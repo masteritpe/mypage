@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Markdown to Table</title>
+  
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  
+  <style>
+    :root {
+      --bg-body: #F9FAFB;
+      --bg-surface: #FFFFFF;
+      --border-light: #F3F4F6;
+      --border-base: #E5E7EB;
+      --text-main: #111827;
+      --text-muted: #6B7280;
+      --primary: #111827;       /* 깔끔한 다크그레이 톤 */
+      --primary-hover: #374151;
+      --secondary: #FFFFFF;
+      --secondary-hover: #F9FAFB;
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+      --radius-md: 8px;
+      --radius-lg: 12px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background: var(--bg-body);
+      color: var(--text-main);
+      margin: 0;
+      padding: 40px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* 상단 헤더 & 컨트롤 레이아웃 */
+    .dashboard-header { max-width: 100%; margin: 0 auto 24px auto; }
+    .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 16px; }
+    .title-area { display: flex; align-items: center; gap: 12px; }
+    .title-area i { font-size: 28px; color: var(--primary); }
+    h2 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+    
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+
+    /* 버튼 스타일 */
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 10px 18px; border-radius: var(--radius-md);
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      border: 1px solid transparent;
+    }
+    .btn-primary { background: var(--primary); color: white; box-shadow: var(--shadow-sm); }
+    .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
+    .btn-outline { background: var(--secondary); color: var(--text-main); border-color: var(--border-base); box-shadow: var(--shadow-sm); }
+    .btn-outline:hover { background: var(--secondary-hover); border-color: #D1D5DB; }
+
+    /* 안내 문구 */
+    .instructions {
+      display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+      font-size: 13px; color: var(--text-muted);
+      background: var(--bg-surface); padding: 12px 20px;
+      border-radius: var(--radius-md); border: 1px solid var(--border-base);
+    }
+    .instructions span { display: inline-flex; align-items: center; gap: 6px; }
+
+    /* 테이블 래퍼 */
+    #table-wrapper {
+      max-width: 100%; margin: 0 auto; background: var(--bg-surface);
+      border: 1px solid var(--border-base); border-radius: var(--radius-lg);
+      overflow: auto; max-height: calc(100vh - 200px); box-shadow: var(--shadow-md);
+      position: relative;
+    }
+    #table-wrapper::-webkit-scrollbar { width: 8px; height: 8px; }
+    #table-wrapper::-webkit-scrollbar-track { background: transparent; }
+    #table-wrapper::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 4px; }
+    #table-wrapper::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
+
+    /* 테이블 스타일 */
+    table { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; font-size: 15px; text-align: left; }
+    th, td {
+      padding: 12px 16px; white-space: pre-wrap; word-break: break-all;
+      border-bottom: 1px solid var(--border-light); border-right: 1px solid var(--border-light);
+      line-height: 1.5; outline: none; transition: background-color 0.2s;
+    }
+    th:last-child, td:last-child { border-right: none; }
+    tr:last-child td { border-bottom: none; }
+    th { font-weight: 600; color: var(--text-main); background: #F9FAFB; position: sticky; top: 0; z-index: 10; }
+
+    /* 편집 가능한 셀 스타일 */
+    [contenteditable="true"]:hover { background-color: #F3F4F6; cursor: text; }
+    [contenteditable="true"]:focus {
+      background-color: #FFFBF1;
+      box-shadow: inset 0 0 0 2px #3B82F6; /* 포커스 시 파란색 테두리 */
+      z-index: 5;
+    }
+
+    /* 초기 빈 화면 상태 */
+    .empty-msg { padding: 80px 20px; text-align: center; color: var(--text-muted); display: flex; flex-direction: column; align-items: center; gap: 12px; }
+    .empty-msg i { font-size: 40px; color: #D1D5DB; }
+  </style>
+</head>
+<body>
+
+  <div class="dashboard-header">
+    <div class="header-top">
+      <div class="title-area">
+        <i class="ph ph-table"></i>
+        <h2>MD to Table</h2>
+      </div>
+      
+      <div class="actions">
+        <button class="btn btn-outline" onclick="clearTable()">
+          <i class="ph ph-trash"></i> 초기화
+        </button>
+        <button class="btn btn-outline" onclick="copyForExcel()">
+          <i class="ph ph-file-xls"></i> 엑셀용 복사
+        </button>
+        <button class="btn btn-primary" onclick="copyAsMarkdown()">
+          <i class="ph ph-markdown-logo"></i> 마크다운 복사
+        </button>
+      </div>
+    </div>
+
+    <div class="instructions">
+      <span><i class="ph ph-clipboard-text"></i> <b>Ctrl+V</b>: 마크다운 텍스트 아무 곳에나 붙여넣기</span>
+      <span style="color: #D1D5DB;">|</span>
+      <span><i class="ph ph-cursor-text"></i> <b>클릭</b>: 표 내용 즉시 수정</span>
+      <span style="color: #D1D5DB;">|</span>
+      <span><i class="ph ph-export"></i> 완성 후 우측 상단의 <b>'복사'</b> 버튼 이용</span>
+    </div>
+  </div>
+
+  <div id="table-wrapper">
+    <div class="empty-msg">
+      <i class="ph ph-markdown-logo"></i>
+      마크다운 표 전체를 복사해서 화면에 붙여넣으세요 (Ctrl+V)
+    </div>
+  </div>
+
+  <script>
+    const wrapper = document.getElementById('table-wrapper');
+
+    // 1. 붙여넣기 이벤트 감지 (마크다운 파싱)
+    document.addEventListener('paste', (event) => {
+      // 이미 표 안의 셀을 편집 중일 때는 기본 붙여넣기 작동되도록 예외 처리
+      if (document.activeElement && document.activeElement.hasAttribute('contenteditable')) return;
+
+      const clipboardData = event.clipboardData || window.clipboardData;
+      const pastedText = clipboardData.getData('text/plain');
+      
+      if (!pastedText) return;
+
+      const parsedData = parseMarkdownTable(pastedText);
+
+      if (parsedData.length > 0) {
+        renderTable(parsedData);
+      } else {
+        alert('유효한 마크다운 표 형식을 찾을 수 없습니다.\n"|" 로 구분된 마크다운 표를 복사해주세요.');
+      }
+    });
+
+    // 2. 마크다운 표 텍스트 파싱 함수
+    function parseMarkdownTable(text) {
+      // 파이프(|) 기호가 있는 줄만 추출
+      const lines = text.split('\n').map(line => line.trim()).filter(line => line.includes('|'));
+      const tableData = [];
+      
+      for (let line of lines) {
+        // 마크다운 구분선(---|--- 등) 무시
+        if (/^\|?(\s*:?-+:?\s*\|?)+\|?$/.test(line)) continue; 
+        
+        let cells = line.split('|').map(c => c.trim());
+        // 양끝이 파이프(|)로 닫혀있어서 생긴 빈 배열 요소 제거
+        if (cells.length > 1 && cells[0] === '') cells.shift();
+        if (cells.length > 0 && cells[cells.length - 1] === '') cells.pop();
+        
+        if (cells.length > 0) {
+          tableData.push(cells);
+        }
+      }
+      return tableData;
+    }
+
+    // 3. 화면에 표 렌더링 (모든 셀 수정 가능)
+    function renderTable(data) {
+      if (!data || data.length === 0) return;
+
+      let html = '<table id="edit-table">';
+      data.forEach((row, rowIndex) => {
+        html += '<tr>';
+        row.forEach(cell => {
+          let text = cell !== undefined ? String(cell) : '';
+          text = text.replace(/<br\s*\/?>/gi, '\n'); 
+          
+          if (rowIndex === 0) {
+            html += `<th contenteditable="true">${text}</th>`;
+          } else {
+            html += `<td contenteditable="true">${text}</td>`;
+          }
+        });
+        html += '</tr>';
+      });
+      html += '</table>';
+      
+      wrapper.innerHTML = html;
+    }
+
+    // 4. 화면의 표 데이터를 2차원 배열로 추출
+    function getTableData() {
+      const table = document.getElementById('edit-table');
+      if (!table) return null;
+
+      const rows = Array.from(table.rows);
+      return rows.map(row => Array.from(row.cells).map(cell => cell.innerText.trim()));
+    }
+
+    // 5. 마크다운 형식으로 복사
+    function copyAsMarkdown() {
+      const data = getTableData();
+      if (!data) return alert('먼저 마크다운 표를 붙여넣어주세요.');
+
+      let md = '';
+      data.forEach((row, index) => {
+        md += '| ' + row.join(' | ') + ' |\n';
+        // 첫 번째 행 다음 구분선 추가
+        if (index === 0) {
+          md += '|' + row.map(() => '---').join('|') + '|\n';
+        }
+      });
+
+      navigator.clipboard.writeText(md).then(() => {
+        alert('마크다운 형식으로 복사되었습니다!');
+      });
+    }
+
+    // 6. 엑셀/스프레드시트용 형식(TSV)으로 복사
+    function copyForExcel() {
+      const data = getTableData();
+      if (!data) return alert('먼저 마크다운 표를 붙여넣어주세요.');
+
+      const tsv = data.map(row => row.join('\t')).join('\n');
+      
+      navigator.clipboard.writeText(tsv).then(() => {
+        alert('엑셀용 데이터로 복사되었습니다!\n스프레드시트에 바로 붙여넣기(Ctrl+V) 하세요.');
+      });
+    }
+
+    // 7. 초기화
+    function clearTable() {
+      wrapper.innerHTML = `
+        <div class="empty-msg">
+          <i class="ph ph-markdown-logo"></i>
+          마크다운 표 전체를 복사해서 화면에 붙여넣으세요 (Ctrl+V)
+        </div>
+      `;
+    }
+  </script>
+</body>
+</html>

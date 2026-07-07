@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MD to PPT Slides</title>
+  
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  
+  <style>
+    :root {
+      --bg-body: #F9FAFB;
+      --bg-surface: #FFFFFF;
+      --border-light: #F3F4F6;
+      --border-base: #E5E7EB;
+      --text-main: #111827;
+      --text-muted: #6B7280;
+      --primary: #111827;       /* 모던 다크그레이 톤 통일 */
+      --primary-hover: #374151;
+      --secondary: #FFFFFF;
+      --secondary-hover: #F9FAFB;
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+      --radius-md: 8px;
+      --radius-lg: 12px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background: var(--bg-body);
+      color: var(--text-main);
+      margin: 0;
+      padding: 40px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* 상단 헤더 & 컨트롤 레이아웃 */
+    .dashboard-header { max-width: 1000px; margin: 0 auto 24px auto; }
+    .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 16px; }
+    .title-area { display: flex; align-items: center; gap: 12px; }
+    .title-area i { font-size: 28px; color: var(--primary); }
+    h2 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+
+    /* 모던 버튼 스타일 */
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 10px 18px; border-radius: var(--radius-md);
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      border: 1px solid transparent;
+    }
+    .btn-primary { background: var(--primary); color: white; box-shadow: var(--shadow-sm); }
+    .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
+    .btn-outline { background: var(--secondary); color: var(--text-main); border-color: var(--border-base); box-shadow: var(--shadow-sm); }
+    .btn-outline:hover { background: var(--secondary-hover); border-color: #D1D5DB; }
+
+    /* 안내 문구 */
+    .instructions {
+      display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+      font-size: 13px; color: var(--text-muted);
+      background: var(--bg-surface); padding: 12px 20px;
+      border-radius: var(--radius-md); border: 1px solid var(--border-base);
+    }
+    .instructions span { display: inline-flex; align-items: center; gap: 6px; }
+
+    /* 슬라이드 컨테이너 & 래퍼 */
+    #slides-container {
+      max-width: 1000px; margin: 0 auto;
+      display: flex; flex-direction: column; gap: 32px;
+    }
+
+    .slide-wrapper {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-base);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-md);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .slide-toolbar {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px 24px; background: #F9FAFB;
+      border-bottom: 1px solid var(--border-light);
+    }
+    .slide-number { font-weight: 700; color: var(--text-main); font-size: 15px; }
+    
+    .toolbar-actions { display: flex; gap: 8px; }
+    .btn-icon {
+      padding: 8px; border-radius: 6px; border: 1px solid transparent;
+      background: transparent; color: var(--text-muted); cursor: pointer;
+      transition: all 0.2s; display: inline-flex; align-items: center; justify-content: center;
+    }
+    .btn-icon:hover { background: #FEE2E2; color: #EF4444; }
+
+    /* 슬라이드 본문 에디터 영역 */
+    .slide-content {
+      padding: 40px; min-height: 250px;
+      outline: none; overflow-y: auto;
+      font-size: 16px; line-height: 1.6;
+      transition: box-shadow 0.2s;
+    }
+    .slide-content:focus { box-shadow: inset 0 0 0 2px #3B82F6; } /* 포커스 시 파란 테두리 */
+    .slide-content:empty:before { content: "텍스트를 입력하거나 마크다운을 붙여넣으세요..."; color: #9CA3AF; }
+
+    /* 마크다운 렌더링 스타일 보정 */
+    .slide-content h1, .slide-content h2, .slide-content h3 { margin-top: 1em; margin-bottom: 0.5em; font-weight: 700; color: var(--text-main); }
+    .slide-content h1 { font-size: 1.8em; border-bottom: 2px solid var(--border-base); padding-bottom: 8px; }
+    .slide-content h2 { font-size: 1.5em; }
+    .slide-content ul, .slide-content ol { padding-left: 24px; margin-bottom: 1em; }
+    .slide-content li { margin-bottom: 0.4em; }
+    .slide-content strong { color: var(--text-main); font-weight: 700; }
+    
+    .slide-content table { border-collapse: collapse; width: 100%; margin-bottom: 1em; font-size: 15px; }
+    .slide-content th, .slide-content td { border: 1px solid var(--border-base); padding: 12px; text-align: left; }
+    .slide-content th { background-color: #F9FAFB; font-weight: 600; color: var(--text-main); }
+    .slide-content pre { background: var(--bg-body); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border-base); overflow-x: auto; }
+    .slide-content code { font-family: monospace; font-size: 0.9em; background: var(--bg-body); padding: 2px 6px; border-radius: 4px; }
+
+    /* 초기 빈 화면 상태 */
+    .empty-msg {
+      padding: 100px 20px; text-align: center; color: var(--text-muted);
+      display: flex; flex-direction: column; align-items: center; gap: 16px;
+      background: var(--bg-surface); border: 1px dashed var(--border-base);
+      border-radius: var(--radius-lg); box-shadow: var(--shadow-sm);
+    }
+    .empty-msg i { font-size: 48px; color: #D1D5DB; }
+    .empty-msg h3 { margin: 0; font-size: 18px; font-weight: 600; color: var(--text-main); }
+  </style>
+</head>
+<body>
+
+  <div class="dashboard-header">
+    <div class="header-top">
+      <div class="title-area">
+        <i class="ph ph-presentation-chart"></i>
+        <h2>MD to PPT Slides</h2>
+      </div>
+      <div class="actions">
+        <button class="btn btn-outline" onclick="clearAll()">
+          <i class="ph ph-trash"></i> 전체 초기화
+        </button>
+        <button class="btn btn-outline" onclick="addEmptySlide()">
+          <i class="ph ph-plus"></i> 새 슬라이드 추가
+        </button>
+      </div>
+    </div>
+    <div class="instructions">
+      <span><i class="ph ph-keyboard"></i> <b>Ctrl+V</b>: 마크다운 텍스트 자동 분할</span>
+      <span style="color: #D1D5DB;">|</span>
+      <span><i class="ph ph-cursor-text"></i> <b>클릭</b>: 슬라이드 내용 즉시 수정</span>
+      <span style="color: #D1D5DB;">|</span>
+      <span><i class="ph ph-copy"></i> 복사 후 PPT <b>빈 슬라이드 배경</b>에 붙여넣기</span>
+    </div>
+  </div>
+
+  <div id="slides-container">
+    <div id="empty-state" class="empty-msg">
+      <i class="ph ph-clipboard-text"></i>
+      <h3>마크다운을 복사한 뒤 화면 아무 곳에서나 Ctrl+V를 눌러보세요.</h3>
+      <p style="margin: 0; font-size: 14px;">( '#' 단위 또는 '---' 기준으로 슬라이드가 자동 분할됩니다. )</p>
+    </div>
+  </div>
+
+  <script>
+    const container = document.getElementById('slides-container');
+    let slideCount = 0;
+
+    // 붙여넣기 이벤트 감지
+    window.addEventListener('paste', (e) => {
+      // 슬라이드 내용을 직접 편집 중일 때는 기본 붙여넣기 동작 허용
+      const activeEl = document.activeElement;
+      if (activeEl && activeEl.classList.contains('slide-content')) return;
+
+      e.preventDefault();
+      const text = (e.clipboardData || window.clipboardData).getData('text/plain');
+      if (!text) return;
+
+      // 마크다운 분할 로직 (--- 구분선 또는 ## 헤더 기준)
+      let chunks = [];
+      if (text.includes('\n---')) {
+        chunks = text.split(/\n---\n?/);
+      } else {
+        chunks = text.split(/(?=^#{1,2}\s)/m);
+      }
+
+      chunks = chunks.filter(chunk => chunk.trim().length > 0);
+
+      if (document.getElementById('empty-state')) {
+        container.innerHTML = '';
+      }
+
+      chunks.forEach(chunk => {
+        createSlide(chunk);
+      });
+    });
+
+    // 슬라이드 생성 함수
+    function createSlide(markdownText = '') {
+      slideCount++;
+      const wrapper = document.createElement('div');
+      wrapper.className = 'slide-wrapper';
+      wrapper.id = `slide-${slideCount}`;
+
+      const htmlContent = markdownText ? marked.parse(markdownText) : '';
+
+      wrapper.innerHTML = `
+        <div class="slide-toolbar">
+          <div class="slide-number">Slide ${slideCount}</div>
+          <div class="toolbar-actions">
+            <button class="btn btn-primary" onclick="copySlide('${wrapper.id}')">
+              <i class="ph ph-copy"></i> 이 슬라이드 복사
+            </button>
+            <button class="btn-icon" onclick="removeSlide('${wrapper.id}')" title="슬라이드 삭제">
+              <i class="ph ph-x" style="font-size: 18px;"></i>
+            </button>
+          </div>
+        </div>
+        <div class="slide-content" contenteditable="true">${htmlContent}</div>
+      `;
+      container.appendChild(wrapper);
+    }
+
+    // 빈 슬라이드 추가
+    function addEmptySlide() {
+      if (document.getElementById('empty-state')) {
+        container.innerHTML = '';
+      }
+      createSlide('');
+    }
+
+    // 슬라이드 삭제
+    function removeSlide(slideId) {
+      document.getElementById(slideId).remove();
+      if (container.children.length === 0) {
+        clearAll();
+      }
+    }
+
+    // 전체 초기화
+    function clearAll() {
+      slideCount = 0;
+      container.innerHTML = `
+        <div id="empty-state" class="empty-msg">
+          <i class="ph ph-clipboard-text"></i>
+          <h3>마크다운을 복사한 뒤 화면 아무 곳에서나 Ctrl+V를 눌러보세요.</h3>
+          <p style="margin: 0; font-size: 14px;">( '#' 단위 또는 '---' 기준으로 슬라이드가 자동 분할됩니다. )</p>
+        </div>
+      `;
+    }
+
+    // 🔥 PPT 최적화 복사 기능 (통합 표 + 셀 병합 로직 유지)
+    function copySlide(slideId) {
+      const slideWrapper = document.getElementById(slideId);
+      const contentDiv = slideWrapper.querySelector('.slide-content');
+      
+      if (!contentDiv.innerHTML.trim()) return alert('복사할 내용이 없습니다.');
+
+      // 1. 슬라이드 내 표들 중 가장 칸(열)이 많은 갯수를 파악
+      let maxCols = 1;
+      contentDiv.querySelectorAll('table').forEach(tbl => {
+        tbl.querySelectorAll('tr').forEach(tr => {
+          maxCols = Math.max(maxCols, tr.children.length);
+        });
+      });
+
+      // 2. 오직 1개의 표(Table)로 모든 텍스트와 표를 재구성
+      let cleanHtml = '<table border="0" cellpadding="0" cellspacing="0" style="width: 100%; border-collapse: collapse; font-family: \'Malgun Gothic\', \'Pretendard\', sans-serif;">';
+
+      // 텍스트 영역 투명 처리 스타일
+      const textRowStyle = "border: none; border-top: none; border-right: none; border-bottom: none; border-left: none; background-color: transparent; padding: 0 0 8px 0; vertical-align: top;";
+
+      Array.from(contentDiv.childNodes).forEach(node => {
+        if (node.nodeType === Node.TEXT_NODE) {
+          if (node.textContent.trim() !== '') {
+            cleanHtml += `<tr><td colspan="${maxCols}" style="${textRowStyle}">${node.textContent}</td></tr>`;
+          }
+        } 
+        else if (node.nodeType === Node.ELEMENT_NODE) {
+          const tagName = node.tagName.toLowerCase();
+          
+          if (tagName === 'table') {
+            const rows = node.querySelectorAll('tr');
+            rows.forEach(row => {
+              cleanHtml += '<tr>';
+              const cells = Array.from(row.querySelectorAll('th, td'));
+              cells.forEach((cell, index) => {
+                const isHeader = cell.tagName.toLowerCase() === 'th';
+                const bgColor = isHeader ? 'background-color: #F3F4F6;' : '';
+                const fontWeight = isHeader ? 'font-weight: bold;' : 'font-weight: normal;';
+                
+                let colspanAttr = '';
+                if (index === cells.length - 1 && cells.length < maxCols) {
+                  colspanAttr = ` colspan="${maxCols - cells.length + 1}"`;
+                }
+
+                cleanHtml += `<td${colspanAttr} style="border: 1px solid #000000; padding: 8px; ${bgColor} ${fontWeight}">${cell.innerHTML}</td>`;
+              });
+              cleanHtml += '</tr>';
+            });
+            cleanHtml += `<tr><td colspan="${maxCols}" style="${textRowStyle} height: 15px;"></td></tr>`;
+          } else {
+            const clone = node.cloneNode(true);
+            
+            if (tagName === 'ul' || tagName === 'ol') {
+                clone.style.paddingLeft = '24px';
+                clone.style.margin = '5px 0 15px 0';
+            }
+            if (tagName.match(/^h[1-6]$/)) {
+                clone.style.marginTop = '15px';
+                clone.style.marginBottom = '8px';
+            }
+
+            cleanHtml += `<tr><td colspan="${maxCols}" style="${textRowStyle}">${clone.outerHTML}</td></tr>`;
+          }
+        }
+      });
+
+      cleanHtml += '</table>';
+
+      const contentText = contentDiv.innerText;
+
+      try {
+        const blobHtml = new Blob([cleanHtml], { type: 'text/html' });
+        const blobText = new Blob([contentText], { type: 'text/plain' });
+        
+        const clipboardItem = new window.ClipboardItem({
+          'text/html': blobHtml,
+          'text/plain': blobText
+        });
+
+        navigator.clipboard.write([clipboardItem]).then(() => {
+          // 버튼 상태 일시적 변경 (시각적 피드백)
+          const btn = slideWrapper.querySelector('.btn-primary');
+          const originalText = btn.innerHTML;
+          btn.innerHTML = '<i class="ph ph-check"></i> 복사 완료!';
+          btn.style.background = '#10B981'; /* 성공 초록색 */
+          btn.style.borderColor = '#10B981';
+          setTimeout(() => {
+              btn.innerHTML = originalText;
+              btn.style.background = 'var(--primary)';
+              btn.style.borderColor = 'transparent';
+          }, 1500);
+        });
+      } catch (err) {
+        alert('이 브라우저에서는 클립보드 고급 복사를 지원하지 않습니다.');
+      }
+    }
+  </script>
+</body>
+</html>
