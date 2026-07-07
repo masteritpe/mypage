@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>재해복구 모의 훈련 기록</title>
+  
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+  <style>
+    :root {
+      --bg-body: #F9FAFB;
+      --bg-surface: #FFFFFF;
+      --border-light: #F3F4F6;
+      --border-base: #E5E7EB;
+      --border-dark: #D1D5DB;
+      --text-main: #111827;
+      --text-muted: #6B7280;
+      --primary: #111827;
+      --primary-hover: #374151;
+      --secondary: #FFFFFF;
+      --secondary-hover: #F9FAFB;
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+      --radius-md: 8px;
+      --radius-lg: 12px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background: var(--bg-body); color: var(--text-main); margin: 0; padding: 0;
+      -webkit-font-smoothing: antialiased; height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+    }
+
+    /* 상단 바 */
+    .top-bar { 
+      background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(8px); 
+      height: 64px; min-height: 64px; padding: 0 30px; 
+      border-bottom: 1px solid var(--border-base); 
+      display: flex; justify-content: space-between; align-items: center; z-index: 10; 
+    }
+    .title-input { font-size: 20px; font-weight: 700; border: none; background: transparent; outline: none; width: 400px; color: var(--text-main); }
+    .title-input::placeholder { color: var(--border-dark); }
+    .actions { display: flex; gap: 8px; align-items: center; }
+
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 14px; border-radius: var(--radius-md); font-size: 14px; font-weight: 600; cursor: pointer; transition: 0.2s; border: 1px solid transparent; outline: none; }
+    .btn-primary { background: var(--primary); color: white; box-shadow: var(--shadow-sm); }
+    .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
+    .btn-outline { background: var(--secondary); color: var(--text-main); border-color: var(--border-base); }
+    .btn-outline:hover { background: var(--secondary-hover); border-color: #D1D5DB; }
+
+    /* 레이아웃 */
+    .layout-container { display: flex; flex: 1; overflow: hidden; }
+
+    /* 좌측 타임라인 */
+    .sidebar { width: 320px; background: var(--bg-surface); border-right: 1px solid var(--border-base); display: flex; flex-direction: column; overflow-y: auto; padding: 24px 20px; }
+    .sidebar-title { font-size: 16px; font-weight: 700; margin: 0 0 20px 0; display: flex; align-items: center; gap: 8px; color: var(--primary); }
+    
+    .timeline-list { position: relative; padding-left: 14px; display: flex; flex-direction: column; gap: 16px; margin: 0; }
+    .timeline-list::before { content: ''; position: absolute; left: 4px; top: 8px; bottom: 8px; width: 2px; background: var(--border-base); }
+    
+    .timeline-item { position: relative; cursor: pointer; padding: 8px 12px; border-radius: var(--radius-md); transition: background 0.2s; }
+    .timeline-item:hover { background: var(--bg-body); }
+    .timeline-item::before { content: ''; position: absolute; left: -14px; top: 14px; width: 10px; height: 10px; border-radius: 50%; background: var(--primary); box-shadow: 0 0 0 3px var(--bg-surface); transition: transform 0.2s; }
+    
+    .tl-time { font-size: 13px; font-weight: 700; color: var(--primary); margin-bottom: 4px; }
+    .tl-msg { font-size: 13px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* 메인 콘텐츠 */
+    .main-content { flex: 1; overflow-y: auto; padding: 40px 30px; background: var(--bg-body); scroll-behavior: smooth; }
+    .form-wrapper { max-width: 800px; margin: 0 auto; width: 100%; }
+    
+    .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+    .header-row h2 { margin: 0; font-size: 18px; display: flex; align-items: center; gap: 8px; color: var(--primary); }
+
+    /* 개별 로그 카드 & 드래그 스타일 */
+    .log-card { 
+      background: var(--bg-surface); border: 1px solid var(--border-base); border-radius: var(--radius-lg); 
+      padding: 20px; box-shadow: var(--shadow-sm); margin-bottom: 16px; 
+      transition: box-shadow 0.2s, border-color 0.2s, transform 0.2s; position: relative; 
+      cursor: grab;
+    }
+    .log-card:active { cursor: grabbing; }
+    .log-card.dragging { opacity: 0.5; transform: scale(0.98); border: 2px dashed var(--border-dark); }
+    .log-card.highlight { box-shadow: 0 0 0 2px var(--primary); border-color: var(--primary); }
+    
+    .card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border-light); }
+    .card-meta { display: flex; gap: 16px; flex: 1; pointer-events: auto; }
+    
+    .input-group { display: flex; align-items: center; gap: 8px; background: var(--bg-body); padding: 6px 12px; border-radius: 6px; border: 1px solid transparent; transition: 0.2s; }
+    .input-group:focus-within { border-color: var(--primary); background: var(--bg-surface); box-shadow: 0 0 0 2px rgba(17, 24, 39, 0.05); }
+    
+    .inline-input { border: none; background: transparent; font-size: 14px; font-family: inherit; color: var(--text-main); outline: none; width: 100%; }
+    
+    /* 입력창 포커스 시 브라우저 기본 드롭다운 화살표 표시 지원 */
+    .inline-input::-webkit-calendar-picker-indicator { display: none !important; }
+    .person-input:focus::-webkit-calendar-picker-indicator { display: block !important; opacity: 0.5; cursor: pointer; }
+
+    .time-input { width: 100px; font-weight: 600; }
+    .person-input { width: 120px; }
+    
+    .msg-area { display: flex; flex-direction: column; gap: 8px; pointer-events: auto; }
+    .msg-input { width: 100%; padding: 12px; border: 1px solid var(--border-base); border-radius: var(--radius-md); font-size: 15px; font-family: inherit; color: var(--text-main); background: var(--bg-surface); resize: vertical; min-height: 80px; line-height: 1.5; outline: none; transition: border-color 0.2s;}
+    .msg-input:focus { border-color: var(--primary); }
+    
+    .btn-icon { color: var(--text-muted); background: transparent; border: none; cursor: pointer; padding: 6px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; transition: 0.2s; }
+    .btn-icon:hover { color: #DC2626; background: #FEE2E2; }
+    
+    .drag-handle { color: var(--border-dark); cursor: grab; font-size: 20px; margin-right: 8px; display: flex; align-items: center; }
+
+    /* 토스트 알림 */
+    .toast { visibility: hidden; background: #111827; color: #fff; text-align: center; border-radius: 8px; padding: 12px 24px; position: fixed; z-index: 1000; left: 50%; bottom: 30px; transform: translateX(-50%); font-size: 14px; opacity: 0; transition: 0.3s; }
+    .toast.show { visibility: visible; opacity: 1; bottom: 50px; }
+  </style>
+</head>
+<body>
+
+  <datalist id="personHistoryList"></datalist>
+
+  <div class="top-bar">
+    <input type="text" id="docTitle" class="title-input" value="재해복구 모의 훈련 기록" spellcheck="false">
+    <div class="actions">
+      <button class="btn btn-outline" onclick="sortCardsByTime(true)"><i class="ph ph-sort-ascending"></i> 정렬</button>
+      <button class="btn btn-outline" onclick="addLogCard()"><i class="ph ph-plus"></i> 새 로그</button>
+      <button class="btn btn-primary" onclick="exportToTXT()"><i class="ph ph-download-simple"></i> TXT 저장</button>
+    </div>
+  </div>
+
+  <div class="layout-container">
+    <aside class="sidebar">
+      <h3 class="sidebar-title"><i class="ph-fill ph-clock"></i> 훈련 타임라인</h3>
+      <div id="timelineContainer" class="timeline-list"></div>
+    </aside>
+
+    <main class="main-content" id="mainContent">
+      <div class="form-wrapper">
+        <div class="header-row">
+          <h2><i class="ph-fill ph-cards"></i> 상황 조치 로그</h2>
+          <span style="font-size: 12px; color: var(--text-muted);">* 24시간제로 입력하세요. 입력창을 벗어나면 정렬되며, 드래그도 가능합니다.</span>
+        </div>
+        <div id="logCardContainer"></div>
+      </div>
+    </main>
+  </div>
+
+  <div id="toast" class="toast">알림 메시지</div>
+
+  <script>
+    let isInitialLoad = true;
+
+    window.onload = () => {
+      loadPersonHistory();
+      sortCardsByTime(false);
+      initDragAndDrop();
+      isInitialLoad = false;
+    };
+
+    function loadPersonHistory() {
+      const history = JSON.parse(localStorage.getItem('dr_person_history')) || [];
+      const dataList = document.getElementById('personHistoryList');
+      dataList.innerHTML = ''; 
+      history.forEach(name => {
+        const option = document.createElement('option');
+        option.value = name;
+        dataList.appendChild(option);
+      });
+    }
+
+    function savePersonToHistory(name) {
+      name = name.trim();
+      if (!name) return;
+      let history = JSON.parse(localStorage.getItem('dr_person_history')) || [];
+      if (!history.includes(name)) {
+        history.push(name);
+        localStorage.setItem('dr_person_history', JSON.stringify(history));
+        loadPersonHistory(); 
+      }
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.altKey && (e.key === 'n' || e.key === 'N')) {
+        e.preventDefault();
+        addLogCard();
+        showToast('새 로그가 추가되었습니다.');
+      }
+    });
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.innerText = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 2000);
+    }
+
+    function addLogCard(time = '', person = '', msg = '') {
+      const container = document.getElementById('logCardContainer');
+      const cardId = 'log-' + Math.random().toString(36).substr(2, 9);
+      
+      const card = document.createElement('div');
+      card.className = 'log-card';
+      card.id = cardId;
+      card.draggable = true; 
+      
+      if(person) savePersonToHistory(person);
+
+      card.innerHTML = `
+        <div class="card-top" onmousedown="event.stopPropagation()">
+          <div class="card-meta">
+            <div class="drag-handle"><i class="ph-bold ph-dots-six-vertical"></i></div>
+            <div class="input-group">
+              <i class="ph ph-clock"></i>
+              <input type="text" class="inline-input time-input" value="${time}" placeholder="예: 14:30" 
+                     oninput="updateTimeline()" onblur="sortCardsByTime(false)">
+            </div>
+            <div class="input-group">
+              <i class="ph ph-user"></i>
+              <input type="text" class="inline-input person-input" value="${person}" placeholder="처리자" 
+                     list="personHistoryList"
+                     oninput="updateTimeline()" onblur="savePersonToHistory(this.value)">
+            </div>
+          </div>
+          <button class="btn-icon" onclick="removeLogCard('${cardId}')"><i class="ph ph-trash"></i></button>
+        </div>
+        <div class="msg-area" onmousedown="event.stopPropagation()">
+          <textarea class="msg-input" placeholder="조치 내용 입력..." oninput="updateTimeline()">${msg}</textarea>
+        </div>
+      `;
+      
+      container.appendChild(card);
+      initDragAndDrop();
+      updateTimeline();
+
+      if (!isInitialLoad) {
+        setTimeout(() => {
+          card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          const timeInput = card.querySelector('.time-input');
+          if (timeInput) {
+            timeInput.focus();
+          }
+          card.classList.add('highlight');
+          setTimeout(() => card.classList.remove('highlight'), 1000);
+        }, 50);
+      }
+    }
+
+    function removeLogCard(id) {
+      document.getElementById(id).remove();
+      updateTimeline();
+    }
+
+    function initDragAndDrop() {
+      const container = document.getElementById('logCardContainer');
+      const cards = container.querySelectorAll('.log-card');
+
+      cards.forEach(card => {
+        card.ondragstart = () => card.classList.add('dragging');
+        card.ondragend = () => {
+          card.classList.remove('dragging');
+          updateTimeline(); 
+        };
+      });
+
+      container.ondragover = e => {
+        e.preventDefault();
+        const afterElement = getDragAfterElement(container, e.clientY);
+        const draggingCard = document.querySelector('.dragging');
+        if (draggingCard) {
+          if (afterElement == null) {
+            container.appendChild(draggingCard);
+          } else {
+            container.insertBefore(draggingCard, afterElement);
+          }
+        }
+      };
+    }
+
+    function getDragAfterElement(container, y) {
+      const draggableElements = [...container.querySelectorAll('.log-card:not(.dragging)')];
+      return draggableElements.reduce((closest, child) => {
+        const box = child.getBoundingClientRect();
+        const offset = y - box.top - box.height / 2;
+        if (offset < 0 && offset > closest.offset) {
+          return { offset: offset, element: child };
+        } else {
+          return closest;
+        }
+      }, { offset: Number.NEGATIVE_INFINITY }).element;
+    }
+
+    // 24시간제 파싱 로직 (오전/오후 제거)
+    function parse24HourTime(timeStr) {
+      if (!timeStr || timeStr.trim() === '') return 999999;
+      
+      // 숫자 그룹 두 개만 추출 (14:30 -> 14, 30)
+      const match = timeStr.match(/(\d+)[^\d]*(\d+)/);
+      if (!match) return 999999;
+      
+      let h = parseInt(match[1], 10);
+      let m = parseInt(match[2], 10);
+      
+      return h * 60 + m; 
+    }
+
+    function sortCardsByTime(isManual = false) {
+      const container = document.getElementById('logCardContainer');
+      const cards = [...container.querySelectorAll('.log-card')];
+
+      const mapped = cards.map((card, index) => {
+        return {
+          card: card,
+          index: index,
+          val: parse24HourTime(card.querySelector('.time-input').value)
+        };
+      });
+
+      mapped.sort((a, b) => {
+        if (a.val === b.val) return a.index - b.index;
+        return a.val - b.val;
+      });
+
+      mapped.forEach(item => container.appendChild(item.card));
+      updateTimeline();
+      
+      if(isManual) {
+        showToast('시간 순으로 정렬되었습니다.');
+      }
+    }
+
+    function updateTimeline() {
+      const timelineContainer = document.getElementById('timelineContainer');
+      const cards = document.querySelectorAll('.log-card');
+      timelineContainer.innerHTML = '';
+
+      cards.forEach(card => {
+        const time = card.querySelector('.time-input').value || '--:--';
+        const msg = card.querySelector('.msg-input').value || '(내용 없음)';
+        
+        const item = document.createElement('div');
+        item.className = 'timeline-item';
+        item.onclick = () => {
+          card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          card.classList.add('highlight');
+          setTimeout(() => card.classList.remove('highlight'), 1000);
+        };
+        item.innerHTML = `<div class="tl-time">${time}</div><div class="tl-msg">${msg}</div>`;
+        timelineContainer.appendChild(item);
+      });
+    }
+
+    function exportToTXT() {
+      const title = document.getElementById('docTitle').value || 'DR_훈련_기록';
+      const cards = document.querySelectorAll('.log-card');
+      let content = `[${title}]\n\n`;
+
+      cards.forEach(card => {
+        const rawTime = card.querySelector('.time-input').value;
+        let formattedTime = rawTime;
+
+        // TXT 출력 시 12시간제로 변환 (오전/오후 처리)
+        if (rawTime && rawTime.trim() !== '') {
+          const match = rawTime.match(/(\d+)[^\d]*(\d+)/);
+          if (match) {
+            let h = parseInt(match[1], 10);
+            let m = match[2].padStart(2, '0'); // 분은 항상 2자리로
+            
+            let ampm = h >= 12 ? '오후' : '오전';
+            let displayH = h % 12;
+            if (displayH === 0) displayH = 12; // 0시는 오전 12시, 12시는 오후 12시
+            
+            formattedTime = `${ampm} ${displayH}:${m}`;
+          }
+        }
+
+        const person = card.querySelector('.person-input').value;
+        const msg = card.querySelector('.msg-input').value;
+        
+        const personStr = person ? `[${person}] ` : '';
+        const timeStr = formattedTime ? `[${formattedTime}] ` : '';
+        const formattedMsg = msg.replace(/\n/g, '\n'); 
+        
+        content += `${personStr}${timeStr}${formattedMsg}\n`;
+      });
+
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${title.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>TPS/tpmC Sizing</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+/* === Design System === */
+:root {
+    --bg-app: #f3f4f6; --bg-panel: #ffffff; --border: #e2e8f0;
+    --primary: #2563eb; --primary-hover: #1d4ed8;
+    --text-main: #0f172a; --text-sub: #64748b;
+    --success: #10b981; --warning: #f59e0b; --danger: #ef4444;
+    --radius: 8px;
+    --font-ui: 'Inter', sans-serif;
+    --font-code: 'JetBrains Mono', monospace;
+}
+
+* { box-sizing: border-box; outline: none; }
+body { margin: 0; background: var(--bg-app); color: var(--text-main); font-family: var(--font-ui); font-size: 13px; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* Header */
+header { height: 56px; background: #fff; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 24px; flex-shrink: 0; justify-content: space-between; z-index: 20; }
+header .brand { font-weight: 700; font-size: 16px; display: flex; align-items: center; gap: 10px; }
+header .brand i { color: var(--primary); font-size: 18px; }
+.header-actions { display: flex; gap: 8px; }
+
+/* Layout */
+.workspace { display: flex; flex: 1; overflow: hidden; }
+
+/* Sidebar */
+.pane-list { width: 320px; background: #fff; border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; }
+.search-area { height: 60px; padding: 0 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; }
+.search-input { width: 100%; height: 36px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; }
+.search-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+.list-scroll { flex: 1; overflow-y: auto; background: #f8fafc; }
+
+/* List Item */
+.item-card { padding: 16px; border-bottom: 1px solid var(--border); background: #fff; cursor: pointer; border-left: 3px solid transparent; transition: 0.1s; }
+.item-card:hover { background: #f1f5f9; }
+.item-card.active { background: #eff6ff; border-left-color: var(--primary); }
+.item-head { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+.item-prj { font-weight: 700; color: var(--text-main); font-size: 14px; }
+.item-server { font-size: 12px; color: var(--text-sub); display: flex; align-items: center; gap: 6px; }
+
+/* Main Editor Pane */
+.pane-editor { flex: 1; background: #fff; display: flex; flex-direction: column; overflow: hidden; }
+.toolbar { height: 60px; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 32px; justify-content: space-between; background: #fff; flex-shrink: 0; }
+
+/* Scroll Area */
+.editor-scroll { flex: 1; overflow-y: auto; background: #f8fafc; display: block; }
+.editor-container { width: 100%; max-width: 900px; margin: 30px auto; padding-bottom: 60px; padding-left: 30px; padding-right: 30px; display: flex; flex-direction: column; gap: 20px; }
+
+/* Board View (장표) */
+.board-container { display: none; padding: 24px; height: 100%; overflow-x: auto; gap: 24px; align-items: flex-start; background: #f8fafc; }
+.board-container.active { display: flex; }
+.board-col { min-width: 320px; width: 320px; display: flex; flex-direction: column; gap: 16px; background: #f1f5f9; border-radius: 12px; padding: 16px; border: 1px solid var(--border); }
+.board-col-header { font-size: 14px; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.board-col-header .count { background: #e2e8f0; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+
+.calc-card { background: #fff; border-radius: 8px; border: 1px solid #cbd5e1; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.02); cursor: pointer; transition: 0.1s; }
+.calc-card:hover { transform: translateY(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+.calc-card-header { padding: 10px; background: var(--primary); color: #fff; font-weight: 700; text-align: center; font-size: 13px; }
+.calc-card-body { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.calc-stat { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-sub); border-bottom: 1px dashed #e2e8f0; padding-bottom: 4px; }
+.calc-stat:last-child { border-bottom: none; }
+.calc-stat b { color: var(--text-main); font-family: var(--font-code); }
+.calc-result-bar { background: #f8fafc; font-weight: 700; padding: 8px; text-align: center; font-size: 13px; border-top: 1px solid #cbd5e1; }
+
+/* Cards */
+.card { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); transition: opacity 0.3s ease; }
+.card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #f1f5f9; }
+.card-title { font-size: 15px; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
+.card.disabled-area { opacity: 0.5; pointer-events: none; background: #f8fafc; }
+
+/* Form Elements */
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sub); margin-bottom: 6px; }
+.input-field { width: 100%; height: 40px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 14px; background: #fff; transition: 0.2s; }
+.input-field:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+.select-field { width: 100%; height: 40px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 14px; background: #fff; cursor: pointer; }
+
+/* Radio Group */
+.radio-group { display: flex; gap: 16px; align-items: center; height: 40px; }
+.radio-label { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; font-weight: 500; }
+.radio-label input { accent-color: var(--primary); }
+
+/* Correction Grid */
+.factor-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+.factor-box { background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid var(--border); display: flex; flex-direction: column; }
+.factor-label { font-size: 11px; font-weight: 600; color: var(--text-sub); margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.factor-input { width: 100%; border: 1px solid var(--border); border-radius: 4px; padding: 6px; font-size: 13px; font-weight: 700; color: var(--primary); text-align: center; }
+
+/* Cloud Spec Grid */
+.cloud-box { background: #f0fdf4; border: 1px solid #bbf7d0; }
+.cloud-result { text-align: right; font-family: var(--font-code); font-weight: 700; color: #15803d; font-size: 16px; margin-top: 5px; }
+.status-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; color: #fff; }
+.status-ok { background: var(--success); }
+.status-warn { background: var(--danger); }
+
+/* Result Box */
+.result-box { background: #eff6ff; border: 1px solid #dbeafe; border-radius: 12px; padding: 24px; text-align: center; }
+.result-label { font-size: 13px; color: #64748b; font-weight: 600; margin-bottom: 8px; }
+.result-value { font-family: var(--font-code); font-size: 32px; font-weight: 700; color: var(--primary); letter-spacing: -1px; }
+.formula-display { margin-top: 12px; padding: 10px; background: #fff; border: 1px dashed #cbd5e1; border-radius: 6px; font-family: var(--font-code); font-size: 12px; color: var(--text-sub); word-break: break-all; line-height: 1.6; }
+
+/* Modal Overlay */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; display: none; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
+.settings-box { background: #fff; width: 450px; padding: 24px; border-radius: 12px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); }
+.setting-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px dashed #f1f5f9; padding-bottom: 8px; }
+.setting-row:last-child { border-bottom: none; }
+.setting-input { width: 80px; text-align: right; padding: 6px; border: 1px solid var(--border); border-radius: 4px; }
+
+/* Buttons */
+.btn { height: 36px; padding: 0 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid transparent; display: inline-flex; align-items: center; gap: 6px; transition: 0.2s; }
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: var(--primary-hover); }
+.btn-secondary { background: #fff; border-color: #cbd5e1; color: var(--text-sub); }
+.btn-secondary:hover { background: #f8fafc; color: var(--text-main); }
+.btn-danger { background: #fff; border-color: #fecaca; color: #ef4444; }
+.btn-danger:hover { background: #fee2e2; }
+.btn-icon { width: 36px; padding: 0; justify-content: center; font-size: 16px; color: var(--text-sub); }
+.empty-state { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #94a3b8; }
+
+/* === Toast Notification === */
+#toast-container { position: fixed; bottom: 24px; right: 24px; display: flex; flex-direction: column; gap: 10px; z-index: 9999; }
+.toast { background: #fff; color: var(--text-main); padding: 14px 24px; border-radius: 8px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); border-left: 4px solid var(--primary); font-size: 14px; font-weight: 600; opacity: 0; transform: translateY(20px); transition: all 0.3s ease; display: flex; align-items: center; gap: 10px; }
+.toast.show { opacity: 1; transform: translateY(0); }
+.toast.success { border-left-color: var(--success); }
+.toast.info { border-left-color: var(--primary); }
+.toast.danger { border-left-color: var(--danger); }
+</style>
+</head>
+<body>
+
+<header>
+    <div class="brand"><i class="fas fa-calculator"></i>TPS/tpmC Sizing</div>
+    <div class="header-actions">
+        <button class="btn btn-secondary" id="btn-toggle-view"><i class="fas fa-columns"></i> 장표 한눈에 보기</button>
+        <button class="btn btn-secondary" id="btn-save-img"><i class="fas fa-image" style="color:#8b5cf6"></i> 이미지 저장</button>
+        <button class="btn btn-secondary" id="btn-export"><i class="fas fa-file-excel" style="color:#10b981"></i> 다운로드</button>
+        <button class="btn btn-secondary btn-icon" id="btn-settings" title="환경설정"><i class="fas fa-cog"></i></button>
+    </div>
+</header>
+
+<div class="workspace">
+    <aside class="pane-list">
+        <div class="search-area">
+            <input type="text" id="search-input" class="search-input" placeholder="Search...">
+        </div>
+        <div class="list-scroll" id="history-list">
+            <div class="empty-state" id="list-empty"><span>목록이 비어있습니다.</span></div>
+        </div>
+        <div style="padding:12px; text-align:center; font-size:11px; color:#94a3b8; border-top:1px solid var(--border);">
+            Total <span id="total-count" style="font-weight:700; color:#0f172a;">0</span> Items
+        </div>
+    </aside>
+
+    <main class="pane-editor">
+        <div class="toolbar" id="editor-toolbar">
+            <div style="font-weight:700; font-size:15px;" id="editor-title">산정 상세(Detail Calculation)</div>
+            <div style="display:flex; gap:8px;">
+                <button class="btn btn-secondary" id="btn-new"><i class="fas fa-plus"></i> 신규</button>
+                <button class="btn btn-danger" id="btn-delete" style="display:none;"><i class="fas fa-trash"></i> 삭제</button>
+                <button class="btn btn-primary" id="btn-save"><i class="fas fa-check"></i> 저장</button>
+            </div>
+        </div>
+
+        <div class="editor-scroll" id="editor-view">
+            <div class="editor-container">
+                
+                <div class="card">
+                    <div class="card-header"><div class="card-title"><i class="fas fa-project-diagram" style="color:#64748b;"></i> 기본 정보</div></div>
+                    <div class="form-grid">
+                        <div>
+                            <label class="label">프로젝트명</label>
+                            <input type="text" id="inp-name" class="input-field" placeholder="예: 차세대 시스템" autocomplete="off">
+                        </div>
+                        <div>
+                            <label class="label">서버/용도</label>
+                            <input type="text" id="inp-server" class="input-field" placeholder="예: WAS-01" autocomplete="off">
+                        </div>
+                        
+                        <div>
+                            <label class="label">산정 기준 선택</label>
+                            <div class="radio-group">
+                                <label class="radio-label"><input type="radio" name="calc-mode" value="TPS" checked onchange="toggleMode()"> 목표 TPS 기준</label>
+                                <label class="radio-label"><input type="radio" name="calc-mode" value="TPMC" onchange="toggleMode()"> 목표 tpmC 기준</label>
+                            </div>
+                        </div>
+
+                        <div id="div-direct-tpmc" style="display:none;">
+                            <label class="label" style="color:#2563eb">기준 tpmC(Base)</label>
+                            <input type="number" id="inp-direct-tpmc" class="input-field" placeholder="예: 50000" style="border-color:#2563eb; font-weight:bold;">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card" id="card-step1">
+                    <div class="card-header"><div class="card-title"><i class="fas fa-sliders-h" style="color:#64748b;"></i> 1단계: 기본 사이징(TPS 모드 전용)</div></div>
+                    <div class="form-grid">
+                        <div>
+                            <label class="label">목표 TPS</label>
+                            <input type="number" id="inp-tps" class="input-field" placeholder="0" min="1">
+                        </div>
+                        <div>
+                            <label class="label">기본 TPM(TPS × 60)</label>
+                            <input type="text" id="disp-tpm" class="input-field" style="background:#f1f5f9; color:#64748b;" readonly value="0">
+                        </div>
+                    </div>
+                    <div class="form-grid" style="margin-top:16px;">
+                        <div>
+                            <label class="label">업무 복잡도(α)</label>
+                            <select id="sel-alpha" class="select-field">
+                                <option value="0.8">0.8(단순 조회)</option>
+                                <option value="1.0">1.0(일반 웹 트랜잭션)</option>
+                                <option value="1.2">1.2(약간 복잡)</option>
+                                <option value="1.5">1.5(복합 트랜잭션)</option>
+                                <option value="2.0">2.0(고복잡도/금융)</option>
+                                <option value="5.0">5.0(배치/통계)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="label">시스템 여유율(β)</label>
+                            <select id="sel-beta" class="select-field">
+                                <option value="1.3">1.3(여유 적음)</option>
+                                <option value="1.43">1.43(목표 CPU 70%)</option>
+                                <option value="1.67">1.67(목표 CPU 60%)</option>
+                                <option value="2.0">2.0(안정성 최우선)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header"><div class="card-title"><i class="fas fa-chart-line" style="color:#64748b;"></i> 2단계: 상세 보정(5 Factors)</div></div>
+                    <div class="factor-grid">
+                        <div class="factor-box"><label class="factor-label">① Peak Time</label><input type="number" id="inp-peak" class="factor-input" step="0.1" value="1.2"></div>
+                        <div class="factor-box"><label class="factor-label">② 리뉴얼 구축</label><input type="number" id="inp-renew" class="factor-input" step="0.1" value="1.2"></div>
+                        <div class="factor-box"><label class="factor-label">③ I/F 부하</label><input type="number" id="inp-inter" class="factor-input" step="0.1" value="1.1"></div>
+                        <div class="factor-box"><label class="factor-label">④ 시스템여유율(추가)</label><input type="number" id="inp-safety" class="factor-input" step="0.1" value="1.2"></div>
+                        <div class="factor-box"><label class="factor-label">⑤ 향후 5년간 증가분</label><input type="number" id="inp-growth" class="factor-input" step="0.1" value="1.4"></div>
+                    </div>
+                </div>
+
+                <div class="result-box">
+                    <div class="result-label">최종 필요 용량(Required Capacity)</div>
+                    <div class="result-value" id="final-tpmc">0</div>
+                    <div class="formula-display" id="formula-preview"></div>
+                </div>
+
+                <div class="card cloud-box">
+                    <div class="card-header" style="border-bottom-color:#bbf7d0;">
+                        <div class="card-title" style="color:#15803d;"><i class="fas fa-cloud"></i> 3단계: 클라우드 스펙 검증(NCP/AWS)</div>
+                        <span id="cloud-status" class="status-badge status-warn">확인 필요</span>
+                    </div>
+                    <div class="form-grid">
+                        <div>
+                            <label class="label">클라우드 벤더/모델(1 vCPU당 tpmC)</label>
+                            <select id="sel-cloud-model" class="select-field">
+                                <option value="14000">NCP Standard(Gen 4/5) - 14k</option>
+                                <option value="17000" selected>NCP High-CPU(Gen 5) - 17k</option>
+                                <option value="21000">NCP Premium(Gen 6) - 21k</option>
+                                <option value="16000">AWS m5/c5(Gen 5) - 16k</option>
+                                <option value="20000">AWS m6i/c6i(Gen 6) - 20k</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="label">할당 vCPU 개수</label>
+                            <input type="number" id="inp-vcpu" class="input-field" placeholder="예: 16" min="2" step="2">
+                        </div>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:12px;">
+                        <span style="font-size:12px; color:#15803d;">* 예상 서버 용량(vCPU × 단위성능)</span>
+                        <div class="cloud-result" id="cloud-tpmc">0 tpmC</div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <div class="board-container" id="board-view"></div>
+    </main>
+</div>
+
+<div id="toast-container"></div>
+
+<div id="settings-modal" class="modal-overlay">
+    <div class="settings-box">
+        <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
+            <div style="font-weight:700; font-size:16px;"><i class="fas fa-cog"></i> 기본값 설정</div>
+            <button class="btn btn-secondary btn-icon" id="btn-close-settings" style="height:28px; width:28px;"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="setting-row"><label>기본 복잡도(α)</label><input type="number" id="def-alpha" class="setting-input" step="0.1"></div>
+        <div class="setting-row"><label>기본 여유율(β)</label><input type="number" id="def-beta" class="setting-input" step="0.01"></div>
+        <hr style="border:0; border-top:1px dashed #e2e8f0; margin:16px 0;">
+        <div class="setting-row"><label>① Peak Time</label><input type="number" id="def-peak" class="setting-input" step="0.1"></div>
+        <div class="setting-row"><label>② 리뉴얼 구축</label><input type="number" id="def-renew" class="setting-input" step="0.1"></div>
+        <div class="setting-row"><label>③ 인터페이스 부하</label><input type="number" id="def-inter" class="setting-input" step="0.1"></div>
+        <div class="setting-row"><label>④ 시스템 여유율(추가)</label><input type="number" id="def-safety" class="setting-input" step="0.1"></div>
+        <div class="setting-row"><label>⑤ 향후 5년간 증가분</label><input type="number" id="def-growth" class="setting-input" step="0.1"></div>
+        <div style="margin-top:24px; text-align:right;"><button class="btn btn-primary" id="btn-save-settings">저장</button></div>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+<script>
+    // === IndexedDB Setup ===
+    const DB_NAME = "TpmcSizingDB";
+    const DB_VERSION = 1;
+    const STORE_NAME = "sizings";
+    let db;
+
+    function initDB() {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open(DB_NAME, DB_VERSION);
+            request.onerror = event => reject("IndexedDB 로드 에러");
+            request.onsuccess = event => { db = event.target.result; resolve(db); };
+            request.onupgradeneeded = event => {
+                db = event.target.result;
+                if (!db.objectStoreNames.contains(STORE_NAME)) {
+                    db.createObjectStore(STORE_NAME, { keyPath: "id" });
+                }
+            };
+        });
+    }
+
+    function getAllFromDB() {
+        return new Promise((resolve) => {
+            const tx = db.transaction(STORE_NAME, "readonly");
+            const store = tx.objectStore(STORE_NAME);
+            const request = store.getAll();
+            request.onsuccess = () => resolve(request.result || []);
+        });
+    }
+
+    function putToDB(item) {
+        return new Promise((resolve) => {
+            const tx = db.transaction(STORE_NAME, "readwrite");
+            const store = tx.objectStore(STORE_NAME);
+            store.put(item);
+            tx.oncomplete = () => resolve();
+        });
+    }
+
+    function deleteFromDB(id) {
+        return new Promise((resolve) => {
+            const tx = db.transaction(STORE_NAME, "readwrite");
+            const store = tx.objectStore(STORE_NAME);
+            store.delete(id);
+            tx.oncomplete = () => resolve();
+        });
+    }
+
+    // === Global State ===
+    let dataList = [];
+    let selectedId = null;
+    let config = { alpha: 1.5, beta: 1.43, peak: 1.2, renew: 1.2, inter: 1.1, safety: 1.2, growth: 1.4 };
+    let isBoardView = false;
+
+    // DOM Elements
+    const $ = id => document.getElementById(id);
+    const inps = {
+        name: $('inp-name'), server: $('inp-server'), 
+        tps: $('inp-tps'), alpha: $('sel-alpha'), beta: $('sel-beta'),
+        directTpmc: $('inp-direct-tpmc'),
+        peak: $('inp-peak'), renew: $('inp-renew'), inter: $('inp-inter'), safety: $('inp-safety'), growth: $('inp-growth'),
+        cloudModel: $('sel-cloud-model'), vcpu: $('inp-vcpu')
+    };
+    const defs = { alpha: $('def-alpha'), beta: $('def-beta'), peak: $('def-peak'), renew: $('def-renew'), inter: $('def-inter'), safety: $('def-safety'), growth: $('def-growth') };
+
+    // === Toast UI Logic ===
+    function showToast(message, type = 'success') {
+        const container = $('toast-container');
+        if (!container) return;
+        
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        
+        const icon = type === 'success' ? '<i class="fas fa-check-circle" style="color:var(--success);"></i>' : 
+                     type === 'danger' ? '<i class="fas fa-exclamation-circle" style="color:var(--danger);"></i>' :
+                     '<i class="fas fa-info-circle" style="color:var(--primary);"></i>';
+                     
+        toast.innerHTML = `${icon} <span>${message}</span>`;
+        container.appendChild(toast);
+        
+        setTimeout(() => toast.classList.add('show'), 10);
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => toast.remove(), 300);
+        }, 2000);
+    }
+
+    // --- Core Logic ---
+    function loadConfig() {
+        const saved = localStorage.getItem('TPMC_CONFIG_V4');
+        if(saved) config = JSON.parse(saved);
+        defs.alpha.value = config.alpha; defs.beta.value = config.beta;
+        defs.peak.value = config.peak; defs.renew.value = config.renew;
+        defs.inter.value = config.inter; defs.safety.value = config.safety; defs.growth.value = config.growth;
+    }
+    
+    function saveConfig() {
+        config = {
+            alpha: parseFloat(defs.alpha.value)||1.5, beta: parseFloat(defs.beta.value)||1.43,
+            peak: parseFloat(defs.peak.value)||1.0, renew: parseFloat(defs.renew.value)||1.0,
+            inter: parseFloat(defs.inter.value)||1.0, safety: parseFloat(defs.safety.value)||1.0,
+            growth: parseFloat(defs.growth.value)||1.0
+        };
+        localStorage.setItem('TPMC_CONFIG_V4', JSON.stringify(config));
+        $('settings-modal').style.display = 'none';
+        alert('저장되었습니다.');
+    }
+
+    function toggleMode() {
+        const modeInput = document.querySelector('input[name="calc-mode"]:checked');
+        const mode = modeInput ? modeInput.value : 'TPS';
+        const step1 = $('card-step1');
+        const directBox = $('div-direct-tpmc');
+        
+        if(mode === 'TPS') {
+            step1.classList.remove('disabled-area');
+            directBox.style.display = 'none';
+        } else {
+            step1.classList.add('disabled-area');
+            directBox.style.display = 'block';
+            inps.directTpmc.focus();
+        }
+        calculate();
+    }
+
+    function calculate() {
+        const modeInput = document.querySelector('input[name="calc-mode"]:checked');
+        const mode = modeInput ? modeInput.value : 'TPS';
+        
+        const peak = parseFloat(inps.peak.value)||1;
+        const renew = parseFloat(inps.renew.value)||1;
+        const inter = parseFloat(inps.inter.value)||1;
+        const safety = parseFloat(inps.safety.value)||1;
+        const growth = parseFloat(inps.growth.value)||1;
+
+        let baseTpmc = 0;
+        let tps = 0, alpha = 0, beta = 0;
+
+        if (mode === 'TPS') {
+            tps = parseFloat(inps.tps.value) || 0;
+            alpha = parseFloat(inps.alpha.value)||1;
+            beta = parseFloat(inps.beta.value)||1;
+            $('disp-tpm').value = (tps * 60).toLocaleString();
+            baseTpmc = tps * 60 * alpha * beta;
+            
+            $('formula-preview').innerHTML = 
+                `(TPS×60 × <span style='color:#2563eb'>α${alpha}</span> × <span style='color:#2563eb'>β${beta}</span>) ` +
+                `× ${peak} × ${renew} × ${inter} × ${safety} × ${growth}`;
+        } else {
+            baseTpmc = parseFloat(inps.directTpmc.value) || 0;
+            $('formula-preview').innerHTML = 
+                `(<span style='color:#2563eb; font-weight:bold;'>Base ${baseTpmc.toLocaleString()}</span>) ` +
+                `× ${peak} × ${renew} × ${inter} × ${safety} × ${growth}`;
+        }
+
+        const reqTpmc = Math.round(baseTpmc * peak * renew * inter * safety * growth);
+        $('final-tpmc').textContent = reqTpmc.toLocaleString();
+        
+        const unitTpmc = parseInt(inps.cloudModel.value);
+        const vcpu = parseInt(inps.vcpu.value) || 0;
+        const serverTpmc = unitTpmc * vcpu;
+        
+        $('cloud-tpmc').textContent = serverTpmc.toLocaleString() + ' tpmC';
+        
+        const badge = $('cloud-status');
+        if(vcpu === 0) {
+            badge.className = 'status-badge status-warn'; badge.textContent = '입력 대기';
+            badge.style.background = '#f59e0b';
+        } else if(serverTpmc >= reqTpmc) {
+            badge.className = 'status-badge status-ok'; badge.textContent = '적정 (OK)';
+        } else {
+            badge.className = 'status-badge status-warn'; 
+            badge.style.background = '#ef4444';
+            badge.textContent = `부족 (${Math.round((serverTpmc/reqTpmc)*100) || 0}%)`;
+        }
+
+        return { 
+            mode, tps, alpha, beta, directTpmc: (mode==='TPMC'?baseTpmc:0),
+            peak, renew, inter, safety, growth, reqTpmc, 
+            unitTpmc, vcpu, serverTpmc, cloudName: inps.cloudModel.options[inps.cloudModel.selectedIndex].text
+        };
+    }
+
+    // === View Toggle ===
+    function toggleView() {
+        isBoardView = !isBoardView;
+        const btn = $('btn-toggle-view');
+        const sidebar = document.querySelector('.pane-list'); // 추가: 사이드바 요소 선택
+        
+        if(isBoardView) {
+            $('editor-view').style.display = 'none';
+            $('editor-toolbar').style.display = 'none';
+            $('board-view').classList.add('active');
+            sidebar.style.display = 'none'; // 추가: 장표 뷰일 때 사이드바 숨김
+            btn.innerHTML = `<i class="fas fa-edit"></i> 상세 편집 모드`;
+            btn.classList.add('btn-primary');
+            btn.classList.remove('btn-secondary');
+            renderBoard();
+        } else {
+            $('editor-view').style.display = 'block';
+            $('editor-toolbar').style.display = 'flex';
+            $('board-view').classList.remove('active');
+            sidebar.style.display = 'flex'; // 추가: 편집 모드일 때 사이드바 다시 표시
+            btn.innerHTML = `<i class="fas fa-columns"></i> 장표 한눈에 보기`;
+            btn.classList.add('btn-secondary');
+            btn.classList.remove('btn-primary');
+        }
+    }
+
+    // === Board View Rendering (프로젝트별 그룹화) ===
+    function renderBoard() {
+        const board = $('board-view');
+        board.innerHTML = '';
+        
+        // 프로젝트명 리스트 추출
+        const projects = [...new Set(dataList.map(d => d.name))].sort();
+
+        projects.forEach(prjName => {
+            const itemsInPrj = dataList.filter(d => d.name === prjName);
+            const col = document.createElement('div');
+            col.className = 'board-col';
+            
+            col.innerHTML = `
+                <div class="board-col-header">
+                    <i class="fas fa-folder-open" style="color:var(--primary)"></i> ${prjName}
+                    <span class="count">${itemsInPrj.length}</span>
+                </div>
+            `;
+
+            itemsInPrj.forEach(srv => {
+                const card = document.createElement('div');
+                card.className = 'calc-card';
+                const statusColor = srv.serverTpmc >= srv.reqTpmc ? 'var(--success)' : 'var(--danger)';
+                const inputVal = srv.mode === 'TPS' ? `${srv.tps.toLocaleString()} TPS` : `${srv.directTpmc.toLocaleString()} Base`;
+
+                card.innerHTML = `
+                    <div class="calc-card-header">${srv.server || 'Unnamed Server'}</div>
+                    <div class="calc-card-body">
+                        <div class="calc-stat"><span>입력기준</span><b>${inputVal}</b></div>
+                        <div class="calc-stat"><span>필요 용량</span><b>${srv.reqTpmc.toLocaleString()}</b></div>
+                        <div class="calc-stat"><span>확보 용량</span><b style="color:${statusColor}">${srv.serverTpmc.toLocaleString()}</b></div>
+                        <div class="calc-stat"><span>할당 vCPU</span><b>${srv.vcpu} vCPU</b></div>
+                    </div>
+                    <div class="calc-result-bar" style="color:${statusColor}">
+                        ${srv.serverTpmc >= srv.reqTpmc ? '적정 (OK)' : '부족 (Warning)'}
+                    </div>
+                `;
+                card.ondblclick = () => {
+                    toggleView();
+                    loadItem(srv);
+                };
+                card.title = "더블클릭하여 편집";
+                col.appendChild(card);
+            });
+            board.appendChild(col);
+        });
+    }
+
+    // === DB 연동 List & CRUD ===
+    async function refreshDataList() {
+        dataList = await getAllFromDB();
+        renderList();
+        if(isBoardView) renderBoard();
+    }
+
+    function renderList() {
+        const term = $('search-input').value.toLowerCase();
+        const filtered = dataList.filter(d => d.name.toLowerCase().includes(term) || (d.server||'').toLowerCase().includes(term));
+        const list = $('history-list'); list.innerHTML = '';
+        
+        if(filtered.length === 0) {
+            list.innerHTML = '<div class="empty-state"><span>목록 없음</span></div>';
+            $('total-count').textContent = 0; return;
+        }
+        $('total-count').textContent = filtered.length;
+        filtered.forEach(d => {
+            const el = document.createElement('div');
+            el.className = `item-card ${selectedId === d.id ? 'active' : ''}`;
+            const modeLabel = d.mode === 'TPMC' ? '<span style="font-size:10px; background:#dbeafe; color:#1e40af; padding:2px 4px; border-radius:3px; margin-right:4px;">tpmC</span>' : '';
+            
+            el.innerHTML = `
+                <div class="item-head">
+                    <span class="item-prj">${modeLabel}${d.name}</span>
+                    <div class="item-server"><i class="fas fa-server"></i> ${d.server||'-'}</div>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:11px;">
+                    <span>Req: <b>${d.reqTpmc.toLocaleString()}</b></span>
+                    <span style="color:${d.serverTpmc >= d.reqTpmc ? '#15803d':'#ef4444'}">Prov: <b>${d.serverTpmc.toLocaleString()}</b></span>
+                </div>`;
+            el.onclick = () => {
+                if(isBoardView) toggleView();
+                loadItem(d);
+            };
+            list.appendChild(el);
+        });
+    }
+
+    function loadItem(d) {
+        selectedId = d.id;
+        inps.name.value = d.name; inps.server.value = d.server||'';
+        
+        const mode = d.mode || 'TPS';
+        document.querySelector(`input[name="calc-mode"][value="${mode}"]`).checked = true;
+        toggleMode();
+
+        if(mode === 'TPS') {
+            inps.tps.value = d.tps; inps.alpha.value = d.alpha; inps.beta.value = d.beta;
+            inps.directTpmc.value = '';
+        } else {
+            inps.directTpmc.value = d.directTpmc;
+            inps.tps.value = '';
+        }
+        
+        inps.peak.value = d.peak; inps.renew.value = d.renew; inps.inter.value = d.inter;
+        inps.safety.value = d.safety; inps.growth.value = d.growth;
+        inps.cloudModel.value = d.unitTpmc; inps.vcpu.value = d.vcpu;
+
+        $('btn-delete').style.display = 'inline-flex'; 
+        $('btn-save').innerHTML = '<i class="fas fa-check"></i> 저장';
+        calculate(); renderList();
+    }
+
+    function resetForm() {
+        selectedId = null;
+        inps.name.value = ''; inps.server.value = ''; 
+        
+        document.querySelector(`input[name="calc-mode"][value="TPS"]`).checked = true;
+        toggleMode();
+
+        inps.tps.value = ''; inps.directTpmc.value = '';
+        inps.vcpu.value = '';
+        inps.alpha.value = config.alpha; inps.beta.value = config.beta;
+        inps.peak.value = config.peak; inps.renew.value = config.renew;
+        inps.inter.value = config.inter; inps.safety.value = config.safety; inps.growth.value = config.growth;
+
+        $('btn-delete').style.display = 'none'; $('btn-save').innerHTML = '<i class="fas fa-plus"></i> 저장';
+        calculate(); renderList(); inps.name.focus();
+    }
+
+    async function saveItem() {
+        if(!inps.name.value.trim()) return alert('프로젝트명 입력');
+        const calc = calculate();
+        const newItem = { id: selectedId || Date.now().toString(), name: inps.name.value, server: inps.server.value, ...calc };
+        
+        await putToDB(newItem);
+        
+        selectedId = newItem.id;
+        $('btn-delete').style.display = 'inline-flex'; $('btn-save').innerHTML = '<i class="fas fa-check"></i> 저장';
+        
+        await refreshDataList();
+    }
+
+    async function deleteItem() { 
+        if(selectedId && confirm('삭제하시겠습니까?')) { 
+            await deleteFromDB(selectedId);
+            resetForm(); 
+            await refreshDataList();
+        } 
+    }
+
+    function exportExcel() {
+        if(dataList.length === 0) return alert('추출할 데이터가 없습니다.');
+        const rows = dataList.map((d, i) => {
+            const isTPS = d.mode === 'TPS';
+            return {
+                "No": i+1,
+                "프로젝트명": d.name, 
+                "서버/용도": d.server, 
+                "산정 기준": isTPS ? 'TPS' : 'tpmC',
+                "입력값(TPS/Base)": isTPS ? d.tps : d.directTpmc,
+                "업무 복잡도(α)": isTPS ? d.alpha : '-', 
+                "시스템 여유율(β)": isTPS ? d.beta : '-', 
+                "Peak Time 보정": d.peak, 
+                "리뉴얼 구축 보정": d.renew, 
+                "인터페이스 부하": d.inter, 
+                "추가 여유율": d.safety, 
+                "향후 증가분": d.growth,
+                "최종 필요 tpmC": d.reqTpmc,
+                "클라우드 모델": d.cloudName || '-',
+                "할당 vCPU": d.vcpu, 
+                "확보 tpmC": d.serverTpmc, 
+                "판정 결과": d.serverTpmc >= d.reqTpmc ? '적정' : '부족'
+            };
+        });
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.json_to_sheet(rows);
+        
+        const wscols = [
+            {wch:5}, {wch:20}, {wch:15}, {wch:10}, {wch:15},
+            {wch:15}, {wch:15}, {wch:15}, {wch:15}, {wch:15}, {wch:15}, {wch:15},
+            {wch:18}, {wch:25}, {wch:10}, {wch:15}, {wch:10}
+        ];
+        ws['!cols'] = wscols;
+
+        XLSX.utils.book_append_sheet(wb, ws, "Sizing");
+        XLSX.writeFile(wb, `Sizing_${new Date().toISOString().slice(0,10)}.xlsx`);
+    }
+
+    // === 이미지 저장 기능 (스크롤 영역 전체 캡처) ===
+    async function saveAsImage() {
+        if (!isBoardView) {
+            showToast('장표 한눈에 보기 화면에서만 이미지로 저장할 수 있습니다.', 'info');
+            return;
+        }
+
+        const targetEl = $('board-view');
+
+        try {
+            showToast('이미지 생성을 시작합니다. 잠시만 기다려주세요.', 'info');
+            
+            // 1. 원본 스타일 임시 저장
+            const originalOverflow = targetEl.style.overflow;
+            const originalWidth = targetEl.style.width;
+            const originalHeight = targetEl.style.height;
+
+            // 2. 전체 스크롤 영역 측정을 위해 컨테이너 강제 확장
+            const scrollWidth = targetEl.scrollWidth;
+            const scrollHeight = targetEl.scrollHeight;
+            
+            targetEl.style.overflow = 'visible';
+            targetEl.style.width = scrollWidth + 'px';
+            targetEl.style.height = scrollHeight + 'px';
+
+            // 3. html2canvas 옵션에 전체 크기 명시
+            const canvas = await html2canvas(targetEl, {
+                backgroundColor: '#f8fafc',
+                scale: 2, // 고해상도 처리
+                width: scrollWidth,
+                height: scrollHeight,
+                windowWidth: scrollWidth,    // 가상 윈도우 너비 지정
+                windowHeight: scrollHeight   // 가상 윈도우 높이 지정
+            });
+            
+            // 4. 캡처 완료 후 스타일 원래대로 복구
+            targetEl.style.overflow = originalOverflow;
+            targetEl.style.width = originalWidth;
+            targetEl.style.height = originalHeight;
+
+            // 5. 이미지 다운로드
+            const link = document.createElement('a');
+            link.download = `TPS_tpmC_Sizing_장표뷰_${new Date().toISOString().slice(0,10)}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+            
+            showToast('이미지가 성공적으로 저장되었습니다.', 'success');
+        } catch (e) {
+            console.error(e);
+            showToast('이미지 저장 중 오류가 발생했습니다.', 'danger');
+        }
+    }
+
+    // === App Initialization ===
+    window.onload = async () => {
+        loadConfig();
+        
+        // 이벤트 바인딩
+        [...Object.values(inps)].forEach(el => {
+            if(el) el.addEventListener('input', calculate);
+        });
+        
+        $('btn-new').onclick = resetForm; 
+        $('btn-save').onclick = saveItem; 
+        $('btn-delete').onclick = deleteItem;
+        $('btn-save-img').onclick = saveAsImage; // 이미지 저장 기능 연결
+        $('btn-export').onclick = exportExcel; 
+        $('btn-toggle-view').onclick = toggleView;
+        $('search-input').onkeyup = renderList;
+        $('btn-settings').onclick = () => { loadConfig(); $('settings-modal').style.display = 'flex'; };
+        $('btn-close-settings').onclick = () => $('settings-modal').style.display = 'none';
+        $('btn-save-settings').onclick = saveConfig;
+
+        try {
+            await initDB();
+            await refreshDataList();
+            resetForm();
+        } catch (error) {
+            console.error(error);
+            alert('데이터베이스를 초기화하는 중 오류가 발생했습니다.');
+        }
+    };
+</script>
+</body>
+</html>

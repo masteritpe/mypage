@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Meeting Minutes</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+<style>
+/* --- 1. Design Tokens --- */
+:root {
+  --bg-app: #f3f4f6;
+  --bg-card: #ffffff;
+  --text-main: #111827;
+  --text-sub: #6b7280;
+  --primary: #059669;
+  --primary-hover: #047857;
+  --danger: #ef4444;
+  --danger-hover: #dc2626;
+  --border: #e5e7eb;
+  --focus-ring: rgba(5, 150, 105, 0.2);
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --radius: 12px;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background-color: var(--bg-app);
+  color: var(--text-main);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- 2. Header --- */
+header {
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  z-index: 10;
+}
+header h1 {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+}
+.header-actions { display: flex; gap: 8px; }
+
+/* 버튼 스타일 */
+.btn {
+  border: 1px solid var(--border);
+  background: white;
+  color: var(--text-main);
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn:hover { background-color: #f9fafb; border-color: #d1d5db; }
+.btn:active { transform: translateY(1px); }
+.btn.action { color: #4b5563; }
+.btn.action:hover { color: #1f2937; background: #f3f4f6; }
+.btn.primary { background: var(--primary); color: white; border: 1px solid var(--primary); }
+.btn.primary:hover { background: var(--primary-hover); }
+.btn.danger { color: var(--danger); border-color: var(--border); }
+.btn.danger:hover { background: #fef2f2; border-color: #fecaca; color: var(--danger-hover); }
+.btn.icon-only { padding: 8px 10px; color: var(--text-sub); border: none; background: transparent; }
+.btn.icon-only:hover { background: #f3f4f6; color: var(--text-main); }
+.btn.ghost { border: none; background: transparent; }
+.btn.ghost:hover { background: #f3f4f6; }
+.btn-sep { width: 1px; height: 16px; background: #e5e7eb; margin: 0 4px; align-self: center; }
+
+/* --- 3. Main Layout --- */
+main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  height: calc(100vh - 60px);
+  overflow: hidden;
+}
+@media (max-width: 900px) {
+  main { grid-template-columns: 1fr; }
+  aside { display: none; }
+}
+
+.scroll-area { padding: 24px; overflow-y: auto; height: 100%; }
+
+/* --- 4. Sidebar --- */
+aside { background: white; border-right: 1px solid var(--border); display: flex; flex-direction: column; z-index: 5; }
+.sidebar-header { padding: 16px; border-bottom: 1px solid var(--border); }
+.search-box { position: relative; }
+.search-box i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #9ca3af; font-size: 14px; }
+.search-box input {
+  width: 100%; padding: 10px 10px 10px 36px; border: 1px solid var(--border); border-radius: 8px;
+  font-size: 13px; background: #f9fafb; outline: none; transition: all 0.2s;
+}
+.search-box input:focus { background: white; border-color: var(--primary); box-shadow: 0 0 0 3px var(--focus-ring); }
+
+.history-list { overflow-y: auto; flex: 1; padding: 12px; }
+.history-item {
+  padding: 14px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px;
+  cursor: pointer; background: white; transition: all 0.2s;
+}
+.history-item:hover { border-color: var(--primary); transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+.history-item.active { background: #ecfdf5; border-color: var(--primary); }
+.h-title { font-size: 14px; font-weight: 700; color: var(--text-main); margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.h-meta { font-size: 11px; color: var(--text-sub); display: flex; justify-content: space-between; }
+
+/* --- 5. Editor Section --- */
+.editor-container {
+  display: flex; flex-direction: column; gap: 24px;
+  max-width: 900px; margin: 0 auto; width: 100%;
+}
+
+.card {
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow-sm); overflow: hidden; transition: box-shadow 0.2s;
+}
+.card:focus-within { box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border-color: var(--primary); }
+.card-header {
+  padding: 16px 32px;
+  background: #fafafa; border-bottom: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.card-title { font-size: 14px; font-weight: 700; color: #374151; display: flex; align-items: center; gap: 6px; }
+
+/* 입력 폼 스타일 */
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 24px 32px; }
+.form-group { display: flex; flex-direction: column; gap: 8px; }
+.form-group.full-width { grid-column: span 2; }
+.form-label { font-size: 13px; font-weight: 600; color: var(--text-sub); }
+.form-control {
+  width: 100%; padding: 12px 14px;
+  border: 1px solid var(--border); border-radius: 8px;
+  font-size: 14px; outline: none; transition: border-color 0.2s; font-family: inherit;
+}
+.form-control:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--focus-ring); }
+
+textarea.form-control {
+  resize: vertical;
+  min-height: 80px;
+  line-height: 1.5;
+}
+
+textarea.content-area {
+  width: 100%; border: none; padding: 32px;
+  resize: vertical; font-size: 14px; line-height: 1.6;
+  font-family: inherit; outline: none; min-height: 400px; color: #374151;
+}
+textarea::placeholder { color: #9ca3af; }
+.toolbar-group { display: flex; align-items: center; gap: 6px; }
+
+/* Toast */
+#toast-area { position: fixed; bottom: 24px; right: 24px; display: flex; flex-direction: column; gap: 8px; z-index: 1100; }
+.toast {
+  background: #1f2937; color: white; padding: 12px 16px; border-radius: 8px; font-size: 13px;
+  box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex; align-items: center; gap: 10px;
+}
+@keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+/* --- 6. Modal (회의 일정) --- */
+.modal-overlay {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.4); z-index: 2000;
+  display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(2px);
+}
+.modal-content {
+  background: #fff; width: 950px; max-width: 95%; border-radius: 12px;
+  box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04); 
+  display: flex; flex-direction: column; height: 80vh; max-height: 800px; overflow: hidden;
+}
+.modal-header {
+  padding: 16px 24px; border-bottom: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: center; background: #fafafa;
+}
+.modal-header h2 { margin: 0; font-size: 16px; display: flex; align-items: center; gap: 8px; color: #374151; }
+.modal-body { padding: 24px; display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+
+/* 일정 모달 내부 레이아웃 */
+.schedule-layout { 
+  display: grid; 
+  grid-template-columns: 320px 1fr; 
+  gap: 24px; 
+  flex: 1;
+  overflow: hidden;
+}
+@media (max-width: 768px) { .schedule-layout { grid-template-columns: 1fr; overflow-y: auto; } }
+
+.schedule-form { 
+  background: #f9fafb; padding: 20px; border-radius: 8px; border: 1px solid var(--border); 
+  display: flex; flex-direction: column; height: 100%;
+}
+
+/* 아젠다 영역 공간 조금 줄이고 남은 영역 채움 */
+.sch-agenda-group { 
+  flex: 1; 
+  display: flex; flex-direction: column; 
+  margin-top: 16px; min-height: 120px; 
+}
+#sch-agenda { 
+  flex: 1; 
+  resize: none; 
+}
+
+/* 버튼 짤림 방지용 고정 영역 처리 */
+.sch-form-buttons {
+  display: flex; align-items: center; gap: 8px; margin-top: 16px; flex-shrink: 0;
+}
+
+.schedule-list-area { display: flex; flex-direction: column; overflow: hidden; }
+.sch-table-wrapper { border: 1px solid var(--border); border-radius: 8px; overflow-y: auto; flex: 1; background: white; }
+.sch-table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+.sch-table th, .sch-table td { padding: 12px 14px; border-bottom: 1px solid var(--border); text-align: left; }
+.sch-table th { background: #f3f4f6; font-weight: 600; color: var(--text-sub); position: sticky; top: 0; z-index: 2; }
+.sch-table tr { cursor: pointer; transition: background 0.2s; }
+.sch-table tr:hover { background: #f9fafb; }
+.sch-table tr.selected { background: #ecfdf5; }
+/* 선택된 항목 왼쪽에 띠 표시 */
+.sch-table tr.selected td:first-child { box-shadow: inset 3px 0 0 0 var(--primary); }
+/* 아젠다 말줄임표 처리 위한 CSS */
+.sch-table td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #374151; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1><i class="fas fa-handshake" style="color:var(--primary)"></i> 회의록 관리</h1>
+  <div class="header-actions">
+    <button class="btn action" id="btn-new" title="단축키: Ctrl+Alt+N"><i class="fas fa-plus"></i> 새 회의록</button>
+    <button class="btn action" id="btn-schedule" title="회의 일정 및 아젠다 관리"><i class="fas fa-calendar-alt" style="color:#8b5cf6"></i> 회의 일정</button>
+    <div class="btn-sep"></div>
+    <button class="btn action" id="btn-export-word" title="Word 양식으로 다운로드"><i class="fas fa-file-word" style="color:#2563eb"></i> Word 다운로드</button>
+    <div class="btn-sep"></div>
+    <button class="btn danger" id="btn-delete"><i class="fas fa-trash-alt"></i> 삭제</button>
+    <button class="btn primary" id="btn-save" title="단축키: Ctrl+S"><i class="fas fa-save"></i> 저장</button>
+  </div>
+</header>
+
+<main>
+  <aside>
+    <div class="sidebar-header">
+      <div class="search-box">
+        <i class="fas fa-search"></i>
+        <input type="text" id="search-input" spellcheck="false" placeholder="회의 제목, 내용 검색..." />
+      </div>
+    </div>
+    <div id="history-list" class="history-list"></div>
+  </aside>
+
+  <div class="scroll-area">
+    <div class="editor-container">
+      
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="fas fa-info-circle" style="color:var(--primary)"></i> 기본 정보</div>
+        </div>
+        <div class="form-grid">
+          <div class="form-group full-width">
+            <label class="form-label">회의 제목</label>
+            <input type="text" id="doc-title" class="form-control" list="list-title" spellcheck="false" placeholder="예: 인프라 아키텍처 선정">
+          </div>
+          <div class="form-group">
+            <label class="form-label">문서 번호</label>
+            <input type="text" id="doc-number" class="form-control" spellcheck="false" placeholder="예: 20260701-01-공통(TA)">
+          </div>
+          <div class="form-group">
+            <label class="form-label">작성자</label>
+            <input type="text" id="doc-author" class="form-control" list="list-author" spellcheck="false" placeholder="예: 장홍석 수석">
+          </div>
+          <div class="form-group">
+            <label class="form-label">회의 일시</label>
+            <input type="text" id="doc-datetime" class="form-control" spellcheck="false" placeholder="예: 2026-05-15 10:00~10:40">
+          </div>
+          <div class="form-group">
+            <label class="form-label">회의 장소</label>
+            <input type="text" id="doc-location" class="form-control" list="list-location" spellcheck="false" placeholder="예: 아시아나IDT 제안룸1">
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="fas fa-users" style="color:#f59e0b"></i> 참석자 정보</div>
+        </div>
+        <div class="form-grid">
+          <div class="form-group full-width">
+            <label class="form-label">고객사</label>
+            <textarea id="attendee-client" class="form-control" spellcheck="false" placeholder="예: 이브릿지 김선주 상무"></textarea>
+          </div>
+          <div class="form-group full-width">
+            <label class="form-label">프로젝트</label>
+            <textarea id="attendee-project" class="form-control" spellcheck="false" placeholder="예: 아시아나 IDT 장홍석, 투비소프트 박지만/최선"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="fas fa-file-alt" style="color:#3b82f6"></i> 회의 내용</div>
+          <div class="toolbar-group">
+            <button class="btn icon-only ghost" style="padding:4px;" onclick="insertBullet('doc-content', '▶ ')" title="구분 추가 (Alt+1)"><i class="fas fa-caret-right"></i></button>
+            <button class="btn icon-only ghost" style="padding:4px;" onclick="insertBullet('doc-content', '● ')" title="닷 추가 (Alt+2)"><i class="fas fa-circle" style="font-size: 10px;"></i></button>            
+            <button class="btn icon-only ghost" style="padding:4px;" onclick="insertBullet('doc-content', '- ')" title="리스트 추가 (Alt+3)"><i class="fas fa-list-ul"></i></button>
+            <button class="btn icon-only ghost" style="padding:4px;" onclick="insertBullet('doc-content', '→ ')" title="화살표 추가 (Alt+4)"><i class="fas fa-arrow-right"></i></button>
+          </div>
+        </div>
+        <textarea id="doc-content" class="content-area" spellcheck="false" placeholder="본 회의록은 아키텍처 검토 자료 외 내용으로 기술합니다..."></textarea>
+      </div>
+
+    </div>
+  </div>
+</main>
+
+<div id="schedule-modal" class="modal-overlay" style="display:none;">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2><i class="fas fa-calendar-alt" style="color:#8b5cf6"></i> 회의 일정 관리</h2>
+      <button class="btn icon-only" id="btn-close-modal"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="schedule-layout">
+        <div class="schedule-form">
+          <div class="form-group">
+            <label class="form-label">회의 일자</label>
+            <input type="date" id="sch-date" class="form-control">
+          </div>
+          <div class="form-group" style="margin-top: 16px;">
+            <label class="form-label">회의명</label>
+            <input type="text" id="sch-name" class="form-control" spellcheck="false" placeholder="예: 인프라 아키텍처 검토">
+          </div>
+          <div class="form-group sch-agenda-group">
+            <label class="form-label">아젠다</label>
+            <textarea id="sch-agenda" class="form-control" spellcheck="false" placeholder="쿠버네티스 검토 사항 안내&#13;&#10;비동기 이벤트 처리..."></textarea>
+          </div>
+          
+          <div class="sch-form-buttons">
+            <button class="btn ghost" id="btn-sch-delete" style="display:none; margin-right:auto; color:var(--danger); padding:8px 4px;"><i class="fas fa-trash-alt"></i> 삭제</button>
+            <div style="margin-left: auto; display: flex; gap: 8px;">
+              <button class="btn ghost action" id="btn-sch-clear" style="padding:8px 12px;"><i class="fas fa-undo"></i> 초기화</button>
+              <button class="btn primary" id="btn-sch-save"><i class="fas fa-check"></i> 저장</button>
+            </div>
+          </div>
+        </div>
+        
+        <div class="schedule-list-area">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-shrink: 0;">
+            <span style="font-size:14px; color:var(--text-sub); font-weight:700;">등록된 일정 목록</span>
+            <button class="btn action" id="btn-sch-excel"><i class="fas fa-file-excel" style="color:#10b981"></i> Excel 다운로드</button>
+          </div>
+          <div class="sch-table-wrapper">
+            <table class="sch-table">
+              <thead>
+                <tr>
+                  <th style="width: 110px;">일자</th>
+                  <th style="width: 160px;">회의명</th>
+                  <th>아젠다</th>
+                </tr>
+              </thead>
+              <tbody id="sch-tbody">
+                </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<datalist id="list-title"></datalist>
+<datalist id="list-author"></datalist>
+<datalist id="list-location"></datalist>
+
+<div id="toast-area"></div>
+
+<script>
+/* ================= Logic ================= */
+const DB_NAME = 'MeetingMinutesDB'; 
+const DB_VERSION = 2; 
+const STORE_NAME = 'minutes';
+const SCH_STORE_NAME = 'schedules';
+
+let db;
+let currentDocId = null;
+let currentSchId = null;
+
+// DB 초기화
+function openDB() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = e => {
+      const d = e.target.result;
+      if (!d.objectStoreNames.contains(STORE_NAME)) {
+          d.createObjectStore(STORE_NAME, { keyPath: 'id' });
+      }
+      if (!d.objectStoreNames.contains(SCH_STORE_NAME)) {
+          d.createObjectStore(SCH_STORE_NAME, { keyPath: 'id' });
+      }
+    };
+    req.onsuccess = () => { db = req.result; res(db); };
+    req.onerror = () => rej(req.error);
+  });
+}
+
+// 회의록 트랜잭션 함수
+const tx = (mode) => db.transaction(STORE_NAME, mode).objectStore(STORE_NAME);
+const saveItem = (item) => new Promise((res, rej) => { const r = tx('readwrite').put(item); r.onsuccess = () => res(); r.onerror = rej; });
+const loadItem = (id) => new Promise((res, rej) => { const r = tx('readonly').get(id); r.onsuccess = () => res(r.result); r.onerror = rej; });
+const getAllItems = () => new Promise((res, rej) => { const r = tx('readonly').getAll(); r.onsuccess = () => res(r.result); r.onerror = rej; });
+const deleteItem = (id) => new Promise((res, rej) => { const r = tx('readwrite').delete(id); r.onsuccess = () => res(); r.onerror = rej; });
+
+// 일정 트랜잭션 함수
+const txSch = (mode) => db.transaction(SCH_STORE_NAME, mode).objectStore(SCH_STORE_NAME);
+const saveSchItem = (item) => new Promise((res, rej) => { const r = txSch('readwrite').put(item); r.onsuccess = () => res(); r.onerror = rej; });
+const getAllSchItems = () => new Promise((res, rej) => { const r = txSch('readonly').getAll(); r.onsuccess = () => res(r.result); r.onerror = rej; });
+const deleteSchItem = (id) => new Promise((res, rej) => { const r = txSch('readwrite').delete(id); r.onsuccess = () => res(); r.onerror = rej; });
+
+// App Logic
+const App = {
+  async init() {
+    await openDB();
+    
+    // 버튼 이벤트
+    document.getElementById('btn-new').addEventListener('click', () => this.createNew());
+    document.getElementById('btn-save').addEventListener('click', () => this.save());
+    document.getElementById('btn-delete').addEventListener('click', () => this.delete());
+    document.getElementById('btn-export-word').addEventListener('click', () => this.exportToWord());
+
+    // 일정 모달 이벤트
+    document.getElementById('btn-schedule').addEventListener('click', () => {
+        document.getElementById('schedule-modal').style.display = 'flex';
+        this.loadSchedules();
+    });
+    document.getElementById('btn-close-modal').addEventListener('click', () => {
+        document.getElementById('schedule-modal').style.display = 'none';
+    });
+    document.getElementById('btn-sch-save').addEventListener('click', () => this.saveSchedule());
+    document.getElementById('btn-sch-clear').addEventListener('click', () => this.clearScheduleForm());
+    document.getElementById('btn-sch-delete').addEventListener('click', () => this.deleteSchedule());
+    document.getElementById('btn-sch-excel').addEventListener('click', () => this.exportScheduleExcel());
+
+    // === 모달 닫힘 버그 수정 부분 시작 ===
+    // 드래그(선택) 중 마우스가 바깥으로 나갔을 때 닫히는 현상 방지
+    let isMouseDownOnOverlay = false;
+
+    document.getElementById('schedule-modal').addEventListener('mousedown', (e) => {
+        if(e.target === document.getElementById('schedule-modal')) {
+            isMouseDownOnOverlay = true;
+        } else {
+            isMouseDownOnOverlay = false;
+        }
+    });
+
+    document.getElementById('schedule-modal').addEventListener('mouseup', (e) => {
+        if(e.target === document.getElementById('schedule-modal') && isMouseDownOnOverlay) {
+            document.getElementById('schedule-modal').style.display = 'none';
+        }
+        isMouseDownOnOverlay = false;
+    });
+    // === 모달 닫힘 버그 수정 부분 끝 ===
+
+    // 검색어 바인딩
+    document.getElementById('search-input').addEventListener('input', e => this.renderList(e.target.value));
+
+    // 단축키 설정
+    document.addEventListener('keydown', e => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { 
+        e.preventDefault(); 
+        this.save();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.altKey && e.key.toLowerCase() === 'n') {
+        e.preventDefault();
+        this.createNew();
+        return;
+      }
+      if (e.altKey && !e.ctrlKey && !e.metaKey) {
+        const activeEl = document.activeElement;
+        if (activeEl.tagName === 'TEXTAREA' && activeEl.id === 'doc-content') {
+            if (e.key === '1') { e.preventDefault(); insertBullet(activeEl.id, '▶ '); } 
+            else if (e.key === '2') { e.preventDefault(); insertBullet(activeEl.id, '● '); } 
+            else if (e.key === '3') { e.preventDefault(); insertBullet(activeEl.id, '- '); } 
+            else if (e.key === '4') { e.preventDefault(); insertBullet(activeEl.id, '→ '); }
+        }
+      }
+      if (e.key === 'Tab' && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey) {
+        const activeEl = document.activeElement;
+        if (activeEl.tagName === 'TEXTAREA' && activeEl.id === 'doc-content') {
+            e.preventDefault(); 
+            const start = activeEl.selectionStart;
+            const end = activeEl.selectionEnd;
+            const val = activeEl.value;
+            const tabSymbol = '    '; 
+            activeEl.value = val.substring(0, start) + tabSymbol + val.substring(end);
+            activeEl.selectionStart = activeEl.selectionEnd = start + tabSymbol.length;
+        }
+      }
+    });
+
+    this.renderList();
+  },
+
+  // === 회의록 관련 로직 ===
+  createNew() {
+    currentDocId = null;
+    document.getElementById('doc-title').value = '';
+    document.getElementById('doc-number').value = '';
+    document.getElementById('doc-author').value = '';
+    document.getElementById('doc-datetime').value = '';
+    document.getElementById('doc-location').value = '';
+    document.getElementById('attendee-client').value = '';
+    document.getElementById('attendee-project').value = '';
+    document.getElementById('doc-content').value = '';
+    
+    this.renderList(document.getElementById('search-input').value);
+    document.getElementById('doc-title').focus();
+    this.showToast('새 회의록 양식이 준비되었습니다.');
+  },
+
+  async loadDoc(id) {
+    const data = await loadItem(id);
+    if(data) {
+        currentDocId = data.id;
+        document.getElementById('doc-title').value = data.title || '';
+        document.getElementById('doc-number').value = data.docNumber || '';
+        document.getElementById('doc-author').value = data.author || '';
+        document.getElementById('doc-datetime').value = data.datetime || '';
+        document.getElementById('doc-location').value = data.location || '';
+        document.getElementById('attendee-client').value = data.client || '';
+        document.getElementById('attendee-project').value = data.project || '';
+        document.getElementById('doc-content').value = data.content || '';
+        
+        this.renderList(document.getElementById('search-input').value);
+    }
+  },
+
+  async save() {
+    const title = document.getElementById('doc-title').value;
+    if (!title) {
+        this.showToast('회의 제목을 입력해주세요.', 'error');
+        document.getElementById('doc-title').focus();
+        return;
+    }
+
+    if (!currentDocId) currentDocId = Date.now().toString();
+
+    const data = {
+      id: currentDocId,
+      title: title,
+      docNumber: document.getElementById('doc-number').value,
+      author: document.getElementById('doc-author').value,
+      datetime: document.getElementById('doc-datetime').value,
+      location: document.getElementById('doc-location').value,
+      client: document.getElementById('attendee-client').value,
+      project: document.getElementById('attendee-project').value,
+      content: document.getElementById('doc-content').value,
+      updatedAt: new Date().toISOString()
+    };
+
+    try {
+      await saveItem(data);
+      this.showToast('저장되었습니다.', 'success');
+      this.renderList(document.getElementById('search-input').value);
+    } catch(e) { this.showToast('저장 실패', 'error'); }
+  },
+
+  async delete() {
+    if (!currentDocId) {
+        this.showToast('삭제할 문서가 없습니다.'); 
+        return; 
+    }
+    if(confirm(`현재 회의록을 삭제하시겠습니까?`)) {
+        try {
+            await deleteItem(currentDocId);
+            this.showToast('삭제되었습니다.', 'success');
+            this.createNew();
+        } catch(e) { this.showToast('삭제 오류', 'error'); }
+    }
+  },
+
+  updateDatalists(list) {
+    const titles = new Set();
+    const authors = new Set();
+    const locations = new Set();
+
+    list.forEach(item => {
+        if(item.title) titles.add(item.title);
+        if(item.author) authors.add(item.author);
+        if(item.location) locations.add(item.location);
+    });
+
+    const populate = (id, set) => {
+        const dl = document.getElementById(id);
+        if(!dl) return;
+        dl.innerHTML = ''; 
+        set.forEach(val => {
+            const opt = document.createElement('option');
+            opt.value = val;
+            dl.appendChild(opt);
+        });
+    };
+
+    populate('list-title', titles);
+    populate('list-author', authors);
+    populate('list-location', locations);
+  },
+
+  async renderList(query = '') {
+    const list = await getAllItems();
+    this.updateDatalists(list);
+    list.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+
+    const container = document.getElementById('history-list');
+    container.innerHTML = '';
+
+    const filtered = list.filter(item => {
+      const q = query.toLowerCase();
+      const searchable = (item.title + (item.docNumber||'') + (item.content||'') + (item.datetime||'')).toLowerCase();
+      return searchable.includes(q);
+    });
+
+    if (filtered.length === 0) {
+      container.innerHTML = `<div style="text-align:center; padding:20px; color:#9ca3af; font-size:13px;">저장된 회의록이 없습니다.</div>`;
+      return;
+    }
+
+    filtered.forEach(item => {
+      const el = document.createElement('div');
+      el.className = `history-item ${item.id === currentDocId ? 'active' : ''}`;
+      el.onclick = () => this.loadDoc(item.id);
+      
+      const dateStr = item.datetime ? item.datetime.split(' ')[0] : '일시 미상';
+      el.innerHTML = `
+        <div class="h-title">${item.title || '제목 없음'}</div>
+        <div class="h-meta">
+            <span>${item.docNumber || '번호 없음'}</span>
+            <span>${dateStr}</span>
+        </div>
+      `;
+      container.appendChild(el);
+    });
+  },
+
+  // === 회의 일정 모달 로직 ===
+  async loadSchedules() {
+    const list = await getAllSchItems();
+    list.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0)); // 최신 날짜순
+    
+    const tbody = document.getElementById('sch-tbody');
+    tbody.innerHTML = '';
+    
+    if(list.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:20px; color:#9ca3af;">등록된 일정이 없습니다.</td></tr>`;
+        return;
+    }
+
+    list.forEach(item => {
+        const tr = document.createElement('tr');
+        if(item.id === currentSchId) tr.classList.add('selected');
+        
+        // 아젠다가 여러 줄일 경우 첫 번째 줄만 가져오기
+        const firstLineAgenda = item.agenda ? item.agenda.split('\n')[0] : '-';
+
+        tr.innerHTML = `
+            <td>${item.date || '-'}</td>
+            <td title="${item.name || ''}">${item.name || '-'}</td>
+            <td title="${item.agenda || ''}">${firstLineAgenda}</td>
+        `;
+        
+        tr.onclick = () => {
+            currentSchId = item.id;
+            document.getElementById('sch-date').value = item.date || '';
+            document.getElementById('sch-name').value = item.name || '';
+            document.getElementById('sch-agenda').value = item.agenda || '';
+            document.getElementById('btn-sch-delete').style.display = 'block';
+            this.loadSchedules(); // 선택 영역 하이라이트 갱신
+        };
+        tbody.appendChild(tr);
+    });
+  },
+
+  clearScheduleForm() {
+    currentSchId = null;
+    document.getElementById('sch-date').value = '';
+    document.getElementById('sch-name').value = '';
+    document.getElementById('sch-agenda').value = '';
+    document.getElementById('btn-sch-delete').style.display = 'none';
+    this.loadSchedules();
+  },
+
+  async saveSchedule() {
+    const name = document.getElementById('sch-name').value.trim();
+    if(!name) {
+        this.showToast('회의명을 입력해주세요.', 'error');
+        document.getElementById('sch-name').focus();
+        return;
+    }
+
+    const item = {
+        id: currentSchId || Date.now().toString(),
+        date: document.getElementById('sch-date').value,
+        name: name,
+        agenda: document.getElementById('sch-agenda').value
+    };
+
+    try {
+      await saveSchItem(item);
+      this.showToast('일정이 저장되었습니다.', 'success');
+      currentSchId = item.id;
+      document.getElementById('btn-sch-delete').style.display = 'block';
+      this.loadSchedules();
+    } catch(e) { this.showToast('일정 저장 실패', 'error'); }
+  },
+
+  async deleteSchedule() {
+    if(!currentSchId) return;
+    if(confirm('해당 일정을 삭제하시겠습니까?')) {
+        try {
+            await deleteSchItem(currentSchId);
+            this.showToast('일정이 삭제되었습니다.', 'success');
+            this.clearScheduleForm();
+        } catch(e) { this.showToast('일정 삭제 실패', 'error'); }
+    }
+  },
+
+  async exportScheduleExcel() {
+    const list = await getAllSchItems();
+    if(list.length === 0) {
+        this.showToast('다운로드할 일정이 없습니다.', 'error');
+        return;
+    }
+    
+    // 엑셀은 과거 날짜부터 오름차순 정렬이 보기 편함
+    list.sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0)); 
+
+    // CSV BOM 설정 (한글 깨짐 방지)
+    let csvContent = '\uFEFF'; 
+    csvContent += '회의 일자,회의명,아젠다\n';
+
+    list.forEach(item => {
+        // 셀 내의 콤마나 줄바꿈 처리
+        const date = `"${(item.date||'').replace(/"/g, '""')}"`;
+        const name = `"${(item.name||'').replace(/"/g, '""')}"`;
+        const agenda = `"${(item.agenda||'').replace(/"/g, '""')}"`;
+        csvContent += `${date},${name},${agenda}\n`;
+    });
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    
+    const today = new Date().toISOString().slice(0,10);
+    link.href = url;
+    link.download = `회의일정_${today}.csv`;
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    this.showToast('일정이 엑셀(CSV)로 다운로드되었습니다.', 'success');
+  },
+
+  exportToWord() {
+    const title = (document.getElementById('doc-title').value || '').trim();
+    const docNumber = (document.getElementById('doc-number').value || '').trim();
+    const author = (document.getElementById('doc-author').value || '').trim();
+    const datetime = (document.getElementById('doc-datetime').value || '').trim();
+    const location = (document.getElementById('doc-location').value || '').trim();
+    
+    const formatText = (text) => {
+      if (!text) return '';
+      const lines = text.replace(/\s+$/, '').split('\n');
+      return lines.map(line => {
+        const match = line.match(/^([ \t]+)(.*)/);
+        if (match) {
+          const spaces = match[1];
+          const rest = match[2];
+          let indent = 0;
+          for (let i = 0; i < spaces.length; i++) {
+            if (spaces[i] === '\t') indent += 24; 
+            else indent += 6; 
+          }
+          const safeRest = rest.replace(/  /g, '&nbsp;&nbsp;');
+          return `<p style="margin: 0 0 0 ${indent}px; line-height: 1.6;">${safeRest}</p>`;
+        } else {
+          const safeLine = line.replace(/  /g, '&nbsp;&nbsp;');
+          return `<p style="margin: 0; line-height: 1.6;">${safeLine || '&nbsp;'}</p>`;
+        }
+      }).join('');
+    };
+    
+    const client = formatText(document.getElementById('attendee-client').value);
+    const project = formatText(document.getElementById('attendee-project').value);
+    const content = formatText(document.getElementById('doc-content').value);
+
+    const htmlTemplate = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" 
+            xmlns:w="urn:schemas-microsoft-com:office:word" 
+            xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta charset="utf-8">
+        <title>회의록</title>
+        <style>
+          @page WordSection1 {
+            size: 21.0cm 29.7cm;
+            margin: 2.5cm 2.0cm 2.5cm 2.0cm;
+            mso-header-margin: 1.25cm;
+            mso-footer-margin: 1.25cm;
+            mso-header: h1;
+          }
+          div.WordSection1 { page: WordSection1; }
+          
+          body, p, div, span, td, th { 
+            font-family: 'Batang', '바탕체', serif; 
+            font-size: 10pt; 
+            margin: 0; 
+            padding: 0; 
+            line-height: 1.4;
+          }
+
+          .doc-title { text-align: center; font-size: 20pt; font-weight: bold; margin-top: 10pt; margin-bottom: 20pt; }
+          
+          table.data-table { width: 100%; border-collapse: collapse; border: 1px solid black; }
+          .table-gap { height: 12pt; font-size: 10pt; line-height: 1; margin: 10pt 0; }
+          
+          table.data-table th, table.data-table td { 
+            border: 1px solid black; 
+            padding: 4px 6px; 
+            vertical-align: middle; 
+          }
+          table.data-table th { background-color: #f2f2f2; text-align: center; font-weight: bold; }
+          
+          .col-th { width: 15%; }
+          .col-td { width: 35%; }
+          
+          .attendee-header { text-align: left; font-weight: bold; background-color: #f2f2f2; padding-left: 10px; }
+          .content-header { text-align: center; vertical-align: middle; font-weight: bold; background-color: #f2f2f2; font-size: 12pt; height: 35px; }
+
+          table.hrdftrtbl {
+            margin: 0in 0in 0in 900in;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+          }
+        </style>
+      </head>
+      <body>
+        
+        <div class="WordSection1">
+          <div class="doc-title">회&nbsp;&nbsp;&nbsp;&nbsp;의&nbsp;&nbsp;&nbsp;&nbsp;록</div>
+          
+          <table class="data-table">
+            <tr>
+              <th class="col-th">문서 번호</th><td class="col-td">${docNumber}</td>
+              <th class="col-th">작성자</th><td class="col-td">${author}</td>
+            </tr>
+            <tr>
+              <th>회의 일시</th><td>${datetime}</td>
+              <th>회의 장소</th><td>${location}</td>
+            </tr>
+            <tr>
+              <th>회의 제목</th><td colspan="3">${title}</td>
+            </tr>
+            <tr>
+              <td colspan="4" class="attendee-header">회의 참석자</td>
+            </tr>
+            <tr>
+              <th>고객사</th><td colspan="3">${client}</td>
+            </tr>
+            <tr>
+              <th>프로젝트</th><td colspan="3">${project}</td>
+            </tr>
+          </table>
+
+          <p class="table-gap">&nbsp;</p>
+
+          <table class="data-table">
+            <tr>
+              <th class="content-header">회&nbsp;&nbsp;&nbsp;의&nbsp;&nbsp;&nbsp;내&nbsp;&nbsp;&nbsp;용</th>
+            </tr>
+            <tr>
+              <td valign="top" style="height: 450px; vertical-align: top; padding: 15px 25px 15px 50px; line-height: 1.6;">
+                ${content}
+              </td>
+            </tr>
+          </table>
+        </div>
+
+        <table class="hrdftrtbl" border="0" cellspacing="0" cellpadding="0">
+          <tr>
+            <td>
+              <div style="mso-element:header" id="h1">
+                <table style="width: 100%; border-collapse: collapse; border: none;">
+                  <tr>
+                    <td style="border: none; border-bottom: 3px double black; text-align: left; font-size: 10pt; font-weight: bold; color: #555; padding-bottom: 5px; font-family: 'Batang', '바탕체', serif !important;">이브릿지 더라운지시스템 3.0 구축 사업</td>
+                    <td style="border: none; border-bottom: 3px double black; text-align: right; font-size: 10pt; font-weight: bold; color: #555; padding-bottom: 5px; font-family: 'Batang', '바탕체', serif !important;">회의록</td>
+                  </tr>
+                </table>
+              </div>
+            </td>
+          </tr>
+        </table>
+
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob(['\ufeff', htmlTemplate], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
+    
+    const safeTitle = title || '제목없음';
+    const fileName = `${docNumber ? docNumber : '회의록'}_${safeTitle}.doc`;
+    
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    this.showToast('Word 문서(doc)로 다운로드되었습니다.', 'success');
+  },
+
+  showToast(msg, type='info') {
+    const area = document.getElementById('toast-area');
+    const el = document.createElement('div');
+    el.className = 'toast';
+    let icon = '<i class="fas fa-info-circle"></i>';
+    if(type === 'success') icon = '<i class="fas fa-check-circle" style="color:#10b981"></i>';
+    if(type === 'error') icon = '<i class="fas fa-exclamation-circle" style="color:#ef4444"></i>';
+    el.innerHTML = `${icon} ${msg}`;
+    area.appendChild(el);
+    setTimeout(() => el.remove(), 3000);
+  }
+};
+
+window.insertBullet = function(id, symbol = '- ') {
+  const el = document.getElementById(id);
+  const start = el.selectionStart;
+  const end = el.selectionEnd; 
+  const val = el.value;
+  const before = val.substring(0, start);
+  const after = val.substring(end);
+  el.value = before + symbol + after;
+  el.selectionStart = el.selectionEnd = start + symbol.length;
+  el.focus();
+};
+
+App.init();
+</script>
+</body>
+</html>

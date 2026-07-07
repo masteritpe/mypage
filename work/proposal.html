@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Proposal Manager</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@300;400;500;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+
+<link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+<script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+<script src="https://unpkg.com/quill-image-resize@3.0.9/image-resize.min.js"></script>
+
+<style>
+/* === Proposal Manager Theme === */
+:root {
+    --bg-app: #f8fafc; --bg-panel: #ffffff; --border: #e2e8f0;
+    --primary: #2563eb; --primary-hover: #1d4ed8; --primary-light: #eff6ff;
+    --success: #10b981; --warning: #f59e0b; --danger: #ef4444;
+    --text-main: #0f172a; --text-sub: #64748b;
+    --radius: 8px; --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+    --font-ui: 'Inter', 'Noto Sans KR', sans-serif;
+    --font-code: 'JetBrains Mono', monospace;
+}
+
+* { box-sizing: border-box; outline: none; }
+body { margin: 0; background: var(--bg-app); color: var(--text-main); font-family: var(--font-ui); font-size: 13px; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* Header */
+header { height: 56px; background: #fff; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 24px; flex-shrink: 0; justify-content: space-between; z-index: 20; }
+header .brand { font-weight: 700; font-size: 16px; color: var(--text-main); display: flex; align-items: center; gap: 10px; }
+header .brand i { color: var(--primary); font-size: 20px; }
+
+/* Layout */
+.workspace { display: flex; flex: 1; overflow: hidden; }
+.pane-list { width: 340px; background: #fff; border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; }
+
+/* Search Area */
+.search-area { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; flex-direction: row; gap: 8px; background: var(--primary-light); align-items: center; }
+.search-input { flex: 1; height: 36px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; transition: 0.2s; background: #fff; }
+.search-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+.search-select { flex: 0 0 90px; height: 36px; padding: 0 8px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 12px; background: #fff; color: var(--text-main); cursor: pointer; transition: 0.2s; font-family: var(--font-ui); }
+.search-select:focus { border-color: var(--primary); }
+
+.list-scroll { flex: 1; overflow-y: auto; background: #f8fafc; padding: 8px; }
+
+/* List Item Card */
+.item-card { padding: 12px 14px; margin-bottom: 8px; border: 1px solid transparent; border-radius: var(--radius); background: #fff; cursor: pointer; transition: 0.2s; position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.02); }
+.item-card:hover { background: #f1f5f9; }
+.item-card.active { background: #eff6ff; border-color: var(--primary); }
+.item-card.done .item-title { color: #64748b; text-decoration: line-through; }
+.item-card.done { border-color: var(--success); opacity: 0.8; }
+
+.item-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
+.item-title { font-weight: 700; color: var(--text-main); font-size: 13px; line-height: 1.4; flex: 1; }
+.item-check { font-size: 16px; color: var(--border); margin-left: 8px; }
+.item-card.done .item-check { color: var(--success); }
+
+.item-meta { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--text-sub); }
+.item-project { font-weight: 700; color: var(--primary); font-size: 11px; background: #e0e7ff; padding: 2px 6px; border-radius: 4px; margin-right: 6px; }
+.d-day { font-weight: 600; }
+.d-day.urgent { color: var(--danger); }
+
+/* Progress Bar */
+.progress-area { padding: 16px; border-top: 1px solid var(--border); background: #f8fafc; }
+.progress-bar-bg { height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; margin-top: 8px; }
+.progress-bar-fill { height: 100%; background: var(--success); width: 0%; transition: 0.5s ease-in-out; }
+.progress-text { font-size: 12px; font-weight: 600; color: var(--text-main); display: flex; justify-content: space-between; }
+
+/* Editor Pane */
+.pane-editor { flex: 1; background: var(--bg-app); display: flex; flex-direction: column; position: relative; }
+.toolbar { height: 56px; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 32px; justify-content: space-between; background: #fff; flex-shrink: 0; z-index: 10; }
+.editor-scroll { flex: 1; overflow-y: auto; padding: 40px; }
+
+/* 중앙 정렬 문서 컨테이너 */
+.editor-paper {
+    width: 100%;
+    max-width: 900px;
+    margin: 0 auto;
+    background: #fff;
+    padding: 50px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+}
+
+/* Form Elements */
+.form-section { margin-bottom: 36px; }
+.section-title { font-size: 14px; font-weight: 700; color: #1e293b; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; }
+.section-title > span { display: flex; align-items: center; gap: 8px; }
+.form-row { display: flex; gap: 16px; margin-bottom: 16px; }
+.form-col { flex: 1; }
+.label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sub); margin-bottom: 6px; }
+.input-field { width: 100%; height: 38px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--radius); font-family: var(--font-ui); font-size: 14px; transition: 0.2s; }
+.input-field:focus { border-color: var(--primary); }
+.input-field.filled { background-color: #f8fafc; color: #334155; font-weight: 600; }
+
+/* Quill Editor Styles */
+.editor-wrapper { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; transition: 0.2s; background: #fff; }
+.editor-wrapper:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+.ql-container.ql-snow { border: none !important; font-family: var(--font-ui) !important; }
+.ql-editor { min-height: 200px; font-size: 14px; line-height: 1.8; padding: 24px !important; }
+.ql-editor img.img-highlight { outline: 4px solid #FDBA74 !important; outline-offset: 2px !important; }
+
+/* 컨셉 박스 스타일 적용 */
+#inp-concept-container .ql-editor { min-height: 120px; background: #f0fdf4; }
+
+/* ✅ 붙여넣기 한 표(Table) 원본 유지용 래퍼 스타일 */
+.quill-raw-table {
+    margin: 1.5rem 0;
+    width: 100%;
+    overflow-x: auto;
+    border-radius: var(--radius);
+    box-shadow: 0 0 0 1px var(--border);
+    background: #fff;
+}
+.quill-raw-table table {
+    border-collapse: collapse !important;
+    width: 100%;
+    margin: 0;
+    font-size: 13px;
+    color: var(--text-main);
+    text-align: left;
+}
+.quill-raw-table th, .quill-raw-table td {
+    border: 1px solid var(--border);
+    padding: 8px 12px;
+}
+.quill-raw-table thead th, .quill-raw-table th {
+    background-color: #f8fafc;
+    font-weight: 600;
+}
+
+/* Attachments */
+.attach-box { background: #f8fafc; padding: 20px; border-radius: var(--radius); border: 1px dashed #cbd5e1; }
+.attach-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 12px; }
+.img-thumb-box { position: relative; width: 100%; aspect-ratio: 1; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); background: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+.img-thumb-box img { width: 100%; height: 100%; object-fit: cover; cursor: zoom-in; transition: transform 0.2s; }
+.img-thumb-box img:hover { transform: scale(1.05); }
+.btn-del-img { position: absolute; top: 5px; right: 5px; width: 22px; height: 22px; background: rgba(0,0,0,0.6); color: #fff; border-radius: 50%; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px; opacity: 0; transition: 0.2s; z-index: 2; }
+.img-thumb-box:hover .btn-del-img { opacity: 1; background: var(--danger); }
+.upload-placeholder { width: 100%; aspect-ratio: 1; border: 2px dashed #cbd5e1; border-radius: 8px; background: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #94a3b8; cursor: pointer; font-weight: 600; font-size: 12px; transition: 0.2s; }
+.upload-placeholder:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
+
+.file-thumb { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; background: #fff; padding: 8px; text-align: center; }
+.file-thumb i { font-size: 28px; color: #64748b; margin-bottom: 6px; }
+.file-thumb span { font-size: 10px; color: #334155; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-all; }
+
+/* Link Section Styles */
+.link-list { display: flex; flex-direction: column; gap: 8px; }
+.link-row { display: flex; align-items: center; gap: 8px; }
+.link-input-title { width: 180px; height: 38px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; font-family: var(--font-ui); background: #fff; transition: 0.2s; }
+.link-input-title:focus { border-color: var(--primary); }
+.link-input-url { flex: 1; height: 38px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--radius); font-family: var(--font-code); font-size: 12px; color: var(--primary); background: #fff; transition: 0.2s; }
+.link-input-url:focus { border-color: var(--primary); }
+.btn-link-action { width: 38px; height: 38px; border: 1px solid var(--border); border-radius: var(--radius); background: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-sub); transition: 0.2s; flex-shrink: 0; }
+.btn-link-action:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
+.btn-link-del { color: #ef4444; border-color: #fecaca; }
+.btn-link-del:hover { background: #fef2f2; border-color: #ef4444; }
+
+/* Buttons & Modal */
+.btn { height: 36px; padding: 0 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid transparent; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; transition: 0.2s; }
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: var(--primary-hover); }
+.btn-secondary { background: #fff; border-color: #cbd5e1; color: var(--text-sub); }
+.btn-secondary:hover { background: #f8fafc; border-color: #94a3b8; color: var(--text-main); }
+.btn-danger { background: #fff; border-color: #fecaca; color: #ef4444; }
+.btn-danger:hover { background: #fef2f2; border-color: #ef4444; }
+
+.modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(4px); z-index: 2000; display: none; align-items: center; justify-content: center; }
+.modal-content { position: relative; max-width: 90vw; max-height: 90vh; }
+.modal-img { max-width: 100%; max-height: 90vh; border-radius: 8px; box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
+.modal-close { position: absolute; top: -40px; right: 0; color: #fff; font-size: 30px; cursor: pointer; transition: 0.2s; }
+.modal-close:hover { color: var(--primary); transform: scale(1.1); }
+
+/* Settings Modal */
+.settings-box { background: #fff; width: 450px; padding: 24px; border-radius: 12px; box-shadow: 0 20px 40px -10px rgba(0,0,0,0.15); max-height: 80vh; overflow-y: auto; }
+.settings-header { font-size: 18px; font-weight: 700; margin-bottom: 20px; color: #1e293b; display: flex; justify-content: space-between; align-items: center; }
+
+/* Shortcut Modal Styles */
+.modal-panel { background: #ffffff; border-radius: 16px; width: 100%; max-width: 440px; padding: 32px; box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.15); animation: slideUpFade 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+@keyframes slideUpFade { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+.modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; }
+.modal-header h3 { margin: 0; font-size: 18px; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
+.btn-close { background: none; border: none; font-size: 20px; color: #94a3b8; cursor: pointer; transition: 0.2s; padding: 4px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+.btn-close:hover { background: #f1f5f9; color: var(--danger); }
+.shortcut-list { display: flex; flex-direction: column; gap: 16px; }
+.shortcut-item { display: flex; justify-content: space-between; align-items: center; padding-bottom: 12px; border-bottom: 1px solid #f1f5f9; }
+.shortcut-item:last-child { border-bottom: none; padding-bottom: 0; }
+.shortcut-desc { font-size: 14px; color: var(--text-sub); font-weight: 500; }
+.shortcut-keys { display: flex; gap: 6px; align-items: center; color: #94a3b8; font-size: 13px; font-weight: 500; }
+kbd { background-color: #f8fafc; border: 1px solid #cbd5e1; border-bottom-width: 2px; border-radius: 6px; padding: 4px 8px; font-family: var(--font-ui); font-size: 12px; font-weight: 600; color: #475569; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+
+.empty-state { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--bg-app); color: #94a3b8; z-index: 10; }
+.hidden { display: none !important; }
+
+#toast { position: fixed; bottom: 30px; right: 30px; background: #1e293b; color: #fff; padding: 12px 24px; border-radius: 30px; font-size: 14px; z-index: 2000; opacity: 0; transition: 0.3s; box-shadow: var(--shadow); pointer-events: none; }
+</style>
+</head>
+<body>
+
+<header>
+    <div class="brand"><i class="fas fa-marker"></i>Proposal Manager</div>
+    <div style="display: flex; gap: 8px;">
+        <button class="btn btn-secondary" id="btn-settings"><i class="fas fa-cog"></i> 설정</button>
+        <button class="btn btn-secondary" id="btn-export"><i class="fas fa-file-excel" style="color:#10b981"></i> 목록 내보내기</button>
+    </div>
+</header>
+
+<div class="workspace">
+    <aside class="pane-list">
+        <div class="search-area">
+            <input type="text" id="search-input" class="search-input" placeholder="목차 검색...">
+            <select id="filter-select" class="search-select">
+                <option value="all">전체</option>
+                <option value="incomplete">미완료</option>
+            </select>
+        </div>
+        
+        <div class="list-scroll" id="item-list"></div>
+
+        <div class="progress-area">
+            <div class="progress-text">
+                <span>진행률</span>
+                <span id="progress-val">0%(0/0)</span>
+            </div>
+            <div class="progress-bar-bg">
+                <div class="progress-bar-fill" id="progress-fill"></div>
+            </div>
+        </div>
+    </aside>
+
+    <main class="pane-editor">
+        <div class="toolbar">
+            <div style="font-weight:700; font-size:15px; color:#1e293b;" id="toolbar-title">항목 편집</div>
+            <div style="display:flex; gap:8px;">
+                <button class="btn btn-secondary" onclick="$('#shortcut-modal').style.display='flex'"><i class="fas fa-keyboard"></i> 단축키</button>
+                <button class="btn btn-secondary" id="btn-new" title="Ctrl+Alt+N"><i class="fas fa-plus"></i> 추가</button>
+                <button class="btn btn-danger" id="btn-delete" style="display:none;"><i class="fas fa-trash"></i> 삭제</button>
+                <button class="btn btn-primary" id="btn-save" title="Ctrl+S"><i class="fas fa-save"></i> 저장</button>
+            </div>
+        </div>
+
+        <div class="editor-scroll">
+            <div class="editor-paper">
+                <div class="form-section">
+                    <div class="form-row">
+                        <div class="form-col">
+                            <label class="label">프로젝트명</label>
+                            <input type="text" id="inp-project" class="input-field filled" placeholder="프로젝트명 입력" spellcheck="false">
+                        </div>
+                        <div class="form-col" style="flex: 0 0 150px;">
+                            <label class="label">상태</label>
+                            <label style="display:flex; align-items:center; height:38px; cursor:pointer; gap:8px; font-weight:600; color:#1e293b;">
+                                <input type="checkbox" id="inp-check" style="width:18px; height:18px; accent-color:var(--success);"> 작성 완료
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <div class="section-title"><span><i class="fas fa-list-ol"></i> 목차 및 기본 정보</span></div>
+                    <div class="form-row">
+                        <div class="form-col" style="flex: 3;">
+                            <label class="label">목차명/항목명</label>
+                            <input type="text" id="inp-title" class="input-field" spellcheck="false">
+                        </div>
+                        <div class="form-col" style="flex: 1; min-width: 140px;">
+                            <label class="label">마감 기한 (Due Date)</label>
+                            <input type="date" id="inp-date" class="input-field">
+                        </div>
+                        <div class="form-col" style="flex: 1; min-width: 100px;">
+                            <label class="label">작성 담당자 (PIC)</label>
+                            <input type="text" id="inp-author" class="input-field" spellcheck="false">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <div class="section-title"><span><i class="fas fa-lightbulb"></i> 컨셉 및 작성 방향 (에디터 내 이미지 복붙 가능)</span></div>
+                    <div class="editor-wrapper" id="inp-concept-container" style="border-color: #bbf7d0;">
+                        <div id="inp-concept" spellcheck="false"></div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <div class="section-title"><span><i class="fas fa-align-left"></i> 세부 내용</span></div>
+                    <div class="editor-wrapper">
+                        <div id="inp-content" spellcheck="false"></div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <div class="section-title">
+                        <span><i class="fas fa-paperclip"></i> 기타 첨부 자료 및 이미지</span>
+                        <span id="img-count" style="font-size:11px; background:#e2e8f0; padding:2px 8px; border-radius:10px; color:#64748b; font-weight:600;">0/10</span>
+                    </div>
+                    <div class="attach-box">
+                        <div id="img-grid" class="attach-grid"></div>
+                        <input type="file" id="inp-file" style="display:none;" multiple>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <div class="section-title"><span><i class="fas fa-project-diagram"></i> 참조 링크 (최대 10개)</span></div>
+                    <div style="background:#fff; border:1px solid var(--border); padding:16px; border-radius:var(--radius);">
+                        <div id="link-container" class="link-list"></div>
+                        <div style="margin-top:12px;">
+                            <button class="btn btn-secondary btn-sm" id="btn-add-link" style="border-style:dashed; width:100%;"><i class="fas fa-plus"></i> 링크 추가</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="empty-state" class="empty-state">
+            <i class="fas fa-folder-open" style="font-size:48px; margin-bottom:16px; color:#cbd5e1;"></i>
+            <p>좌측 목록에서 항목을 선택하거나 추가하세요.</p>
+            <button class="btn btn-primary" id="btn-new-center" style="margin-top:16px;" title="Ctrl+Alt+N">
+                <i class="fas fa-plus"></i> 새 항목 추가
+            </button>
+        </div>
+    </main>
+</div>
+
+<div id="settings-modal" class="modal-overlay" onclick="this.style.display='none'">
+    <div class="settings-box" onclick="event.stopPropagation()">
+        <div class="settings-header">
+            <span><i class="fas fa-cog" style="color:var(--primary);"></i> 환경 설정</span>
+            <button class="btn-close" id="btn-close-settings"><i class="fas fa-times"></i></button>
+        </div>
+        <div style="margin-bottom:20px;">
+            <label class="label">기본 프로젝트명 (신규 작성 시 자동 입력값)</label>
+            <input type="text" id="set-project-name" class="input-field" placeholder="제안 프로젝트명 입력">
+            <p style="margin:4px 0 0 0; font-size:11px; color:#64748b;">* 설정 저장 시 기존 데이터는 변경되지 않습니다.</p>
+        </div>
+        <div style="margin-bottom:20px;">
+             <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; color:#334155;">
+                <input type="checkbox" id="set-project-only" style="width:16px; height:16px; accent-color:var(--primary);">
+                목록에 현재 설정된 프로젝트명과 같은 항목만 표시
+            </label>
+        </div>
+        <div style="text-align:right; border-top:1px solid #f1f5f9; padding-top:16px;">
+            <button class="btn btn-primary" id="btn-save-settings">저장</button>
+        </div>
+    </div>
+</div>
+
+<div id="shortcut-modal" class="modal-overlay" onclick="this.style.display='none'">
+    <div class="modal-panel" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3><i class="fas fa-keyboard" style="color:var(--primary);"></i> 에디터 단축키</h3>
+            <button class="btn-close" onclick="$('#shortcut-modal').style.display='none'" title="닫기"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="shortcut-list">
+            <div class="shortcut-item">
+                <span class="shortcut-desc">볼드 / 이탤릭 / 밑줄</span>
+                <div class="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>B</kbd> / <kbd>I</kbd> / <kbd>U</kbd></div>
+            </div>
+            <div class="shortcut-item">
+                <span class="shortcut-desc">취소선</span>
+                <div class="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>0</kbd></div>
+            </div>
+            <div class="shortcut-item">
+                <span class="shortcut-desc">글자색 (빨강 / 파랑)</span>
+                <div class="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>R</kbd> / <kbd>B</kbd></div>
+            </div>
+            <div class="shortcut-item">
+                <span class="shortcut-desc">형광펜 강조 (7가지 색상)</span>
+                <div class="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>1~7</kbd></div>
+            </div>
+            <div class="shortcut-item">
+                <span class="shortcut-desc">표(Table) 지우기</span>
+                <div class="shortcut-keys"><kbd>Backspace</kbd></div>
+            </div>
+            <div class="shortcut-item">
+                <span class="shortcut-desc">서식 모두 지우기</span>
+                <div class="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>X</kbd></div>
+            </div>
+            <div class="shortcut-item">
+                <span class="shortcut-desc">글꼴 크기 조절</span>
+                <div class="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>+</kbd> / <kbd>-</kbd></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="img-modal" class="modal-overlay" onclick="this.style.display='none'">
+    <div class="modal-content">
+        <span class="modal-close" id="modal-close-img">&times;</span>
+        <img id="modal-img-tag" class="modal-img" src="">
+    </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+let quillConcept, quillContent;
+let currentFiles = [];
+let currentLinks = []; 
+const $ = s => document.querySelector(s);
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.style.opacity = '1'; t.style.bottom = '30px'; setTimeout(() => { t.style.opacity = '0'; t.style.bottom = '-50px'; }, 2000); }
+
+// ✅ 표(Table) 붙여넣기 원본 보호를 위한 커스텀 모듈 등록
+const BlockEmbed = Quill.import('blots/block/embed');
+class RawTableBlot extends BlockEmbed {
+    static create(value) {
+        const node = super.create();
+        node.innerHTML = value;
+        node.setAttribute('contenteditable', 'false'); // 에디터 내부에서 표 구조가 깨지는 것 방지
+        return node;
+    }
+    static value(node) {
+        return node.innerHTML;
+    }
+}
+RawTableBlot.blotName = 'rawTable';
+RawTableBlot.tagName = 'div';
+RawTableBlot.className = 'quill-raw-table';
+Quill.register(RawTableBlot, true);
+
+function initEditors() {
+    const SizeStyle = Quill.import('attributors/style/size');
+    SizeStyle.whitelist = null; 
+    Quill.register(SizeStyle, true);
+
+    const quillOptions = {
+        theme: 'snow',
+        scrollingContainer: '.editor-scroll', // 스크롤 튐 방지
+        modules: { toolbar: false, imageResize: { displaySize: true } }
+    };
+    
+    quillConcept = new Quill('#inp-concept', quillOptions);
+    quillContent = new Quill('#inp-content', quillOptions);
+
+    // ✅ 표(Table) 붙여넣기 가로채기 설정 (컨셉, 세부 내용 에디터 모두 적용)
+    const Delta = Quill.import('delta');
+    const tableMatcher = function(node, delta) {
+        return new Delta().insert({ rawTable: node.outerHTML });
+    };
+    quillConcept.clipboard.addMatcher('TABLE', tableMatcher);
+    quillContent.clipboard.addMatcher('TABLE', tableMatcher);
+}
+
+// --- Core Logic ---
+const DOC_CORE = {
+    db: null, DB_NAME: 'ProposalMgrDB', STORE_NAME: 'proposal_items',
+    state: { items: [], search: '', filter: 'all', selectedId: null, projectOnly: false },
+
+    init: async function() {
+        initEditors();
+        await this.openDB();
+        this.loadSettings();
+        this.bindEvents();
+        await this.refreshList();
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const targetUid = urlParams.get('uid');
+
+        if (targetUid) {
+            const targetItem = this.state.items.find(i => i.uid === targetUid);
+            if (targetItem) {
+                loadItem(targetItem);
+                setTimeout(() => {
+                    const activeEl = document.querySelector('.item-card.active');
+                    if(activeEl) activeEl.scrollIntoView({block: 'center', behavior: 'smooth'});
+                }, 100);
+            } else { toast('요청하신 항목을 찾을 수 없습니다.'); }
+        }
+    },
+
+    openDB: function() {
+        return new Promise((resolve) => {
+            const req = indexedDB.open(this.DB_NAME, 1);
+            req.onupgradeneeded = (e) => {
+                if (!e.target.result.objectStoreNames.contains(this.STORE_NAME)) {
+                    e.target.result.createObjectStore(this.STORE_NAME, { keyPath: 'uid' });
+                }
+            };
+            req.onsuccess = (e) => { this.db = e.target.result; resolve(); };
+        });
+    },
+
+    getAll: function() {
+        return new Promise((resolve) => {
+            const tx = this.db.transaction(this.STORE_NAME, 'readonly');
+            tx.objectStore(this.STORE_NAME).getAll().onsuccess = (e) => {
+                this.state.items = e.target.result || [];
+                this.state.items.sort((a, b) => {
+                    const hasA = !!a.deadline;
+                    const hasB = !!b.deadline;
+                    if (hasA && !hasB) return -1;
+                    if (!hasA && hasB) return 1;
+                    if (hasA && hasB) {
+                        const dateA = new Date(a.deadline).getTime();
+                        const dateB = new Date(b.deadline).getTime();
+                        if (dateA !== dateB) return dateA - dateB;
+                    }
+                    const projDiff = (a.project || '').localeCompare(b.project || '');
+                    if (projDiff !== 0) return projDiff;
+                    return (a.title || '').localeCompare(b.title || '');
+                });
+                resolve(this.state.items);
+            };
+        });
+    },
+
+    save: function(item) {
+        return new Promise((resolve) => {
+            const tx = this.db.transaction(this.STORE_NAME, 'readwrite');
+            tx.objectStore(this.STORE_NAME).put(item).onsuccess = () => resolve(item);
+        });
+    },
+
+    remove: function(uid) {
+        return new Promise((resolve) => {
+            const tx = this.db.transaction(this.STORE_NAME, 'readwrite');
+            tx.objectStore(this.STORE_NAME).delete(uid).onsuccess = () => resolve();
+        });
+    },
+
+    loadSettings: function() {
+        const onlyCurrent = localStorage.getItem('PROP_PROJECT_ONLY') === 'true';
+        this.state.projectOnly = onlyCurrent;
+    },
+
+    setFilter: function(type) {
+        this.state.filter = type;
+        this.renderList();
+    },
+
+    refreshList: async function() {
+        await this.getAll();
+        this.renderList();
+        this.updateProgress();
+    },
+
+    renderList: function() {
+        const el = $('#item-list'); el.innerHTML = '';
+        const { search, filter, items, selectedId, projectOnly } = this.state;
+        const defaultPrjName = localStorage.getItem('PROP_PROJECT_NAME') || '';
+        const filtered = items.filter(i => {
+            if (projectOnly && i.project !== defaultPrjName) return false;
+            if (filter === 'incomplete' && i.isDone) return false;
+            if (search && !(i.title||'').toLowerCase().includes(search) && !(i.author||'').toLowerCase().includes(search)) return false;
+            return true;
+        });
+        filtered.forEach(item => {
+            const div = document.createElement('div');
+            const isDone = item.isDone;
+            const dDayStr = this.getDday(item.deadline);
+            div.className = `item-card ${selectedId === item.uid ? 'active' : ''} ${isDone ? 'done' : ''}`;
+            div.onclick = () => loadItem(item);
+            div.innerHTML = `
+                <div class="item-top">
+                    <span class="item-title">
+                        <span class="item-project">${item.project || 'No Project'}</span>
+                        ${item.title || '(제목 없음)'}
+                    </span>
+                    <i class="fas fa-check-circle item-check"></i>
+                </div>
+                <div class="item-meta">
+                    <span class="d-day ${dDayStr.includes('-') || dDayStr === 'D-Day' ? 'urgent' : ''}">${dDayStr}</span>
+                    <span>${item.author || '-'}</span>
+                </div>
+            `;
+            el.appendChild(div);
+        });
+        if(filtered.length === 0) el.innerHTML = '<div style="padding:20px; text-align:center; color:#94a3b8;">항목 없음</div>';
+    },
+
+    updateProgress: function() {
+        const defaultPrjName = localStorage.getItem('PROP_PROJECT_NAME') || '';
+        const { items, projectOnly } = this.state;
+        const targetItems = projectOnly ? items.filter(i => i.project === defaultPrjName) : items;
+        const total = targetItems.length;
+        const done = targetItems.filter(i => i.isDone).length;
+        const pct = total === 0 ? 0 : Math.round((done / total) * 100);
+        $('#progress-val').textContent = `${pct}% (${done}/${total})`;
+        $('#progress-fill').style.width = `${pct}%`;
+    },
+
+    getDday: function(dateStr) {
+        if (!dateStr) return '';
+        const target = new Date(dateStr).setHours(0,0,0,0);
+        const today = new Date().setHours(0,0,0,0);
+        const diff = (target - today) / (1000 * 60 * 60 * 24);
+        if (diff < 0) return `D+${Math.abs(diff)}`;
+        if (diff === 0) return 'D-Day';
+        return `D-${diff}`;
+    },
+
+    fileProcess: function(file) {
+        return new Promise(resolve => {
+            const r = new FileReader();
+            r.onload = e => resolve({ name: file.name, type: file.type || 'application/octet-stream', data: e.target.result });
+            r.readAsDataURL(file);
+        });
+    },
+
+    bindEvents: function() {
+        $('#btn-new').onclick = $('#btn-new-center').onclick = showNewForm;
+        $('#btn-save').onclick = saveCurrent;
+        $('#btn-delete').onclick = deleteCurrent;
+        
+        $('#search-input').onkeyup = (e) => { this.state.search = e.target.value.toLowerCase(); this.renderList(); };
+        $('#filter-select').onchange = (e) => { this.setFilter(e.target.value); };
+
+        $('#btn-settings').onclick = () => {
+            $('#set-project-name').value = localStorage.getItem('PROP_PROJECT_NAME') || '';
+            $('#set-project-only').checked = this.state.projectOnly;
+            $('#settings-modal').style.display = 'flex';
+        };
+        $('#btn-close-settings').onclick = () => $('#settings-modal').style.display = 'none';
+        
+        $('#btn-save-settings').onclick = () => {
+            const newName = $('#set-project-name').value;
+            const isOnly = $('#set-project-only').checked;
+            localStorage.setItem('PROP_PROJECT_NAME', newName);
+            localStorage.setItem('PROP_PROJECT_ONLY', isOnly);
+            this.state.projectOnly = isOnly;
+            if (!this.state.selectedId) $('#inp-project').value = newName;
+            this.refreshList();
+            $('#settings-modal').style.display = 'none';
+            toast('설정 저장됨');
+        };
+
+        $('#btn-export').onclick = async () => {
+            if(!window.ExcelJS) return alert('Excel 라이브러리 로딩 실패');
+            const wb = new ExcelJS.Workbook();
+            const ws = wb.addWorksheet('제안 목록');
+            ws.columns = [
+                { header: '프로젝트', key: 'project', width: 20 },
+                { header: '상태', key: 'status', width: 10 },
+                { header: '목차명', key: 'title', width: 30 },
+                { header: '담당자', key: 'author', width: 15 },
+                { header: '마감일', key: 'deadline', width: 15 },
+                { header: '컨셉/방향', key: 'concept', width: 40 },
+                { header: '내용', key: 'content', width: 50 },
+                { header: '참조링크', key: 'links', width: 30 }
+            ];
+            const { items, projectOnly } = this.state;
+            const defaultPrjName = localStorage.getItem('PROP_PROJECT_NAME') || '';
+            const exportItems = items.filter(i => projectOnly ? i.project === defaultPrjName : true);
+            exportItems.forEach(i => {
+                const linkStr = (i.graphLinks || []).map(l => {
+                    if(typeof l === 'object') return l.title ? `[${l.title}] ${l.url}` : l.url;
+                    return l;
+                }).join('\n');
+
+                ws.addRow({
+                    project: i.project, status: i.isDone ? '완료' : '진행중',
+                    title: i.title, author: i.author, deadline: i.deadline,
+                    concept: (i.concept||'').replace(/<[^>]*>/g, ''),
+                    content: (i.content||'').replace(/<[^>]*>/g, ''),
+                    links: linkStr
+                });
+            });
+            const buf = await wb.xlsx.writeBuffer();
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(new Blob([buf]));
+            a.download = `제안목록_${new Date().toISOString().slice(0,10)}.xlsx`;
+            a.click();
+        };
+
+        $('#inp-file').onchange = async (e) => {
+            for(let file of e.target.files) {
+                if(currentFiles.length >= 10) { toast('파일은 최대 10개까지만 등록 가능합니다.'); break; }
+                const f = await this.fileProcess(file);
+                currentFiles.push(f);
+            }
+            renderAttachGrid();
+            e.target.value = '';
+        };
+
+        // 단축키 전역 및 Quill 처리
+        document.addEventListener('keydown', e => {
+            const isCmd = (navigator.platform.includes('Mac')) ? e.metaKey : e.ctrlKey;
+            
+            if(isCmd && !e.altKey && (e.key === 's' || e.key === 'S')) {
+                e.preventDefault();
+                if($('#empty-state').classList.contains('hidden')) saveCurrent();
+                return;
+            }
+            if(isCmd && e.altKey && (e.key === 'n' || e.key === 'N')) {
+                e.preventDefault(); showNewForm(); return;
+            }
+
+            let activeQuill = null;
+            if (quillConcept.hasFocus()) activeQuill = quillConcept;
+            else if (quillContent.hasFocus()) activeQuill = quillContent;
+
+            if(isCmd && activeQuill) {
+                const range = activeQuill.getSelection();
+                if(!range) return;
+
+                if(e.key === '+' || e.key === '=' || e.key === '-') {
+                    e.preventDefault();
+                    const fmt = activeQuill.getFormat(range);
+                    const cur = fmt.size ? parseInt(fmt.size) : 14;
+                    const next = (e.key === '-') ? Math.max(10, cur-1) : cur+1;
+                    activeQuill.format('size', next + 'px'); return;
+                }
+                if(e.shiftKey && (e.key === 'x' || e.key === 'X')) {
+                    e.preventDefault();
+                    if(range.length > 0) activeQuill.removeFormat(range.index, range.length);
+                    else Object.keys(activeQuill.getFormat(range)).forEach(k => activeQuill.format(k, false));
+                    return;
+                }
+                if(!e.altKey && !e.shiftKey && e.key === '0') {
+                    e.preventDefault();
+                    const f = activeQuill.getFormat(range);
+                    activeQuill.format('strike', !f['strike']); return;
+                }
+                if(!e.altKey && !e.shiftKey && ['1','2','3','4','5','6','7'].includes(e.key)) {
+                    e.preventDefault();
+                    const hls = {'1':'#ffedd5','2':'#e0f2fe','3':'#fef08a','4':'#dcfce7','5':'#fce7f3','6':'#e6d5c3','7':'#f3f4f6'};
+                    const f = activeQuill.getFormat(range);
+                    activeQuill.format('background', (f['background'] === hls[e.key]) ? false : hls[e.key]); return;
+                }
+                if(e.altKey && !e.shiftKey) {
+                    const key = e.key.toLowerCase();
+                    const f = activeQuill.getFormat(range);
+                    if(key === 'r') { e.preventDefault(); activeQuill.format('color', f['color'] === '#ef4444' ? false : '#ef4444'); return; }
+                    if(key === 'b') { e.preventDefault(); activeQuill.format('color', f['color'] === '#4f46e5' ? false : '#4f46e5'); return; }
+                }
+            }
+        });
+
+        // 외부 복사 붙여넣기 첨부파일 가로채기
+        document.addEventListener('paste', e => {
+            const active = document.activeElement;
+            const inEditor = active && (active.isContentEditable || active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.closest('.ql-container'));
+            if(inEditor) return; 
+            
+            if(!$('#empty-state').classList.contains('hidden')) return;
+            const items = (e.clipboardData || window.clipboardData).items;
+            for(let i of items) {
+                if(i.type.indexOf('image') !== -1) {
+                    e.preventDefault();
+                    if(currentFiles.length >= 10) return toast('첨부파일은 최대 10개까지만 가능합니다.');
+                    const r = new FileReader();
+                    r.onload = ev => { 
+                        currentFiles.push({name:`pasted_${Date.now()}.png`, type:'image/png', data:ev.target.result}); 
+                        renderAttachGrid(); 
+                        toast('클립보드 이미지가 첨부파일로 추가되었습니다.');
+                    };
+                    r.readAsDataURL(i.getAsFile());
+                    return;
+                }
+            }
+        });
+
+        $('#btn-add-link').onclick = () => {
+            if(currentLinks.length >= 10) return alert('링크는 최대 10개까지 가능합니다.');
+            currentLinks.push({ title: '', url: '' });
+            renderLinkList();
+        };
+    }
+};
+
+function renderAttachGrid() {
+    const grid = $('#img-grid'); grid.innerHTML = '';
+    currentFiles.forEach((f, idx) => {
+        const slot = document.createElement('div'); slot.className = 'img-thumb-box';
+        if(f.type.startsWith('image/')) {
+            slot.innerHTML = `<img src="${f.data}"><button class="btn-del-img" onclick="currentFiles.splice(${idx},1);renderAttachGrid();event.stopPropagation();" title="삭제"><i class="fas fa-times"></i></button>`;
+            slot.onclick = () => { $('#modal-img-tag').src = f.data; $('#img-modal').style.display = 'flex'; };
+        } else {
+            slot.innerHTML = `<i class="fas fa-file-alt" style="font-size:24px;color:#94a3b8;margin-bottom:5px;"></i><span style="font-size:10px;text-align:center;padding:0 5px;line-height:1.2;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${f.name}</span><button class="btn-del-img" onclick="currentFiles.splice(${idx},1);renderAttachGrid();event.stopPropagation();" title="삭제"><i class="fas fa-times"></i></button>`;
+            slot.onclick = () => { const a = document.createElement('a'); a.href = f.data; a.download = f.name; a.click(); };
+        }
+        grid.appendChild(slot);
+    });
+    if(currentFiles.length < 10) {
+        grid.innerHTML += `<div class="upload-placeholder" onclick="document.getElementById('inp-file').click()"><i class="fas fa-plus"></i><span style="margin-top:4px">추가</span></div>`;
+    }
+    $('#img-count').innerText = `${currentFiles.length}/10`;
+}
+
+function renderLinkList() {
+    const el = $('#link-container'); el.innerHTML = '';
+    currentLinks.forEach((linkObj, idx) => {
+        const row = document.createElement('div');
+        row.className = 'link-row';
+        
+        let tVal = linkObj.title || '';
+        let uVal = linkObj.url || (typeof linkObj === 'string' ? linkObj : '');
+
+        row.innerHTML = `<input type="text" class="link-input-title" placeholder="링크 제목" value="${tVal}" oninput="currentLinks[${idx}].title=this.value">
+                         <input type="text" class="link-input-url" placeholder="URL 주소" value="${uVal}" oninput="currentLinks[${idx}].url=this.value">
+                         <button class="btn-link-action" title="링크 열기" onclick="if(currentLinks[${idx}].url){window.open(currentLinks[${idx}].url,'_blank')}else{toast('URL을 입력하세요.')}"><i class="fas fa-external-link-alt"></i></button>
+                         <button class="btn-link-action btn-link-del" title="삭제" onclick="currentLinks.splice(${idx},1); renderLinkList();"><i class="fas fa-trash-alt"></i></button>`;
+        el.appendChild(row);
+    });
+}
+
+function showNewForm() {
+    DOC_CORE.state.selectedId = null;
+    $('#inp-project').value = localStorage.getItem('PROP_PROJECT_NAME') || '';
+    DOC_CORE.renderList();
+    $('#empty-state').classList.add('hidden');
+    $('#btn-delete').style.display = 'none';
+    $('#toolbar-title').textContent = '새 항목 작성';
+    $('#inp-title').value = '';
+    $('#inp-date').value = '';
+    $('#inp-author').value = '';
+    
+    quillConcept.setText('');
+    quillContent.setText('');
+    
+    $('#inp-check').checked = false;
+    currentFiles = [];
+    currentLinks = [];
+    renderAttachGrid();
+    renderLinkList();
+    $('#inp-title').focus();
+}
+
+function loadItem(item) {
+    DOC_CORE.state.selectedId = item.uid;
+    $('#inp-project').value = item.project;
+    DOC_CORE.renderList();
+    $('#empty-state').classList.add('hidden');
+    $('#btn-delete').style.display = 'inline-flex';
+    $('#toolbar-title').textContent = '항목 수정';
+    $('#inp-title').value = item.title || '';
+    $('#inp-date').value = item.deadline || '';
+    $('#inp-author').value = item.author || '';
+    
+    quillConcept.clipboard.dangerouslyPasteHTML(item.concept || '');
+    quillContent.clipboard.dangerouslyPasteHTML(item.content || '');
+    
+    $('#inp-check').checked = !!item.isDone;
+    currentFiles = item.attachments || [];
+    renderAttachGrid();
+    
+    const rawLinks = item.graphLinks || [];
+    currentLinks = rawLinks.map(l => {
+        if(typeof l === 'string') return { title: '', url: l };
+        return l;
+    });
+    renderLinkList();
+}
+
+async function saveCurrent() {
+    if(!$('#inp-title').value.trim()) return toast('목차명(제목)을 입력해주세요.');
+    
+    const cleanLinks = currentLinks.filter(l => l.url && l.url.trim() !== '');
+    
+    const item = {
+        uid: DOC_CORE.state.selectedId || Date.now().toString(36),
+        project: $('#inp-project').value,
+        title: $('#inp-title').value,
+        deadline: $('#inp-date').value,
+        author: $('#inp-author').value,
+        concept: quillConcept.root.innerHTML,
+        content: quillContent.root.innerHTML,
+        isDone: $('#inp-check').checked,
+        attachments: currentFiles,
+        graphLinks: cleanLinks,
+        updatedAt: new Date().toISOString()
+    };
+    await DOC_CORE.save(item);
+    DOC_CORE.state.selectedId = item.uid;
+    DOC_CORE.refreshList();
+    toast('저장되었습니다.');
+}
+
+async function deleteCurrent() {
+    if(confirm('정말 이 항목을 삭제하시겠습니까?')) {
+        await DOC_CORE.remove(DOC_CORE.state.selectedId);
+        DOC_CORE.state.selectedId = null;
+        DOC_CORE.refreshList();
+        $('#empty-state').classList.remove('hidden');
+        toast('삭제되었습니다.');
+    }
+}
+
+DOC_CORE.init();
+</script>
+</body>
+</html>

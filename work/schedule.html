@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infra Schedule</title>
+    
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css" />
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+    <style>
+        :root {
+            --bg-body: #f8f9fa;       
+            --bg-card: #ffffff;       
+            --text-primary: #1e293b;  
+            --text-secondary: #64748b;
+            --accent-color: #4f46e5;  
+            --accent-hover: #4338ca;
+            --success-color: #10b981;
+            --success-hover: #059669;
+            --danger-color: #ef4444;
+            
+            --border-light: #e2e8f0;
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            
+            --radius-md: 12px;
+            --radius-sm: 8px;
+        }
+
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+            background-color: var(--bg-body);
+            color: var(--text-primary);
+            margin: 0;
+            padding: 40px 20px;
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-bottom: 32px;
+        }
+
+        .header-title h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin: 0;
+            letter-spacing: -0.5px;
+        }
+
+        .header-title p {
+            color: var(--text-secondary);
+            margin: 6px 0 12px 0;
+            font-size: 14px;
+        }
+
+        .project-input {
+            font-size: 18px;
+            padding: 8px 12px;
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-sm);
+            width: 300px;
+            font-weight: 600;
+            color: var(--accent-color);
+            background-color: #fff;
+            transition: all 0.2s;
+        }
+        .project-input:focus {
+            outline: none;
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            padding: 24px;
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border-light);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .stat-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+        .stat-card h3 { font-size: 14px; color: var(--text-secondary); font-weight: 500; margin: 0 0 12px 0; }
+        .stat-card .value { font-size: 32px; font-weight: 700; color: var(--text-primary); }
+        .stat-card .sub-text { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
+
+        .controls {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 20px;
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s ease;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .btn-add { background-color: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-light); }
+        .btn-add:hover { background-color: #f1f5f9; }
+
+        .btn-del { background-color: #fff1f2; color: var(--danger-color); border: 1px solid #fecdd3; }
+        .btn-del:hover { background-color: #ffe4e6; }
+
+        .btn-excel { background-color: var(--accent-color); color: white; padding-left: 24px; padding-right: 24px; }
+        .btn-excel:hover { background-color: var(--accent-hover); box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3); }
+
+        /* [신규] 리스트 다운로드 버튼 스타일 */
+        .btn-list { background-color: var(--success-color); color: white; padding-left: 20px; padding-right: 20px; }
+        .btn-list:hover { background-color: var(--success-hover); box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3); }
+
+        .table-container {
+            background: var(--bg-card);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-md);
+            overflow: visible;
+            border: 1px solid var(--border-light);
+        }
+
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        thead { background-color: #f8fafc; border-bottom: 2px solid var(--border-light); }
+        th { padding: 16px; text-align: left; font-weight: 600; color: var(--text-secondary); font-size: 13px; }
+        th.center { text-align: center; }
+        td { padding: 8px 16px; border-bottom: 1px solid var(--border-light); color: var(--text-primary); vertical-align: middle; }
+        tr:last-child td { border-bottom: none; }
+        
+        tr.draggable-row { cursor: grab; transition: background-color 0.2s; }
+        tr.draggable-row:active { cursor: grabbing; }
+        
+        tr.dragging { 
+            opacity: 0.4; 
+            background-color: #e2e8f0; 
+            border: 2px dashed #cbd5e1;
+        }
+        
+        tr.drag-over {
+            border-top: 3px solid var(--accent-color);
+        }
+
+        input[type="text"], input[type="date"], input[type="number"] {
+            width: 100%; padding: 8px 10px; border: 1px solid transparent; 
+            border-radius: 6px; background-color: transparent; font-family: inherit; font-size: 14px;
+            color: var(--text-primary); transition: all 0.2s; box-sizing: border-box;
+        }
+        table input:hover { background-color: #f1f5f9; }
+        table input:focus {
+            background-color: #fff; border-color: var(--accent-color); outline: none;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+        .readonly { background-color: #f8fafc !important; color: var(--text-secondary); text-align: center; pointer-events: none; }
+        
+        .row-checkbox { width: 18px; height: 18px; cursor: pointer; accent-color: var(--accent-color); }
+        input[type="date"] { color: var(--text-secondary); cursor: pointer; }
+        input[type="date"]:valid { color: var(--text-primary); }
+
+        .task-wrapper { display: flex; align-items: center; gap: 8px; }
+        .btn-mini-add {
+            width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--border-light);
+            background-color: #fff; color: var(--accent-color); font-size: 16px; padding: 0;
+            display: flex; align-items: center; justify-content: center; cursor: pointer;
+            opacity: 0.4; transition: all 0.2s;
+        }
+        .task-wrapper:hover .btn-mini-add { opacity: 1; }
+        .btn-mini-add:hover { background-color: var(--accent-color); color: white; border-color: var(--accent-color); }
+
+        .drag-handle { cursor: grab; font-size: 18px; color: #94a3b8; user-select: none; }
+        .drag-handle:hover { color: var(--text-primary); }
+        .draggable-row:active .drag-handle { cursor: grabbing; }
+
+        #dbStatus { font-size: 12px; color: var(--success-color); margin-left: 10px; font-weight: 500; opacity: 0; transition: opacity 0.5s; }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <div class="header-title">
+            <h1>Infra Schedule</h1>
+            <div style="display:flex; align-items:center;">
+                <input type="text" id="projectName" class="project-input" placeholder="Project Name (프로젝트명)" onchange="saveData()" autocomplete="off">
+                <span id="dbStatus">✓ Saved</span>
+            </div>
+        </div>
+        <div class="controls">
+            <button class="btn-add" onclick="addRow()" title="맨 아래에 추가 (Ctrl+Alt+N)">
+                <span style="margin-right:6px">+</span> 항목 추가
+            </button>
+            <button class="btn-del" onclick="deleteRows()">
+                선택 삭제
+            </button>
+            <button class="btn-list" onclick="downloadListExcel()">
+                내역 다운로드
+            </button>
+            <button class="btn-excel" onclick="downloadExcel()">
+                Gantt 다운로드
+            </button>
+        </div>
+    </header>
+
+    <div class="summary-grid">
+        <div class="stat-card">
+            <h3>Total Tasks</h3>
+            <div class="value" id="totalTasks">0</div>
+            <div class="sub-text">진행 중인 세부 업무</div>
+        </div>
+        <div class="stat-card">
+            <h3>Total Effort</h3>
+            <div class="value" style="color: var(--accent-color);" id="totalMM">0.0 <span style="font-size:16px; color:#666;">M/M</span></div>
+            <div class="sub-text">총 투입 공수(Working Day/22일)</div>
+        </div>
+        <div class="stat-card">
+            <h3>Duration</h3>
+            <div class="value" style="font-size: 20px; line-height: 38px;" id="projectDuration">-</div>
+            <div class="sub-text">전체 프로젝트 기간</div>
+        </div>
+    </div>
+
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th width="4%" class="center"></th>
+                    <th width="4%" class="center"><input type="checkbox" id="checkAll" class="row-checkbox" onclick="toggleAll()"></th>
+                    <th width="32%">수행내역(Task Name)</th>
+                    <th width="14%" class="center">시작일(Start)</th>
+                    <th width="14%" class="center">종료일(End)</th>
+                    <th width="8%" class="center" title="주말을 제외한 영업일수">Working<br>Days</th>
+                    <th width="8%" class="center">인원(Pers)</th>
+                    <th width="10%" class="center" title="Working Day/22일 기준">공수(M/M)</th>
+                </tr>
+            </thead>
+            <tbody id="taskTableBody">
+                </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    // ==========================================
+    // 0. DB Logic & Init
+    // ==========================================
+    const DB_NAME = "InfraScheduleDB";
+    const DB_VERSION = 1;
+    const STORE_NAME = "scheduleData";
+    let db;
+
+    window.onload = function() { initDB(); };
+
+    function initDB() {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        request.onupgradeneeded = function(e) {
+            db = e.target.result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME, { keyPath: "id" });
+        };
+        request.onsuccess = function(e) {
+            db = e.target.result;
+            loadDataFromDB();
+        };
+    }
+
+    function loadDataFromDB() {
+        const tx = db.transaction([STORE_NAME], "readonly");
+        const req = tx.objectStore(STORE_NAME).get("currentProject");
+        req.onsuccess = function(e) {
+            const data = e.target.result;
+            const tableBody = document.getElementById("taskTableBody");
+            tableBody.innerHTML = ""; 
+
+            if (data) {
+                document.getElementById("projectName").value = data.projectName || "";
+                if (data.tasks && data.tasks.length > 0) {
+                    data.tasks.forEach(task => appendRowToTable(task));
+                } else {
+                    addRow();
+                }
+            } else {
+                addRow();
+            }
+            updateSummary();
+        };
+    }
+
+    function saveData() {
+        if (!db) return;
+        const projectName = document.getElementById("projectName").value;
+        const rows = document.querySelectorAll("#taskTableBody tr");
+        const tasks = [];
+        rows.forEach(row => {
+            tasks.push(getRowData(row));
+        });
+        const data = { id: "currentProject", projectName, tasks, updatedAt: new Date() };
+        const tx = db.transaction([STORE_NAME], "readwrite");
+        tx.objectStore(STORE_NAME).put(data).onsuccess = showSaveStatus;
+    }
+
+    function showSaveStatus() {
+        const el = document.getElementById("dbStatus");
+        el.style.opacity = 1;
+        setTimeout(() => { el.style.opacity = 0; }, 1500);
+    }
+
+    function getRowData(row) {
+        return {
+            task: row.querySelector('.task-name').value,
+            start: row.querySelector('.start-date').value,
+            end: row.querySelector('.end-date').value,
+            persons: row.querySelector('.persons').value
+        };
+    }
+
+    // ==========================================
+    // 1. Core Logic & Drag n Drop
+    // ==========================================
+    let draggedRow = null;
+    let dragSrcGroupIndex = -1;
+
+    function addRow() { appendRowToTable({}); }
+
+    function addSubRow(btn) {
+        const currentRow = btn.closest('tr');
+        const currentTaskName = currentRow.querySelector('.task-name').value;
+        const newIndex = currentRow.rowIndex; 
+        const tableBody = document.getElementById("taskTableBody");
+        const newRow = tableBody.insertRow(newIndex); 
+        
+        let newTaskName = "";
+        if(currentTaskName) {
+            if(currentTaskName.includes("↳")) newTaskName = currentTaskName;
+            else newTaskName = "↳ " + currentTaskName; 
+        }
+
+        renderRowContent(newRow, { task: newTaskName });
+        setTimeout(() => {
+            const dateInput = newRow.querySelector('.start-date');
+            if(dateInput) dateInput.focus();
+        }, 50);
+        saveData();
+    }
+
+    function appendRowToTable(data) {
+        const table = document.getElementById("taskTableBody");
+        const row = table.insertRow();
+        renderRowContent(row, data);
+        if(!data.task && !data.start) saveData();
+    }
+
+    function renderRowContent(row, data) {
+        row.className = "draggable-row";
+        row.setAttribute('draggable', 'true');
+        
+        row.addEventListener('dragstart', handleDragStart);
+        row.addEventListener('dragenter', handleDragEnter);
+        row.addEventListener('dragover', handleDragOver);
+        row.addEventListener('dragleave', handleDragLeave);
+        row.addEventListener('drop', handleDrop);
+        row.addEventListener('dragend', handleDragEnd);
+
+        row.innerHTML = `
+            <td class="center"><span class="drag-handle">☰</span></td>
+            <td class="center"><input type="checkbox" name="rowCheck" class="row-checkbox"></td>
+            <td>
+                <div class="task-wrapper">
+                    <input type="text" class="task-name" value="${data.task || ''}" placeholder="업무명 입력" onchange="saveData()">
+                    <button class="btn-mini-add" onclick="addSubRow(this)" title="이 업무 아래에 일정 추가">+</button>
+                </div>
+            </td>
+            <td><input type="date" class="start-date" value="${data.start || ''}" onchange="calc(this)"></td>
+            <td><input type="date" class="end-date" value="${data.end || ''}" onchange="calc(this)"></td>
+            <td><input type="text" class="readonly row-days" value="0" readonly></td>
+            <td><input type="number" class="persons" min="0" step="0.1" value="${data.persons || 1}" onchange="calc(this)" style="text-align:center;"></td>
+            <td><input type="text" class="readonly row-mm" value="0.0" readonly></td>
+        `;
+        if(data.start && data.end) calc(row.querySelector('input'), false);
+    }
+
+    // --- Drag & Drop Event Handlers ---
+    function getGroupsFromTable() {
+        const rows = Array.from(document.querySelectorAll('#taskTableBody tr'));
+        const groups = [];
+        let currentGroup = [];
+
+        rows.forEach(row => {
+            const taskName = row.querySelector('.task-name').value;
+            const isChild = taskName.trim().startsWith('↳');
+            const rowData = getRowData(row);
+
+            if (!isChild) {
+                if (currentGroup.length > 0) groups.push(currentGroup);
+                currentGroup = [rowData];
+            } else {
+                currentGroup.push(rowData);
+            }
+        });
+        if (currentGroup.length > 0) groups.push(currentGroup);
+        return groups;
+    }
+
+    function findGroupIndex(row) {
+        const rows = Array.from(document.querySelectorAll('#taskTableBody tr'));
+        const targetIndex = rows.indexOf(row);
+        const groups = getGroupsFromTable(); 
+        
+        let counter = 0;
+        for (let i = 0; i < groups.length; i++) {
+            const groupLen = groups[i].length;
+            if (targetIndex >= counter && targetIndex < counter + groupLen) {
+                return i;
+            }
+            counter += groupLen;
+        }
+        return -1;
+    }
+
+    function handleDragStart(e) {
+        draggedRow = this;
+        this.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        dragSrcGroupIndex = findGroupIndex(this);
+    }
+
+    function handleDragOver(e) {
+        if (e.preventDefault) e.preventDefault(); 
+        e.dataTransfer.dropEffect = 'move';
+        return false;
+    }
+
+    function handleDragEnter(e) { this.classList.add('drag-over'); }
+    function handleDragLeave(e) { this.classList.remove('drag-over'); }
+
+    function handleDrop(e) {
+        if (e.stopPropagation) e.stopPropagation();
+
+        const targetRow = this;
+        const dragDestGroupIndex = findGroupIndex(targetRow);
+
+        if (dragSrcGroupIndex !== dragDestGroupIndex && dragSrcGroupIndex !== -1 && dragDestGroupIndex !== -1) {
+            const groups = getGroupsFromTable();
+            const movedGroup = groups.splice(dragSrcGroupIndex, 1)[0];
+            groups.splice(dragDestGroupIndex, 0, movedGroup);
+
+            const tableBody = document.getElementById("taskTableBody");
+            tableBody.innerHTML = "";
+            
+            groups.forEach(group => {
+                group.forEach(taskData => { appendRowToTable(taskData); });
+            });
+            saveData();
+        }
+        return false;
+    }
+
+    function handleDragEnd(e) {
+        this.classList.remove('dragging');
+        document.querySelectorAll('#taskTableBody tr').forEach(row => row.classList.remove('drag-over'));
+        draggedRow = null;
+        dragSrcGroupIndex = -1;
+    }
+
+    // --- Calculation & Utils ---
+    function calc(el, shouldSave = true) {
+        const row = el.closest('tr');
+        const sVal = row.querySelector('.start-date').value;
+        const eVal = row.querySelector('.end-date').value;
+        const p = parseFloat(row.querySelector('.persons').value) || 0;
+
+        if (sVal && eVal) {
+            const s = new Date(sVal);
+            const e = new Date(eVal);
+            
+            if(s > e) {
+                row.querySelector('.row-days').value = 0;
+                row.querySelector('.row-mm').value = 0.0;
+            } else {
+                let workingDays = 0;
+                let currentDate = new Date(s);
+                while (currentDate <= e) {
+                    const dayOfWeek = currentDate.getDay();
+                    if (dayOfWeek !== 0 && dayOfWeek !== 6) workingDays++;
+                    currentDate.setDate(currentDate.getDate() + 1);
+                }
+                row.querySelector('.row-days').value = workingDays;
+                row.querySelector('.row-mm').value = ((workingDays * p) / 22).toFixed(2);
+            }
+        } else {
+            row.querySelector('.row-days').value = 0;
+            row.querySelector('.row-mm').value = 0.0;
+        }
+        updateSummary();
+        if(shouldSave) saveData();
+    }
+
+    function deleteRows() {
+        const table = document.getElementById("taskTableBody");
+        const checkboxes = document.getElementsByName("rowCheck");
+        let deleted = false;
+        for (let i = checkboxes.length - 1; i >= 0; i--) {
+            if (checkboxes[i].checked) {
+                table.deleteRow(i);
+                deleted = true;
+            }
+        }
+        if(!deleted) alert("삭제할 항목을 선택해주세요.");
+        else {
+            updateSummary();
+            document.getElementById("checkAll").checked = false;
+            saveData();
+        }
+    }
+
+    function toggleAll() {
+        const checked = document.getElementById("checkAll").checked;
+        document.getElementsByName("rowCheck").forEach(cb => cb.checked = checked);
+    }
+
+    function updateSummary() {
+        const rows = document.querySelectorAll("#taskTableBody tr");
+        let totalMM = 0;
+        let minS = new Date('9999-12-31'), maxE = new Date('1900-01-01');
+        let hasDate = false;
+        
+        rows.forEach(r => {
+            totalMM += parseFloat(r.querySelector('.row-mm').value) || 0;
+            const sVal = r.querySelector('.start-date').value;
+            const eVal = r.querySelector('.end-date').value;
+            if (sVal) {
+                const s = new Date(sVal);
+                if(s < minS) minS = s;
+                hasDate = true;
+            }
+            if (eVal) {
+                const e = new Date(eVal);
+                if(e > maxE) maxE = e;
+                hasDate = true;
+            }
+        });
+
+        document.getElementById("totalTasks").innerText = rows.length;
+        document.getElementById("totalMM").innerText = totalMM.toFixed(1) + " M/M";
+        if (hasDate && minS <= maxE) {
+            const fmt = (d) => d.toISOString().split('T')[0];
+            document.getElementById("projectDuration").innerText = `${fmt(minS)} ~ ${fmt(maxE)}`;
+        } else {
+            document.getElementById("projectDuration").innerText = "-";
+        }
+    }
+
+    document.addEventListener('keydown', function(event) {
+        if (event.ctrlKey && event.altKey && (event.key === 'n' || event.key === 'N')) {
+            event.preventDefault(); 
+            addRow(); 
+            const tableBody = document.getElementById("taskTableBody");
+            if(tableBody.lastElementChild) {
+                setTimeout(() => {
+                    tableBody.lastElementChild.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    const firstInput = tableBody.lastElementChild.querySelector('input[type="text"]');
+                    if(firstInput) firstInput.focus();
+                }, 50);
+            }
+        }
+    });
+
+    // ==========================================
+    // 2. Excel Download (List & Gantt)
+    // ==========================================
+    
+    // [신규] 화면 리스트 그대로 다운로드
+    async function downloadListExcel() {
+        const workbook = new ExcelJS.Workbook();
+        const sheet = workbook.addWorksheet('수행내역리스트');
+        const prjName = document.getElementById("projectName").value.trim() || "시스템 인프라";
+        const rows = document.querySelectorAll("#taskTableBody tr");
+
+        if (rows.length === 0) { alert("데이터가 없습니다."); return; }
+
+        // 헤더 설정
+        const headers = ['수행내역(Task)', '시작일(Start)', '종료일(End)', 'Working Days', '인원(Pers)', '공수(M/M)'];
+        const headerRow = sheet.addRow(headers);
+        
+        // 헤더 스타일
+        headerRow.eachCell((cell) => {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFEFEF' } };
+            cell.font = { bold: true };
+            cell.alignment = { horizontal: 'center', vertical: 'middle' };
+            cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+        });
+
+        // 컬럼 너비 설정
+        sheet.columns = [
+            { width: 45 }, { width: 15 }, { width: 15 }, { width: 15 }, { width: 12 }, { width: 12 }
+        ];
+
+        // 데이터 추가
+        rows.forEach(row => {
+            const task = row.querySelector('.task-name').value;
+            const start = row.querySelector('.start-date').value;
+            const end = row.querySelector('.end-date').value;
+            const days = row.querySelector('.row-days').value;
+            const pers = row.querySelector('.persons').value;
+            const mm = row.querySelector('.row-mm').value;
+
+            // 데이터가 있는 경우에만 추가
+            if (task || start) {
+                const newRow = sheet.addRow([task, start, end, days, pers, mm]);
+                newRow.eachCell((cell, colNumber) => {
+                    cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+                    // 텍스트는 좌측, 숫자/날짜는 중앙 정렬
+                    if(colNumber === 1) cell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+                    else cell.alignment = { vertical: 'middle', horizontal: 'center' };
+                });
+            }
+        });
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        saveAs(new Blob([buffer]), `${prjName.replace(/\s+/g, '_')}_List.xlsx`);
+    }
+
+    // 기존 Gantt 차트 다운로드
+    async function downloadExcel() {
+        const workbook = new ExcelJS.Workbook();
+        const sheet = workbook.addWorksheet('구축일정');
+        const rows = document.querySelectorAll("#taskTableBody tr");
+        const prjName = document.getElementById("projectName").value.trim() || "시스템 인프라";
+
+        if (rows.length === 0) { alert("데이터가 없습니다."); return; }
+
+        const taskMap = new Map();
+        let minDate = new Date('9999-12-31');
+
+        rows.forEach(row => {
+            let rawName = row.querySelector('.task-name').value.trim();
+            const cleanName = rawName.replace(/^↳\s*/, '').trim();
+
+            if (!cleanName) return; 
+
+            const sVal = row.querySelector('.start-date').value;
+            const eVal = row.querySelector('.end-date').value;
+
+            if (sVal && eVal) {
+                const sDate = new Date(sVal);
+                const eDate = new Date(eVal);
+                if (sDate > eDate) return;
+
+                if (sDate < minDate) minDate = sDate;
+
+                if (!taskMap.has(cleanName)) {
+                    taskMap.set(cleanName, []);
+                }
+                taskMap.get(cleanName).push({ start: sDate, end: eDate });
+            }
+        });
+
+        if (taskMap.size === 0) { alert("유효한 일정 데이터가 없습니다."); return; }
+
+        const projectStart = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+
+        const fillHeader = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFEFEF' } }; 
+        const fillBar = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF9CA3AF' } }; 
+        const borderThin = { style: 'thin', color: { argb: 'FFBFBFBF' } };
+        const borderMedium = { style: 'medium', color: { argb: 'FF000000' } }; 
+
+        sheet.getColumn(1).width = 45;
+        sheet.mergeCells('A1:BM1');
+        const titleCell = sheet.getCell('A1');
+        titleCell.value = `■ ${prjName} 구축 일정표`;
+        titleCell.font = { bold: true, size: 16 };
+        titleCell.alignment = { vertical: 'middle' };
+        
+        sheet.mergeCells('A2:A3');
+        const headerName = sheet.getCell('A2');
+        headerName.value = "수행내역";
+        headerName.style = { 
+            fill: fillHeader, font: { bold: true }, alignment: { vertical: 'middle', horizontal: 'center' },
+            border: { top: borderMedium, bottom: borderMedium, left: borderMedium, right: borderThin }
+        };
+
+        const totalCols = 2 + (12 * 5);
+        for (let c = 2; c < totalCols; c++) {
+            sheet.getCell(2, c).border = { top: borderMedium, bottom: borderThin, left: borderThin, right: borderThin };
+            sheet.getCell(3, c).border = { top: borderThin, bottom: borderMedium, left: borderThin, right: borderThin };
+        }
+
+        for (let m = 0; m < 12; m++) {
+            const startCol = 2 + (m * 5);
+            const endCol = startCol + 4;
+            sheet.mergeCells(2, startCol, 2, endCol);
+            const mCell = sheet.getCell(2, startCol);
+            mCell.value = `M${m+1}`;
+            mCell.fill = fillHeader; mCell.font = { bold: true };
+            mCell.alignment = { vertical: 'middle', horizontal: 'center' };
+            mCell.border = { top: borderMedium, bottom: borderThin, left: borderThin, right: borderThin };
+
+            for (let w = 0; w < 5; w++) {
+                const wCol = startCol + w;
+                const wCell = sheet.getCell(3, wCol);
+                wCell.value = w + 1;
+                wCell.fill = fillHeader; wCell.font = { size: 9 };
+                wCell.alignment = { horizontal: 'center', vertical: 'middle' };
+                wCell.border = { top: borderThin, bottom: borderMedium, left: borderThin, right: borderThin };
+                sheet.getColumn(wCol).width = 3.2; 
+            }
+        }
+
+        let currentRowIndex = 4;
+        
+        taskMap.forEach((ranges, taskName) => {
+            const row = sheet.getRow(currentRowIndex);
+            
+            const nameCell = row.getCell(1);
+            nameCell.value = taskName;
+            nameCell.alignment = { vertical: 'middle', indent: 1 };
+            nameCell.border = { top: borderThin, left: borderMedium, bottom: borderThin, right: borderThin };
+
+            const maxCol = 2 + (12 * 5) - 1;
+            for (let c = 2; c <= maxCol; c++) {
+                row.getCell(c).border = { top: borderThin, left: borderThin, bottom: borderThin, right: borderThin };
+            }
+            row.getCell(maxCol).border = { top: borderThin, left: borderThin, bottom: borderThin, right: borderMedium };
+
+            ranges.forEach(range => {
+                const startMonthIdx = (range.start.getFullYear() - projectStart.getFullYear()) * 12 + (range.start.getMonth() - projectStart.getMonth());
+                const endMonthIdx = (range.end.getFullYear() - projectStart.getFullYear()) * 12 + (range.end.getMonth() - projectStart.getMonth());
+                
+                const getWeekIdx = (date) => Math.min(4, Math.floor((date.getDate() - 1) / 7));
+                
+                let startGridCol = 2 + (startMonthIdx * 5) + getWeekIdx(range.start);
+                let endGridCol = 2 + (endMonthIdx * 5) + getWeekIdx(range.end);
+
+                if (startGridCol < 2) startGridCol = 2;
+                if (endGridCol > maxCol) endGridCol = maxCol;
+
+                for (let c = startGridCol; c <= endGridCol; c++) {
+                    if (c >= 2 && c <= maxCol) {
+                        row.getCell(c).fill = fillBar;
+                    }
+                }
+            });
+
+            currentRowIndex++;
+        });
+        
+        const lastRowIndex = currentRowIndex - 1;
+        for(let c = 1; c <= 2 + (12*5) - 1; c++) {
+             const cell = sheet.getCell(lastRowIndex, c);
+             const currentBorder = cell.border || {};
+             cell.border = { ...currentBorder, bottom: borderMedium };
+        }
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        saveAs(new Blob([buffer]), `${prjName.replace(/\s+/g, '_')}_Gantt.xlsx`);
+    }
+</script>
+</body>
+</html>

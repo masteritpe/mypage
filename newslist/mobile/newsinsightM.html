@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>News Insight Mobile Viewer</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css" />
+
+<style>
+/* === Mobile Theme (News Insight) === */
+:root {
+    --primary: #2563eb;
+    --primary-dark: #1d4ed8;
+    --accent: #3b82f6; 
+    --accent-light: #eff6ff;
+    --bg: #f1f5f9; 
+    --card: #ffffff;
+    --text: #0f172a; 
+    --sub: #64748b; 
+    --border: #e2e8f0;
+    --success: #10b981;
+    --danger: #ef4444;
+    --font-ui: 'Pretendard', sans-serif;
+    --safe-area-bottom: env(safe-area-inset-bottom);
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font-ui); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+/* === Header & Search === */
+header { padding: 12px 16px; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); display: flex; gap: 10px; align-items: center; box-shadow: 0 2px 10px rgba(0,0,0,0.03); z-index: 10; flex-shrink: 0; }
+.logo-icon { color: var(--primary); font-size: 20px; display: flex; align-items: center; justify-content: center; width: 42px; height: 42px; flex-shrink: 0; }
+.search-box { flex: 1; position: relative; }
+.search-input { width: 100%; height: 42px; background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 0 40px 0 12px; font-size: 14px; color: var(--text); outline: none; transition: 0.2s; }
+.search-input:focus { background: #fff; border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-light); }
+.search-icon { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--sub); }
+.btn-menu { width: 42px; height: 42px; border: none; background: transparent; border-radius: 8px; color: var(--text); font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0;}
+.btn-menu:active { background: #e2e8f0; }
+
+/* === List View === */
+#list-view { flex: 1; overflow-y: auto; padding: 12px; -webkit-overflow-scrolling: touch; }
+.doc-card { background: var(--card); padding: 16px; border-radius: 12px; margin-bottom: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.02); border: 1px solid var(--border); transition: transform 0.1s; cursor: pointer; position: relative; border-left: 4px solid var(--primary); }
+.doc-card:active { transform: scale(0.98); background: #f8fafc; }
+
+.card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.badge-cat { font-size: 11px; color: var(--primary); font-weight: 700; background: var(--accent-light); padding: 4px 8px; border-radius: 6px; }
+.badge-date { font-weight: 500; font-size: 12px; color: var(--sub); }
+
+.card-title { font-size: 15px; font-weight: 600; line-height: 1.5; color: var(--text); margin-bottom: 12px; word-break: break-all; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.card-info { font-size: 12px; color: var(--sub); display: flex; justify-content: space-between; align-items: center; font-weight: 500;}
+
+/* === Detail Overlay === */
+#detail-view { position: fixed; inset: 0; background: #fff; z-index: 100; transform: translateX(100%); transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1); display: flex; flex-direction: column; }
+#detail-view.active { transform: translateX(0); }
+
+.detail-header { height: 56px; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 16px; justify-content: space-between; background: rgba(255,255,255,0.95); backdrop-filter: blur(8px); flex-shrink: 0; }
+.btn-back { font-size: 16px; background: none; border: none; color: var(--text); padding: 8px 0; cursor: pointer; display: flex; align-items: center; gap: 6px; font-weight: 600; }
+.detail-content { flex: 1; overflow-y: auto; padding: 20px; padding-bottom: calc(90px + var(--safe-area-bottom)); }
+
+.view-title { font-size: 22px; font-weight: 800; line-height: 1.4; color: #111; margin-bottom: 16px; word-break: break-word; }
+
+.view-meta-grid { background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; display: flex; flex-direction: column; gap: 6px; margin-bottom: 24px; }
+.meta-row { display: flex; font-size: 12px; }
+.meta-label { font-weight: 700; color: #64748b; width: 60px; flex-shrink: 0; }
+.meta-value { color: #334155; word-break: break-all; font-weight: 500; }
+
+.view-lead { font-size: 15px; font-weight: 600; color: #1e40af; line-height: 1.6; padding-left: 12px; border-left: 3px solid var(--primary); margin-bottom: 24px; }
+.view-body { font-size: 15px; line-height: 1.8; color: #333; word-break: break-word; }
+
+/* === 텍스트 밀림 방지: 표(Table) 요소는 건드리지 않고 블록 텍스트만 핀셋 초기화 === */
+.view-body p, 
+.view-body div:not(.img-card):not(.file-list):not(.view-body), 
+.view-body h1, .view-body h2, .view-body h3, .view-body h4, .view-body h5, .view-body h6,
+.view-body ul, .view-body ol, .view-body li {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    text-align: left !important;
+    text-indent: 0 !important;
+}
+
+/* === 표(Table) 모바일 뷰어 전용 튼튼한 레이아웃 강제 === */
+.view-body table { 
+    width: 100% !important; 
+    max-width: 100% !important;
+    table-layout: fixed !important;
+    border-collapse: collapse !important; 
+    margin: 16px 0 !important; 
+}
+.view-body table td, 
+.view-body table th { 
+    border: 1px solid var(--border) !important; 
+    padding: 8px !important; 
+    word-break: break-word !important; 
+    white-space: normal !important; 
+    vertical-align: top !important;
+}
+.view-body table td *, 
+.view-body table th * {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    text-align: left !important;
+    white-space: normal !important;
+}
+
+.view-body img { max-width: 100% !important; height: auto !important; border-radius: 6px; margin: 10px 0; }
+
+.insight-box { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 12px; padding: 16px; margin-top: 32px; font-size: 14px; line-height: 1.7; color: #92400e; }
+.insight-label { font-weight: 800; font-size: 12px; color: #b45309; margin-bottom: 8px; display: block; }
+
+/* === Images & Files === */
+.attach-section { margin-top: 32px; border-top: 2px solid #f1f5f9; padding-top: 20px; }
+.section-label { font-size: 12px; font-weight: 700; color: #94a3b8; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+.img-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.img-card { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: #fff; aspect-ratio: 1; cursor: zoom-in; }
+.img-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.file-list { display: flex; flex-direction: column; gap: 8px; }
+.file-item { background: #f8fafc; border: 1px solid var(--border); padding: 10px 12px; border-radius: 8px; display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text); text-decoration: none; }
+.file-item i { color: var(--sub); font-size: 16px; }
+
+/* === Modal === */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200; display: none; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
+.modal-box { background: #fff; width: 90%; max-width: 360px; border-radius: 16px; padding: 24px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+.modal-title { font-size: 18px; font-weight: 700; margin-bottom: 16px; color: var(--primary); }
+.btn-full { width: 100%; height: 48px; border-radius: 8px; border: 1px solid var(--border); background: #fff; color: var(--text); font-weight: 600; margin-bottom: 10px; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: 0.2s; }
+.btn-full:active { background: #f1f5f9; }
+.btn-full.primary { background: var(--primary); color: #fff; border: none; }
+.btn-full.primary:active { background: var(--primary-dark); }
+
+#img-viewer { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 300; display: none; align-items: center; justify-content: center; flex-direction: column; }
+#img-viewer img { max-width: 100%; max-height: 85vh; object-fit: contain; }
+.viewer-close { position: absolute; top: 20px; right: 20px; color: #fff; font-size: 32px; cursor: pointer; padding: 10px; z-index: 301; }
+
+#toast { position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%); background: rgba(33, 33, 33, 0.95); color: #fff; padding: 12px 24px; border-radius: 30px; font-size: 14px; font-weight: 500; opacity: 0; pointer-events: none; transition: 0.3s; z-index: 400; white-space: nowrap; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+.empty-msg { text-align: center; margin-top: 100px; color: var(--sub); line-height: 1.6; font-size: 15px; }
+</style>
+</head>
+<body>
+
+<header>
+    <div class="logo-icon"><i class="fas fa-layer-group"></i></div>
+    <div class="search-box">
+        <i class="fas fa-search search-icon"></i>
+        <input type="text" id="search-input" class="search-input" placeholder="뉴스 제목 또는 본문 검색...">
+    </div>
+    <button class="btn-menu" id="btn-settings" title="데이터 관리"><i class="fas fa-ellipsis-v"></i></button>
+</header>
+
+<main id="list-view"></main>
+
+<div id="detail-view">
+    <div class="detail-header">
+        <button class="btn-back" id="btn-back"><i class="fas fa-chevron-left"></i> 목록으로</button>
+        <span style="font-weight:600; font-size:14px; color:var(--sub);"><i class="fas fa-newspaper"></i> Insight 상세</span>
+        <div style="width:80px;"></div> 
+    </div>
+    <div class="detail-content">
+        <div id="view-title" class="view-title"></div>
+
+        <div class="view-meta-grid">
+            <div class="meta-row">
+                <span class="meta-label">DATE</span>
+                <span class="meta-value" id="view-date"></span>
+            </div>
+            <div class="meta-row">
+                <span class="meta-label">CAT</span>
+                <span class="meta-value" id="view-cat"></span>
+            </div>
+            <div class="meta-row">
+                <span class="meta-label">SOURCE</span>
+                <span class="meta-value" id="view-source"></span>
+            </div>
+        </div>
+
+        <div id="view-lead-section">
+            <div id="view-lead" class="view-lead"></div>
+        </div>
+        
+        <div id="view-content" class="view-body"></div>
+
+        <div id="view-insight-section" style="display:none;">
+            <div class="insight-box">
+                <strong class="insight-label">💡 PROFESSIONAL INSIGHT</strong>
+                <div id="view-insight"></div>
+            </div>
+        </div>
+        
+        <div id="view-attach-section" class="attach-section" style="display:none;">
+            <div class="section-label"><i class="fas fa-paperclip"></i> 첨부 자료</div>
+            <div id="view-attach-images" class="img-grid"></div>
+            <div id="view-attach-files" class="file-list"></div>
+        </div>
+    </div>
+</div>
+
+<div id="data-modal" class="modal-overlay">
+    <div class="modal-box">
+        <div class="modal-title"><i class="fas fa-sync-alt"></i> 데이터 관리</div>
+        <p style="font-size:13px; color:var(--sub); margin-bottom:24px; line-height:1.5;">
+            데스크탑에서 백업한 JSON 파일을 불러오거나,<br>현재 기기의 데이터를 저장할 수 있습니다.
+        </p>
+        
+        <input type="file" id="inp-json-file" accept=".json" style="display:none">
+        <button class="btn-full primary" onclick="document.getElementById('inp-json-file').click()">
+            <i class="fas fa-upload"></i> JSON 백업 데이터 복구
+        </button>
+        <button class="btn-full" id="btn-backup-json">
+            <i class="fas fa-download"></i> 기기 데이터 백업 (JSON)
+        </button>
+        <button class="btn-full" onclick="document.getElementById('data-modal').style.display='none'" style="margin-top:16px; color:#ef4444; border-color:#fee2e2;">
+            닫기
+        </button>
+    </div>
+</div>
+
+<div id="img-viewer" onclick="closeImageViewer()">
+    <span class="viewer-close">&times;</span>
+    <img id="img-viewer-content">
+    <div style="color:rgba(255,255,255,0.7); font-size:13px; margin-top:16px;">화면을 터치하면 닫힙니다</div>
+</div>
+
+<div id="toast">메시지</div>
+
+<script>
+// --- DB 연동 로직 (NewsInsightDB 호환) ---
+const DB_NAME = 'NewsInsightDB';
+let db = null;
+let allDocs = [];
+
+const AppDB = {
+    open: function(){
+        return new Promise((resolve,reject)=>{
+            const req = indexedDB.open(DB_NAME, 1);
+            req.onupgradeneeded = e => {
+                const d = e.target.result;
+                if(!d.objectStoreNames.contains("docs")) d.createObjectStore("docs", {keyPath: "id"});
+            };
+            req.onsuccess = e => { db = e.target.result; resolve(db); };
+            req.onerror = () => reject(req.error);
+        });
+    },
+    getAllDocs: function(){
+        return new Promise((res,rej)=>{
+            if(!db) return res([]);
+            const tx = db.transaction("docs", "readonly");
+            const r = tx.objectStore("docs").getAll();
+            r.onsuccess = () => res(r.result || []);
+            r.onerror = () => rej(r.error);
+        });
+    },
+    putDoc: function(doc){ 
+        return new Promise((res,rej)=>{ 
+            const r = db.transaction("docs", "readwrite").objectStore("docs").put(doc); 
+            r.onsuccess = () => res(true); 
+            r.onerror = () => rej(r.error); 
+        }); 
+    }
+};
+
+// --- 유틸리티 ---
+function stripTags(html) {
+    if(!html) return "";
+    const tmp = document.createElement("DIV");
+    tmp.innerHTML = html;
+    return tmp.textContent || tmp.innerText || "";
+}
+
+function toast(msg) {
+    const t = document.getElementById('toast');
+    t.innerHTML = `<i class="fas fa-info-circle"></i> ${msg}`; 
+    t.style.opacity = '1';
+    setTimeout(() => t.style.opacity = '0', 2000);
+}
+
+// --- UI 렌더링 ---
+async function init() {
+    try {
+        await AppDB.open();
+        await loadList();
+    } catch(e) {
+        console.error(e);
+        toast('데이터베이스 연결에 실패했습니다.');
+    }
+}
+
+async function loadList() {
+    allDocs = await AppDB.getAllDocs();
+    allDocs.sort((a,b) => b.id - a.id);
+    renderList(allDocs);
+}
+
+function renderList(items) {
+    const listEl = document.getElementById('list-view');
+    listEl.innerHTML = '';
+
+    if(items.length === 0) {
+        listEl.innerHTML = `
+            <div class="empty-msg">
+                <i class="fas fa-folder-open" style="font-size:56px; margin-bottom:16px; color:#cbd5e1;"></i><br>
+                저장된 인사이트 문서가 없습니다.<br>
+                우측 상단 메뉴(<i class="fas fa-ellipsis-v"></i>)에서<br>
+                기존 데이터를 복구해 보세요.
+            </div>`;
+        return;
+    }
+
+    items.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'doc-card';
+        div.onclick = () => showDetail(item);
+        
+        const plainTitle = stripTags(item.title) || 'Untitled Insight';
+        const imgCount = (item.attachments || []).filter(f => f.type === 'image').length;
+        const fileCount = (item.attachments || []).filter(f => f.type !== 'image').length;
+        
+        let attachHTML = '';
+        if(imgCount > 0) attachHTML += `<span style="margin-right:8px;"><i class="far fa-image"></i> ${imgCount}</span>`;
+        if(fileCount > 0) attachHTML += `<span><i class="fas fa-file-alt"></i> ${fileCount}</span>`;
+
+        div.innerHTML = `
+            <div class="card-top">
+                <span class="badge-cat">${item.cat || 'Uncategorized'}</span>
+                <span class="badge-date">${item.date || '-'}</span>
+            </div>
+            <div class="card-title">${plainTitle}</div>
+            <div class="card-info">
+                <span style="color:var(--primary);">${item.source ? '<i class="fas fa-link"></i> Source' : ''}</span>
+                <span style="color:var(--sub);">${attachHTML}</span>
+            </div>
+        `;
+        listEl.appendChild(div);
+    });
+}
+
+function showDetail(item) {
+    const detailEl = document.getElementById('detail-view');
+    
+    document.getElementById('view-title').innerHTML = item.title || 'Untitled';
+    document.getElementById('view-date').textContent = item.date || '-';
+    document.getElementById('view-cat').textContent = item.cat || '-';
+    
+    if(item.source) {
+        document.getElementById('view-source').innerHTML = `<a href="${item.source}" target="_blank" style="color:var(--primary); text-decoration:none;">${item.source}</a>`;
+    } else {
+        document.getElementById('view-source').textContent = '-';
+    }
+    
+    const leadSec = document.getElementById('view-lead-section');
+    if(item.lead && stripTags(item.lead).trim() !== '') {
+        leadSec.style.display = 'block';
+        document.getElementById('view-lead').innerHTML = item.lead;
+    } else {
+        leadSec.style.display = 'none';
+    }
+    
+    document.getElementById('view-content').innerHTML = item.content || '<span style="color:#9ca3af">본문 내용이 없습니다.</span>';
+
+    const insightSec = document.getElementById('view-insight-section');
+    if(item.insight && stripTags(item.insight).trim() !== '') {
+        insightSec.style.display = 'block';
+        document.getElementById('view-insight').innerHTML = item.insight;
+    } else {
+        insightSec.style.display = 'none';
+    }
+
+    const attachSec = document.getElementById('view-attach-section');
+    const attachImgs = document.getElementById('view-attach-images');
+    const attachFiles = document.getElementById('view-attach-files');
+    attachImgs.innerHTML = '';
+    attachFiles.innerHTML = '';
+    
+    const attachments = item.attachments || [];
+    if(attachments.length > 0) {
+        attachSec.style.display = 'block';
+        
+        attachments.forEach(file => {
+            if(file.type === 'image') {
+                const card = document.createElement('div');
+                card.className = 'img-card';
+                card.innerHTML = `<img src="${file.data}" onclick="viewImage(this.src)">`;
+                attachImgs.appendChild(card);
+            } else {
+                const link = document.createElement('a');
+                link.className = 'file-item';
+                link.href = file.data;
+                link.download = file.name;
+                link.innerHTML = `<i class="fas fa-file-download"></i> <span>${file.name}</span>`;
+                attachFiles.appendChild(link);
+            }
+        });
+        
+        attachImgs.style.display = attachImgs.children.length > 0 ? 'grid' : 'none';
+        attachFiles.style.display = attachFiles.children.length > 0 ? 'flex' : 'none';
+    } else {
+        attachSec.style.display = 'none';
+    }
+
+    detailEl.classList.add('active');
+}
+
+document.getElementById('search-input').addEventListener('input', (e) => {
+    const term = e.target.value.toLowerCase().trim();
+    const filtered = allDocs.filter(d => {
+        const raw = ((d.title||'') + (d.content||'') + (d.insight||'') + (d.cat||'')).toLowerCase();
+        return raw.includes(term);
+    });
+    renderList(filtered);
+});
+
+document.getElementById('btn-back').addEventListener('click', () => {
+    document.getElementById('detail-view').classList.remove('active');
+});
+
+document.getElementById('btn-settings').addEventListener('click', () => {
+    document.getElementById('data-modal').style.display = 'flex';
+});
+
+document.getElementById('btn-backup-json').addEventListener('click', async () => {
+    try {
+        const docs = await AppDB.getAllDocs();
+        if (docs.length === 0) return toast('백업할 데이터가 없습니다.'); 
+
+        const blob = new Blob([JSON.stringify(docs, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `NewsInsight_Mobile_Backup_${new Date().toISOString().slice(0,10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        
+        document.getElementById('data-modal').style.display = 'none';
+        toast('백업 파일이 생성되었습니다.'); 
+    } catch(err) {
+        alert('백업 실패: ' + err.message);
+    }
+});
+
+// === JSON 복구 로직 강화 (기존 배열 및 IDB Admin 덤프 모두 지원) ===
+document.getElementById('inp-json-file').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+        try {
+            const parsedData = JSON.parse(evt.target.result);
+            let docsToImport = [];
+
+            // 1. 기존 백업 형식 확인 (배열)
+            if (Array.isArray(parsedData)) {
+                docsToImport = parsedData;
+            } 
+            // 2. IDB Admin 백업 형식 확인 (객체 내 stores.docs 배열)
+            else if (parsedData && parsedData.stores && Array.isArray(parsedData.stores.docs)) {
+                docsToImport = parsedData.stores.docs;
+            } 
+            else {
+                throw new Error('올바른 데이터 형식이 아닙니다.');
+            }
+
+            if (!confirm(`${docsToImport.length}개의 데이터를 복구하시겠습니까?\n(기존 동일 ID 문서는 덮어씌워집니다)`)) return;
+
+            let count = 0;
+            for (const doc of docsToImport) {
+                if (doc.id) {
+                    await AppDB.putDoc(doc);
+                    count++;
+                }
+            }
+
+            await loadList();
+            document.getElementById('data-modal').style.display = 'none';
+            toast(`${count}개의 데이터 복구가 완료되었습니다.`); 
+        } catch(err) {
+            console.error(err);
+            alert('파일 읽기 오류: ' + err.message);
+        } finally {
+            e.target.value = ''; 
+        }
+    };
+    reader.readAsText(file);
+});
+
+function viewImage(src) {
+    const viewer = document.getElementById('img-viewer');
+    const content = document.getElementById('img-viewer-content');
+    content.src = src;
+    viewer.style.display = 'flex';
+}
+
+function closeImageViewer() {
+    document.getElementById('img-viewer').style.display = 'none';
+    document.getElementById('img-viewer-content').src = '';
+}
+
+document.addEventListener("DOMContentLoaded", init);
+</script>
+</body>
+</html>

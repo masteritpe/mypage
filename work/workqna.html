@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Q&A</title>
+  
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+  <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+  <script src="https://unpkg.com/quill-image-resize@3.0.9/image-resize.min.js"></script>
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: { 
+            primary: '#2563eb',
+            gray: { 50: '#fafafa', 100: '#f5f5f5', 200: '#eaeaea', 300: '#e0e0e0', 400: '#888888', 500: '#666666', 900: '#111111' } 
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Custom Scrollbar */
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .animate-fadeIn { animation: fadeIn 0.2s ease-out forwards; }
+    
+    @keyframes slideUpFade { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    .animate-slideUp { animation: slideUpFade 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+    /* Quill Editor Overrides for Tailwind */
+    .ql-container.ql-snow { border: none !important; font-family: inherit !important; }
+    .ql-editor { min-height: 250px; font-size: 15px; line-height: 1.8; padding: 20px !important; }
+    .ql-editor img { max-width: 100%; border-radius: 8px; cursor: zoom-in; transition: transform 0.2s; }
+    .ql-editor img:hover { transform: scale(1.02); }
+    .ql-editor img.img-highlight { outline: 4px solid #FDBA74 !important; outline-offset: 2px !important; }
+    
+    .ql-editor ul, .ql-editor ol { padding-left: 24px !important; margin: 8px 0 !important; }
+    .ql-editor li { margin: 4px 0 !important; padding: 0 !important; list-style-type: disc; }
+    .ql-editor ol li { list-style-type: decimal; }
+    .ql-editor p, .ql-editor div { margin: 0 0 8px 0 !important; }
+    
+    /* ✅ 붙여넣기 한 표(Table) 원본 유지용 래퍼 스타일 (Tailwind/QnA 테마 맞춤) */
+    .quill-raw-table {
+        margin: 1.5rem 0;
+        width: 100%;
+        overflow-x: auto;
+        border-radius: 8px;
+        box-shadow: 0 0 0 1px #e2e8f0;
+        background: #fff;
+    }
+    .quill-raw-table table {
+        border-collapse: collapse !important;
+        width: 100%;
+        margin: 0;
+        font-size: 13px;
+        color: #0f172a;
+        text-align: left;
+    }
+    .quill-raw-table th, .quill-raw-table td {
+        border: 1px solid #e2e8f0;
+        padding: 8px 12px;
+    }
+    .quill-raw-table thead th, .quill-raw-table th {
+        background-color: #f8fafc;
+        font-weight: 600;
+    }
+
+    /* Paper Layout Container */
+    .editor-paper {
+        width: 100%; max-width: 900px; margin: 0 auto; background: #fff;
+        padding: 48px; border-radius: 12px; border: 1px solid #e2e8f0;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-900 font-sans h-screen overflow-hidden selection:bg-blue-100">
+  <div id="root" class="h-full"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // ✅ 표(Table) 붙여넣기 원본 보호를 위한 커스텀 모듈 등록 (React 컴포넌트 외부에서 1회 등록)
+    const BlockEmbed = window.Quill.import('blots/block/embed');
+    class RawTableBlot extends BlockEmbed {
+        static create(value) {
+            const node = super.create();
+            node.innerHTML = value;
+            node.setAttribute('contenteditable', 'false'); // 에디터 내부에서 표 구조가 깨지는 것 방지
+            return node;
+        }
+        static value(node) {
+            return node.innerHTML;
+        }
+    }
+    RawTableBlot.blotName = 'rawTable';
+    RawTableBlot.tagName = 'div';
+    RawTableBlot.className = 'quill-raw-table';
+    window.Quill.register(RawTableBlot, true);
+
+    // --- IndexedDB ---
+    const DB_NAME = 'QnADB';
+    const STORE_NAME = 'qnaStore';
+
+    const openDB = () => {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, 1);
+        request.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains(STORE_NAME)) {
+            db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+          }
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    };
+
+    const getAllData = async () => {
+      const db = await openDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const store = tx.objectStore(STORE_NAME);
+        const request = store.getAll();
+        request.onsuccess = () => resolve(request.result.sort((a, b) => b.id - a.id));
+        request.onerror = () => reject(request.error);
+      });
+    };
+
+    const putItem = async (item) => {
+      const db = await openDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        const request = store.put(item);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    };
+
+    const deleteItem = async (id) => {
+      const db = await openDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        const request = store.delete(id);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    };
+
+    // --- Main App ---
+    const App = () => {
+      const [qnaList, setQnaList] = useState([]);
+      const [isLoaded, setIsLoaded] = useState(false);
+      const [selectedId, setSelectedId] = useState(null);
+      const [searchQuery, setSearchQuery] = useState('');
+      const [isBlurred, setIsBlurred] = useState(true);
+      
+      const [isEditing, setIsEditing] = useState(false);
+      const [editForm, setEditForm] = useState({ id: null, tag: '', question: '', keywords: '', answer: '' });
+      
+      const [showShortcutModal, setShowShortcutModal] = useState(false);
+      const [viewerImage, setViewerImage] = useState(null);
+
+      const fileInputRef = useRef(null);
+      const quillRef = useRef(null);
+      const quillInstance = useRef(null);
+      const saveRef = useRef();
+
+      useEffect(() => {
+        getAllData().then(data => {
+          setQnaList(data);
+          if (data.length > 0) setSelectedId(data[0].id);
+          setIsLoaded(true);
+        });
+      }, []);
+
+      const filteredList = qnaList.filter(q => 
+        q.question.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        q.tag.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+
+      const selectedItem = qnaList.find(q => q.id === selectedId);
+
+      useEffect(() => {
+        setIsBlurred(true);
+        if (!isEditing) setEditForm({ id: null, tag: '', question: '', keywords: '', answer: '' });
+      }, [selectedId, isEditing]);
+
+      // --- Quill Editor Initialization ---
+      useEffect(() => {
+        if (isEditing && quillRef.current && !quillInstance.current) {
+          const SizeStyle = window.Quill.import('attributors/style/size');
+          SizeStyle.whitelist = null;
+          window.Quill.register(SizeStyle, true);
+
+          quillInstance.current = new window.Quill(quillRef.current, {
+            theme: 'snow',
+            scrollingContainer: '#editor-scroll-container', // 스크롤 튐 방지
+            modules: { toolbar: false, imageResize: { displaySize: true } }
+          });
+
+          // ✅ 표(Table) 붙여넣기 가로채기 설정 추가
+          const Delta = window.Quill.import('delta');
+          quillInstance.current.clipboard.addMatcher('TABLE', function(node, delta) {
+              return new Delta().insert({ rawTable: node.outerHTML });
+          });
+
+          // 초기 데이터 세팅 (줄바꿈 안전 처리 포함)
+          if (editForm.answer) {
+            let htmlToLoad = editForm.answer;
+            if (htmlToLoad && !htmlToLoad.includes('<p>') && !htmlToLoad.includes('<br>')) {
+                htmlToLoad = htmlToLoad.replace(/\n/g, '<br>');
+            }
+            quillInstance.current.clipboard.dangerouslyPasteHTML(htmlToLoad);
+          }
+
+          quillInstance.current.on('text-change', () => {
+            setEditForm(prev => ({ ...prev, answer: quillInstance.current.root.innerHTML }));
+          });
+        }
+        
+        return () => {
+          if (!isEditing) quillInstance.current = null;
+        };
+      }, [isEditing]);
+
+      const handleAddNew = () => {
+        setEditForm({ id: Date.now(), tag: '', question: '', keywords: '', answer: '' });
+        setIsEditing(true);
+        setSelectedId(null);
+      };
+
+      const handleEdit = (item) => {
+        setEditForm({ 
+            ...item, 
+            keywords: Array.isArray(item.keywords) ? item.keywords.join(', ') : (item.keywords || '') 
+        });
+        setIsEditing(true);
+      };
+
+      saveRef.current = async () => {
+        if (!editForm.question.trim()) {
+          alert('질문을 입력해주세요!');
+          return;
+        }
+        
+        const answerHtml = quillInstance.current ? quillInstance.current.root.innerHTML : editForm.answer;
+
+        const newItem = {
+          ...editForm,
+          answer: answerHtml,
+          keywords: typeof editForm.keywords === 'string' 
+            ? editForm.keywords.split(',').map(k => k.trim()).filter(k => k !== '') 
+            : editForm.keywords
+        };
+
+        await putItem(newItem);
+        const updatedData = await getAllData();
+        
+        setQnaList(updatedData);
+        setSelectedId(newItem.id);
+        setIsEditing(false);
+      };
+
+      const handleDelete = async (id) => {
+        if(confirm('정말 삭제하시겠습니까?')) {
+          await deleteItem(id);
+          const updatedData = await getAllData();
+          setQnaList(updatedData);
+          setSelectedId(updatedData.length > 0 ? updatedData[0].id : null);
+        }
+      };
+
+      // --- 엑셀 처리 ---
+      const handleFileDownload = async () => {
+        const data = await getAllData();
+        if (data.length === 0) return alert('내보낼 데이터가 없습니다.');
+
+        const exportData = data.map(item => ({
+          '태그': item.tag,
+          '질문': item.question,
+          '키워드': (item.keywords || []).join(', '),
+          '답변': item.answer.replace(/<[^>]*>/g, '') // 태그 제거 후 엑셀 저장
+        }));
+
+        const worksheet = XLSX.utils.json_to_sheet(exportData);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "QnA_Data");
+        XLSX.writeFile(workbook, `QnA_Backup_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      };
+
+      const handleFileUpload = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (evt) => {
+          try {
+            const data = new Uint8Array(evt.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+            if (jsonData.length === 0) return alert('데이터가 없습니다.');
+
+            let importCount = 0;
+            const now = Date.now(); 
+
+            for (let i = 0; i < jsonData.length; i++) {
+              const row = jsonData[i];
+              const question = row['질문'] || row['question'] || '';
+              if (!question.trim()) continue; 
+
+              const tag = row['태그'] || row['카테고리'] || '미분류';
+              const answer = row['답변'] || row['answer'] || '';
+              const keywordsStr = row['키워드'] || row['keywords'] || '';
+              const keywords = keywordsStr.toString().split(',').map(k => k.trim()).filter(k => k !== '');
+
+              await putItem({ id: now + i, tag: tag.toString(), question: question.toString(), keywords, answer: answer.toString() });
+              importCount++;
+            }
+
+            if (importCount > 0) {
+              const updatedData = await getAllData();
+              setQnaList(updatedData);
+              setSelectedId(updatedData[0].id); 
+              alert(`${importCount}개의 질문이 등록되었습니다!`);
+            }
+          } catch (error) { alert('오류가 발생했습니다.'); } 
+          finally { e.target.value = ''; }
+        };
+        reader.readAsArrayBuffer(file);
+      };
+
+      // --- 단축키 및 이벤트 ---
+      useEffect(() => {
+        const handleKeyDown = (e) => {
+          const isCmd = navigator.platform.includes('Mac') ? e.metaKey : e.ctrlKey;
+          
+          // 전역 저장 / 새 글
+          if (isCmd && !e.altKey && (e.key === 's' || e.key === 'S')) {
+            e.preventDefault();
+            if (isEditing) saveRef.current();
+          }
+          if (isCmd && e.altKey && (e.key === 'n' || e.key === 'N')) {
+            e.preventDefault();
+            handleAddNew();
+          }
+
+          // Quill 에디터 서식 단축키
+          if (isEditing && quillInstance.current && quillInstance.current.hasFocus()) {
+            const range = quillInstance.current.getSelection();
+            if (!range) return;
+
+            if (e.key === '+' || e.key === '=' || e.key === '-') {
+                e.preventDefault();
+                const fmt = quillInstance.current.getFormat(range);
+                const cur = fmt.size ? parseInt(fmt.size) : 15;
+                const next = (e.key === '-') ? Math.max(10, cur-1) : cur+1;
+                quillInstance.current.format('size', next + 'px'); return;
+            }
+            if (e.shiftKey && (e.key === 'x' || e.key === 'X')) {
+                e.preventDefault();
+                if(range.length > 0) quillInstance.current.removeFormat(range.index, range.length);
+                else Object.keys(quillInstance.current.getFormat(range)).forEach(k => quillInstance.current.format(k, false));
+                return;
+            }
+            if (!e.altKey && !e.shiftKey && e.key === '0') {
+                e.preventDefault();
+                const f = quillInstance.current.getFormat(range);
+                quillInstance.current.format('strike', !f['strike']); return;
+            }
+            if (!e.altKey && !e.shiftKey && ['1','2','3','4','5','6','7'].includes(e.key)) {
+                e.preventDefault();
+                const hls = {'1':'#ffedd5','2':'#e0f2fe','3':'#fef08a','4':'#dcfce7','5':'#fce7f3','6':'#e6d5c3','7':'#f3f4f6'};
+                const f = quillInstance.current.getFormat(range);
+                quillInstance.current.format('background', (f['background'] === hls[e.key]) ? false : hls[e.key]); return;
+            }
+            if (e.altKey && !e.shiftKey) {
+                const key = e.key.toLowerCase();
+                const f = quillInstance.current.getFormat(range);
+                if(key === 'r') { e.preventDefault(); quillInstance.current.format('color', f['color'] === '#ef4444' ? false : '#ef4444'); return; }
+                if(key === 'b') { e.preventDefault(); quillInstance.current.format('color', f['color'] === '#2563eb' ? false : '#2563eb'); return; }
+            }
+          }
+
+          // 뷰어 모드 Spacebar 블러 해제
+          const tag = e.target.tagName.toLowerCase();
+          if (tag !== 'input' && tag !== 'textarea' && !e.target.closest('.ql-editor')) {
+            if (e.code === 'Space' && !isEditing && selectedItem) {
+              e.preventDefault();
+              setIsBlurred(prev => !prev);
+            }
+            
+            // 방향키 이동
+            if (!isEditing && filteredList.length > 0) {
+              const currentIndex = filteredList.findIndex(item => item.id === selectedId);
+              if (e.code === 'ArrowLeft' && currentIndex > 0) {
+                e.preventDefault(); setSelectedId(filteredList[currentIndex - 1].id);
+              } else if (e.code === 'ArrowRight' && currentIndex >= 0 && currentIndex < filteredList.length - 1) {
+                e.preventDefault(); setSelectedId(filteredList[currentIndex + 1].id);
+              }
+            }
+          }
+        };
+        
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+      }, [isEditing, selectedItem, filteredList, selectedId]);
+
+      // 뷰어 모드: 정답 영역 클릭 핸들러 (드래그 시 블러 방지 및 이미지 뷰어)
+      const handleViewClick = (e) => {
+        // 텍스트 선택(드래그) 중이면 블러 처리 무시
+        if (!isBlurred && window.getSelection().toString().length > 0) return;
+        
+        if (e.target.tagName === 'IMG') {
+          setViewerImage(e.target.src);
+          return;
+        }
+        setIsBlurred(!isBlurred);
+      };
+
+      if (!isLoaded) return <div className="h-full flex items-center justify-center text-gray-500">데이터를 불러오는 중...</div>;
+
+      return (
+        <div className="flex h-full w-full bg-[#f8fafc]">
+          <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".xlsx, .xls, .csv" className="hidden" />
+
+          {/* Sidebar */}
+          <div className="w-80 border-r border-gray-200 bg-white flex flex-col flex-shrink-0 z-10 shadow-[2px_0_8px_rgba(0,0,0,0.02)]">
+            <div className="h-14 border-b border-gray-200 flex justify-between items-center px-5 bg-white shrink-0">
+              <h2 className="text-[15px] font-bold text-gray-800 flex items-center gap-2">
+                <i className="fas fa-question-circle text-primary"></i> Q&A DB
+              </h2>
+              <div className="flex gap-1 text-gray-500">
+                <button onClick={handleFileDownload} className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-md transition" title="엑셀 백업"><i className="fas fa-file-excel"></i></button>
+                <button onClick={() => fileInputRef.current.click()} className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-md transition" title="엑셀 추가"><i className="fas fa-file-upload"></i></button>
+              </div>
+            </div>
+            
+            <div className="p-4 bg-[#eff6ff] border-b border-gray-200">
+              <input 
+                type="text" 
+                placeholder="질문 또는 태그 검색..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-white text-[13px] border border-gray-200 rounded-md px-3 py-2 outline-none focus:border-primary focus:ring-2 focus:ring-blue-100 transition shadow-sm"
+              />
+            </div>
+            
+            <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2 custom-scrollbar bg-[#f8fafc]">
+              {filteredList.map((item) => (
+                <div 
+                  key={item.id} 
+                  onClick={() => { setSelectedId(item.id); setIsEditing(false); }}
+                  className={`px-4 py-3 rounded-lg cursor-pointer transition-all duration-200 border ${
+                    selectedId === item.id && !isEditing
+                      ? 'bg-[#eff6ff] border-primary shadow-sm' 
+                      : 'bg-white border-transparent hover:bg-gray-100 hover:border-gray-200'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-primary uppercase tracking-wide">
+                      {item.tag || '미분류'}
+                    </span>
+                  </div>
+                  <h3 className={`text-[13px] font-semibold truncate ${selectedId === item.id && !isEditing ? 'text-gray-900' : 'text-gray-600'}`}>
+                    {item.question}
+                  </h3>
+                </div>
+              ))}
+              {qnaList.length === 0 && (
+                <div className="text-center text-xs text-gray-400 mt-10 px-4 leading-relaxed">
+                  등록된 질문이 없습니다.<br/><br/>
+                  <span className="text-primary font-medium cursor-pointer hover:underline" onClick={() => fileInputRef.current.click()}>
+                    엑셀 파일 업로드
+                  </span> 
+                  또는 우측 상단의 추가 버튼을 누르세요.
+                </div>
+              )}
+            </div>
+            <div className="p-3 text-center text-[11px] text-gray-400 border-t border-gray-200 bg-white">
+              Total <span className="font-bold text-gray-700">{filteredList.length}</span> items
+            </div>
+          </div>
+
+          {/* Main Content Area */}
+          <div className="flex-1 flex flex-col relative bg-[#f8fafc]">
+            {/* Toolbar */}
+            <div className="h-14 border-b border-gray-200 bg-white flex items-center justify-between px-8 shrink-0 z-10">
+              <div className="font-bold text-[15px] text-gray-800">
+                {isEditing ? '질문 편집기' : (selectedItem ? '상세 보기' : '')}
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => setShowShortcutModal(true)} className="px-3 py-1.5 text-[13px] font-semibold text-gray-600 bg-white border border-gray-300 rounded-md hover:bg-gray-50 flex items-center gap-2 transition">
+                  <i className="fas fa-keyboard"></i> 단축키
+                </button>
+                {isEditing ? (
+                  <>
+                    <button onClick={() => { setIsEditing(false); setSelectedId(selectedId || (qnaList.length > 0 ? qnaList[0].id : null)); }} className="px-3 py-1.5 text-[13px] font-semibold text-gray-600 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition">취소</button>
+                    <button onClick={() => saveRef.current()} className="px-4 py-1.5 text-[13px] font-semibold text-white bg-primary rounded-md hover:bg-blue-700 transition flex items-center gap-2 shadow-sm" title="저장 (Ctrl+S)">
+                      <i className="fas fa-save"></i> 저장
+                    </button>
+                  </>
+                ) : (
+                  <button onClick={handleAddNew} className="px-4 py-1.5 text-[13px] font-semibold text-white bg-primary rounded-md hover:bg-blue-700 transition flex items-center gap-2 shadow-sm" title="새 항목 (Ctrl+Alt+N)">
+                    <i className="fas fa-plus"></i> 추가
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Scrollable Editor/View Area */}
+            <div id="editor-scroll-container" className="flex-1 overflow-y-auto p-10 custom-scrollbar">
+              {isEditing ? (
+                <div className="editor-paper animate-slideUp">
+                  <div className="space-y-6">
+                    <div>
+                      <label className="block text-[13px] font-bold text-gray-700 mb-2 flex items-center gap-2"><i className="fas fa-tag text-gray-400"></i> 태그 (카테고리)</label>
+                      <input type="text" value={editForm.tag} onChange={e => setEditForm({...editForm, tag: e.target.value})} className="w-full border border-gray-300 rounded-md px-3 py-2.5 text-[14px] outline-none focus:border-primary focus:ring-2 focus:ring-blue-100 transition" placeholder="예: 공통, 기술, 제안..." spellcheck="false" />
+                    </div>
+                    <div>
+                      <label className="block text-[13px] font-bold text-gray-700 mb-2 flex items-center gap-2"><i className="fas fa-question-circle text-gray-400"></i> 질문 내용</label>
+                      <input type="text" value={editForm.question} onChange={e => setEditForm({...editForm, question: e.target.value})} className="w-full border border-gray-300 rounded-md px-3 py-2.5 text-[14px] outline-none focus:border-primary focus:ring-2 focus:ring-blue-100 transition" placeholder="예: 시스템 아키텍처 구성 방안은?" spellcheck="false" />
+                    </div>
+                    <div>
+                      <label className="block text-[13px] font-bold text-gray-700 mb-2 flex items-center gap-2"><i className="fas fa-key text-gray-400"></i> 핵심 키워드 (쉼표로 구분)</label>
+                      <input type="text" value={editForm.keywords} onChange={e => setEditForm({...editForm, keywords: e.target.value})} className="w-full border border-gray-300 rounded-md px-3 py-2.5 text-[14px] outline-none focus:border-primary focus:ring-2 focus:ring-blue-100 transition" placeholder="예: 클라우드, MSA, 이중화..." spellcheck="false" />
+                    </div>
+                    <div>
+                      <label className="block text-[13px] font-bold text-gray-700 mb-2 flex items-center gap-2"><i className="fas fa-align-left text-gray-400"></i> 답변 스크립트</label>
+                      <div className="border border-gray-300 rounded-md overflow-hidden focus-within:border-primary focus-within:ring-2 focus-within:ring-blue-100 transition bg-white">
+                        <div id="quill-editor" ref={quillRef} spellcheck="false"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : selectedItem ? (
+                <div className="editor-paper animate-fadeIn relative">
+                  <div className="absolute top-8 right-8 flex gap-2 opacity-0 hover:opacity-100 transition-opacity" style={{ animation: 'fadeIn 0.5s forwards' }}>
+                    <button onClick={() => handleEdit(selectedItem)} className="w-9 h-9 flex items-center justify-center text-gray-500 hover:text-primary hover:bg-blue-50 border border-gray-200 rounded-md transition bg-white shadow-sm" title="수정">
+                      <i className="fas fa-edit"></i>
+                    </button>
+                    <button onClick={() => handleDelete(selectedItem.id)} className="w-9 h-9 flex items-center justify-center text-gray-500 hover:text-red-600 hover:bg-red-50 border border-gray-200 rounded-md transition bg-white shadow-sm" title="삭제">
+                      <i className="fas fa-trash-alt"></i>
+                    </button>
+                  </div>
+
+                  <div className="mb-4 inline-block">
+                    <span className="text-[11px] font-bold text-primary uppercase tracking-widest bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-md">{selectedItem.tag || '미분류'}</span>
+                  </div>
+                  
+                  <h1 className="text-[26px] font-bold mb-6 text-gray-900 leading-tight">{selectedItem.question}</h1>
+                  
+                  {selectedItem.keywords && selectedItem.keywords.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-10">
+                      {selectedItem.keywords.map((kw, idx) => (
+                        <span key={idx} className="px-3 py-1 bg-gray-100 text-gray-600 rounded text-[12px] font-semibold border border-gray-200">
+                          # {kw}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="relative group mt-8">
+                    <div className="flex justify-between items-end mb-3 border-b-2 border-gray-100 pb-2">
+                      <h3 className="text-[14px] font-bold text-gray-500 flex items-center gap-2"><i className="fas fa-comment-dots"></i> 답변 내용</h3>
+                      <div className="text-[11px] text-gray-500 font-bold px-2 py-1 bg-gray-100 border border-gray-200 rounded shadow-sm">Press Space</div>
+                    </div>
+                    
+                    <div 
+                      onClick={handleViewClick}
+                      className={`ql-editor p-8 rounded-xl bg-white border border-gray-200 cursor-pointer transition-all duration-300 min-h-[250px] ${
+                        isBlurred ? 'blur-[8px] select-none opacity-40 grayscale' : 'blur-0 select-text opacity-100 shadow-sm'
+                      }`}
+                      dangerouslySetInnerHTML={{ __html: selectedItem.answer }}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center text-gray-400 h-full">
+                  <i className="fas fa-folder-open text-5xl mb-4 text-gray-300"></i>
+                  <p className="text-[15px] font-bold text-gray-500">등록된 질문이 없습니다.</p>
+                  <p className="text-[13px] mt-2">상단의 추가 버튼을 눌러 새 항목을 등록하세요.</p>
+                </div>
+              )}
+            </div>
+          </div>
+          
+          {/* Shortcut Modal */}
+          {showShortcutModal && (
+            <div className="fixed inset-0 bg-black/60 z-[2000] flex items-center justify-center backdrop-blur-sm" onClick={() => setShowShortcutModal(false)}>
+              <div className="bg-white rounded-2xl w-full max-w-[440px] p-8 shadow-2xl animate-slideUp" onClick={e => e.stopPropagation()}>
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="m-0 text-[18px] font-bold text-gray-900 flex items-center gap-2"><i className="fas fa-keyboard text-primary"></i> 에디터 단축키</h3>
+                  <button onClick={() => setShowShortcutModal(false)} className="text-gray-400 hover:text-red-500 transition text-xl"><i className="fas fa-times"></i></button>
+                </div>
+                <div className="flex flex-col gap-4">
+                  {[
+                    { desc: '볼드 / 이탤릭 / 밑줄', keys: ['Ctrl', 'B / I / U'] },
+                    { desc: '취소선', keys: ['Ctrl', '0'] },
+                    { desc: '글자색 (빨강 / 파랑)', keys: ['Ctrl', 'Alt', 'R / B'] },
+                    { desc: '형광펜 강조 (7가지 색상)', keys: ['Ctrl', '1~7'] },
+                    { desc: '표(Table) 지우기', keys: ['Backspace'] },
+                    { desc: '서식 모두 지우기', keys: ['Ctrl', 'Shift', 'X'] },
+                    { desc: '글꼴 크기 조절', keys: ['Ctrl', '+ / -'] },
+                  ].map((item, idx) => (
+                    <div key={idx} className="flex justify-between items-center pb-3 border-b border-gray-100 last:border-0 last:pb-0">
+                      <span className="text-[14px] text-gray-600 font-medium">{item.desc}</span>
+                      <div className="flex gap-1.5 items-center text-gray-400 text-[13px] font-medium">
+                        {item.keys.map((k, i) => (
+                          <React.Fragment key={i}>
+                            <kbd className="bg-gray-50 border border-gray-300 border-b-2 rounded-md px-2 py-1 font-sans text-[12px] font-bold text-gray-600 shadow-sm">{k}</kbd>
+                            {i < item.keys.length - 1 && <span>+</span>}
+                          </React.Fragment>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Image Viewer Modal */}
+          {viewerImage && (
+            <div className="fixed inset-0 bg-black/80 z-[2000] flex items-center justify-center backdrop-blur-sm" onClick={() => setViewerImage(null)}>
+              <div className="relative max-w-[90vw] max-h-[90vh]">
+                <button onClick={() => setViewerImage(null)} className="absolute -top-10 right-0 text-white hover:text-primary transition text-3xl"><i className="fas fa-times"></i></button>
+                <img src={viewerImage} className="max-w-full max-h-[90vh] rounded-lg shadow-2xl" onClick={e => e.stopPropagation()} />
+              </div>
+            </div>
+          )}
+
+        </div>
+      );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>

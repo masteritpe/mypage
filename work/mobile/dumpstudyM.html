@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Dump Study Mobile Viewer</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css" />
+
+<style>
+/* === Mobile Theme (Dump Study) === */
+:root {
+    --primary: #4f46e5;
+    --primary-dark: #3730a3;
+    --accent: #4f46e5; 
+    --accent-light: #eef2ff;
+    --bg: #f3f4f6; 
+    --card: #ffffff;
+    --text: #1f2937; 
+    --sub: #6b7280; 
+    --border: #e5e7eb;
+    --success: #10b981;
+    --danger: #ef4444;
+    --font-ui: 'Pretendard', sans-serif;
+    --safe-area-bottom: env(safe-area-inset-bottom);
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font-ui); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+/* === Header & Search === */
+header { padding: 12px 16px; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); display: flex; gap: 10px; align-items: center; box-shadow: 0 2px 10px rgba(0,0,0,0.03); z-index: 10; flex-shrink: 0; }
+.logo-icon { color: var(--accent); font-size: 20px; display: flex; align-items: center; justify-content: center; width: 42px; height: 42px; flex-shrink: 0; }
+.search-box { flex: 1; position: relative; }
+.search-input { width: 100%; height: 42px; background: #f9fafb; border: 1px solid var(--border); border-radius: 8px; padding: 0 40px 0 12px; font-size: 14px; color: var(--text); outline: none; transition: 0.2s; }
+.search-input:focus { background: #fff; border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-light); }
+.search-icon { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--sub); }
+.btn-menu { width: 42px; height: 42px; border: none; background: transparent; border-radius: 8px; color: var(--text); font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0;}
+.btn-menu:active { background: #e5e7eb; }
+
+/* === List View === */
+#list-view { flex: 1; overflow-y: auto; padding: 12px; -webkit-overflow-scrolling: touch; }
+.doc-card { background: var(--card); padding: 16px; border-radius: 12px; margin-bottom: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.02); border: 1px solid var(--border); transition: transform 0.1s; cursor: pointer; position: relative; border-left: 4px solid transparent; }
+.doc-card.st-checked { border-left-color: var(--success); }
+.doc-card.st-unchecked { border-left-color: #d1d5db; }
+.doc-card:active { transform: scale(0.98); background: #f9fafb; }
+
+.card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.badge-id { font-weight: 700; font-size: 13px; color: var(--accent); }
+.badge-cat { font-size: 11px; color: var(--sub); font-weight: 600; background: #f3f4f6; padding: 3px 6px; border-radius: 4px; border: 1px solid var(--border); }
+
+.card-title { font-size: 15px; line-height: 1.5; color: var(--text); margin-bottom: 12px; word-break: break-all; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.card-info { font-size: 12px; color: var(--sub); display: flex; justify-content: space-between; align-items: center; font-weight: 600;}
+.status-checked { color: var(--success); }
+.status-unchecked { color: #9ca3af; }
+
+/* === Detail Overlay === */
+#detail-view { position: fixed; inset: 0; background: #fff; z-index: 100; transform: translateX(100%); transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1); display: flex; flex-direction: column; }
+#detail-view.active { transform: translateX(0); }
+
+.detail-header { height: 56px; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 16px; justify-content: space-between; background: rgba(255,255,255,0.95); backdrop-filter: blur(8px); flex-shrink: 0; }
+.btn-back { font-size: 16px; background: none; border: none; color: var(--text); padding: 8px 0; cursor: pointer; display: flex; align-items: center; gap: 6px; font-weight: 600; }
+.detail-content { flex: 1; overflow-y: auto; padding: 20px; padding-bottom: calc(90px + var(--safe-area-bottom)); }
+
+.view-meta-grid { display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
+.view-meta-pill { background: #f9fafb; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; color: var(--sub); border: 1px solid var(--border); display: flex; align-items: center; gap: 4px; }
+
+.view-section-title { font-size: 12px; font-weight: 700; color: #9ca3af; margin: 24px 0 8px 0; text-transform: uppercase; display: flex; align-items: center; gap: 6px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+.view-body { font-size: 15px; line-height: 1.7; color: #374151; word-break: break-word; background: #f9fafb; padding: 16px; border-radius: 8px; }
+
+.view-body mark { background: #fde68a; color: #451a03; padding: 0 2px; border-radius: 2px; }
+.view-body span[style*="color:#ef4444"], .view-body font[color="#ef4444"] { color: #ef4444 !important; font-weight: bold; }
+.view-body span[style*="color:#3b82f6"], .view-body font[color="#3b82f6"] { color: #3b82f6 !important; font-weight: bold; }
+.view-body u { text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 2px;}
+
+.keypoint-box { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; padding: 16px; position: relative; margin-top: 24px; font-size: 14px; line-height: 1.6; color: #78350f; }
+.keypoint-box::before { content: '💡 핵심 해법 (Key Point)'; position: absolute; top: -10px; left: 16px; background: #fffbeb; padding: 0 8px; font-size: 11px; font-weight: 700; color: #b45309; }
+
+/* === Images === */
+.img-grid { display: grid; grid-template-columns: 1fr; gap: 16px; margin-top: 12px; }
+.img-card { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+.img-card img { width: 100%; height: auto; display: block; background: #f9fafb; cursor: zoom-in; }
+
+/* === Modal === */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200; display: none; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
+.modal-box { background: #fff; width: 90%; max-width: 360px; border-radius: 16px; padding: 24px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+.modal-title { font-size: 18px; font-weight: 700; margin-bottom: 16px; color: var(--primary); }
+.btn-full { width: 100%; height: 48px; border-radius: 8px; border: 1px solid var(--border); background: #fff; color: var(--text); font-weight: 600; margin-bottom: 10px; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: 0.2s; }
+.btn-full:active { background: #f3f4f6; }
+.btn-full.primary { background: var(--primary); color: #fff; border: none; }
+.btn-full.primary:active { background: var(--primary-dark); }
+
+#img-viewer { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 300; display: none; align-items: center; justify-content: center; flex-direction: column; }
+#img-viewer img { max-width: 100%; max-height: 85vh; object-fit: contain; }
+.viewer-close { position: absolute; top: 20px; right: 20px; color: #fff; font-size: 32px; cursor: pointer; padding: 10px; z-index: 301; }
+
+#toast { position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%); background: #1f2937; color: #fff; padding: 12px 24px; border-radius: 30px; font-size: 14px; font-weight: 500; opacity: 0; pointer-events: none; transition: 0.3s; z-index: 400; white-space: nowrap; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+.empty-msg { text-align: center; margin-top: 100px; color: var(--sub); line-height: 1.6; font-size: 15px; }
+</style>
+</head>
+<body>
+
+<header>
+    <div class="logo-icon"><i class="fas fa-brain"></i></div>
+    <div class="search-box">
+        <i class="fas fa-search search-icon"></i>
+        <input type="text" id="search-input" class="search-input" placeholder="문제 내용 검색...">
+    </div>
+    <button class="btn-menu" id="btn-settings" title="데이터 관리"><i class="fas fa-ellipsis-v"></i></button>
+</header>
+
+<main id="list-view"></main>
+
+<div id="detail-view">
+    <div class="detail-header">
+        <button class="btn-back" id="btn-back"><i class="fas fa-chevron-left"></i> 목록보기</button>
+        <span style="font-weight:600; font-size:14px; color:var(--sub);"><i class="fas fa-file-alt"></i> 덤프 상세</span>
+        <div style="width:70px;"></div> 
+    </div>
+    <div class="detail-content">
+        <div class="view-meta-grid">
+            <div class="view-meta-pill"><i class="fas fa-layer-group" style="color:var(--sub)"></i> Chap. <span id="view-chapter"></span></div>
+            <div class="view-meta-pill"><i class="fas fa-hashtag" style="color:var(--sub)"></i> <span id="view-number" style="color:var(--accent);"></span></div>
+            <div class="view-meta-pill" id="view-status-pill"></div>
+        </div>
+
+        <div class="view-section-title"><i class="fas fa-question-circle"></i> 문제 내용 (Question)</div>
+        <div id="view-question" class="view-body" style="background:transparent; padding:0;"></div>
+        
+        <div class="view-section-title" style="margin-top:30px;"><i class="fas fa-check-double"></i> 정답 및 풀이 (Solution)</div>
+        <div id="view-solution" class="view-body"></div>
+
+        <div id="view-keypoint-section" style="display:none;">
+            <div class="keypoint-box" id="view-keypoint"></div>
+        </div>
+        
+        <div id="view-img-section" style="display:none; margin-top:30px;">
+            <div class="view-section-title"><i class="far fa-images"></i> 참고 자료 (Images)</div>
+            <div id="view-images" class="img-grid"></div>
+        </div>
+    </div>
+</div>
+
+<div id="data-modal" class="modal-overlay">
+    <div class="modal-box">
+        <div class="modal-title"><i class="fas fa-database"></i> 데이터 동기화</div>
+        <p style="font-size:13px; color:var(--sub); margin-bottom:24px; line-height:1.5;">
+            JSON 백업 파일을 불러오거나,<br>현재 데이터를 저장할 수 있습니다.
+        </p>
+        
+        <input type="file" id="inp-json-file" accept=".json" style="display:none">
+        <button class="btn-full primary" onclick="document.getElementById('inp-json-file').click()">
+            <i class="fas fa-file-import"></i> JSON 백업 파일 불러오기
+        </button>
+        <button class="btn-full" id="btn-backup-json">
+            <i class="fas fa-download"></i> 현재 데이터 백업 (JSON)
+        </button>
+        <button class="btn-full" onclick="document.getElementById('data-modal').style.display='none'" style="margin-top:16px; color:#ef4444; border-color:#fee2e2;">
+            닫기
+        </button>
+    </div>
+</div>
+
+<div id="img-viewer" onclick="closeImageViewer()">
+    <span class="viewer-close">&times;</span>
+    <img id="img-viewer-content">
+    <div style="color:rgba(255,255,255,0.7); font-size:13px; margin-top:16px;">화면을 터치하면 닫힙니다</div>
+</div>
+
+<div id="toast">메시지</div>
+
+<script>
+// --- DB 연동 로직 ---
+const DB_NAME = "DumpDB";
+const DB_VER  = 1;
+let db = null;
+let allTests = [];
+
+const AppDB = {
+    open: function(){
+        return new Promise((resolve,reject)=>{
+            const req = indexedDB.open(DB_NAME, DB_VER);
+            req.onupgradeneeded = e => {
+                const d = e.target.result;
+                if(!d.objectStoreNames.contains("tests")) d.createObjectStore("tests",{keyPath:"id"});
+                if(!d.objectStoreNames.contains("images")) d.createObjectStore("images",{keyPath:"id"});
+            };
+            req.onsuccess = e => { db = e.target.result; resolve(db); };
+            req.onerror = () => reject(req.error);
+        });
+    },
+    getAllTests: function(){
+        return new Promise((res,rej)=>{
+            if(!db) return res([]);
+            const tx = db.transaction("tests", "readonly");
+            const r = tx.objectStore("tests").getAll();
+            r.onsuccess = () => res(r.result || []);
+            r.onerror = () => rej(r.error);
+        });
+    },
+    getImageBlob: function(id){
+        if(!id) return Promise.resolve(null);
+        return new Promise((res)=>{
+            if(!db) return res(null);
+            const r = db.transaction("images", "readonly").objectStore("images").get(id);
+            r.onsuccess = () => res(r.result ? r.result.blob : null);
+            r.onerror = () => res(null);
+        });
+    },
+    putTest: function(t){ return new Promise((res,rej)=>{ const r=db.transaction("tests","readwrite").objectStore("tests").put(t); r.onsuccess=()=>res(true); r.onerror=()=>rej(r.error); }); },
+    putImageWithId: function(imgData){
+        return new Promise((res,rej) => {
+            const r = db.transaction("images", "readwrite").objectStore("images").put(imgData);
+            r.onsuccess = () => res(imgData.id);
+            r.onerror = () => rej(r.error);
+        });
+    }
+};
+
+// --- Base64 / Blob 변환 헬퍼 ---
+function blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+}
+
+function base64ToBlob(base64Data) {
+    if (base64Data.indexOf('base64,') === -1) {
+        const bstr = atob(base64Data);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while(n--) u8arr[n] = bstr.charCodeAt(n);
+        return new Blob([u8arr], {type: "image/png"});
+    }
+    
+    const parts = base64Data.split(',');
+    const mime = parts[0].match(/:(.*?);/)[1];
+    const bstr = atob(parts[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while(n--){
+        u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new Blob([u8arr], {type: mime});
+}
+
+// --- 유틸리티 ---
+function stripTags(html) {
+    if(!html) return "";
+    const tmp = document.createElement("DIV");
+    tmp.innerHTML = html;
+    return tmp.textContent || tmp.innerText || "";
+}
+
+function htmlDecode(s) {
+    return String(s || "").replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&').replace(/&quot;/g,'"');
+}
+
+function toast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg; 
+    t.style.opacity = '1';
+    setTimeout(() => t.style.opacity = '0', 2000);
+}
+
+// --- UI 렌더링 ---
+async function init() {
+    try {
+        await AppDB.open();
+        await loadList();
+    } catch(e) {
+        console.error(e);
+        toast('데이터베이스 연결에 실패했습니다.');
+    }
+}
+
+async function loadList() {
+    allTests = await AppDB.getAllTests();
+    allTests.sort((a,b) => {
+        const chapA = (a.chapter || "").toLowerCase();
+        const chapB = (b.chapter || "").toLowerCase();
+        if(chapA !== chapB) return chapA.localeCompare(chapB, undefined, {numeric: true, sensitivity: 'base'});
+        const numA = parseInt(a.number, 10) || 0;
+        const numB = parseInt(b.number, 10) || 0;
+        if(numA !== numB) return numA - numB;
+        return (a.number||"").localeCompare(b.number||"");
+    });
+    renderList(allTests);
+}
+
+function renderList(items) {
+    const listEl = document.getElementById('list-view');
+    listEl.innerHTML = '';
+
+    if(items.length === 0) {
+        listEl.innerHTML = `
+            <div class="empty-msg">
+                <i class="fas fa-box-open" style="font-size:56px; margin-bottom:16px; color:#d1d5db;"></i><br>
+                저장된 덤프 문제가 없습니다.<br>
+                우측 상단 메뉴(<i class="fas fa-ellipsis-v"></i>)에서<br>
+                JSON 백업 데이터를 불러와주세요.
+            </div>`;
+        return;
+    }
+
+    items.forEach(item => {
+        const div = document.createElement('div');
+        const isChecked = item.status === "체크완료";
+        div.className = `doc-card ${isChecked ? 'st-checked' : 'st-unchecked'}`;
+        div.onclick = () => showDetail(item);
+        
+        const imgCount = [1,2,3,4,5,6,7,8,9,10].filter(n=>item[`img${n}Id`]).length;
+        const statusIcon = isChecked ? '<i class="fas fa-check-circle"></i> 체크완료' : '<i class="far fa-circle"></i> 미체크';
+        const statusColorClass = isChecked ? 'status-checked' : 'status-unchecked';
+        
+        div.innerHTML = `
+            <div class="card-top">
+                <span class="badge-cat">${item.chapter || '-'}</span>
+                <span class="badge-id">#${item.number || '000'}</span>
+            </div>
+            <div class="card-title">${stripTags(htmlDecode(item.question)).substring(0, 100) || '(문제 내용 없음)'}</div>
+            <div class="card-info">
+                <span class="${statusColorClass}">${statusIcon}</span>
+                ${imgCount > 0 ? `<span style="color:var(--accent);"><i class="far fa-images"></i> ${imgCount}</span>` : '<span></span>'}
+            </div>
+        `;
+        listEl.appendChild(div);
+    });
+}
+
+async function showDetail(item) {
+    const detailEl = document.getElementById('detail-view');
+    
+    document.getElementById('view-chapter').textContent = item.chapter || '-';
+    document.getElementById('view-number').textContent = item.number || '000';
+    
+    const isChecked = item.status === "체크완료";
+    const statusPill = document.getElementById('view-status-pill');
+    statusPill.innerHTML = isChecked ? '<i class="fas fa-check-circle" style="color:var(--success)"></i> 체크완료' : '<i class="far fa-circle" style="color:#9ca3af"></i> 미체크';
+    
+    document.getElementById('view-question').innerHTML = htmlDecode(item.question) || '<span style="color:#9ca3af">내용 없음</span>';
+    document.getElementById('view-solution').innerHTML = htmlDecode(item.solution) || '<span style="color:#9ca3af">내용 없음</span>';
+
+    const keypointSec = document.getElementById('view-keypoint-section');
+    if(item.keypoint && stripTags(htmlDecode(item.keypoint)).trim() !== '') {
+        keypointSec.style.display = 'block';
+        document.getElementById('view-keypoint').innerHTML = htmlDecode(item.keypoint);
+    } else {
+        keypointSec.style.display = 'none';
+    }
+
+    const imgSec = document.getElementById('view-img-section');
+    const imgBox = document.getElementById('view-images');
+    imgBox.innerHTML = '';
+    
+    let hasImages = false;
+    for(let i=1; i<=10; i++) {
+        const imgId = item[`img${i}Id`];
+        if(imgId) {
+            hasImages = true;
+            const blob = await AppDB.getImageBlob(imgId);
+            if(blob) {
+                const src = URL.createObjectURL(blob);
+                const card = document.createElement('div');
+                card.className = 'img-card';
+                card.innerHTML = `<img src="${src}" onclick="viewImage(this.src)">`;
+                imgBox.appendChild(card);
+            }
+        }
+    }
+    
+    imgSec.style.display = hasImages ? 'block' : 'none';
+    detailEl.classList.add('active');
+}
+
+// --- 이벤트 리스너 ---
+document.getElementById('search-input').addEventListener('input', (e) => {
+    const term = e.target.value.toLowerCase().trim();
+    const filtered = allTests.filter(t => {
+        const raw = ((t.question||'') + (t.solution||'') + (t.keypoint||'') + (t.chapter||'') + (t.number||'')).toLowerCase();
+        return raw.includes(term);
+    });
+    renderList(filtered);
+});
+
+document.getElementById('btn-back').addEventListener('click', () => {
+    document.getElementById('detail-view').classList.remove('active');
+});
+
+document.getElementById('btn-settings').addEventListener('click', () => {
+    document.getElementById('data-modal').style.display = 'flex';
+});
+
+// JSON 백업 (Export) - 최신 stores 구조로 백업
+document.getElementById('btn-backup-json').addEventListener('click', async () => {
+    try {
+        toast("백업 파일 생성 중...");
+        const tests = await AppDB.getAllTests();
+        
+        const exportData = {
+            database: "dumpstudy_db",
+            version: 1,
+            exportedAt: new Date().toISOString(),
+            stores: {
+                tests: tests,
+                images: []
+            }
+        };
+
+        // 문제들에 연결된 모든 이미지 ID 추출
+        const imgIds = new Set();
+        tests.forEach(t => {
+            for(let i=1; i<=10; i++) {
+                if(t[`img${i}Id`]) imgIds.add(t[`img${i}Id`]);
+            }
+        });
+
+        // 이미지를 Base64로 변환하여 배열에 추가
+        for (let id of imgIds) {
+            const blob = await AppDB.getImageBlob(id);
+            if (blob) {
+                const base64Data = await blobToBase64(blob);
+                exportData.stores.images.push({ id: id, data: base64Data });
+            }
+        }
+
+        const jsonBlob = new Blob([JSON.stringify(exportData)], { type: 'application/json' });
+        const url = URL.createObjectURL(jsonBlob);
+        const a = document.createElement('a');
+        const dateStr = new Date().toISOString().slice(0,10).replace(/-/g,'');
+        
+        a.href = url;
+        a.download = `DumpStudy_Backup_${dateStr}.json`;
+        a.click();
+        
+        document.getElementById('data-modal').style.display = 'none';
+        toast(`성공적으로 ${tests.length}개의 문제를 백업했습니다.`);
+    } catch(err) {
+        alert('백업 실패: ' + err.message);
+    }
+});
+
+// JSON 복구 (Import) - 배열 형식 및 stores 형식 모두 지원
+document.getElementById('inp-json-file').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+
+    toast("데이터 복구 중...");
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+        try {
+            const data = JSON.parse(evt.target.result);
+            let testCount = 0;
+            let imgCount = 0;
+
+            if (Array.isArray(data)) {
+                // 1. 기존 백업 포맷 (배열 형태)
+                for (const item of data) {
+                    if (item.id && item.chapter) {
+                        const newTest = { ...item };
+                        for (let i = 1; i <= 10; i++) {
+                            if (newTest[`img${i}Data`]) {
+                                const blob = base64ToBlob(newTest[`img${i}Data`]);
+                                const newImgId = "IMG_" + Math.random().toString(36).slice(2);
+                                await AppDB.putImageWithId({ id: newImgId, blob: blob });
+                                newTest[`img${i}Id`] = newImgId;
+                                delete newTest[`img${i}Data`]; 
+                            }
+                        }
+                        await AppDB.putTest(newTest);
+                        testCount++;
+                    }
+                }
+            } else if (data.stores && data.stores.tests) {
+                // 2. 전체 DB 덤프 포맷 (stores 객체 형태)
+                if (data.stores.images && Array.isArray(data.stores.images)) {
+                    for (const img of data.stores.images) {
+                        if (img.id && (img.data || img.blob)) {
+                            const blobData = img.data || img.blob; 
+                            const blob = base64ToBlob(blobData);
+                            await AppDB.putImageWithId({ id: img.id, blob: blob });
+                            imgCount++;
+                        }
+                    }
+                }
+                for (const item of data.stores.tests) {
+                    if (item.id && item.chapter) {
+                        await AppDB.putTest(item);
+                        testCount++;
+                    }
+                }
+            } else {
+                throw new Error("알 수 없는 포맷의 백업 파일입니다.");
+            }
+
+            await loadList();
+            document.getElementById('data-modal').style.display = 'none';
+            toast(`총 ${testCount}개의 문제 복구가 완료되었습니다!`);
+        } catch(err) {
+            console.error(err);
+            alert('파일 읽기 실패: 올바른 JSON 파일인지 확인해주세요. (' + err.message + ')');
+        } finally {
+            e.target.value = ''; 
+        }
+    };
+    reader.readAsText(file);
+});
+
+// --- 이미지 뷰어 ---
+function viewImage(src) {
+    const viewer = document.getElementById('img-viewer');
+    const content = document.getElementById('img-viewer-content');
+    content.src = src;
+    viewer.style.display = 'flex';
+}
+
+function closeImageViewer() {
+    document.getElementById('img-viewer').style.display = 'none';
+    document.getElementById('img-viewer-content').src = '';
+}
+
+// Init
+document.addEventListener("DOMContentLoaded", init);
+</script>
+</body>
+</html>

@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Weekly Log</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+<style>
+/* --- 1. Design Tokens --- */
+:root {
+  --bg-app: #f3f4f6;
+  --bg-card: #ffffff;
+  --text-main: #111827;
+  --text-sub: #6b7280;
+  --primary: #2563eb;
+  --danger: #ef4444;
+  --danger-hover: #dc2626;
+  --border: #e5e7eb;
+  --focus-ring: rgba(37, 99, 235, 0.2);
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --radius: 12px;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background-color: var(--bg-app);
+  color: var(--text-main);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- 2. Header --- */
+header {
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  z-index: 10;
+}
+header h1 {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+}
+.header-actions { display: flex; gap: 8px; }
+
+/* 버튼 스타일 */
+.btn {
+  border: 1px solid var(--border);
+  background: white;
+  color: var(--text-main);
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn:hover { background-color: #f9fafb; border-color: #d1d5db; }
+.btn:active { transform: translateY(1px); }
+
+.btn.action { color: #4b5563; }
+.btn.action:hover { color: #1f2937; background: #f3f4f6; }
+
+.btn.primary { background: var(--primary); color: white; border: 1px solid var(--primary); }
+.btn.primary:hover { background: #1d4ed8; }
+
+.btn.danger { color: var(--danger); border-color: var(--border); }
+.btn.danger:hover { background: #fef2f2; border-color: #fecaca; color: var(--danger-hover); }
+
+.btn.icon-only { padding: 8px 10px; color: var(--text-sub); border: none; background: transparent; }
+.btn.icon-only:hover { background: #f3f4f6; color: var(--text-main); }
+.btn.ghost { border: none; }
+
+/* --- 3. Main Layout --- */
+main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  height: calc(100vh - 60px);
+  overflow: hidden;
+}
+@media (max-width: 900px) {
+  main { grid-template-columns: 1fr; }
+  aside { display: none; }
+}
+
+.scroll-area { padding: 24px; overflow-y: auto; height: 100%; }
+
+/* --- 4. Editor Section --- */
+.editor-container {
+  display: flex; flex-direction: column; gap: 20px;
+  max-width: 900px; margin: 0 auto; width: 100%;
+}
+
+/* 날짜 네비게이터 */
+.week-navigator {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: var(--shadow-sm);
+}
+.week-info { display: flex; flex-direction: column; }
+.week-label { font-size: 13px; color: var(--text-sub); font-weight: 600; text-transform: uppercase; margin-bottom: 4px; }
+.week-range { 
+  font-size: 20px; font-weight: 800; color: var(--text-main); 
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+.badge-working-days {
+  background: #dbeafe; color: #1e40af; font-size: 11px; padding: 2px 6px; 
+  border-radius: 4px; font-weight: 700; vertical-align: middle;
+}
+
+.week-controls { display: flex; align-items: center; gap: 8px; background: #f9fafb; padding: 4px; border-radius: 8px; border: 1px solid var(--border); }
+.week-controls input[type="week"] {
+  border: none; background: transparent; font-size: 14px; font-weight: 600; color: var(--text-main);
+  outline: none; cursor: pointer;
+}
+
+/* 카드 공통 */
+.card {
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow-sm); overflow: hidden; transition: box-shadow 0.2s;
+}
+.card:focus-within { box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border-color: #bfdbfe; }
+.card-header {
+  padding: 12px 16px; background: #fafafa; border-bottom: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.card-title { font-size: 14px; font-weight: 700; color: #374151; display: flex; align-items: center; gap: 6px; }
+
+/* 툴바 버튼 그룹 */
+.toolbar-group { display: flex; align-items: center; gap: 4px; }
+
+textarea {
+  width: 100%; border: none; padding: 16px; resize: none; font-size: 15px; line-height: 1.6;
+  font-family: inherit; outline: none; min-height: 150px; color: #374151;
+}
+textarea::placeholder { color: #9ca3af; }
+
+/* --- 5. Sidebar --- */
+aside { background: white; border-left: 1px solid var(--border); display: flex; flex-direction: column; }
+.sidebar-header { padding: 16px; border-bottom: 1px solid var(--border); }
+.search-box { position: relative; }
+.search-box i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #9ca3af; font-size: 14px; }
+.search-box input {
+  width: 100%; padding: 10px 10px 10px 36px; border: 1px solid var(--border); border-radius: 8px;
+  font-size: 13px; background: #f9fafb; outline: none; transition: all 0.2s;
+}
+.search-box input:focus { background: white; border-color: var(--primary); box-shadow: 0 0 0 3px var(--focus-ring); }
+
+.history-list { overflow-y: auto; flex: 1; padding: 12px; }
+.history-item {
+  padding: 14px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px;
+  cursor: pointer; background: white; transition: all 0.2s;
+}
+.history-item:hover { border-color: var(--primary); transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+.history-item.active { background: #eff6ff; border-color: var(--primary); }
+.h-date { font-size: 11px; color: var(--text-sub); margin-top: 4px; }
+.h-week { font-size: 14px; font-weight: 700; color: var(--text-main); display: flex; justify-content: space-between; }
+.h-week span { color: var(--primary); font-size: 12px; }
+
+/* --- 6. Modal --- */
+.modal-overlay {
+  position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+  background: rgba(17, 24, 39, 0.5); z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(2px);
+  animation: fadeIn 0.2s ease-out;
+}
+.modal-content {
+  background: var(--bg-card); width: 90%; max-width: 800px;
+  border-radius: var(--radius); box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
+  display: flex; flex-direction: column; max-height: 85vh;
+}
+.modal-header {
+  padding: 16px 20px; border-bottom: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.modal-header h2 { font-size: 16px; margin: 0; display: flex; align-items: center; gap: 8px; color: var(--text-main); }
+.modal-body { padding: 20px; flex: 1; overflow-y: auto; }
+#monthly-preview-text {
+  width: 100%; height: 400px; padding: 16px; border: 1px solid var(--border);
+  border-radius: 8px; font-family: inherit; font-size: 14px; line-height: 1.6;
+  resize: vertical; outline: none; background: #f9fafb; color: #374151;
+}
+.modal-footer {
+  padding: 16px 20px; border-top: 1px solid var(--border); background: #fafafa;
+  display: flex; justify-content: flex-end; border-radius: 0 0 var(--radius) var(--radius); gap: 8px;
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* Toast */
+#toast-area { position: fixed; bottom: 24px; right: 24px; display: flex; flex-direction: column; gap: 8px; z-index: 1100; }
+.toast {
+  background: #1f2937; color: white; padding: 12px 16px; border-radius: 8px; font-size: 13px;
+  box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex; align-items: center; gap: 10px;
+}
+@keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+.btn-sep { width: 1px; height: 16px; background: #e5e7eb; margin: 0 4px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1><i class="fas fa-layer-group" style="color:var(--primary)"></i> Weekly Log</h1>
+  <div class="header-actions">
+    <button class="btn action" id="btn-monthly" title="해당 월 전체 데이터 취합 후 복사"><i class="fas fa-calendar-alt"></i> 월간</button>
+    <button class="btn" id="btn-today"><i class="fas fa-calendar-day"></i> 오늘</button>
+    <button class="btn" id="btn-copy"><i class="far fa-copy"></i> 주간 복사</button>
+    
+    <div class="btn-sep"></div>
+
+    <button class="btn action" id="btn-backup" title="JSON 파일로 저장"><i class="fas fa-file-download"></i> 백업</button>
+    <button class="btn action" id="btn-restore" title="JSON 파일 불러오기"><i class="fas fa-file-upload"></i> 복구</button>
+    <input type="file" id="file-restore" accept=".json" style="display:none" />
+
+    <div class="btn-sep"></div>
+
+    <button class="btn danger" id="btn-delete"><i class="fas fa-trash-alt"></i> 삭제</button>
+    <button class="btn primary" id="btn-save"><i class="fas fa-save"></i> 저장</button>
+  </div>
+</header>
+
+<main>
+  <div class="scroll-area">
+    <div class="editor-container">
+      
+      <div class="week-navigator">
+        <div class="week-info">
+          <div class="week-label" id="week-display-label">2026-00주</div>
+          <div class="week-range" id="display-range"></div>
+        </div>
+        <div class="week-controls">
+          <button class="btn icon-only ghost" id="btn-prev-week" title="이전 주"><i class="fas fa-chevron-left"></i></button>
+          <input type="week" id="week-picker" />
+          <button class="btn icon-only ghost" id="btn-next-week" title="다음 주"><i class="fas fa-chevron-right"></i></button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="fas fa-check-circle" style="color:var(--primary)"></i> 금주 진행</div>
+          <div class="toolbar-group">
+            <button class="btn icon-only ghost" style="padding:4px;" onclick="insertBullet('this-week', '● ')" title="그룹 추가 (Ctrl+Alt+O)"><i class="fas fa-circle" style="font-size:8px;"></i></button>
+            <button class="btn icon-only ghost" style="padding:4px;" onclick="insertBullet('this-week', '- ')" title="리스트 추가 (Ctrl+Alt+H)"><i class="fas fa-list-ul"></i></button>
+          </div>
+        </div>
+        <textarea id="this-week" spellcheck="false" placeholder="이번 주 주요 진행 사항을 입력하세요..."></textarea>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="fas fa-calendar-alt" style="color:#f59e0b"></i> 차주 계획</div>
+          <div class="toolbar-group">
+            <button class="btn icon-only ghost" style="padding:4px;" onclick="insertBullet('next-week', '● ')" title="그룹 추가 (Ctrl+Alt+O)"><i class="fas fa-circle" style="font-size:8px;"></i></button>
+            <button class="btn icon-only ghost" style="padding:4px;" onclick="insertBullet('next-week', '- ')" title="리스트 추가 (Ctrl+Alt+H)"><i class="fas fa-list-ul"></i></button>
+          </div>
+        </div>
+        <textarea id="next-week" spellcheck="false" placeholder="다음 주 예정된 계획을 입력하세요..."></textarea>
+      </div>
+
+      <div class="card" style="border-style:dashed;">
+        <div class="card-header" style="background:transparent;">
+          <div class="card-title"><i class="fas fa-sticky-note" style="color:#6b7280"></i> 비고</div>
+        </div>
+        <textarea id="notes" spellcheck="false" style="min-height:80px;" placeholder="특이사항, 아이디어, 회의록 등"></textarea>
+      </div>
+
+    </div>
+  </div>
+
+  <aside>
+    <div class="sidebar-header">
+      <div class="search-box">
+        <i class="fas fa-search"></i>
+        <input type="text" id="search-input" placeholder="업무 내용 검색..." />
+      </div>
+    </div>
+    <div id="history-list" class="history-list"></div>
+  </aside>
+</main>
+
+<div id="monthly-modal" class="modal-overlay" style="display: none;">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 id="modal-title"><i class="fas fa-file-alt" style="color:var(--primary)"></i> 월간 보고서 미리보기</h2>
+      <button class="btn icon-only ghost" id="btn-close-modal"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <textarea id="monthly-preview-text" spellcheck="false"></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" id="btn-close-modal-footer">닫기</button>
+      <button class="btn primary" id="btn-copy-modal"><i class="far fa-copy"></i> 복사하기</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-area"></div>
+
+<script>
+/* ================= Logic ================= */
+const DB_NAME = 'WeeklyLogDB'; 
+const STORE_NAME = 'logs';
+let db;
+
+function getWeekDateObject(weekValue) {
+  if (!weekValue) return null;
+  const [yearStr, weekStr] = weekValue.split('-W');
+  const year = parseInt(yearStr);
+  const week = parseInt(weekStr);
+  
+  const simple = new Date(year, 0, 1 + (week - 1) * 7);
+  const dow = simple.getDay();
+  const ISOweekStart = new Date(simple);
+  if (dow <= 4) ISOweekStart.setDate(simple.getDate() - simple.getDay() + 1);
+  else ISOweekStart.setDate(simple.getDate() + 8 - simple.getDay());
+
+  const start = new Date(ISOweekStart);
+  const end = new Date(ISOweekStart);
+  end.setDate(start.getDate() + 4); // 금요일 기준
+  
+  return { start, end };
+}
+
+function getFormattedDateRange(weekValue) {
+  const dates = getWeekDateObject(weekValue);
+  if (!dates) return '';
+  const fmt = d => `${d.getMonth() + 1}. ${d.getDate()}`;
+  return `${fmt(dates.start)}(월) ~ ${fmt(dates.end)}(금)`;
+}
+
+function getFormattedWeekLabel(weekValue) {
+    if(!weekValue) return '';
+    return weekValue.replace('W', '') + '주';
+}
+
+function getCurrentWeekStr() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
+  const week1 = new Date(d.getFullYear(), 0, 4);
+  const weekNum = 1 + Math.round(((d.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+  return `${d.getFullYear()}-W${weekNum.toString().padStart(2, '0')}`;
+}
+
+// DB 
+function openDB() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = e => {
+      const d = e.target.result;
+      if (!d.objectStoreNames.contains(STORE_NAME)) d.createObjectStore(STORE_NAME, { keyPath: 'weekKey' });
+    };
+    req.onsuccess = () => { db = req.result; res(db); };
+    req.onerror = () => rej(req.error);
+  });
+}
+const tx = (mode) => db.transaction(STORE_NAME, mode).objectStore(STORE_NAME);
+const saveItem = (item) => new Promise((res, rej) => { const r = tx('readwrite').put(item); r.onsuccess = () => res(); r.onerror = rej; });
+const loadItem = (key) => new Promise((res, rej) => { const r = tx('readonly').get(key); r.onsuccess = () => res(r.result); r.onerror = rej; });
+const getAllItems = () => new Promise((res, rej) => { const r = tx('readonly').getAll(); r.onsuccess = () => res(r.result); r.onerror = rej; });
+const deleteItem = (key) => new Promise((res, rej) => { const r = tx('readwrite').delete(key); r.onsuccess = () => res(); r.onerror = rej; });
+
+async function importDataBatch(rows) {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORE_NAME, 'readwrite');
+    const store = transaction.objectStore(STORE_NAME);
+    let count = 0;
+    rows.forEach(row => {
+      if(row.weekKey) { store.put(row); count++; }
+    });
+    transaction.oncomplete = () => resolve(count);
+    transaction.onerror = (e) => reject(e);
+  });
+}
+
+// App Logic
+const App = {
+  currentWeek: '',
+
+  async init() {
+    await openDB();
+    const picker = document.getElementById('week-picker');
+    picker.value = getCurrentWeekStr();
+    
+    picker.addEventListener('change', e => this.handleWeekChange(e.target.value));
+    
+    document.getElementById('btn-prev-week').addEventListener('click', () => { picker.stepDown(); picker.dispatchEvent(new Event('change')); });
+    document.getElementById('btn-next-week').addEventListener('click', () => { picker.stepUp(); picker.dispatchEvent(new Event('change')); });
+    document.getElementById('btn-today').addEventListener('click', () => { picker.value = getCurrentWeekStr(); picker.dispatchEvent(new Event('change')); });
+
+    // Buttons
+    document.getElementById('btn-save').addEventListener('click', () => this.save());
+    document.getElementById('btn-delete').addEventListener('click', () => this.delete());
+    document.getElementById('btn-copy').addEventListener('click', () => this.copy());
+    document.getElementById('btn-monthly').addEventListener('click', () => this.monthlyReport());
+
+    // Modal Events
+    const modal = document.getElementById('monthly-modal');
+    const closeModal = () => modal.style.display = 'none';
+    document.getElementById('btn-close-modal').addEventListener('click', closeModal);
+    document.getElementById('btn-close-modal-footer').addEventListener('click', closeModal);
+    
+    // 모달 배경 클릭 시 닫기
+    modal.addEventListener('click', (e) => {
+        if(e.target === modal) closeModal();
+    });
+
+    // 모달 안의 복사버튼
+    document.getElementById('btn-copy-modal').addEventListener('click', () => {
+        const text = document.getElementById('monthly-preview-text').value;
+        navigator.clipboard.writeText(text).then(() => {
+            this.showToast('클립보드에 복사되었습니다.', 'success');
+        });
+    });
+
+    // Backup/Restore
+    document.getElementById('btn-backup').addEventListener('click', () => this.backup());
+    document.getElementById('btn-restore').addEventListener('click', () => document.getElementById('file-restore').click());
+    document.getElementById('file-restore').addEventListener('change', (e) => this.restore(e));
+
+    // Search
+    document.getElementById('search-input').addEventListener('input', e => this.renderList(e.target.value));
+
+    // Shortcuts
+    document.addEventListener('keydown', e => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { 
+        e.preventDefault(); 
+        this.save();
+        return;
+      }
+      if (e.ctrlKey && e.altKey) {
+        const activeEl = document.activeElement;
+        if (activeEl.tagName === 'TEXTAREA' && ['this-week', 'next-week', 'notes'].includes(activeEl.id)) {
+            const k = e.key.toLowerCase();
+            if (k === 'o') { 
+                e.preventDefault();
+                insertBullet(activeEl.id, '● ');
+            } else if (k === 'h') { 
+                e.preventDefault();
+                insertBullet(activeEl.id, '- ');
+            }
+        }
+      }
+    });
+
+    this.handleWeekChange(picker.value);
+  },
+
+  async handleWeekChange(val) {
+    if (!val) return;
+    this.currentWeek = val;
+
+    document.getElementById('week-display-label').textContent = getFormattedWeekLabel(val); 
+    const rangeText = getFormattedDateRange(val);
+    document.getElementById('display-range').innerHTML = `${rangeText} <span class="badge-working-days">5일</span>`;
+
+    const data = await loadItem(val);
+    document.getElementById('this-week').value = data?.thisWeek || '';
+    document.getElementById('next-week').value = data?.nextWeek || '';
+    document.getElementById('notes').value = data?.notes || '';
+
+    this.renderList(document.getElementById('search-input').value);
+  },
+
+  async save() {
+    if (!this.currentWeek) return;
+    const data = {
+      weekKey: this.currentWeek,
+      thisWeek: document.getElementById('this-week').value,
+      nextWeek: document.getElementById('next-week').value,
+      notes: document.getElementById('notes').value,
+      updated: new Date().toISOString()
+    };
+    try {
+      await saveItem(data);
+      this.showToast('저장 완료', 'success');
+      this.renderList(document.getElementById('search-input').value);
+    } catch(e) { this.showToast('저장 실패', 'error'); }
+  },
+
+  async delete() {
+    if (!this.currentWeek) return;
+    const t = document.getElementById('this-week').value;
+    const n = document.getElementById('next-week').value;
+    if(!t && !n) { this.showToast('삭제할 내용이 없습니다.'); return; }
+
+    if(confirm(`${getFormattedWeekLabel(this.currentWeek)} 기록을 삭제하시겠습니까?`)) {
+        try {
+            await deleteItem(this.currentWeek);
+            document.getElementById('this-week').value = '';
+            document.getElementById('next-week').value = '';
+            document.getElementById('notes').value = '';
+            this.showToast('삭제되었습니다.', 'success');
+            this.renderList(document.getElementById('search-input').value);
+        } catch(e) { this.showToast('삭제 오류', 'error'); }
+    }
+  },
+
+  async renderList(query = '') {
+    const list = await getAllItems();
+    list.sort((a, b) => b.weekKey.localeCompare(a.weekKey));
+
+    const container = document.getElementById('history-list');
+    container.innerHTML = '';
+
+    const filtered = list.filter(item => {
+      const q = query.toLowerCase();
+      return (item.weekKey + (item.thisWeek||'') + (item.nextWeek||'') + (item.notes||'')).toLowerCase().includes(q);
+    });
+
+    if (filtered.length === 0) {
+      container.innerHTML = `<div style="text-align:center; padding:20px; color:#9ca3af; font-size:13px;">기록이 없습니다.</div>`;
+      return;
+    }
+
+    filtered.forEach(item => {
+      const el = document.createElement('div');
+      el.className = `history-item ${item.weekKey === this.currentWeek ? 'active' : ''}`;
+      el.onclick = () => {
+        document.getElementById('week-picker').value = item.weekKey;
+        this.handleWeekChange(item.weekKey);
+      };
+      
+      const friendlyWeek = getFormattedWeekLabel(item.weekKey);
+      const rangeTxt = getFormattedDateRange(item.weekKey);
+
+      el.innerHTML = `
+        <div class="h-week">
+          ${friendlyWeek}
+          ${item.weekKey === getCurrentWeekStr() ? '<span>THIS WEEK</span>' : ''}
+        </div>
+        <div class="h-date">${rangeTxt}</div>
+      `;
+      container.appendChild(el);
+    });
+  },
+
+  copy() {
+    const w = this.currentWeek;
+    const t = document.getElementById('this-week').value;
+    const n = document.getElementById('next-week').value;
+    const o = document.getElementById('notes').value;
+    
+    const header = `[주간 업무 보고] ${getFormattedWeekLabel(w)}`;
+    const range = `기간 : ${getFormattedDateRange(w)}`;
+
+    const text = `${header}\n${range}\n\n■ 금주 진행\n${t||'-'}\n\n■ 차주 계획\n${n||'-'}\n\n■ 비고\n${o||'-'}`;
+    navigator.clipboard.writeText(text).then(() => this.showToast('클립보드 복사 완료', 'success'));
+  },
+
+  async monthlyReport() {
+    if (!this.currentWeek) return;
+
+    const currentDateRange = getWeekDateObject(this.currentWeek);
+    const targetYear = currentDateRange.start.getFullYear();
+    const targetMonth = currentDateRange.start.getMonth(); 
+
+    const monthStart = new Date(targetYear, targetMonth, 1);
+    const monthEnd = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59);
+
+    const list = await getAllItems();
+    const monthlyItems = list.filter(item => {
+      const iDates = getWeekDateObject(item.weekKey);
+      if (!iDates) return false;
+      return (iDates.start <= monthEnd && iDates.end >= monthStart);
+    });
+
+    if (monthlyItems.length === 0) {
+      this.showToast('해당 월에 작성된 기록이 없습니다.', 'error');
+      return;
+    }
+
+    monthlyItems.sort((a, b) => a.weekKey.localeCompare(b.weekKey));
+
+    let combinedThisWeek = '';
+    let combinedNextWeek = '';
+    let combinedNotes = '';
+
+    monthlyItems.forEach(item => {
+      const weekLabel = `[${getFormattedWeekLabel(item.weekKey)}]`;
+      if (item.thisWeek) combinedThisWeek += `${weekLabel}\n${item.thisWeek}\n\n`;
+      if (item.nextWeek) combinedNextWeek += `${weekLabel}\n${item.nextWeek}\n\n`;
+      if (item.notes) combinedNotes += `${weekLabel}\n${item.notes}\n\n`;
+    });
+
+    const header = `[월간 업무 보고] ${targetYear}년 ${targetMonth + 1}월`;
+    const text = `${header}\n\n■ 금주 진행 (월간 취합)\n${combinedThisWeek.trim() || '-'}\n\n■ 차주 계획 (월간 취합)\n${combinedNextWeek.trim() || '-'}\n\n■ 비고 (월간 취합)\n${combinedNotes.trim() || '-'}`;
+    
+    // 모달창에 텍스트 넣고 띄우기
+    document.getElementById('modal-title').innerHTML = `<i class="fas fa-file-alt" style="color:var(--primary)"></i> ${targetYear}년 ${targetMonth + 1}월 월간 보고서`;
+    document.getElementById('monthly-preview-text').value = text;
+    document.getElementById('monthly-modal').style.display = 'flex';
+
+    // 화면 표출과 동시에 클립보드에도 자동 복사
+    navigator.clipboard.writeText(text).then(() => {
+      this.showToast(`${targetMonth + 1}월 데이터가 복사되었습니다. 모달창에서 확인/수정 가능합니다.`, 'success');
+    });
+  },
+
+  async backup() {
+    try {
+        const allData = await getAllItems();
+        const exportData = {
+            app: "WeeklyLog",
+            version: 1,
+            exportedAt: new Date().toISOString(),
+            data: allData
+        };
+        const fileName = `WeeklyLog_Backup_${new Date().toISOString().slice(0,10)}.json`;
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        this.showToast('백업 파일이 생성되었습니다.', 'success');
+    } catch(e) {
+        console.error(e);
+        this.showToast('백업 중 오류가 발생했습니다.', 'error');
+    }
+  },
+
+  restore(e) {
+    const file = e.target.files[0];
+    if(!file) return;
+
+    if(!confirm("현재 데이터를 JSON 파일 내용으로 병합/덮어쓰기 하시겠습니까?")) {
+        e.target.value = '';
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+        try {
+            const json = JSON.parse(evt.target.result);
+            let rows = [];
+            if (json.stores && json.stores[STORE_NAME]) rows = json.stores[STORE_NAME];
+            else if (json.data && Array.isArray(json.data)) rows = json.data;
+            else if (Array.isArray(json)) rows = json;
+            else throw new Error("Invalid Format");
+
+            const count = await importDataBatch(rows);
+            this.showToast(`${count}개의 주간 기록이 복구되었습니다.`, 'success');
+            this.handleWeekChange(this.currentWeek);
+        } catch (err) {
+            console.error(err);
+            this.showToast('복구 실패: 지원하지 않는 JSON 형식입니다.', 'error');
+        }
+    };
+    reader.readAsText(file);
+    e.target.value = ''; 
+  },
+
+  showToast(msg, type='info') {
+    const area = document.getElementById('toast-area');
+    const el = document.createElement('div');
+    el.className = 'toast';
+    let icon = '<i class="fas fa-info-circle"></i>';
+    if(type === 'success') icon = '<i class="fas fa-check-circle" style="color:#34d399"></i>';
+    if(type === 'error') icon = '<i class="fas fa-exclamation-circle" style="color:#ef4444"></i>';
+    el.innerHTML = `${icon} ${msg}`;
+    area.appendChild(el);
+    setTimeout(() => el.remove(), 3000);
+  }
+};
+
+window.insertBullet = function(id, symbol = '- ') {
+  const el = document.getElementById(id);
+  const start = el.selectionStart;
+  const val = el.value;
+  const before = val.substring(0, start);
+  const prefix = (before.endsWith('\n') || before === '') ? symbol : '\n' + symbol;
+  el.value = before + prefix + val.substring(start);
+  el.selectionStart = el.selectionEnd = start + prefix.length;
+  el.focus();
+};
+
+App.init();
+</script>
+</body>
+</html>

@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloud Estimate</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+	<script src="https://unpkg.com/@babel/standalone@7.23.9/babel.min.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; color: #334155; overflow: hidden; }
+        .custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        .dragging { opacity: 0.5; background-color: #f1f5f9; }
+        .drag-handle { cursor: grab; }
+        .drag-handle:active { cursor: grabbing; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo, useEffect, useRef } = React;
+
+        /* --- Icons --- */
+        const Icon = ({ path, size = 18, className = "" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{path}</svg>
+        );
+        const Icons = {
+            Plus: (p) => <Icon {...p} path={<><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>} />,
+            Trash: (p) => <Icon {...p} path={<><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></>} />,
+            FileText: (p) => <Icon {...p} path={<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></>} />,
+            Search: (p) => <Icon {...p} path={<><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></>} />,
+            Edit: (p) => <Icon {...p} path={<><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></>} />,
+            X: (p) => <Icon {...p} path={<><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>} />,
+            Server: (p) => <Icon {...p} path={<><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></>} />,
+            Database: (p) => <Icon {...p} path={<><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></>} />,
+            FilePlus: (p) => <Icon {...p} path={<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></>} />,
+            Code: (p) => <Icon {...p} path={<><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></>} />,
+            Grip: (p) => <Icon {...p} path={<><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></>} />,
+            Download: (p) => <Icon {...p} path={<><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></>} />,
+            ListOrdered: (p) => <Icon {...p} path={<><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><path d="M4 6h1v4"/><path d="M4 10h2"/><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/></>} />,
+            Settings: (p) => <Icon {...p} path={<><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></>} />,
+            Copy: (p) => <Icon {...p} path={<><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></>} />,
+            Calculator: (p) => <Icon {...p} path={<><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="16" y1="14" x2="16" y2="14"/><line x1="12" y1="14" x2="12" y2="14"/><line x1="8" y1="14" x2="8" y2="14"/><line x1="16" y1="18" x2="16" y2="18"/><line x1="12" y1="18" x2="12" y2="18"/><line x1="8" y1="18" x2="8" y2="18"/></>} />
+        };
+
+        /* --- IndexedDB --- */
+        const DB_NAME = "CloudQuoteDB";
+        const STORE_NAME = "quotes";
+        const idb = {
+            open: () => new Promise((res, rej) => {
+                const req = indexedDB.open(DB_NAME, 1);
+                req.onupgradeneeded = e => { if (!e.target.result.objectStoreNames.contains(STORE_NAME)) e.target.result.createObjectStore(STORE_NAME, { keyPath: "id" }); };
+                req.onsuccess = e => res(e.target.result);
+                req.onerror = e => rej(e.target.error);
+            }),
+            getAll: async () => {
+                const db = await idb.open();
+                return new Promise((res, rej) => { const req = db.transaction(STORE_NAME, "readonly").objectStore(STORE_NAME).getAll(); req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); });
+            },
+            save: async (val) => {
+                const db = await idb.open();
+                return new Promise((res, rej) => { const tx = db.transaction(STORE_NAME, "readwrite"); tx.objectStore(STORE_NAME).put(val); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); });
+            },
+            delete: async (id) => {
+                const db = await idb.open();
+                return new Promise((res, rej) => { const tx = db.transaction(STORE_NAME, "readwrite"); tx.objectStore(STORE_NAME).delete(id); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); });
+            }
+        };
+
+        const CATEGORIES = ['Compute', 'Database', 'Storage', 'Network', 'Security', 'Software', 'Managed', 'Etc'];
+        const CATEGORY_STYLES = {
+            'Compute': 'bg-blue-50 text-blue-700 border-blue-100', 
+            'Database': 'bg-amber-50 text-amber-700 border-amber-100',
+            'Storage': 'bg-emerald-50 text-emerald-700 border-emerald-100',
+            'Network': 'bg-orange-50 text-orange-700 border-orange-100', 
+            'Security': 'bg-rose-50 text-rose-700 border-rose-100',
+            'Managed': 'bg-purple-50 text-purple-700 border-purple-100', 
+            'Software': 'bg-cyan-50 text-cyan-700 border-cyan-100',
+            'Etc': 'bg-slate-50 text-slate-600 border-slate-100'
+        };
+
+        const INITIAL_QUOTE = { id: 'q1', name: '기본 견적서', items: [], memo: '', updatedAt: Date.now() };
+
+        /* --- Helper --- */
+        const formatNum = (n, isDecimal = false) => {
+            if (n == null || isNaN(n)) return '0';
+            const num = Number(n);
+            if (isDecimal) {
+                return num.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 4 });
+            }
+            return Math.floor(num).toLocaleString('ko-KR');
+        };
+        const parseNum = (s) => parseInt(s?.toString().replace(/[^0-9]/g, '')) || 0;
+        
+        // 개월 수 계산기 (빈칸일 경우 1회 청구로 계산)
+        const getCalcMonths = (m) => {
+            if (m === '' || m === null || m === undefined) return 1;
+            const num = parseFloat(m);
+            return isNaN(num) ? 1 : num;
+        };
+
+        /* --- Calculator Modal --- */
+        const CalculatorModal = ({ isOpen, onClose }) => {
+            const [display, setDisplay] = useState('0');
+            const [prevValue, setPrevValue] = useState(null);
+            const [operator, setOperator] = useState(null);
+            const [waitingForOperand, setWaitingForOperand] = useState(false);
+
+            useEffect(() => {
+                if (isOpen) {
+                    setDisplay('0');
+                    setPrevValue(null);
+                    setOperator(null);
+                    setWaitingForOperand(false);
+                }
+            }, [isOpen]);
+
+            const inputDigit = (digit) => {
+                if (waitingForOperand) {
+                    setDisplay(String(digit));
+                    setWaitingForOperand(false);
+                } else {
+                    setDisplay(display === '0' ? String(digit) : display + digit);
+                }
+            };
+
+            const inputDot = () => {
+                if (waitingForOperand) {
+                    setDisplay('0.');
+                    setWaitingForOperand(false);
+                } else if (!display.includes('.')) {
+                    setDisplay(display + '.');
+                }
+            };
+
+            const clear = () => {
+                setDisplay('0');
+                setPrevValue(null);
+                setOperator(null);
+                setWaitingForOperand(false);
+            };
+
+            const performOperation = (nextOperator) => {
+                const inputValue = parseFloat(display);
+
+                if (prevValue === null) {
+                    setPrevValue(inputValue);
+                } else if (operator) {
+                    const currentValue = prevValue || 0;
+                    const newValue = calculate(currentValue, inputValue, operator);
+                    setPrevValue(newValue);
+                    setDisplay(String(newValue));
+                }
+
+                setWaitingForOperand(true);
+                setOperator(nextOperator);
+            };
+
+            const calculate = (prev, next, op) => {
+                switch(op) {
+                    case '+': return prev + next;
+                    case '-': return prev - next;
+                    case '*': return prev * next;
+                    case '/': return prev / next;
+                    case '=': return next;
+                    default: return next;
+                }
+            };
+
+            const getFormattedDisplay = (val) => {
+                if (val === '0' || val === '') return '0';
+                const parts = val.split('.');
+                const intPart = parts[0];
+                const decimalPart = parts.length > 1 ? '.' + parts[1] : '';
+                const formattedInt = parseFloat(intPart).toLocaleString('ko-KR');
+                
+                if (val.endsWith('.') && !decimalPart) {
+                    return formattedInt + '.';
+                }
+                return formattedInt + decimalPart;
+            };
+
+            useEffect(() => {
+                if (!isOpen) return;
+
+                const handleKeyDown = (e) => {
+                    const { key } = e;
+                    if (/[0-9]/.test(key)) {
+                        e.preventDefault();
+                        inputDigit(key);
+                    } else if (['+', '-', '*', '/'].includes(key)) {
+                        e.preventDefault();
+                        performOperation(key);
+                    } else if (key === 'Enter' || key === '=') {
+                        e.preventDefault();
+                        performOperation('=');
+                    } else if (key === '.') {
+                        e.preventDefault();
+                        inputDot();
+                    } else if (key === 'Escape') {
+                        onClose();
+                    } else if (key.toLowerCase() === 'c') {
+                        clear();
+                    } else if (key === 'Backspace') {
+                        e.preventDefault();
+                        if(!waitingForOperand && display !== '0') {
+                            setDisplay(prev => prev.length === 1 ? '0' : prev.slice(0, -1));
+                        }
+                    }
+                };
+
+                window.addEventListener('keydown', handleKeyDown);
+                return () => window.removeEventListener('keydown', handleKeyDown);
+            }, [isOpen, display, waitingForOperand, operator, prevValue]);
+
+            if (!isOpen) return null;
+
+            const Btn = ({ onClick, className, children }) => (
+                <button onClick={onClick} className={`p-3 rounded-lg font-medium shadow-sm active:scale-95 transition-transform ${className}`}>
+                    {children}
+                </button>
+            );
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-xs overflow-hidden">
+                        <div className="px-4 py-3 border-b flex justify-between items-center bg-slate-50">
+                            <h3 className="font-bold text-slate-800 flex items-center gap-2"><Icons.Calculator size={16}/> 계산기</h3>
+                            <button onClick={onClose}><Icons.X size={18}/></button>
+                        </div>
+                        <div className="p-4 bg-slate-100">
+                            <div className="bg-white p-3 rounded-lg text-right text-2xl font-mono font-medium text-slate-800 mb-4 border shadow-inner h-14 overflow-hidden">
+                                {getFormattedDisplay(display)}
+                            </div>
+                            <div className="grid grid-cols-4 gap-2">
+                                <Btn onClick={clear} className="bg-rose-100 text-rose-600">C</Btn>
+                                <Btn onClick={()=>performOperation('/')} className="bg-indigo-100 text-indigo-600">/</Btn>
+                                <Btn onClick={()=>performOperation('*')} className="bg-indigo-100 text-indigo-600">*</Btn>
+                                <Btn onClick={()=>performOperation('-')} className="bg-indigo-100 text-indigo-600">-</Btn>
+
+                                <Btn onClick={()=>inputDigit('7')} className="bg-white text-slate-700 hover:bg-slate-50">7</Btn>
+                                <Btn onClick={()=>inputDigit('8')} className="bg-white text-slate-700 hover:bg-slate-50">8</Btn>
+                                <Btn onClick={()=>inputDigit('9')} className="bg-white text-slate-700 hover:bg-slate-50">9</Btn>
+                                <Btn onClick={()=>performOperation('+')} className="bg-indigo-100 text-indigo-600 row-span-2 flex items-center justify-center">+</Btn>
+
+                                <Btn onClick={()=>inputDigit('4')} className="bg-white text-slate-700 hover:bg-slate-50">4</Btn>
+                                <Btn onClick={()=>inputDigit('5')} className="bg-white text-slate-700 hover:bg-slate-50">5</Btn>
+                                <Btn onClick={()=>inputDigit('6')} className="bg-white text-slate-700 hover:bg-slate-50">6</Btn>
+
+                                <Btn onClick={()=>inputDigit('1')} className="bg-white text-slate-700 hover:bg-slate-50">1</Btn>
+                                <Btn onClick={()=>inputDigit('2')} className="bg-white text-slate-700 hover:bg-slate-50">2</Btn>
+                                <Btn onClick={()=>inputDigit('3')} className="bg-white text-slate-700 hover:bg-slate-50">3</Btn>
+                                <Btn onClick={()=>performOperation('=')} className="bg-indigo-600 text-white row-span-2 flex items-center justify-center">=</Btn>
+
+                                <Btn onClick={()=>inputDigit('0')} className="bg-white text-slate-700 hover:bg-slate-50 col-span-2">0</Btn>
+                                <Btn onClick={inputDot} className="bg-white text-slate-700 hover:bg-slate-50">.</Btn>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        /* --- Settings Modal --- */
+        const SettingsModal = ({ isOpen, onClose, defaultMonths, exchangeRate, onSave }) => {
+            const [localMonths, setLocalMonths] = useState(defaultMonths);
+            const [localRate, setLocalRate] = useState(exchangeRate);
+            
+            useEffect(() => { 
+                setLocalMonths(defaultMonths); 
+                setLocalRate(exchangeRate);
+            }, [defaultMonths, exchangeRate, isOpen]);
+            
+            const handleSave = () => { 
+                onSave(localMonths, localRate); 
+                onClose(); 
+            };
+            
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm">
+                        <div className="px-6 py-4 border-b flex justify-between items-center bg-slate-50">
+                            <h3 className="font-bold text-slate-800 flex items-center gap-2"><Icons.Settings size={18}/> 환경 설정</h3>
+                            <button onClick={onClose}><Icons.X size={20}/></button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-2">기본 견적 기간 (개월)</label>
+                                <input type="number" min="1" value={localMonths} onChange={e=>setLocalMonths(parseNum(e.target.value))} className="w-full p-2 border rounded-lg text-sm focus:ring-2 ring-indigo-500 outline-none"/>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-2">USD 환율 (원)</label>
+                                <input type="number" step="any" min="0" value={localRate} onChange={e=>setLocalRate(parseFloat(e.target.value)||0)} className="w-full p-2 border rounded-lg text-sm focus:ring-2 ring-indigo-500 outline-none"/>
+                                <p className="text-[10px] text-slate-500 mt-1">입력된 환율을 기준으로 달러 단가가 원화로 자동 계산됩니다.</p>
+                            </div>
+                        </div>
+                        <div className="px-6 py-4 border-t flex justify-end gap-2 bg-slate-50">
+                            <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600">취소</button>
+                            <button onClick={handleSave} className="px-4 py-2 text-sm text-white bg-indigo-600 rounded">저장</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        /* --- Item Input Modal --- */
+        const ItemModal = ({ isOpen, onClose, onSave, initialData, defaultMonths }) => {
+            const [formData, setFormData] = useState({
+                category: 'Compute', item: '', spec: '', qty: 1, months: 1, price: 0, currency: 'KRW',
+                usage: '', os: '', serverType: '', cpu: '', mem: '', dataDisk: '', isExcluded: false
+            });
+
+            useEffect(() => {
+                if (isOpen) {
+                    if (initialData) {
+                        setFormData({
+                            ...initialData,
+                            currency: initialData.currency || 'KRW'
+                        });
+                    } else {
+                        setFormData({ 
+                            category: 'Compute', item: '', spec: '', qty: 1, months: defaultMonths, price: 0, currency: 'KRW',
+                            usage: '', os: '', serverType: '', cpu: '', mem: '', dataDisk: '', isExcluded: false
+                        });
+                    }
+                }
+            }, [isOpen, initialData, defaultMonths]);
+
+            const handleChange = (f, v) => setFormData(p => ({ ...p, [f]: v }));
+            
+            const getComputedSpec = () => {
+                if (formData.category !== 'Compute' && formData.category !== 'Database') return formData.spec;
+                const parts = [];
+                if(formData.os) parts.push(formData.os);
+                if(formData.serverType) parts.push(formData.serverType);
+                if(formData.cpu) parts.push(`${formData.cpu}vC`);
+                if(formData.mem) parts.push(`${formData.mem}G`);
+                return parts.join(' / ');
+            };
+
+            const handleSave = () => { 
+                onSave({ 
+                    ...formData, 
+                    spec: getComputedSpec(),
+                    months: formData.months === '' ? '' : (parseFloat(formData.months) || 0),
+                    price: parseFloat(formData.price) || 0
+                }); 
+                onClose(); 
+            };
+
+            useEffect(() => {
+                if (!isOpen) return;
+
+                const handleKeyDown = (e) => {
+                    if (e.ctrlKey && e.code === 'KeyS') {
+                        e.preventDefault(); 
+                        handleSave();
+                    }
+                };
+
+                window.addEventListener('keydown', handleKeyDown);
+                return () => window.removeEventListener('keydown', handleKeyDown);
+            }, [isOpen, formData]); 
+
+            if (!isOpen) return null;
+            const isDetailed = formData.category === 'Compute' || formData.category === 'Database';
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+                        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 sticky top-0 z-10">
+                            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><Icons.Edit className="text-indigo-600"/> 항목 {initialData ? '수정' : '추가'}</h3>
+                            <button onClick={onClose}><Icons.X/></button>
+                        </div>
+                        <div className="p-6 space-y-5">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div><label className="block text-xs font-semibold text-slate-500 mb-1">카테고리</label><select value={formData.category} onChange={(e)=>handleChange('category', e.target.value)} className="w-full p-2 border rounded-lg text-sm focus:ring-2 ring-indigo-500 outline-none">{CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
+                                <div><label className="block text-xs font-semibold text-slate-500 mb-1">항목명</label><input type="text" value={formData.item} onChange={(e)=>handleChange('item', e.target.value)} className="w-full p-2 border rounded-lg text-sm focus:ring-2 ring-indigo-500 outline-none"/></div>
+                            </div>
+                            
+                            {isDetailed ? (
+                                <div className={`p-4 rounded-lg border space-y-3 ${formData.category === 'Database' ? 'bg-amber-50' : 'bg-blue-50'}`}>
+                                    <div className="grid grid-cols-3 gap-3">
+                                        <div><label className="block text-[10px] font-bold opacity-50 mb-1">용도</label><input type="text" value={formData.usage} onChange={(e)=>handleChange('usage', e.target.value)} className="w-full p-1.5 border rounded text-xs"/></div>
+                                        <div><label className="block text-[10px] font-bold opacity-50 mb-1">OS</label><input type="text" value={formData.os} onChange={(e)=>handleChange('os', e.target.value)} className="w-full p-1.5 border rounded text-xs"/></div>
+                                        <div><label className="block text-[10px] font-bold opacity-50 mb-1">타입</label><input type="text" value={formData.serverType} onChange={(e)=>handleChange('serverType', e.target.value)} className="w-full p-1.5 border rounded text-xs"/></div>
+                                        <div><label className="block text-[10px] font-bold opacity-50 mb-1">CPU</label><input type="number" value={formData.cpu} onChange={(e)=>handleChange('cpu', e.target.value)} className="w-full p-1.5 border rounded text-xs"/></div>
+                                        <div><label className="block text-[10px] font-bold opacity-50 mb-1">MEM</label><input type="number" value={formData.mem} onChange={(e)=>handleChange('mem', e.target.value)} className="w-full p-1.5 border rounded text-xs"/></div>
+                                        <div><label className="block text-[10px] font-bold opacity-50 mb-1">Data Disk</label><input type="number" value={formData.dataDisk} onChange={(e)=>handleChange('dataDisk', e.target.value)} className="w-full p-1.5 border rounded text-xs"/></div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div><label className="block text-xs font-semibold text-slate-500 mb-1">상세 규격</label><input type="text" value={formData.spec} onChange={(e)=>handleChange('spec', e.target.value)} className="w-full p-2 border rounded-lg text-sm focus:ring-2 ring-indigo-500 outline-none"/></div>
+                            )}
+
+                            <div className="grid grid-cols-12 gap-4 bg-slate-50 p-4 rounded-lg">
+                                <div className="col-span-3">
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1">수량</label>
+                                    <input type="number" value={formData.qty} onChange={(e)=>handleChange('qty', parseNum(e.target.value))} className="w-full p-2 border rounded text-right"/>
+                                </div>
+                                <div className="col-span-3">
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1">개월</label>
+                                    <input 
+                                        type="text" 
+                                        value={formData.months} 
+                                        placeholder="비워두면 1회"
+                                        onChange={(e) => {
+                                            if (e.target.value === '') {
+                                                handleChange('months', '');
+                                                return;
+                                            }
+                                            let val = e.target.value.replace(/[^0-9.]/g, '');
+                                            const parts = val.split('.');
+                                            if(parts.length > 2) val = parts[0] + '.' + parts.slice(1).join('');
+                                            handleChange('months', val);
+                                        }} 
+                                        className="w-full p-2 border rounded text-right focus:ring-2 ring-indigo-500 outline-none placeholder:text-slate-300 placeholder:text-xs"
+                                    />
+                                </div>
+                                <div className="col-span-6">
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1">단가</label>
+                                    <div className="flex gap-2">
+                                        <select value={formData.currency} onChange={(e)=>handleChange('currency', e.target.value)} className="w-24 p-2 border rounded text-sm focus:ring-2 ring-indigo-500 outline-none bg-white">
+                                            <option value="KRW">KRW</option>
+                                            <option value="USD">USD</option>
+                                        </select>
+                                        <input 
+                                            type="text" 
+                                            value={(() => {
+                                                let str = formData.price.toString().replace(/,/g, '');
+                                                const parts = str.split('.');
+                                                parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+                                                return parts.join('.');
+                                            })()}
+                                            onChange={(e) => {
+                                                let val = e.target.value.replace(/[^0-9.\-]/g, '');
+                                                const isNegative = val.startsWith('-');
+                                                val = val.replace(/-/g, '');
+                                                if (isNegative) val = '-' + val;
+                                                const parts = val.split('.');
+                                                if(parts.length > 2) val = parts[0] + '.' + parts.slice(1).join('');
+                                                handleChange('price', val);
+                                            }} 
+                                            className="w-full p-2 border rounded text-right font-semibold text-indigo-600 focus:ring-2 ring-indigo-500 outline-none"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="px-6 py-4 border-t bg-slate-50 flex justify-end gap-2 sticky bottom-0 z-10">
+                            <button onClick={onClose} className="px-4 py-2 text-sm">취소</button>
+                            <button onClick={handleSave} className="px-6 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold shadow-sm" title="Ctrl + S">저장</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [quotes, setQuotes] = useState([]);
+            const [activeQuoteId, setActiveQuoteId] = useState(null);
+            const [viewMode, setViewMode] = useState('edit');
+            const [searchTerm, setSearchTerm] = useState('');
+            const [compareSelection, setCompareSelection] = useState([]);
+            const [isLoading, setIsLoading] = useState(true);
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            const [editingItem, setEditingItem] = useState(null);
+            const [isBulkOpen, setIsBulkOpen] = useState(false);
+            const [bulkText, setBulkText] = useState('');
+            const [defaultMonths, setDefaultMonths] = useState(1);
+            const [exchangeRate, setExchangeRate] = useState(1350); 
+            const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+            const [isCalcOpen, setIsCalcOpen] = useState(false);
+            const fileInputRef = useRef(null);
+            const dragItem = useRef(null);
+            const dragOverItem = useRef(null);
+
+            useEffect(() => {
+                const init = async () => {
+                    const data = await idb.getAll();
+                    if (data.length) { setQuotes(data); setActiveQuoteId(data[0].id); }
+                    else { await idb.save(INITIAL_QUOTE); setQuotes([INITIAL_QUOTE]); setActiveQuoteId(INITIAL_QUOTE.id); }
+                    setIsLoading(false);
+                };
+                init();
+            }, []);
+
+            useEffect(() => {
+                if (isLoading) return;
+                const timer = setTimeout(() => quotes.forEach(q => idb.save(q)), 500);
+                return () => clearTimeout(timer);
+            }, [quotes, isLoading]);
+
+            useEffect(() => {
+                const handleKeyDown = (e) => {
+                    if (e.ctrlKey && e.altKey && e.code === 'KeyN') { e.preventDefault(); openAddModal(); }
+                };
+                window.addEventListener('keydown', handleKeyDown);
+                return () => window.removeEventListener('keydown', handleKeyDown);
+            }, []);
+
+            const getConvertedPrice = (price, currency) => {
+                return currency === 'USD' ? price * exchangeRate : price;
+            };
+
+            const activeQuote = useMemo(() => quotes.find(q => q.id === activeQuoteId) || INITIAL_QUOTE, [quotes, activeQuoteId]);
+            
+            const currentTotal = useMemo(() => activeQuote.items.filter(i => !i.isExcluded).reduce((a,c) => a + getConvertedPrice(c.price, c.currency) * c.qty * getCalcMonths(c.months), 0), [activeQuote, exchangeRate]);
+            
+            const resourceTotals = useMemo(() => {
+                let vcpu = 0;
+                let mem = 0;
+                activeQuote.items.forEach(item => {
+                    if (!item.isExcluded && (item.category === 'Compute' || item.category === 'Database')) {
+                        vcpu += (parseInt(item.qty) || 0) * (parseFloat(item.cpu) || 0);
+                        mem += (parseInt(item.qty) || 0) * (parseFloat(item.mem) || 0);
+                    }
+                });
+                return { 
+                    vcpu: Number(vcpu.toFixed(1)), 
+                    mem: Number(mem.toFixed(1)) 
+                };
+            }, [activeQuote.items]);
+            
+            const sortedQuotes = useMemo(() => {
+                return [...quotes].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+            }, [quotes]);
+
+            const addQuote = () => {
+                const newId = 'q'+Date.now();
+                const q = { id: newId, name: `새 견적 ${quotes.length+1}`, items: [], memo: '' };
+                setQuotes(p => [...p, q]); setActiveQuoteId(newId); setViewMode('edit');
+            };
+
+            const duplicateQuote = (e, id) => {
+                e.stopPropagation();
+                const source = quotes.find(q => q.id === id);
+                if (!source) return;
+                const newId = 'q' + Date.now();
+                const newQuote = {
+                    ...source,
+                    id: newId,
+                    name: `${source.name} (복사)`,
+                    updatedAt: Date.now(),
+                    items: source.items.map(i => ({...i}))
+                };
+                setQuotes(p => [...p, newQuote]);
+            };
+
+            const deleteQuote = async (id) => {
+                if(quotes.length <= 1 || !confirm("삭제하시겠습니까?")) return;
+                await idb.delete(id); setQuotes(p => p.filter(q => q.id !== id));
+                if(activeQuoteId === id) setActiveQuoteId(quotes.find(q=>q.id!==id)?.id);
+            };
+
+            const updateQuote = (k, v) => setQuotes(p => p.map(q => q.id === activeQuoteId ? { ...q, [k]: v } : q));
+            
+            // 환경설정 저장 시 현재 활성화된 견적의 항목들도 일괄 업데이트 (1회성 항목 제외)
+            const handleSettingsSave = (newMonths, newRate) => {
+                setDefaultMonths(newMonths);
+                setExchangeRate(newRate);
+                
+                if (activeQuote && activeQuote.items.length > 0) {
+                    const updatedItems = activeQuote.items.map(item => ({
+                        ...item,
+                        months: (item.months === '' || item.months === null || item.months === undefined) 
+                                ? item.months 
+                                : newMonths
+                    }));
+                    updateQuote('items', updatedItems);
+                }
+            };
+
+            const toggleExclude = (id) => {
+                const newItems = activeQuote.items.map(i => i.id === id ? { ...i, isExcluded: !i.isExcluded } : i);
+                updateQuote('items', newItems);
+            };
+
+            const duplicateItem = (item, index) => {
+                const newItem = { ...item, id: Date.now() + Math.random() };
+                const newItems = [...activeQuote.items];
+                newItems.splice(index + 1, 0, newItem);
+                updateQuote('items', newItems);
+            };
+
+            const openAddModal = () => { setEditingItem(null); setIsModalOpen(true); };
+            const openEditModal = (item) => { setEditingItem(item); setIsModalOpen(true); };
+            const saveItem = (itemData) => {
+                let newItems = editingItem 
+                    ? activeQuote.items.map(i => i.id === editingItem.id ? { ...itemData, id: i.id } : i)
+                    : [...activeQuote.items, { ...itemData, id: Date.now() }];
+                updateQuote('items', newItems);
+            };
+
+            const sortItems = () => {
+                const sorted = [...activeQuote.items].sort((a, b) => {
+                    const idxA = CATEGORIES.indexOf(a.category);
+                    const idxB = CATEGORIES.indexOf(b.category);
+                    const cleanIdxA = idxA === -1 ? 999 : idxA;
+                    const cleanIdxB = idxB === -1 ? 999 : idxB;
+                    return cleanIdxA - cleanIdxB;
+                });
+                updateQuote('items', sorted);
+            };
+
+            const handleFileSelect = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    const bstr = evt.target.result;
+                    const wb = XLSX.read(bstr, {type:'binary'});
+                    const ws = wb.Sheets[wb.SheetNames[0]];
+                    const data = XLSX.utils.sheet_to_json(ws);
+                    const newItems = data.map((row, idx) => {
+                        let rawMonths = row['기간'];
+                        let m = defaultMonths;
+                        if (rawMonths === '' || rawMonths === '1회' || rawMonths === undefined || rawMonths === null) {
+                            m = '';
+                        } else {
+                            m = parseInt(rawMonths);
+                            if (isNaN(m)) m = defaultMonths;
+                        }
+                        
+                        return {
+                            id: Date.now() + idx, category: row['카테고리'] || 'Etc', item: row['항목명'] || '', spec: row['요약스펙'] || '',
+                            qty: parseInt(row['수량'] || 1), 
+                            months: m, 
+                            price: parseFloat(row['단가'] || row['입력단가'] || 0),
+                            currency: row['통화'] || 'KRW',
+                            isExcluded: false
+                        };
+                    });
+                    updateQuote('items', [...activeQuote.items, ...newItems]);
+                };
+                reader.readAsBinaryString(file);
+            };
+
+            const handleTextImport = () => {
+                if (!bulkText.trim()) return;
+                const lines = bulkText.split('\n').filter(l => l.trim());
+                const newItems = lines.map((line, idx) => {
+                    const parts = line.split(/\t+| {2,}/); 
+                    return {
+                        id: Date.now() + idx,
+                        category: parts[0] && CATEGORIES.includes(parts[0]) ? parts[0] : 'Etc',
+                        item: parts[1] || parts[0] || 'Imported',
+                        spec: parts[2] || '',
+                        qty: parseInt(parts[3]) || 1,
+                        price: parseFloat(parts[4]?.replace(/[^0-9.]/g, '')) || 0,
+                        months: defaultMonths,
+                        currency: 'KRW',
+                        isExcluded: false
+                    };
+                });
+                updateQuote('items', [...activeQuote.items, ...newItems]);
+                setIsBulkOpen(false);
+                setBulkText('');
+            };
+
+            const exportExcel = (type) => {
+                const wb = XLSX.utils.book_new();
+                if (type === 'single') {
+                    const data = activeQuote.items.filter(i => !i.isExcluded).map(i => {
+                        const convertedPrice = getConvertedPrice(i.price, i.currency);
+                        return { 
+                            '카테고리': i.category, 
+                            '항목명': i.item, 
+                            '요약스펙': i.spec, 
+                            '수량': i.qty, 
+                            '기간': i.months === '' ? '1회' : i.months, 
+                            '통화': i.currency || 'KRW',
+                            '입력단가': i.price, 
+                            '환산단가(KRW)': convertedPrice,
+                            '합계(KRW)': convertedPrice * i.qty * getCalcMonths(i.months) 
+                        };
+                    });
+                    const ws = XLSX.utils.json_to_sheet(data);
+
+                    const range = XLSX.utils.decode_range(ws['!ref']);
+                    for (let R = 1; R <= range.e.r; ++R) {
+                        ['D', 'E', 'G', 'H', 'I'].forEach(col => {
+                            const cellRef = col + (R + 1);
+                            if (ws[cellRef] && typeof ws[cellRef].v === 'number') {
+                                ws[cellRef].t = 'n'; 
+                                ws[cellRef].z = '#,##0';
+                            }
+                        });
+                    }
+                    
+                    XLSX.utils.book_append_sheet(wb, ws, "견적상세");
+                    XLSX.writeFile(wb, `${activeQuote.name}.xlsx`);
+                } else {
+                    const targets = sortedQuotes.filter(q => compareSelection.includes(q.id));
+                    const header = ["구분", ...targets.map(q => q.name)];
+                    const totalRow = ["총계", ...targets.map(q => q.items.filter(i => !i.isExcluded).reduce((a,c)=>a+getConvertedPrice(c.price, c.currency)*c.qty*getCalcMonths(c.months),0))];
+                    const catRows = CATEGORIES.map(cat => {
+                        const row = [cat];
+                        targets.forEach(q => row.push(q.items.filter(i=>i.category===cat && !i.isExcluded).reduce((a,c)=>a+getConvertedPrice(c.price, c.currency)*c.qty*getCalcMonths(c.months),0)));
+                        return row;
+                    });
+                    
+                    const ws = XLSX.utils.aoa_to_sheet([header, totalRow, [""], ...catRows]);
+
+                    const range = XLSX.utils.decode_range(ws['!ref']);
+                    for (let R = 1; R <= range.e.r; ++R) {
+                        for (let C = 1; C <= range.e.c; ++C) {
+                            const cellAddr = {c: C, r: R};
+                            const cellRef = XLSX.utils.encode_cell(cellAddr);
+                            if(ws[cellRef] && typeof ws[cellRef].v === 'number') {
+                                ws[cellRef].t = 'n';
+                                ws[cellRef].z = '#,##0';
+                            }
+                        }
+                    }
+
+                    XLSX.utils.book_append_sheet(wb, ws, "비교");
+                    XLSX.writeFile(wb, "비교견적.xlsx");
+                }
+            };
+
+            const onDragStart = (e, idx) => { dragItem.current = idx; e.currentTarget.classList.add('dragging'); };
+            const onDragEnter = (e, idx) => { dragOverItem.current = idx; };
+            const onDragEnd = (e) => {
+                e.currentTarget.classList.remove('dragging');
+                if (dragItem.current === dragOverItem.current) return;
+                const copy = [...activeQuote.items];
+                const item = copy.splice(dragItem.current, 1)[0];
+                copy.splice(dragOverItem.current, 0, item);
+                updateQuote('items', copy);
+            };
+
+            if(isLoading) return <div className="h-screen flex items-center justify-center text-slate-400">Loading...</div>;
+
+            return (
+                <div className="flex h-screen w-full bg-slate-50 overflow-hidden">
+                    {/* Sidebar */}
+                    <div className="w-72 bg-white border-r border-slate-200 flex flex-col shrink-0">
+                        <div className="p-5 border-b">
+                            <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2 mb-4">
+                                <span className="bg-indigo-600 text-white p-1 rounded"><Icons.FileText size={18} /></span> Cloud Estimate
+                            </h1>
+                            <div className="relative">
+                                <input type="text" placeholder="견적 검색" value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} className="w-full pl-8 p-2 text-sm border rounded-lg bg-slate-50"/>
+                                <Icons.Search className="absolute left-2.5 top-2.5 text-slate-400" size={14}/>
+                            </div>
+                        </div>
+                        <div className="flex-1 overflow-y-auto custom-scroll p-3 space-y-2">
+                            {sortedQuotes.filter(q => q.name.includes(searchTerm)).map(q => (
+                                <div key={q.id} onClick={()=>{setActiveQuoteId(q.id); setViewMode('edit');}} className={`p-3 rounded-lg cursor-pointer border transition-all ${activeQuoteId===q.id && viewMode==='edit' ? 'bg-indigo-50 border-indigo-200 shadow-sm' : 'bg-white border-transparent hover:bg-slate-50'}`}>
+                                    <div className="flex justify-between items-start">
+                                        <h3 className="text-sm font-semibold truncate">{q.name}</h3>
+                                        <div className="flex gap-2">
+                                            <button onClick={(e)=>duplicateQuote(e, q.id)} className="text-slate-300 hover:text-indigo-500" title="견적 복사"><Icons.Copy size={14}/></button>
+                                            <button onClick={(e)=>{e.stopPropagation(); deleteQuote(q.id)}} className="text-slate-300 hover:text-rose-500" title="삭제"><Icons.Trash size={14}/></button>
+                                        </div>
+                                    </div>
+                                    <p className="text-xs text-slate-400 mt-1">{formatNum(q.items.filter(i => !i.isExcluded).reduce((a,c)=>a+getConvertedPrice(c.price, c.currency)*c.qty*getCalcMonths(c.months),0))} 원</p>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="p-3 border-t"><button onClick={addQuote} className="w-full py-2 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-bold">+ 새 견적</button></div>
+                    </div>
+
+                    {/* Main Content */}
+                    <div className="flex-1 flex flex-col h-full bg-slate-50/50">
+                        <header className="h-16 bg-white border-b px-6 flex items-center justify-between shrink-0">
+                            {viewMode === 'edit' ? (
+                                <input type="text" value={activeQuote.name} onChange={e=>updateQuote('name', e.target.value)} className="text-xl font-bold bg-transparent border-b-2 border-transparent focus:border-indigo-500 outline-none w-96"/>
+                            ) : <h2 className="text-xl font-bold text-slate-800">견적 비교</h2>}
+                            <div className="flex gap-2">
+                                {viewMode === 'edit' && (
+                                    <>
+                                        <button onClick={()=>setIsCalcOpen(true)} className="px-3 py-1.5 border rounded text-sm hover:bg-slate-50 flex items-center gap-1"><Icons.Calculator size={16}/> 계산기</button>
+                                        <button onClick={()=>setIsSettingsOpen(true)} className="px-3 py-1.5 border rounded text-sm hover:bg-slate-50"><Icons.Settings size={16}/></button>
+                                        <input type="file" ref={fileInputRef} onChange={handleFileSelect} accept=".xlsx, .xls" className="hidden" />
+                                        <button onClick={()=>fileInputRef.current.click()} className="px-3 py-1.5 border rounded text-sm flex items-center gap-2 hover:bg-slate-50"><Icons.FilePlus size={16}/> 엑셀 가져오기</button>
+                                        <button onClick={()=>setIsBulkOpen(true)} className="px-3 py-1.5 border rounded text-sm flex items-center gap-2 hover:bg-slate-50"><Icons.Code size={16}/> 텍스트 붙여넣기</button>
+                                    </>
+                                )}
+                                <button onClick={()=>setViewMode(viewMode==='edit'?'compare':'edit')} className="px-3 py-1.5 border rounded text-sm font-medium hover:bg-slate-50">{viewMode==='edit'?'비교 모드':'편집 모드'}</button>
+                                <button onClick={()=>exportExcel(viewMode==='edit'?'single':'compare')} className="px-3 py-1.5 bg-green-600 text-white rounded text-sm font-medium flex items-center gap-2 hover:bg-green-700"><Icons.Download size={16}/> 엑셀 저장</button>
+                            </div>
+                        </header>
+
+                        <main className="flex-1 overflow-y-auto custom-scroll p-6">
+                            {viewMode === 'edit' ? (
+                                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                                    <div className="lg:col-span-9 space-y-4">
+                                        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+                                            <div className="bg-indigo-50 border-b border-indigo-100 p-4 flex justify-between items-center">
+                                                <div className="text-sm font-bold text-indigo-800">견적상세 목록</div>
+                                                <div className="flex items-center gap-4">
+                                                    <div className="text-xs font-medium text-indigo-400 uppercase">Grand Total</div>
+                                                    <div className="text-2xl font-semibold text-indigo-700">{formatNum(currentTotal)} <span className="text-sm font-normal text-indigo-500">KRW</span></div>
+                                                </div>
+                                            </div>
+
+                                            <table className="w-full text-sm text-left">
+                                                <thead className="bg-slate-50 text-slate-500 font-medium border-b">
+                                                    <tr>
+                                                        <th className="w-8"></th>
+                                                        <th className="w-12 text-center px-2">
+                                                            <span className="text-[11px] font-semibold">포함</span>
+                                                        </th>
+                                                        <th className="px-4 py-3 w-32 cursor-pointer hover:bg-slate-100 transition-colors group" onClick={sortItems} title="카테고리 순서로 즉시 정렬">
+                                                            <div className="flex items-center gap-1">
+                                                                Category 
+                                                                <Icons.ListOrdered size={14} className="text-slate-400 opacity-50 group-hover:opacity-100"/>
+                                                            </div>
+                                                        </th>
+                                                        <th className="px-4 py-3">Item & Spec</th>
+                                                        <th className="px-2 py-3 text-center w-24">Qty/Mo</th>
+                                                        <th className="px-4 py-3 text-right w-40">Price & Total</th>
+                                                        <th className="w-16"></th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-100">
+                                                    {activeQuote.items.map((item, idx) => (
+                                                        <tr key={item.id} draggable onDragStart={e=>onDragStart(e, idx)} onDragEnter={e=>onDragEnter(e, idx)} onDragEnd={onDragEnd} onDragOver={e=>e.preventDefault()} className={`cursor-pointer group ${item.isExcluded ? 'bg-slate-50 opacity-50' : 'bg-white hover:bg-slate-50'}`} onClick={()=>openEditModal(item)}>
+                                                            <td className="px-2 text-center drag-handle text-slate-300" onClick={e=>e.stopPropagation()}><Icons.Grip size={14}/></td>
+                                                            <td className="px-2 text-center align-middle" onClick={e=>e.stopPropagation()}>
+                                                                <input type="checkbox" checked={!item.isExcluded} onChange={()=>toggleExclude(item.id)} className="w-4 h-4 cursor-pointer accent-indigo-600 rounded" />
+                                                            </td>
+                                                            <td className="px-4 py-3 align-top"><span className={`text-[10px] px-2 py-0.5 rounded border font-semibold ${CATEGORY_STYLES[item.category]}`}>{item.category}</span></td>
+                                                            <td className="px-4 py-3 align-top">
+                                                                <div className="font-semibold text-slate-700">{item.item || '항목명 없음'}</div>
+                                                                <div className="text-xs text-slate-500 mt-1 flex flex-wrap gap-1">
+                                                                    {item.usage && <span className="bg-blue-50 text-blue-600 px-1 rounded border border-blue-100">{item.usage}</span>}
+                                                                    <span>{item.spec}</span>
+                                                                    {item.dataDisk && <span className="text-indigo-400">/ Data {item.dataDisk}G</span>}
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-2 py-3 text-center align-middle">
+                                                                <div className="bg-slate-100 px-2 py-1 rounded text-slate-600 text-[11px] font-medium">
+                                                                    {item.qty}EA {item.months === '' ? '(1회)' : `x ${item.months}M`}
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-4 py-3 text-right align-middle">
+                                                                <div className="text-[10px] text-slate-400">
+                                                                    {item.currency === 'USD' ? `$${formatNum(item.price, true)}` : `${formatNum(item.price)}원`}
+                                                                    {item.currency === 'USD' && <div className="text-[9px] text-slate-300 mt-0.5">(환산: {formatNum(getConvertedPrice(item.price, item.currency))}원)</div>}
+                                                                </div>
+                                                                <div className={`text-base font-semibold ${item.isExcluded ? 'text-slate-400 line-through' : 'text-indigo-700'}`}>
+                                                                    {formatNum(getConvertedPrice(item.price, item.currency) * item.qty * getCalcMonths(item.months))}
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-2 text-center align-middle">
+                                                                <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                    <button onClick={(e)=>{e.stopPropagation(); duplicateItem(item, idx);}} className="text-slate-300 hover:text-indigo-500" title="항목 복사"><Icons.Copy size={16}/></button>
+                                                                    <button onClick={e=>{e.stopPropagation(); updateQuote('items', activeQuote.items.filter(i=>i.id!==item.id))}} className="text-slate-300 hover:text-rose-500" title="삭제"><Icons.Trash size={16}/></button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                            <button onClick={openAddModal} className="w-full py-3 text-sm text-slate-500 hover:bg-slate-50 font-medium border-t flex items-center justify-center gap-2"><Icons.Plus size={16}/> 항목 추가 (Ctrl+Alt+N)</button>
+                                        </div>
+                                    </div>
+
+                                    <div className="lg:col-span-3 space-y-4">
+                                        <div className="bg-white rounded-xl shadow-sm border p-5">
+                                            <div className="text-xs text-slate-400 mb-1">총 예상 비용</div>
+                                            <div className="text-2xl font-semibold text-slate-800 mb-4">{formatNum(currentTotal)} <span className="text-sm font-normal text-slate-400">KRW</span></div>
+                                            <div className="space-y-1.5 border-t pt-3 mb-3">
+                                                {CATEGORIES.map(cat => {
+                                                    const sub = activeQuote.items.filter(i=>i.category===cat && !i.isExcluded).reduce((a,c)=>a+getConvertedPrice(c.price, c.currency)*c.qty*getCalcMonths(c.months), 0);
+                                                    if (sub === 0) return null;
+                                                    return (<div key={cat} className="flex justify-between text-xs text-slate-500"><span>{cat}</span><span>{formatNum(sub)}</span></div>);
+                                                })}
+                                            </div>
+                                            <div className="mt-3 pt-3 border-t flex justify-between font-semibold text-sm"><span>Total (VAT 10%)</span><span>{formatNum(Math.floor(currentTotal * 1.1))}</span></div>
+                                        </div>
+
+                                        <div className="bg-white rounded-xl shadow-sm border p-4">
+                                            <div className="text-xs font-bold text-slate-600 mb-3 flex items-center gap-1.5">
+                                                <Icons.Server size={14} className="text-indigo-500"/>
+                                                리소스 총합 (Compute & DB)
+                                            </div>
+                                            <div className="space-y-2">
+                                                <div className="flex justify-between items-center text-sm">
+                                                    <span className="text-slate-500 font-medium">Total vCPU</span>
+                                                    <span className="font-semibold text-slate-700">{resourceTotals.vcpu} <span className="text-xs font-normal text-slate-400">vCore</span></span>
+                                                </div>
+                                                <div className="flex justify-between items-center text-sm mt-1">
+                                                    <span className="text-slate-500 font-medium">Total Memory</span>
+                                                    <span className="font-semibold text-slate-700">{resourceTotals.mem} <span className="text-xs font-normal text-slate-400">GB</span></span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-white rounded-xl shadow-sm border p-4">
+                                            <div className="text-xs font-bold text-slate-600 mb-2">메모</div>
+                                            <textarea className="w-full h-32 p-2 text-sm border rounded bg-slate-50 outline-none resize-none" value={activeQuote.memo} onChange={e=>updateQuote('memo', e.target.value)}></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    <div className="bg-white p-4 rounded-xl border">
+                                        <h3 className="text-sm font-bold mb-2">비교 대상 선택</h3>
+                                        <div className="flex gap-2 flex-wrap">
+                                            {sortedQuotes.map(q => (
+                                                <button key={q.id} onClick={()=>setCompareSelection(p=>p.includes(q.id)?p.filter(x=>x!==q.id):[...p,q.id])} className={`px-3 py-1 rounded-full text-xs border ${compareSelection.includes(q.id)?'bg-indigo-600 text-white':'bg-white text-slate-500'}`}>{q.name}</button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div className="bg-white rounded-xl border overflow-x-auto">
+                                        <table className="w-full text-sm text-left border-collapse">
+                                            <thead className="bg-slate-50">
+                                                <tr className="border-b">
+                                                    <th className="p-4 w-32 sticky left-0 bg-slate-50">구분</th>
+                                                    {sortedQuotes.filter(q=>compareSelection.includes(q.id)).map(q=><th key={q.id} className="p-4 border-l font-bold text-indigo-600">{q.name}</th>)}
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr className="bg-indigo-50/50 font-semibold text-indigo-900">
+                                                    <td className="p-4 sticky left-0 bg-indigo-50/50">총계</td>
+                                                    {sortedQuotes.filter(q=>compareSelection.includes(q.id)).map(q=><td key={q.id} className="p-4 border-l text-right">{formatNum(q.items.filter(i=>!i.isExcluded).reduce((a,c)=>a+getConvertedPrice(c.price, c.currency)*c.qty*getCalcMonths(c.months),0))}</td>)}
+                                                </tr>
+                                                {CATEGORIES.map(cat => (
+                                                    <tr key={cat} className="border-b border-slate-50">
+                                                        <td className="p-3 font-medium text-slate-600 sticky left-0 bg-white">{cat}</td>
+                                                        {sortedQuotes.filter(q=>compareSelection.includes(q.id)).map(q=>(<td key={q.id} className="p-3 border-l text-right text-slate-500">{formatNum(q.items.filter(i=>i.category===cat && !i.isExcluded).reduce((a,c)=>a+getConvertedPrice(c.price, c.currency)*c.qty*getCalcMonths(c.months),0))}</td>))}
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+                        </main>
+                    </div>
+
+                    {/* Modals */}
+                    <SettingsModal 
+                        isOpen={isSettingsOpen} 
+                        onClose={()=>setIsSettingsOpen(false)} 
+                        defaultMonths={defaultMonths} 
+                        exchangeRate={exchangeRate} 
+                        onSave={handleSettingsSave} 
+                    />
+                    <CalculatorModal isOpen={isCalcOpen} onClose={()=>setIsCalcOpen(false)} />
+                    <ItemModal isOpen={isModalOpen} onClose={()=>setIsModalOpen(false)} onSave={saveItem} initialData={editingItem} defaultMonths={defaultMonths} />
+                    {isBulkOpen && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+                            <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl">
+                                <div className="px-6 py-4 border-b flex justify-between items-center bg-slate-50"><h3 className="font-bold text-slate-800">텍스트 데이터 붙여넣기</h3><button onClick={()=>setIsBulkOpen(false)}><Icons.X/></button></div>
+                                <div className="p-6">
+                                    <p className="text-sm text-slate-500 mb-2">순서: [카테고리] [항목명] [규격] [수량] [단가]</p>
+                                    <textarea className="w-full h-40 border rounded p-3 text-xs font-mono bg-slate-50 outline-none" value={bulkText} onChange={e=>setBulkText(e.target.value)}></textarea>
+                                </div>
+                                <div className="px-6 py-4 border-t flex justify-end gap-2 bg-slate-50"><button onClick={()=>setIsBulkOpen(false)} className="px-4 py-2 text-sm">취소</button><button onClick={handleTextImport} className="px-4 py-2 text-sm text-white bg-indigo-600 rounded">적용</button></div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

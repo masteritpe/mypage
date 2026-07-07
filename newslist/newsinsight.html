@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <title>News Insight</title>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@300;400;500;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+    
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+    <script src="https://unpkg.com/quill-image-resize@3.0.9/image-resize.min.js"></script>
+
+    <style>
+        :root {
+            --bg-app: #f1f5f9;
+            --primary: #2563eb; --primary-hover: #1d4ed8; --primary-light: #eff6ff;
+            --secondary: #6366f1;
+            --text-main: #0f172a; --text-sub: #64748b;
+            --border: #e2e8f0;
+            --danger: #ef4444;
+            --font-ui: 'Inter', 'Noto Sans KR', sans-serif;
+            --font-code: 'JetBrains Mono', monospace;
+            --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            --radius: 8px;
+        }
+
+        * { box-sizing: border-box; outline: none; }
+        body {
+            margin: 0; height: 100vh; display: flex; flex-direction: column;
+            background: var(--bg-app); font-family: var(--font-ui); color: var(--text-main); overflow: hidden;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        /* Header */
+        header {
+            height: 60px; background: #fff; border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 24px; z-index: 50; flex-shrink: 0;
+        }
+        .brand { font-weight: 800; font-size: 18px; color: var(--primary); display: flex; align-items: center; gap: 10px; }
+        .header-actions { display: flex; gap: 8px; align-items: center; }
+
+        /* Workspace */
+        .workspace { display: flex; flex: 1; overflow: hidden; }
+
+        /* Sidebar */
+        .sidebar {
+            width: 320px; background: #fff; border-right: 1px solid var(--border);
+            display: flex; flex-direction: column; flex-shrink: 0;
+        }
+        .sidebar-header { padding: 15px; border-bottom: 1px solid var(--border); background: var(--primary-light); display: flex; flex-direction: column; gap: 8px; }
+        .search-input, .filter-select {
+            width: 100%; height: 36px; padding: 0 12px; border: 1px solid var(--border);
+            border-radius: var(--radius); background: #fff; font-size: 13px; font-family: inherit; transition: 0.2s;
+        }
+        .search-input:focus, .filter-select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+        .article-list { flex: 1; overflow-y: auto; padding: 8px; background: #f8fafc; }
+        
+        /* 리스트 스타일 */
+        .article-item {
+            padding: 14px; border: 1px solid transparent; border-radius: var(--radius);
+            cursor: pointer; transition: 0.2s; position: relative; margin-bottom: 6px;
+            background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+        }
+        .article-item:hover { background: #f1f5f9; }
+        .article-item.active { background: var(--primary-light); border-color: var(--primary); }
+        .item-date { font-size: 11px; color: var(--text-sub); margin-bottom: 4px; font-weight: 600; display: inline-block; background: #e2e8f0; padding: 2px 6px; border-radius: 4px;}
+        .item-title { font-weight: 700; font-size: 13px; line-height: 1.4; color: var(--text-main); margin-top: 4px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+
+        /* Editor Pane */
+        .editor-pane { flex: 1; display: flex; flex-direction: column; background: var(--bg-app); position: relative; }
+        
+        .toolbar {
+            height: 56px; padding: 0 32px; background: #fff; border-bottom: 1px solid var(--border);
+            display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-shrink: 0; z-index: 10;
+        }
+        .toolbar-group { display: flex; gap: 8px; align-items: center; }
+        .input-pill {
+            height: 36px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--radius); 
+            font-size: 13px; font-family: inherit; transition: 0.2s;
+        }
+        .input-pill:focus { border-color: var(--primary); }
+
+        .paper-viewport { flex: 1; overflow-y: auto; padding: 40px; }
+        
+        /* === Paper Style === */
+        .paper {
+            width: 100%; max-width: 900px; margin: 0 auto;
+            min-height: 297mm; height: auto; 
+            background: white; padding: 60px; border-radius: 12px;
+            box-shadow: var(--shadow); border: 1px solid var(--border);
+            display: flex; flex-direction: column; gap: 24px; position: relative;
+        }
+
+        /* Quill Editor Overrides */
+        .ql-container.ql-snow { border: none !important; font-family: var(--font-ui) !important; }
+        .ql-editor { padding: 0 !important; font-size: 16px; line-height: 1.8; color: var(--text-main); }
+        .ql-editor.ql-blank::before { left: 0; font-style: normal; color: #cbd5e1; }
+        .ql-editor img { max-width: 100% !important; height: auto !important; display: block; margin: 10px 0; border-radius: 4px; }
+        .ql-editor img.img-highlight { outline: 4px solid #FDBA74 !important; outline-offset: 2px !important; }
+
+        .quill-raw-table {
+            margin: 1.5rem 0; width: 100%; overflow-x: auto; border-radius: var(--radius);
+            box-shadow: 0 0 0 1px var(--border); background: #fff;
+        }
+        .quill-raw-table table { border-collapse: collapse !important; width: 100%; margin: 0; font-size: 14px; color: var(--text-main); text-align: left; }
+        .quill-raw-table th, .quill-raw-table td { border: 1px solid var(--border); padding: 8px 12px; }
+        .quill-raw-table thead th, .quill-raw-table th { background-color: #f8fafc; font-weight: 600; }
+
+        /* Editor Specific Styling */
+        #edit-title .ql-editor { font-size: 32px; font-weight: 800; line-height: 1.3; color: #0f172a; letter-spacing: -0.5px; }
+        #edit-title .ql-editor.ql-blank::before { font-size: 32px; font-weight: 800; }
+        
+        #edit-lead .ql-editor { font-size: 18px; font-weight: 600; color: #1e40af; line-height: 1.7; padding-left: 16px !important; border-left: 4px solid var(--primary); }
+        #edit-lead .ql-editor.ql-blank::before { font-size: 18px; font-weight: 600; padding-left: 16px; }
+
+        #edit-content .ql-editor { min-height: 300px; text-align: justify; }
+
+        #edit-insight .ql-editor { color: #92400e; font-size: 15px; font-weight: 500; }
+        
+        .meta-card { background: #f8fafc; padding: 16px; border-radius: 8px; border: 1px solid #e2e8f0; display: flex; flex-direction: column; gap: 6px; }
+        .meta-row { display: flex; font-size: 13px; }
+        .meta-label { font-weight: 700; color: #64748b; width: 80px; flex-shrink: 0; }
+        .meta-value { color: #334155; word-break: break-all; font-weight: 500; } 
+
+        #insight-container { background: #fffbeb; padding: 24px; border-radius: 12px; border: 1px solid #fcd34d; }
+        .insight-label { font-weight: 800; font-size: 12px; color: #b45309; margin-bottom: 12px; display: block; }
+
+        /* Attachments */
+        .attach-section { margin-top: 20px; border-top: 2px solid #f1f5f9; padding-top: 24px; }
+        .section-label { font-size: 13px; font-weight: 700; color: #64748b; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
+        .attach-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 12px; }
+        .attach-item { width: 100%; aspect-ratio: 1; border-radius: 8px; border: 1px solid #e2e8f0; position: relative; background: #fff; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.02); transition: 0.2s; overflow: hidden; }
+        .attach-item:hover { border-color: var(--primary); background: #eff6ff; }
+        .attach-item img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.2s; }
+        .attach-item img:hover { transform: scale(1.05); }
+        .attach-item i { font-size: 28px; color: #94a3b8; margin-bottom: 6px; }
+        .attach-item span { font-size: 10px; color: #64748b; width: 90%; text-align: center; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.2; font-weight: 500; }
+
+        .btn-del { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; background: rgba(0,0,0,0.6); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; z-index: 10; cursor: pointer; border: none; opacity: 0; transition: 0.2s; }
+        .attach-item:hover .btn-del { opacity: 1; background: var(--danger); }
+        .attach-add { border: 2px dashed #cbd5e1; color: #94a3b8; font-weight: 600; font-size: 12px; gap: 4px; }
+        .attach-add i { font-size: 20px; margin-bottom: 0; }
+
+        /* Buttons */
+        .btn { height: 36px; padding: 0 16px; border-radius: 6px; font-weight: 600; font-size: 13px; border: 1px solid transparent; background: white; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: 0.2s; white-space: nowrap; }
+        .btn-default { border-color: var(--border); color: var(--text-sub); }
+        .btn-default:hover { background: #f8fafc; color: var(--text-main); border-color: #cbd5e1; }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-secondary { background: var(--secondary); color: white; }
+        .btn-danger { color: var(--danger); background: white; border-color: #fecaca; }
+        .btn-danger:hover { background: #fef2f2; border-color: var(--danger); }
+        .btn-icon { width: 36px; padding: 0; justify-content: center; }
+
+        /* Modals */
+        .modal { position: fixed; inset: 0; background: rgba(15,23,42,0.4); backdrop-filter: blur(4px); display: none; z-index: 1000; align-items: center; justify-content: center; }
+        .modal-img { max-width: 90%; max-height: 90vh; border-radius: 8px; box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
+        .modal-close { position: absolute; top: -40px; right: 0; color: white; font-size: 30px; cursor: pointer; }
+
+        /* Shortcut Modal Styles */
+        .modal-panel { background: #ffffff; border-radius: 16px; width: 100%; max-width: 440px; padding: 32px; box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.15); animation: slideUpFade 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        @keyframes slideUpFade { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; }
+        .modal-header h3 { margin: 0; font-size: 18px; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
+        .btn-close { background: none; border: none; font-size: 20px; color: #94a3b8; cursor: pointer; transition: 0.2s; padding: 4px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+        .btn-close:hover { background: #f1f5f9; color: var(--danger); }
+        .shortcut-list { display: flex; flex-direction: column; gap: 16px; }
+        .shortcut-item { display: flex; justify-content: space-between; align-items: center; padding-bottom: 12px; border-bottom: 1px solid #f1f5f9; }
+        .shortcut-item:last-child { border-bottom: none; padding-bottom: 0; }
+        .shortcut-desc { font-size: 14px; color: var(--text-sub); font-weight: 500; }
+        .shortcut-keys { display: flex; gap: 6px; align-items: center; color: #94a3b8; font-size: 13px; font-weight: 500; }
+        kbd { background-color: #f8fafc; border: 1px solid #cbd5e1; border-bottom-width: 2px; border-radius: 6px; padding: 4px 8px; font-family: var(--font-ui); font-size: 12px; font-weight: 600; color: #475569; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+
+        /* === MEMO SIDEBAR STYLE === */
+        .side-panel-slide {
+            position: fixed; top: 0; right: -380px; width: 380px; height: 100vh;
+            z-index: 2000; box-shadow: -4px 0 15px rgba(0,0,0,0.1); 
+            transition: right 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+            display: flex; flex-direction: column;
+        }
+        .side-panel-slide.open { right: 0; }
+        .memo-sidebar { background: #fffbeb; border-left: 1px solid #fcd34d; }
+        .memo-header { padding: 16px; border-bottom: 1px solid #fcd34d; display: flex; justify-content: space-between; align-items: center; background: rgba(255, 251, 235, 0.95); }
+        #memo-textarea { flex: 1; border: none; padding: 16px; background: transparent; resize: none; font-family: inherit; font-size: 14px; line-height: 1.6; color: #744210; outline: none; }
+        .btn-memo-icon { border: none; background: transparent; cursor: pointer; color: #92400e; font-size: 16px; transition: 0.2s; display: flex; align-items: center; justify-content: center;}
+        .btn-memo-icon:hover { color: #b45309; transform: scale(1.1); }
+
+        /* === TOAST STYLE === */
+        #toast-container {
+            position: fixed; bottom: 30px; right: 30px; z-index: 3000;
+            display: flex; flex-direction: column; gap: 10px; pointer-events: none;
+        }
+        .toast {
+            background: #1e293b; color: white; padding: 12px 24px; border-radius: 30px;
+            font-size: 14px; font-weight: 500; box-shadow: var(--shadow); pointer-events: auto;
+            display: flex; align-items: center; gap: 8px;
+            animation: toast-in 0.3s cubic-bezier(0.2, 0, 0.2, 1) forwards, 
+                       toast-out 0.3s cubic-bezier(0.2, 0, 0.2, 1) forwards 2.7s;
+            opacity: 0; transform: translateY(20px);
+        }
+        @keyframes toast-in { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes toast-out { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(20px); } }
+
+        .empty-state { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--bg-app); z-index: 5; color: #94a3b8; }
+        .hidden { display: none !important; }
+        
+        /* Table fixes for Quill */
+        .ql-editor table { table-layout: fixed !important; width: 100% !important; border-collapse: collapse; margin: 16px 0; }
+        .ql-editor td, .ql-editor th { border: 1px solid var(--border) !important; padding: 8px !important; word-break: break-word !important; }
+
+        /* ✅ 인쇄 모드 최적화 (PDF 저장/출력 전용 깔끔한 스타일 적용) */
+        @media print {
+            body { background: #ffffff !important; margin: 0; padding: 0; color: #000 !important; }
+            header, .sidebar, .toolbar, .empty-state, #memo-sidebar, .btn-del, .attach-add, #shortcut-modal, #toast-container { display: none !important; }
+            .workspace, .editor-pane, .paper-viewport { display: block !important; height: auto !important; padding: 0 !important; overflow: visible !important; }
+            
+            /* UI 껍데기 벗기기 */
+            .paper { 
+                box-shadow: none !important; border: none !important; padding: 0 !important; 
+                width: 100% !important; max-width: 100% !important; margin: 0 auto !important; 
+            }
+            
+            /* 보고서 느낌의 메타정보 스타일로 덮어쓰기 */
+            .meta-card { 
+                background: transparent !important; border: none !important; 
+                border-top: 2px solid #2563eb !important; border-bottom: 1px solid #cbd5e1 !important; 
+                border-radius: 0 !important; padding: 12px 0 !important; margin-bottom: 30px !important;
+            }
+            #insight-container { 
+                background: transparent !important; border: 2px solid #fcd34d !important; page-break-inside: avoid; 
+            }
+            
+            /* 첨부파일 영역: 이미지는 1줄 1개, 일반 파일/추가버튼은 숨김 처리 */
+            .attach-section { border-top: 1px solid #000 !important; padding-top: 20px !important; }
+            .attach-grid { display: block !important; }
+            .attach-item.item-file { display: none !important; }
+            .attach-item.item-image { 
+                display: block !important; width: 100% !important; height: auto !important; 
+                border: none !important; margin-bottom: 40px !important; text-align: center; 
+                page-break-inside: avoid; background: transparent !important; 
+            }
+            .attach-item.item-image img { 
+                max-width: 100% !important; height: auto !important; max-height: 250mm !important; 
+                display: inline-block; box-shadow: none !important; border: 1px solid #e2e8f0; 
+            }
+            @page { margin: 15mm; }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="brand"><i class="fas fa-layer-group"></i> News Insight</div>
+    <div class="header-actions">
+        <button class="btn btn-default" id="btn-memo" style="color:#d97706; border-color:#fcd34d; background:#fffbeb;">
+            <i class="fas fa-sticky-note"></i> 퀵 메모
+        </button>
+        <div style="width:1px; height:24px; background:#e2e8f0; margin: 0 8px;"></div>
+        <button class="btn btn-default" onclick="app.exportData()"><i class="fas fa-download"></i> 백업</button>
+        <button class="btn btn-default" onclick="document.getElementById('import-input').click()"><i class="fas fa-upload"></i> 복구</button>
+        <input type="file" id="import-input" hidden accept=".json" onchange="app.importData(this)">
+    </div>
+</header>
+
+<div class="workspace">
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <input type="text" id="search" class="search-input" placeholder="검색..." oninput="app.loadList()" spellcheck="false">
+            <select id="filter" class="filter-select" onchange="app.loadList()">
+                <option value="">전체 카테고리</option>
+                <option value="IT/Tech">IT/Tech</option>
+                <option value="AI/Data">AI/Data</option>
+                <option value="Business">Business</option>
+                <option value="Market">Market</option>
+                <option value="Policy">Policy</option>
+            </select>
+        </div>
+        <div id="list" class="article-list"></div>
+        <div style="padding:12px; text-align:center; font-size:11px; color:#94a3b8; border-top:1px solid var(--border); background:#fff;">
+            Total <span id="total-count" style="font-weight:700; color:#0f172a;">0</span> items
+        </div>
+    </aside>
+
+    <main class="editor-pane">
+        <div class="toolbar">
+            <div class="toolbar-group" style="flex:1;">
+                <input type="date" id="in-date" class="input-pill" style="width: 140px;">
+                <select id="in-cat" class="input-pill" style="width: 120px;">
+                    <option value="IT/Tech">IT/Tech</option>
+                    <option value="AI/Data">AI/Data</option>
+                    <option value="Business">Business</option>
+                    <option value="Market">Market</option>
+                    <option value="Policy">Policy</option>
+                </select>
+                <input type="text" id="in-source" class="input-pill" placeholder="Source URL (기사 링크)" style="flex:1; max-width: 400px;" spellcheck="false">
+            </div>
+            
+            <div class="toolbar-group">
+                <button class="btn btn-default btn-icon" onclick="document.getElementById('shortcut-modal').style.display='flex'" title="단축키"><i class="fas fa-keyboard"></i></button>
+                <div style="width:1px; height:20px; background:#cbd5e1; margin:0 4px;"></div>
+                <button class="btn btn-default" onclick="app.fixTable()"><i class="fas fa-table" style="color:#2563eb"></i> 표 맞춤</button>
+                <button class="btn btn-default" onclick="app.exportPDF()"><i class="fas fa-file-pdf" style="color:#ef4444"></i> PDF</button>
+                <button class="btn btn-danger btn-icon" id="btn-delete" onclick="app.delete()" style="display:none;" title="삭제"><i class="fas fa-trash"></i></button>
+                <div style="width:1px; height:20px; background:#cbd5e1; margin:0 4px;"></div>
+                <button class="btn btn-default" onclick="app.reset()"><i class="fas fa-plus"></i> 신규</button>
+                <button class="btn btn-primary" onclick="app.save()"><i class="fas fa-save"></i> 저장</button>
+            </div>
+        </div>
+
+        <div class="paper-viewport editor-scroll">
+            <div id="paper" class="paper">
+                <div id="edit-title"></div>
+
+                <div class="meta-card">
+                    <div class="meta-row">
+                        <span class="meta-label">DATE/CAT</span>
+                        <span class="meta-value" id="view-meta"></span>
+                    </div>
+                    <div class="meta-row">
+                        <span class="meta-label">SOURCE</span>
+                        <span class="meta-value" id="view-source"></span>
+                    </div>
+                </div>
+
+                <div id="edit-lead"></div>
+                <div id="edit-content"></div>
+                
+                <div id="insight-container">
+                    <strong class="insight-label">💡 PROFESSIONAL INSIGHT</strong>
+                    <div id="edit-insight"></div>
+                </div>
+
+                <div class="attach-section">
+                    <div class="section-label">
+                        <span><i class="fas fa-paperclip"></i> 첨부 자료 (이미지/파일)</span>
+                        </div>
+                    <div id="attach-list" class="attach-grid"></div>
+                    <input type="file" id="file-input" hidden onchange="app.addFile(this)" multiple>
+                </div>
+            </div>
+        </div>
+
+        <div id="empty-state" class="empty-state hidden">
+            <i class="fas fa-folder-open" style="font-size:48px; margin-bottom:16px; color:#cbd5e1;"></i>
+            <p style="font-weight:600;">좌측 목록에서 항목을 선택하거나 신규 작성하세요.</p>
+            <button class="btn btn-primary" onclick="app.reset()" style="margin-top:16px;">
+                <i class="fas fa-plus"></i> 신규 인사이트 작성
+            </button>
+        </div>
+    </main>
+</div>
+
+<div id="memo-sidebar" class="side-panel-slide memo-sidebar">
+    <div class="memo-header">
+        <div style="font-weight:700; color:#b45309;"><i class="fas fa-paste"></i> 퀵 메모</div>
+        <button class="btn-memo-icon" id="btn-close-memo" title="닫기"><i class="fas fa-times"></i></button>
+    </div>
+    <textarea id="memo-textarea" placeholder="작업 중 필요한 내용을 자유롭게 기록하세요. (자동 저장됩니다)" spellcheck="false"></textarea>
+</div>
+
+<div id="img-modal" class="modal" onclick="this.style.display='none'">
+    <div style="position:relative; max-width:90vw; max-height:90vh;">
+        <span class="modal-close" onclick="document.getElementById('img-modal').style.display='none'">&times;</span>
+        <img id="modal-img" class="modal-img" onclick="event.stopPropagation()">
+    </div>
+</div>
+
+<div id="shortcut-modal" class="modal" onclick="this.style.display='none'">
+    <div class="modal-panel" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3><i class="fas fa-keyboard" style="color:var(--primary);"></i> 에디터 단축키</h3>
+            <button class="btn-close" onclick="document.getElementById('shortcut-modal').style.display='none'" title="닫기"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="shortcut-list">
+            <div class="shortcut-item">
+                <span class="shortcut-desc">두음 강조 (핵심 기능)</span>
+                <div class="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>M</kbd></div>
+            </div>
+            <div class="shortcut-item">
+                <span class="shortcut-desc">볼드 / 이탤릭 / 밑줄</span>
+                <div class="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>B</kbd> / <kbd>I</kbd> / <kbd>U</kbd></div>
+            </div>
+            <div class="shortcut-item">
+                <span class="shortcut-desc">취소선</span>
+                <div class="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>0</kbd></div>
+            </div>
+            <div class="shortcut-item">
+                <span class="shortcut-desc">글자색 (빨강 / 파랑)</span>
+                <div class="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>R</kbd> / <kbd>B</kbd></div>
+            </div>
+            <div class="shortcut-item">
+                <span class="shortcut-desc">형광펜 강조 (7가지 색상)</span>
+                <div class="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>1~7</kbd></div>
+            </div>
+            <div class="shortcut-item">
+                <span class="shortcut-desc">표(Table) 지우기</span>
+                <div class="shortcut-keys"><kbd>Backspace</kbd></div>
+            </div>
+            <div class="shortcut-item">
+                <span class="shortcut-desc">서식 모두 지우기</span>
+                <div class="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>X</kbd></div>
+            </div>
+            <div class="shortcut-item">
+                <span class="shortcut-desc">글꼴 크기 조절</span>
+                <div class="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>+</kbd> / <kbd>-</kbd></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script>
+    const BlockEmbed = Quill.import('blots/block/embed');
+    class RawTableBlot extends BlockEmbed {
+        static create(value) {
+            const node = super.create();
+            node.innerHTML = value;
+            node.setAttribute('contenteditable', 'false');
+            return node;
+        }
+        static value(node) {
+            return node.innerHTML;
+        }
+    }
+    RawTableBlot.blotName = 'rawTable';
+    RawTableBlot.tagName = 'div';
+    RawTableBlot.className = 'quill-raw-table';
+    Quill.register(RawTableBlot, true);
+
+    const $ = s => document.querySelector(s);
+    let quillTitle, quillLead, quillContent, quillInsight;
+
+    function initEditors() {
+        const SizeStyle = Quill.import('attributors/style/size');
+        SizeStyle.whitelist = null; 
+        Quill.register(SizeStyle, true);
+
+        const baseOptions = {
+            theme: 'snow',
+            scrollingContainer: '.editor-scroll',
+            modules: { toolbar: false, imageResize: { displaySize: true } }
+        };
+
+        quillTitle = new Quill('#edit-title', {
+            theme: 'snow',
+            scrollingContainer: '.editor-scroll',
+            modules: { 
+                toolbar: false,
+                keyboard: { bindings: { enter: { key: 13, handler: () => false } } }
+            },
+            placeholder: '제목을 입력하세요'
+        });
+        
+        quillLead = new Quill('#edit-lead', { ...baseOptions, placeholder: '핵심 요약' });
+        quillContent = new Quill('#edit-content', { ...baseOptions, placeholder: '본문 내용을 입력하세요' });
+        quillInsight = new Quill('#edit-insight', { ...baseOptions, placeholder: '전문적 인사이트 입력' });
+
+        // Quill 에디터 영역 맞춤법 검사 비활성화 강제 적용
+        quillTitle.root.setAttribute('spellcheck', 'false');
+        quillLead.root.setAttribute('spellcheck', 'false');
+        quillContent.root.setAttribute('spellcheck', 'false');
+        quillInsight.root.setAttribute('spellcheck', 'false');
+
+        const Delta = Quill.import('delta');
+        const tableMatcher = function(node, delta) {
+            return new Delta().insert({ rawTable: node.outerHTML });
+        };
+        quillTitle.clipboard.addMatcher('TABLE', tableMatcher);
+        quillLead.clipboard.addMatcher('TABLE', tableMatcher);
+        quillContent.clipboard.addMatcher('TABLE', tableMatcher);
+        quillInsight.clipboard.addMatcher('TABLE', tableMatcher);
+    }
+
+    const DB_NAME = 'NewsInsightDB';
+    const app = {
+        db: null,
+        data: { list: [], current: null, attachments: [] },
+        
+        async init() {
+            initEditors();
+            this.db = await new Promise(resolve => {
+                const r = indexedDB.open(DB_NAME, 1);
+                r.onupgradeneeded = e => e.target.result.createObjectStore('docs', { keyPath: 'id' });
+                r.onsuccess = e => resolve(e.target.result);
+            });
+            
+            ['in-date', 'in-cat', 'in-source'].forEach(id => {
+                document.getElementById(id).addEventListener('input', () => this.updateMetaView());
+            });
+
+            this.bindShortcuts();
+            this.initMemo(); 
+            document.addEventListener('paste', this.handleGlobalPaste.bind(this));
+
+            this.reset();
+            this.loadList();
+            
+            $('#empty-state').classList.remove('hidden');
+        },
+
+        initMemo() {
+            const memoSidebar = document.getElementById("memo-sidebar");
+            const memoText = document.getElementById("memo-textarea");
+            
+            memoText.value = localStorage.getItem("newsinsight_memo") || "";
+            memoText.addEventListener('input', () => localStorage.setItem("newsinsight_memo", memoText.value));
+            
+            document.getElementById("btn-memo").addEventListener('click', () => memoSidebar.classList.add("open"));
+            document.getElementById("btn-close-memo").addEventListener('click', () => memoSidebar.classList.remove("open"));
+        },
+
+        toast(message) {
+            const container = document.getElementById('toast-container');
+            const el = document.createElement('div');
+            el.className = 'toast';
+            el.innerHTML = `<i class="fas fa-info-circle"></i> ${message}`;
+            container.appendChild(el);
+            setTimeout(() => { if(el.parentElement) el.remove(); }, 3000);
+        },
+
+        fixTable() {
+            const tables = document.querySelectorAll('.ql-editor table, .quill-raw-table table');
+            if (tables.length === 0) return this.toast('본문에 표가 없습니다.');
+
+            tables.forEach(table => {
+                table.querySelectorAll('colgroup, col').forEach(el => el.remove());
+                table.removeAttribute('width');
+                table.style.width = '100%';
+                table.style.tableLayout = 'fixed'; 
+                table.querySelectorAll('td, th').forEach(cell => {
+                    cell.removeAttribute('width');
+                    cell.removeAttribute('nowrap');
+                    cell.style.width = 'auto';
+                });
+                table.querySelectorAll('*').forEach(el => {
+                    if (el.style) { el.style.width = 'auto'; el.style.minWidth = '0'; }
+                });
+            });
+            this.toast('표 크기가 페이지에 맞게 최적화되었습니다!');
+        },
+
+        handleGlobalPaste(e) {
+            const active = document.activeElement;
+            if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.closest('.ql-container'))) return;
+            if (!$('#empty-state').classList.contains('hidden')) return;
+
+            const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type.indexOf("image") !== -1) {
+                    e.preventDefault();
+                    if(this.data.attachments.length >= 10) return this.toast('첨부파일은 최대 10개까지만 가능합니다.');
+                    
+                    const blob = items[i].getAsFile();
+                    const r = new FileReader();
+                    r.onload = (event) => {
+                        this.data.attachments.push({
+                            type: 'image',
+                            name: `clipboard_${Date.now()}.png`,
+                            data: event.target.result
+                        });
+                        this.renderAttachments();
+                        this.toast('이미지가 첨부파일로 추가되었습니다.'); 
+                    };
+                    r.readAsDataURL(blob);
+                    return;
+                }
+            }
+        },
+
+        async exportData() {
+            const tx = this.db.transaction('docs', 'readonly');
+            const docs = await new Promise(r => tx.objectStore('docs').getAll().onsuccess = e => r(e.target.result));
+            if (docs.length === 0) return this.toast('백업할 데이터가 없습니다.'); 
+
+            const blob = new Blob([JSON.stringify(docs, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url;
+            a.download = `NewsInsight_Backup_${new Date().toISOString().slice(0,10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            this.toast('백업 파일이 생성되었습니다.'); 
+        },
+
+        async importData(input) {
+            if (!input.files[0]) return;
+            const file = input.files[0];
+            const reader = new FileReader();
+
+            reader.onload = async (e) => {
+                try {
+                    const importedDocs = JSON.parse(e.target.result);
+                    if (!Array.isArray(importedDocs)) throw new Error('올바른 형식이 아닙니다.');
+                    if (!confirm(`${importedDocs.length}개의 데이터를 가져오시겠습니까? (동일 ID 덮어쓰기)`)) return;
+
+                    const tx = this.db.transaction('docs', 'readwrite');
+                    const store = tx.objectStore('docs');
+                    importedDocs.forEach(doc => store.put(doc));
+                    
+                    tx.oncomplete = () => {
+                        this.toast('데이터 복구가 완료되었습니다.'); 
+                        this.loadList();
+                        input.value = ''; 
+                    };
+                } catch (err) { alert('파일 읽기 오류: ' + err.message); }
+            };
+            reader.readAsText(file);
+        },
+
+        bindShortcuts() {
+            document.addEventListener('keydown', (e) => {
+                const isCmd = e.ctrlKey || e.metaKey;
+                if (isCmd && !e.altKey && e.key.toLowerCase() === 's') {
+                    e.preventDefault();
+                    if ($('#empty-state').classList.contains('hidden')) this.save();
+                    return;
+                }
+                if (isCmd && e.altKey && e.key.toLowerCase() === 'n') {
+                    e.preventDefault(); this.reset(); return;
+                }
+
+                let activeQuill = [quillTitle, quillLead, quillContent, quillInsight].find(q => q.hasFocus());
+                if (isCmd && activeQuill) {
+                    const range = activeQuill.getSelection();
+                    if (!range) return;
+
+                    if (e.key === '+' || e.key === '=' || e.key === '-') {
+                        e.preventDefault();
+                        const fmt = activeQuill.getFormat(range);
+                        const cur = fmt.size ? parseInt(fmt.size) : 16;
+                        const next = (e.key === '-') ? Math.max(10, cur-1) : cur+1;
+                        activeQuill.format('size', next + 'px'); return;
+                    }
+                    if (e.shiftKey && e.key.toLowerCase() === 'x') {
+                        e.preventDefault();
+                        if(range.length > 0) activeQuill.removeFormat(range.index, range.length);
+                        else Object.keys(activeQuill.getFormat(range)).forEach(k => activeQuill.format(k, false));
+                        return;
+                    }
+                    if (!e.altKey && !e.shiftKey && e.key === '0') {
+                        e.preventDefault();
+                        const f = activeQuill.getFormat(range);
+                        activeQuill.format('strike', !f['strike']); return;
+                    }
+                    if (!e.altKey && !e.shiftKey && ['1','2','3','4','5','6','7'].includes(e.key)) {
+                        e.preventDefault();
+                        const hls = {'1':'#ffedd5','2':'#e0f2fe','3':'#fef08a','4':'#dcfce7','5':'#fce7f3','6':'#e6d5c3','7':'#f3f4f6'};
+                        const f = activeQuill.getFormat(range);
+                        activeQuill.format('background', (f['background'] === hls[e.key]) ? false : hls[e.key]); return;
+                    }
+                    if (e.altKey && !e.shiftKey) {
+                        const key = e.key.toLowerCase();
+                        const f = activeQuill.getFormat(range);
+                        if(key === 'r') { e.preventDefault(); activeQuill.format('color', f['color'] === '#ef4444' ? false : '#ef4444'); return; }
+                        if(key === 'b') { e.preventDefault(); activeQuill.format('color', f['color'] === '#2563eb' ? false : '#2563eb'); return; }
+                        if(key === 'm') { 
+                            e.preventDefault(); 
+                            const isMatch = f['background'] === '#0d3a9e';
+                            activeQuill.format('background', isMatch ? false : '#0d3a9e'); 
+                            activeQuill.format('color', isMatch ? false : '#ffffff'); 
+                            activeQuill.format('bold', isMatch ? false : true); 
+                            return; 
+                        }
+                    }
+                }
+            });
+        },
+
+        updateMetaView() {
+            const d = document.getElementById('in-date').value;
+            const c = document.getElementById('in-cat').value;
+            const s = document.getElementById('in-source').value;
+            document.getElementById('view-meta').innerText = `${d} | ${c}`;
+            document.getElementById('view-source').innerText = s || '-';
+        },
+
+        async loadList() {
+            const tx = this.db.transaction('docs', 'readonly');
+            const docs = await new Promise(r => tx.objectStore('docs').getAll().onsuccess = e => r(e.target.result));
+            this.data.list = docs.sort((a,b) => b.id - a.id);
+            
+            const listEl = document.getElementById('list');
+            listEl.innerHTML = '';
+            
+            const search = document.getElementById('search').value.toLowerCase();
+            const filter = document.getElementById('filter').value;
+
+            let count = 0;
+            this.data.list.forEach(doc => {
+                if(filter && doc.cat !== filter) return;
+                
+                const plainTitle = (doc.title || '').replace(/<[^>]*>/g, '').trim() || '제목 없음';
+                
+                if(search && !plainTitle.toLowerCase().includes(search)) return;
+
+                const div = document.createElement('div');
+                div.className = `article-item ${this.data.current === doc.id ? 'active' : ''}`;
+                div.innerHTML = `<div class="item-date">${doc.date}</div><div class="item-title">${plainTitle}</div>`;
+                div.onclick = () => this.load(doc.id);
+                listEl.appendChild(div);
+                count++;
+            });
+            $('#total-count').textContent = count;
+        },
+
+        load(id) {
+            const doc = this.data.list.find(d => d.id === id);
+            if(!doc) return;
+            this.data.current = id;
+            this.data.attachments = doc.attachments || [];
+
+            $('#empty-state').classList.add('hidden');
+            $('#btn-delete').style.display = 'inline-flex';
+
+            document.getElementById('in-date').value = doc.date || '';
+            document.getElementById('in-cat').value = doc.cat || 'IT/Tech';
+            document.getElementById('in-source').value = doc.source || '';
+            
+            const processHtml = (html) => {
+                if (html && !html.includes('<p>') && !html.includes('<br>')) return html.replace(/\n/g, '<br>');
+                return html || '';
+            };
+
+            quillTitle.clipboard.dangerouslyPasteHTML(processHtml(doc.title));
+            quillLead.clipboard.dangerouslyPasteHTML(processHtml(doc.lead));
+            quillContent.clipboard.dangerouslyPasteHTML(processHtml(doc.content));
+            quillInsight.clipboard.dangerouslyPasteHTML(processHtml(doc.insight));
+
+            this.updateMetaView();
+            this.renderAttachments();
+            this.loadList();
+        },
+
+        reset() {
+            this.data.current = null;
+            this.data.attachments = [];
+            
+            $('#empty-state').classList.add('hidden');
+            $('#btn-delete').style.display = 'none';
+
+            document.getElementById('in-date').valueAsDate = new Date();
+            document.getElementById('in-source').value = '';
+            
+            quillTitle.setContents([]);
+            quillLead.setContents([]);
+            quillContent.setContents([]);
+            quillInsight.setContents([]);
+
+            this.updateMetaView();
+            this.renderAttachments();
+            this.loadList();
+        },
+
+        async save() {
+            const titleHTML = quillTitle.root.innerHTML;
+            const plainTitle = quillTitle.getText().trim();
+            if(!plainTitle) return this.toast('제목을 입력해주세요.'); 
+
+            const doc = {
+                id: this.data.current || Date.now(),
+                date: document.getElementById('in-date').value,
+                cat: document.getElementById('in-cat').value,
+                source: document.getElementById('in-source').value,
+                title: titleHTML,
+                lead: quillLead.root.innerHTML,
+                content: quillContent.root.innerHTML,
+                insight: quillInsight.root.innerHTML,
+                attachments: this.data.attachments
+            };
+
+            const tx = this.db.transaction('docs', 'readwrite');
+            tx.objectStore('docs').put(doc);
+            this.data.current = doc.id;
+            
+            $('#empty-state').classList.add('hidden');
+            $('#btn-delete').style.display = 'inline-flex';
+            
+            this.toast('문서가 저장되었습니다.'); 
+            this.loadList();
+        },
+
+        async delete() {
+            if(!this.data.current || !confirm('이 문서를 삭제하시겠습니까?')) return;
+            const tx = this.db.transaction('docs', 'readwrite');
+            tx.objectStore('docs').delete(this.data.current);
+            this.reset();
+            $('#empty-state').classList.remove('hidden');
+            this.toast('삭제되었습니다.'); 
+        },
+
+        renderAttachments() {
+            const el = document.getElementById('attach-list');
+            el.innerHTML = '';
+            
+            this.data.attachments.forEach((file, idx) => {
+                const div = document.createElement('div');
+                div.className = file.type === 'image' ? 'attach-item item-image' : 'attach-item item-file';
+                
+                if(file.type === 'image') {
+                    div.innerHTML = `<img src="${file.data}"><button class="btn-del" onclick="event.stopPropagation(); app.delFile(${idx})"><i class="fas fa-times"></i></button>`;
+                    div.onclick = () => { document.getElementById('modal-img').src=file.data; document.getElementById('img-modal').style.display='flex'; };
+                } else {
+                    div.innerHTML = `<i class="fas fa-file-alt"></i><span>${file.name}</span><button class="btn-del" onclick="event.stopPropagation(); app.delFile(${idx})"><i class="fas fa-times"></i></button>`;
+                    div.onclick = () => { const a = document.createElement('a'); a.href=file.data; a.download=file.name; a.click(); };
+                }
+                el.appendChild(div);
+            });
+
+            if(this.data.attachments.length < 10) {
+                const add = document.createElement('div');
+                add.className = 'attach-item attach-add';
+                add.innerHTML = '<i class="fas fa-plus"></i><span>추가</span>';
+                add.onclick = () => document.getElementById('file-input').click();
+                el.appendChild(add);
+            }
+        },
+
+        addFile(input) {
+            for(let file of input.files) {
+                if(this.data.attachments.length >= 10) { this.toast('첨부파일은 최대 10개까지만 가능합니다.'); break; }
+                const r = new FileReader();
+                r.onload = e => {
+                    this.data.attachments.push({
+                        type: file.type.startsWith('image') ? 'image' : 'file',
+                        name: file.name,
+                        data: e.target.result
+                    });
+                    this.renderAttachments();
+                };
+                r.readAsDataURL(file);
+            }
+            input.value = '';
+        },
+        delFile(idx) {
+            this.data.attachments.splice(idx, 1);
+            this.renderAttachments();
+        },
+
+        async exportPDF() {
+            if (!$('#empty-state').classList.contains('hidden')) {
+                return this.toast('출력할 문서가 없습니다.');
+            }
+
+            if (window.location.protocol === 'file:') {
+                this.toast('출력용 깔끔한 레이아웃으로 변환하여 인쇄(PDF 저장)를 시작합니다.');
+                setTimeout(() => window.print(), 500);
+                return;
+            }
+
+            const paper = document.getElementById('paper');
+            const clone = paper.cloneNode(true);
+            
+            clone.style.width = '210mm';
+            clone.style.height = 'auto'; 
+            clone.style.position = 'absolute'; 
+            clone.style.top = '-10000px'; 
+            clone.style.left = '0';
+            clone.style.boxShadow = 'none';
+            clone.style.border = 'none';
+            clone.style.padding = '15mm';
+            clone.style.background = '#ffffff';
+            
+            clone.querySelectorAll('.ql-clipboard, .ql-tooltip').forEach(el => el.remove());
+            clone.querySelectorAll('.ql-editor').forEach(el => {
+                el.contentEditable = false;
+                el.classList.remove('ql-blank');
+            });
+
+            const metaCard = clone.querySelector('.meta-card');
+            if (metaCard) {
+                metaCard.style.background = 'transparent';
+                metaCard.style.border = 'none';
+                metaCard.style.borderTop = '2px solid #2563eb';
+                metaCard.style.borderBottom = '1px solid #cbd5e1';
+                metaCard.style.borderRadius = '0';
+                metaCard.style.padding = '12px 0';
+            }
+
+            const insightText = clone.querySelector('#edit-insight .ql-editor').innerText.trim();
+            const container = clone.querySelector('#insight-container');
+            if (!insightText) {
+                if(container) container.style.display = 'none';
+            } else if(container) {
+                container.style.background = 'transparent';
+                container.style.border = '2px solid #fcd34d';
+            }
+
+            const grid = clone.querySelector('.attach-grid');
+            if (grid) {
+                grid.innerHTML = ''; 
+                grid.style.display = 'block';
+                const images = this.data.attachments.filter(f => f.type === 'image');
+                images.forEach(img => {
+                    const wrapper = document.createElement('div');
+                    wrapper.style.display = 'block';
+                    wrapper.style.width = '100%';
+                    wrapper.style.marginBottom = '30px';
+                    wrapper.style.textAlign = 'center';
+                    
+                    const imgTag = document.createElement('img');
+                    imgTag.src = img.data;
+                    imgTag.style.maxWidth = '100%';
+                    imgTag.style.height = 'auto';
+                    imgTag.style.border = '1px solid #e2e8f0';
+                    imgTag.style.display = 'inline-block';
+                    
+                    wrapper.appendChild(imgTag);
+                    grid.appendChild(wrapper);
+                });
+                if(images.length === 0) {
+                    const section = clone.querySelector('.attach-section');
+                    if(section) section.style.display = 'none';
+                }
+            }
+
+            document.body.appendChild(clone);
+            this.toast('문서 레이아웃으로 변환하여 PDF 생성 중입니다...'); 
+
+            try {
+                const canvas = await html2canvas(clone, { 
+                    scale: 2, 
+                    useCORS: true,
+                    allowTaint: false,
+                    scrollY: -window.scrollY 
+                });
+                
+                const imgData = canvas.toDataURL('image/png');
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                
+                const imgWidth = 210; 
+                const pageHeight = 297; 
+                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                
+                let heightLeft = imgHeight;
+                let position = 0;
+
+                pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                heightLeft -= pageHeight;
+
+                while (heightLeft > 0) {
+                    position = heightLeft - imgHeight;
+                    pdf.addPage();
+                    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                    heightLeft -= pageHeight;
+                }
+
+                let pdfName = quillTitle.getText().trim().slice(0, 20) || 'News_Insight';
+                pdf.save(`${pdfName}.pdf`);
+                this.toast('PDF 다운로드가 완료되었습니다.'); 
+            } catch(e) {
+                console.error(e);
+                this.toast('예기치 못한 오류로 브라우저 기본 인쇄(PDF) 모드로 전환합니다.');
+                setTimeout(() => window.print(), 500);
+            } finally {
+                document.body.removeChild(clone);
+            }
+        }
+    };
+
+    window.onload = () => app.init();
+</script>
+</body>
+</html>

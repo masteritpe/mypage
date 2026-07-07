@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>서버 S/W 스택 관리</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+/* === Design System === */
+:root {
+    --bg-app: #f3f4f6; --bg-panel: #ffffff; --border: #e2e8f0;
+    --primary: #2563eb; --primary-hover: #1d4ed8;
+    --text-main: #0f172a; --text-sub: #64748b;
+    --success: #10b981; --warning: #f59e0b; --danger: #ef4444;
+    --env-prod: #3b82f6; --env-dev: #10b981; --env-qa: #f59e0b; --env-mgmt: #6366f1; --env-dr: #ef4444;
+    --radius: 8px;
+    --font-ui: 'Inter', sans-serif;
+    --font-code: 'JetBrains Mono', monospace;
+}
+
+* { box-sizing: border-box; outline: none; }
+body { margin: 0; background: var(--bg-app); color: var(--text-main); font-family: var(--font-ui); font-size: 13px; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* Header */
+header { height: 56px; background: #fff; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 24px; flex-shrink: 0; justify-content: space-between; z-index: 20; }
+header .brand { font-weight: 700; font-size: 16px; display: flex; align-items: center; gap: 10px; }
+header .brand i { color: var(--primary); font-size: 18px; }
+.header-actions { display: flex; gap: 8px; }
+
+/* Layout */
+.workspace { display: flex; flex: 1; overflow: hidden; }
+
+/* Sidebar */
+.pane-list { width: 340px; background: #fff; border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; }
+.search-area { height: 60px; padding: 0 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; }
+.search-input { width: 100%; height: 36px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; }
+.search-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+.list-scroll { flex: 1; overflow-y: auto; background: #f8fafc; }
+
+/* List Item (Drag & Drop) */
+.item-card { padding: 16px; border-bottom: 1px solid var(--border); background: #fff; cursor: pointer; border-left: 3px solid transparent; transition: background-color 0.1s, border-color 0.1s; position: relative; }
+.item-card:hover { background: #f1f5f9; }
+.item-card.active { background: #eff6ff; border-left-color: var(--primary); }
+.item-card[draggable="true"] { cursor: grab; }
+.item-card[draggable="true"]:active { cursor: grabbing; }
+.item-card.dragging { opacity: 0.5; border: 1px dashed var(--primary); background: #f8fafc; }
+.item-card.over { transform: scale(1.01); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border-left-color: var(--primary); z-index: 2; }
+
+.item-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+.item-prj { font-weight: 700; color: var(--text-main); font-size: 14px; display:flex; align-items:center; gap:6px; flex: 1; pointer-events: none; }
+.env-badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 700; color: #fff; pointer-events: none; }
+.bg-prod { background: var(--env-prod); }
+.bg-dev { background: var(--env-dev); }
+.bg-qa { background: var(--env-qa); }
+.bg-mgmt { background: var(--env-mgmt); }
+.bg-dr { background: var(--env-dr); }
+
+/* List Copy Button */
+.btn-list-copy { background: transparent; border: none; color: #94a3b8; font-size: 14px; cursor: pointer; padding: 4px; border-radius: 4px; transition: 0.2s; display: flex; align-items: center; justify-content: center; }
+.btn-list-copy:hover { color: var(--primary); background: #e2e8f0; }
+
+.summary-box { padding: 16px; border-top: 1px solid var(--border); background: #f8fafc; font-size: 12px; color: var(--text-sub); display: flex; flex-direction: column; gap: 10px; flex-shrink: 0; }
+.summary-box .sum-row { display: flex; justify-content: space-between; align-items: center; }
+.summary-box b { color: var(--text-main); font-size: 13px; }
+
+/* Main Editor Pane */
+.pane-main { flex: 1; background: #fff; display: flex; flex-direction: column; overflow: hidden; }
+.toolbar { height: 60px; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 32px; justify-content: space-between; background: #fff; flex-shrink: 0; }
+.main-content { flex: 1; overflow-y: auto; background: #f8fafc; display: block; position: relative; }
+
+/* Editor View */
+.editor-container { width: 100%; max-width: 900px; margin: 30px auto; padding-bottom: 60px; padding-left: 30px; padding-right: 30px; display: flex; flex-direction: column; gap: 20px; }
+.card { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+.card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #f1f5f9; }
+.card-title { font-size: 15px; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
+
+/* Form Elements */
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 16px; }
+.label { display: block; font-size: 12px; font-weight: 600; color: var(--text-sub); margin-bottom: 6px; }
+.input-field, .select-field { width: 100%; height: 40px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 14px; background: #fff; transition: 0.2s; }
+.input-field:focus, .select-field:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+.select-field { cursor: pointer; }
+
+/* Stack Rows & Drag and Drop Styles */
+.stack-container { display: flex; flex-direction: column; gap: 10px; }
+.stack-row { display: flex; gap: 10px; align-items: center; background: #fff; padding: 2px; border-radius: var(--radius); transition: all 0.2s ease; border: 1px solid transparent; }
+.stack-row.dragging { opacity: 0.4; border: 1px dashed var(--primary); background: #f8fafc; }
+.stack-row.over { transform: scale(1.01); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border-color: var(--primary); }
+.stack-row input { flex: 1; }
+.drag-handle { color: #cbd5e1; cursor: grab; padding: 0 4px 0 8px; font-size: 15px; display: flex; align-items: center; justify-content: center; }
+.drag-handle:active { cursor: grabbing; color: var(--primary); }
+.btn-icon { background: #f1f5f9; color: var(--text-sub); border: none; width: 40px; height: 40px; border-radius: var(--radius); cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center; }
+.btn-icon:hover { background: #e2e8f0; color: var(--danger); }
+
+/* Board View (장표) */
+.board-container { display: none; padding: 24px; height: 100%; overflow-x: auto; gap: 24px; align-items: flex-start; }
+.board-container.active { display: flex; }
+.board-col { min-width: 280px; width: 280px; display: flex; flex-direction: column; gap: 16px; background: #f1f5f9; border-radius: 12px; padding: 16px; border: 1px solid var(--border); }
+.board-col-header { font-size: 15px; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.board-col-header .count { background: #e2e8f0; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+
+.sw-card { background: #fff; border-radius: 8px; border: 1px solid #cbd5e1; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+.sw-card-header { padding: 10px; color: #fff; font-weight: 700; text-align: center; font-size: 14px; }
+.sw-card-body { display: flex; flex-direction: column; }
+.sw-item { padding: 8px 12px; border-bottom: 1px dotted #e2e8f0; font-size: 13px; text-align: center; color: #334155; }
+.sw-item:last-child { border-bottom: none; }
+.sw-os { background: #f8fafc; font-weight: 600; padding: 8px 12px; text-align: center; font-size: 13px; color: #0f172a; border-top: 1px solid #cbd5e1; }
+
+/* Buttons */
+.btn { height: 36px; padding: 0 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid transparent; display: inline-flex; align-items: center; gap: 6px; transition: 0.2s; }
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: var(--primary-hover); }
+.btn-secondary { background: #fff; border-color: #cbd5e1; color: var(--text-sub); }
+.btn-secondary:hover { background: #f8fafc; color: var(--text-main); }
+.btn-danger { background: #fff; border-color: #fecaca; color: #ef4444; }
+.btn-danger:hover { background: #fee2e2; }
+.btn-outline { background: transparent; border-color: var(--primary); color: var(--primary); }
+.btn-outline:hover { background: #eff6ff; }
+.empty-state { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #94a3b8; }
+
+/* Toast */
+#toast-container { position: fixed; bottom: 24px; right: 24px; display: flex; flex-direction: column; gap: 10px; z-index: 9999; }
+.toast { background: #fff; color: var(--text-main); padding: 14px 24px; border-radius: 8px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); border-left: 4px solid var(--primary); font-size: 14px; font-weight: 600; opacity: 0; transform: translateY(20px); transition: all 0.3s ease; display: flex; align-items: center; gap: 10px; }
+.toast.show { opacity: 1; transform: translateY(0); }
+.toast.success { border-left-color: var(--success); }
+.toast.info { border-left-color: var(--primary); }
+</style>
+</head>
+<body>
+
+<header>
+    <div class="brand"><i class="fas fa-layer-group"></i>서버 S/W 스택 관리</div>
+    <div class="header-actions">
+        <button class="btn btn-secondary" id="btn-toggle-view"><i class="fas fa-columns"></i> 장표 한눈에 보기</button>
+        <button class="btn btn-secondary" id="btn-save-img"><i class="fas fa-image" style="color:#8b5cf6"></i> 이미지 저장</button>
+        <button class="btn btn-secondary" id="btn-export"><i class="fas fa-file-excel" style="color:#10b981"></i> 엑셀 다운로드</button>
+    </div>
+</header>
+
+<div class="workspace">
+    <aside class="pane-list">
+        <div class="search-area">
+            <input type="text" id="search-input" class="search-input" placeholder="서버명 또는 S/W 검색...">
+        </div>
+        <div class="list-scroll" id="history-list">
+            <div class="empty-state"><span>등록된 서버가 없습니다.</span></div>
+        </div>
+        <div class="summary-box">
+            <div class="sum-row">
+                <span>총 서버 수</span>
+                <span><b id="total-server-count">0</b> 대</span>
+            </div>
+            <div class="sum-row">
+                <span>등록된 S/W 스택 총합</span>
+                <span style="color: var(--primary);"><b><span id="total-sw-count">0</span></b> 개</span>
+            </div>
+        </div>
+    </aside>
+
+    <main class="pane-main">
+        <div class="toolbar" id="editor-toolbar">
+            <div style="font-weight:700; font-size:15px;" id="editor-title">서버 정보 편집</div>
+            <div style="display:flex; gap:8px;">
+                <button class="btn btn-secondary" id="btn-new" title="단축키: Ctrl + Alt + N"><i class="fas fa-plus"></i> 신규 서버 추가</button>
+                <button class="btn btn-secondary" id="btn-copy" style="display:none;"><i class="far fa-copy"></i> 복사</button>
+                <button class="btn btn-danger" id="btn-delete" style="display:none;"><i class="fas fa-trash"></i> 삭제</button>
+                <button class="btn btn-primary" id="btn-save" title="단축키: Ctrl + S"><i class="fas fa-check"></i> 저장</button>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="editor-container" id="editor-view">
+                <div class="card">
+                    <div class="card-header"><div class="card-title"><i class="fas fa-server" style="color:#64748b;"></i> 기본 정보</div></div>
+                    <div class="form-grid">
+                        <div>
+                            <label class="label">영역 (Zone)</label>
+                            <select id="inp-env" class="select-field">
+                                <option value="운영">운영 (Production)</option>
+                                <option value="개발">개발 (Development)</option>
+                                <option value="검증">검증 (Staging)</option>
+                                <option value="관리">관리 (Management)</option>
+                                <option value="우회">우회 (Bypass)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="label">서버 역할/명칭 (예: 운영 WEB)</label>
+                            <input type="text" id="inp-name" class="input-field" placeholder="예: WEB, WAS, DB, API G/W 등" autocomplete="off">
+                        </div>
+                        <div>
+                            <label class="label">운영체제 (OS)</label>
+                            <input type="text" id="inp-os" class="input-field" placeholder="예: Linux" autocomplete="off">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header" style="border-bottom:none; margin-bottom:0;">
+                        <div class="card-title"><i class="fas fa-layer-group" style="color:#2563eb;"></i> S/W 스택 목록</div>
+                        <button class="btn btn-outline" id="btn-add-stack" style="height:32px; font-size:12px;"><i class="fas fa-plus"></i> 항목 추가</button>
+                    </div>
+                    <div id="stack-list" class="stack-container" style="margin-top:16px;">
+                    </div>
+                </div>
+            </div>
+
+            <div class="board-container" id="board-view">
+            </div>
+        </div>
+    </main>
+</div>
+
+<div id="toast-container"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+<script>
+    // === IndexedDB Setup ===
+    const DB_NAME = "ServerStackDB";
+    const DB_VERSION = 1;
+    const STORE_NAME = "servers";
+    let db;
+
+    function initDB() {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open(DB_NAME, DB_VERSION);
+            request.onerror = () => reject("IndexedDB 로드 에러");
+            request.onsuccess = event => { db = event.target.result; resolve(db); };
+            request.onupgradeneeded = event => {
+                db = event.target.result;
+                if (!db.objectStoreNames.contains(STORE_NAME)) {
+                    db.createObjectStore(STORE_NAME, { keyPath: "id" });
+                }
+            };
+        });
+    }
+
+    function getAllFromDB() {
+        return new Promise((resolve) => {
+            const tx = db.transaction(STORE_NAME, "readonly");
+            const store = tx.objectStore(STORE_NAME);
+            const request = store.getAll();
+            request.onsuccess = () => resolve(request.result || []);
+        });
+    }
+
+    function putToDB(item) {
+        return new Promise((resolve) => {
+            const tx = db.transaction(STORE_NAME, "readwrite");
+            const store = tx.objectStore(STORE_NAME);
+            store.put(item);
+            tx.oncomplete = () => resolve();
+        });
+    }
+
+    function deleteFromDB(id) {
+        return new Promise((resolve) => {
+            const tx = db.transaction(STORE_NAME, "readwrite");
+            const store = tx.objectStore(STORE_NAME);
+            store.delete(id);
+            tx.oncomplete = () => resolve();
+        });
+    }
+    
+    // 배열 전체의 순서(order)를 IndexedDB에 일괄 업데이트하는 함수
+    function updateAllOrdersInDB() {
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE_NAME, "readwrite");
+            const store = tx.objectStore(STORE_NAME);
+            dataList.forEach(item => {
+                store.put(item);
+            });
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject();
+        });
+    }
+
+    // === Global State ===
+    let dataList = []; 
+    let selectedId = null;
+    let stackItems = []; 
+    let isBoardView = false;
+    let dragStartIndex = null; 
+    let listDragStartId = null; // 리스트 드래그 앤 드롭용 상태
+
+    // DOM Elements
+    const $ = id => document.getElementById(id);
+    const inps = { env: $('inp-env'), name: $('inp-name'), os: $('inp-os') };
+    const stackListContainer = $('stack-list');
+
+    const envConfig = {
+        "운영": { class: "bg-prod", hex: "#3b82f6", label: "운영 (Production)" },
+        "개발": { class: "bg-dev", hex: "#10b981", label: "개발 (Development)" },
+        "검증": { class: "bg-qa", hex: "#f59e0b", label: "검증 (Staging)" },
+        "관리": { class: "bg-mgmt", hex: "#6366f1", label: "관리 (Management)" },
+        "우회": { class: "bg-bypass", hex: "#ef4444", label: "우회 (Bypass)" }
+    };
+
+    // === Toast UI ===
+    function showToast(message, type = 'success') {
+        const container = $('toast-container');
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        const icon = type === 'success' ? '<i class="fas fa-check-circle" style="color:var(--success);"></i>' : '<i class="fas fa-info-circle" style="color:var(--primary);"></i>';
+        toast.innerHTML = `${icon} <span>${message}</span>`;
+        container.appendChild(toast);
+        setTimeout(() => toast.classList.add('show'), 10);
+        setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, 1000);
+    }
+
+    function generateId() { return Date.now().toString() + Math.floor(Math.random() * 1000).toString(); }
+
+    // === S/W Stack Editor Rows ===
+    function renderStackRows() {
+        stackListContainer.innerHTML = '';
+        if(stackItems.length === 0) {
+            stackListContainer.innerHTML = `<div style="text-align:center; padding:20px; color:#94a3b8; font-size:12px; background:#f8fafc; border-radius:8px; border:1px dashed #cbd5e1;">등록된 S/W 스택이 없습니다. 항목을 추가하세요.</div>`;
+            return;
+        }
+
+        stackItems.forEach((stack, index) => {
+            const row = document.createElement('div');
+            row.className = 'stack-row';
+            row.draggable = true;
+            row.dataset.index = index;
+            
+            row.innerHTML = `
+                <div class="drag-handle" title="드래그하여 순서 변경"><i class="fas fa-grip-vertical"></i></div>
+                <input type="text" class="input-field stack-val" data-id="${stack.id}" value="${stack.name}" placeholder="예: WEB(Nginx), 관제(a), 백신(a) 등">
+                <button class="btn-icon" onclick="removeStackRow('${stack.id}')" title="삭제"><i class="fas fa-times"></i></button>
+            `;
+
+            row.addEventListener('dragstart', function(e) { dragStartIndex = +this.dataset.index; this.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; });
+            row.addEventListener('dragover', function(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; });
+            row.addEventListener('dragenter', function(e) { if (+this.dataset.index !== dragStartIndex) this.classList.add('over'); });
+            row.addEventListener('dragleave', function(e) { this.classList.remove('over'); });
+            row.addEventListener('drop', function(e) {
+                e.stopPropagation();
+                this.classList.remove('over');
+                const dragEndIndex = +this.dataset.index;
+                if (dragStartIndex !== dragEndIndex && dragStartIndex !== null) {
+                    const itemToMove = stackItems.splice(dragStartIndex, 1)[0];
+                    stackItems.splice(dragEndIndex, 0, itemToMove);
+                    renderStackRows();
+                }
+            });
+            row.addEventListener('dragend', function(e) {
+                this.classList.remove('dragging');
+                document.querySelectorAll('.stack-row').forEach(el => el.classList.remove('over'));
+                dragStartIndex = null;
+            });
+
+            stackListContainer.appendChild(row);
+        });
+
+        document.querySelectorAll('.stack-val').forEach(el => el.addEventListener('input', e => {
+            const item = stackItems.find(s => s.id === e.target.dataset.id);
+            if(item) item.name = e.target.value;
+        }));
+    }
+
+    function addStackRow() {
+        stackItems.push({ id: generateId(), name: '' });
+        renderStackRows();
+    }
+
+    function removeStackRow(id) {
+        stackItems = stackItems.filter(s => s.id !== id);
+        renderStackRows();
+    }
+
+    // === Left List Rendering ===
+    function renderList() {
+        const term = $('search-input').value.toLowerCase();
+        const isSearchActive = term.trim().length > 0;
+        
+        const filtered = dataList.filter(d => 
+            d.name.toLowerCase().includes(term) || 
+            d.env.toLowerCase().includes(term) ||
+            d.os.toLowerCase().includes(term) ||
+            d.stacks.some(s => s.name.toLowerCase().includes(term))
+        );
+        
+        // order 속성 기반으로 정렬 (drag & drop 지원)
+        filtered.sort((a, b) => (a.order || 0) - (b.order || 0));
+
+        const list = $('history-list'); list.innerHTML = '';
+        let totalSw = 0;
+
+        if(filtered.length === 0) {
+            list.innerHTML = '<div class="empty-state"><span>검색 결과가 없습니다.</span></div>';
+            $('total-server-count').textContent = 0; 
+            $('total-sw-count').textContent = 0;
+            return;
+        }
+        
+        $('total-server-count').textContent = filtered.length;
+        
+        filtered.forEach(d => {
+            totalSw += d.stacks.length;
+            const el = document.createElement('div');
+            el.className = `item-card ${selectedId === d.id ? 'active' : ''}`;
+            el.dataset.id = d.id;
+            
+            const envConf = envConfig[d.env] || envConfig["운영"];
+            
+            // 리스트 항목 생성 (그립 아이콘 추가하여 드래그 앤 드롭 인지 향상)
+            el.innerHTML = `
+                <div class="item-head">
+                    <span class="item-prj">
+                        <i class="fas fa-grip-vertical" style="color:#cbd5e1; margin-right:4px; font-size:12px;" title="드래그하여 순서 변경"></i>
+                        <span class="env-badge ${envConf.class}">${d.env}</span> ${d.name}
+                    </span>
+                    <button class="btn-list-copy" onclick="event.stopPropagation(); duplicateFromList('${d.id}')" title="이 항목 복사"><i class="far fa-copy"></i></button>
+                </div>
+                <div style="font-size:11px; color:#64748b; margin-bottom:6px; pointer-events: none;">OS: ${d.os || '-'}</div>
+                <div style="font-size:11px; color:#94a3b8; pointer-events: none;">스택 수: ${d.stacks.length}개</div>`;
+            
+            el.onclick = () => {
+                if(isBoardView) toggleView();
+                loadItem(d);
+            };
+
+            // 검색 중이 아닐 때만 Drag & Drop 활성화
+            if (!isSearchActive) {
+                el.draggable = true;
+                el.title = "드래그하여 순서를 변경할 수 있습니다.";
+                
+                el.addEventListener('dragstart', function(e) {
+                    listDragStartId = this.dataset.id;
+                    this.classList.add('dragging');
+                    e.dataTransfer.effectAllowed = 'move';
+                });
+                
+                el.addEventListener('dragover', function(e) {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                });
+                
+                el.addEventListener('dragenter', function(e) {
+                    if (this.dataset.id !== listDragStartId) this.classList.add('over');
+                });
+                
+                el.addEventListener('dragleave', function(e) {
+                    this.classList.remove('over');
+                });
+                
+                el.addEventListener('drop', async function(e) {
+                    e.stopPropagation();
+                    this.classList.remove('over');
+                    const dropId = this.dataset.id;
+                    
+                    if (listDragStartId && listDragStartId !== dropId) {
+                        const startIndex = dataList.findIndex(x => x.id === listDragStartId);
+                        const endIndex = dataList.findIndex(x => x.id === dropId);
+                        
+                        if(startIndex > -1 && endIndex > -1) {
+                            // 배열 요소 이동
+                            const [movedItem] = dataList.splice(startIndex, 1);
+                            dataList.splice(endIndex, 0, movedItem);
+                            
+                            // 새 순서 부여
+                            dataList.forEach((item, index) => item.order = index);
+                            
+                            // DB 반영 및 다시 렌더링
+                            await updateAllOrdersInDB();
+                            renderList();
+                        }
+                    }
+                });
+                
+                el.addEventListener('dragend', function(e) {
+                    this.classList.remove('dragging');
+                    document.querySelectorAll('.item-card').forEach(el => el.classList.remove('over'));
+                    listDragStartId = null;
+                });
+            }
+
+            list.appendChild(el);
+        });
+        $('total-sw-count').textContent = totalSw;
+    }
+
+    // 리스트 내 복사 버튼 (바로 밑에 복사본 추가되도록 개선)
+    window.duplicateFromList = async function(id) {
+        const itemIdx = dataList.findIndex(d => d.id === id);
+        if(itemIdx === -1) return;
+        
+        const item = dataList[itemIdx];
+        const cleanStacks = item.stacks.map(s => ({ id: generateId(), name: s.name }));
+        
+        const newItem = {
+            id: generateId(),
+            env: item.env,
+            name: item.name + ' - 복사본',
+            os: item.os,
+            stacks: cleanStacks,
+            order: item.order // 임시 부여
+        };
+        
+        // 원본 바로 밑에 삽입 후 전체 순서 재조정
+        dataList.splice(itemIdx + 1, 0, newItem);
+        dataList.forEach((d, index) => d.order = index);
+        
+        await updateAllOrdersInDB();
+        await refreshDataList();
+        
+        const copiedItem = dataList.find(d => d.id === newItem.id);
+        if(copiedItem) loadItem(copiedItem);
+        
+        showToast('항목이 성공적으로 복사되었습니다.', 'success');
+    };
+
+    // === Board View Rendering ===
+    function renderBoard() {
+        const board = $('board-view');
+        board.innerHTML = '';
+        
+        const order = ["운영", "검증", "개발", "관리", "우회"];
+        
+        order.forEach(envKey => {
+            const serversInEnv = dataList.filter(d => d.env === envKey);
+            if(serversInEnv.length === 0) return;
+
+            const envConf = envConfig[envKey];
+            const col = document.createElement('div');
+            col.className = 'board-col';
+            
+            col.innerHTML = `
+                <div class="board-col-header">
+                    <i class="fas fa-server" style="color:${envConf.hex}"></i> ${envConf.label}
+                    <span class="count">${serversInEnv.length}</span>
+                </div>
+            `;
+
+            serversInEnv.forEach(srv => {
+                const card = document.createElement('div');
+                card.className = 'sw-card';
+                
+                let stacksHtml = srv.stacks.map(s => `<div class="sw-item">${s.name || '-'}</div>`).join('');
+                if(srv.stacks.length === 0) stacksHtml = `<div class="sw-item" style="color:#cbd5e1;">스택 없음</div>`;
+
+                card.innerHTML = `
+                    <div class="sw-card-header" style="background:${envConf.hex}">${srv.env} ${srv.name}</div>
+                    <div class="sw-card-body">
+                        ${stacksHtml}
+                        <div class="sw-os">${srv.os || 'OS 미지정'}</div>
+                    </div>
+                `;
+                card.ondblclick = () => {
+                    toggleView();
+                    loadItem(srv);
+                };
+                card.title = "더블클릭하여 편집";
+                col.appendChild(card);
+            });
+            board.appendChild(col);
+        });
+    }
+
+    // === Logic ===
+    function loadItem(d) {
+        selectedId = d.id;
+        $('editor-title').textContent = `${d.env} ${d.name} 편집`;
+        
+        inps.env.value = d.env;
+        inps.name.value = d.name;
+        inps.os.value = d.os;
+        
+        stackItems = JSON.parse(JSON.stringify(d.stacks));
+
+        $('btn-copy').style.display = 'inline-flex'; 
+        $('btn-delete').style.display = 'inline-flex'; 
+        $('btn-save').innerHTML = '<i class="fas fa-check"></i> 저장';
+        
+        renderStackRows();
+        renderList(); 
+    }
+
+    function resetForm() {
+        selectedId = null;
+        $('editor-title').textContent = '신규 서버 추가';
+        
+        inps.name.value = ''; 
+        inps.os.value = 'Linux';
+        inps.env.selectedIndex = 0;
+        
+        stackItems = [ { id: generateId(), name: 'WEB(Nginx)' }, { id: generateId(), name: '백신, 관제' } ];
+
+        $('btn-copy').style.display = 'none'; 
+        $('btn-delete').style.display = 'none'; 
+        $('btn-save').innerHTML = '<i class="fas fa-plus"></i> 저장';
+        
+        renderStackRows();
+        renderList(); 
+        inps.name.focus();
+        
+        if(isBoardView) toggleView();
+    }
+
+    async function saveItem() {
+        if(!inps.name.value.trim()) return alert('서버 명칭을 입력해주세요.');
+        
+        const cleanStacks = stackItems.filter(s => s.name.trim() !== '');
+        
+        // 기존 아이템이면 원래 순서를, 새 아이템이면 맨 끝(order)을 할당
+        const existingItem = dataList.find(d => d.id === selectedId);
+        const itemOrder = existingItem !== undefined ? existingItem.order : dataList.length;
+
+        const newItem = { 
+            id: selectedId || Date.now().toString(), 
+            env: inps.env.value,
+            name: inps.name.value, 
+            os: inps.os.value,
+            stacks: cleanStacks,
+            order: itemOrder
+        };
+        
+        await putToDB(newItem);
+        
+        selectedId = newItem.id;
+        $('btn-copy').style.display = 'inline-flex'; 
+        $('btn-delete').style.display = 'inline-flex'; 
+        $('btn-save').innerHTML = '<i class="fas fa-check"></i> 저장';
+        
+        await refreshDataList();
+        showToast('성공적으로 저장되었습니다.', 'success');
+    }
+
+    // 에디터 상단 툴바의 복사 기능
+    async function copyItem() {
+        if(!selectedId) return;
+
+        const cleanStacks = stackItems
+            .filter(s => s.name.trim() !== '')
+            .map(s => ({ id: generateId(), name: s.name }));
+            
+        const itemIdx = dataList.findIndex(d => d.id === selectedId);
+        if(itemIdx === -1) return;
+
+        const newItem = {
+            id: generateId(),
+            env: inps.env.value,
+            name: inps.name.value + ' - 복사본',
+            os: inps.os.value,
+            stacks: cleanStacks,
+            order: dataList[itemIdx].order // 임시 부여
+        };
+        
+        dataList.splice(itemIdx + 1, 0, newItem);
+        dataList.forEach((d, index) => d.order = index);
+        
+        await updateAllOrdersInDB();
+        await refreshDataList();
+        
+        const copiedItem = dataList.find(d => d.id === newItem.id);
+        if(copiedItem) loadItem(copiedItem);
+        
+        showToast('항목이 성공적으로 복사되었습니다.', 'success');
+    }
+
+    async function deleteItem() { 
+        if(selectedId && confirm('이 서버 정보를 삭제하시겠습니까?')) { 
+            await deleteFromDB(selectedId);
+            resetForm(); 
+            await refreshDataList();
+        } 
+    }
+
+    async function refreshDataList() {
+        dataList = await getAllFromDB();
+        
+        let needsSave = false;
+        const legacyOrder = ["운영", "개발", "검증", "관리", "우회"];
+        
+        // 기존 데이터에 order 속성이 없을 경우 초기화
+        dataList.sort((a, b) => {
+            if (a.order !== undefined && b.order !== undefined) {
+                return a.order - b.order;
+            }
+            const diff = legacyOrder.indexOf(a.env) - legacyOrder.indexOf(b.env);
+            return diff !== 0 ? diff : a.name.localeCompare(b.name);
+        });
+
+        dataList.forEach((d, idx) => {
+            if (d.order !== idx) {
+                d.order = idx;
+                needsSave = true;
+            }
+        });
+        
+        if (needsSave) {
+            await updateAllOrdersInDB();
+        }
+
+        renderList();
+        renderBoard();
+    }
+
+    // === View Toggle ===
+    function toggleView() {
+        isBoardView = !isBoardView;
+        const btn = $('btn-toggle-view');
+        const sidebar = document.querySelector('.pane-list');
+        
+        if(isBoardView) {
+            $('editor-view').style.display = 'none';
+            $('editor-toolbar').style.display = 'none';
+            $('board-view').classList.add('active');
+            sidebar.style.display = 'none';
+            btn.innerHTML = `<i class="fas fa-edit"></i> 상세 편집 모드`;
+            btn.classList.add('btn-primary');
+            btn.classList.remove('btn-secondary');
+            renderBoard();
+        } else {
+            $('editor-view').style.display = 'flex';
+            $('editor-toolbar').style.display = 'flex';
+            $('board-view').classList.remove('active');
+            sidebar.style.display = 'flex';
+            btn.innerHTML = `<i class="fas fa-columns"></i> 장표 한눈에 보기`;
+            btn.classList.add('btn-secondary');
+            btn.classList.remove('btn-primary');
+        }
+    }
+
+    // === Excel Export ===
+    function exportExcel() {
+        if(dataList.length === 0) return alert('추출할 데이터가 없습니다.');
+        
+        const rows = [];
+        dataList.forEach(d => {
+            if(d.stacks.length === 0) {
+                rows.push({ "영역": d.env, "서버명": d.name, "OS": d.os, "S/W 스택": "-" });
+            } else {
+                d.stacks.forEach((stack, idx) => {
+                    rows.push({
+                        "영역": idx === 0 ? d.env : "",
+                        "서버명": idx === 0 ? d.name : "",
+                        "OS": idx === 0 ? d.os : "",
+                        "S/W 스택": stack.name
+                    });
+                });
+            }
+        });
+
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.json_to_sheet(rows);
+        ws['!cols'] = [{wch:15}, {wch:25}, {wch:20}, {wch:40}];
+
+        XLSX.utils.book_append_sheet(wb, ws, "SW_Stack");
+        XLSX.writeFile(wb, `Server_SW_Stack_${new Date().toISOString().slice(0,10)}.xlsx`);
+    }
+
+    // === 이미지 저장 기능 (스크롤 영역 전체 캡처) ===
+    async function saveAsImage() {
+        if (!isBoardView) {
+            showToast('장표 한눈에 보기 화면에서만 이미지로 저장할 수 있습니다.', 'info');
+            return;
+        }
+
+        const targetEl = $('board-view');
+
+        try {
+            showToast('이미지 생성을 시작합니다. 잠시만 기다려주세요.', 'info');
+            
+            // 1. 원본 스타일 임시 저장
+            const originalOverflow = targetEl.style.overflow;
+            const originalWidth = targetEl.style.width;
+            const originalHeight = targetEl.style.height;
+
+            // 2. 전체 스크롤 영역 측정을 위해 컨테이너 강제 확장
+            const scrollWidth = targetEl.scrollWidth;
+            const scrollHeight = targetEl.scrollHeight;
+            
+            targetEl.style.overflow = 'visible';
+            targetEl.style.width = scrollWidth + 'px';
+            targetEl.style.height = scrollHeight + 'px';
+
+            // 3. html2canvas 옵션에 전체 크기 명시
+            const canvas = await html2canvas(targetEl, {
+                backgroundColor: '#f8fafc',
+                scale: 2, // 고해상도 처리
+                width: scrollWidth,
+                height: scrollHeight,
+                windowWidth: scrollWidth,    // 가상 윈도우 너비 지정
+                windowHeight: scrollHeight   // 가상 윈도우 높이 지정
+            });
+            
+            // 4. 캡처 완료 후 스타일 원래대로 복구
+            targetEl.style.overflow = originalOverflow;
+            targetEl.style.width = originalWidth;
+            targetEl.style.height = originalHeight;
+
+            // 5. 이미지 다운로드
+            const link = document.createElement('a');
+            link.download = `SW_Stack_장표뷰_${new Date().toISOString().slice(0,10)}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+            
+            showToast('이미지가 성공적으로 저장되었습니다.', 'success');
+        } catch (e) {
+            console.error(e);
+            showToast('이미지 저장 중 오류가 발생했습니다.', 'danger');
+        }
+    }
+
+    // === Keyboard Shortcuts ===
+    document.addEventListener('keydown', function(e) {
+        if (e.ctrlKey && (e.key === 's' || e.key === 'S')) {
+            e.preventDefault(); 
+            if (!isBoardView) { saveItem(); }
+        }
+        if (e.ctrlKey && e.altKey && (e.key === 'n' || e.key === 'N')) {
+            e.preventDefault();
+            resetForm();
+        }
+    });
+
+    // Event Listeners
+    $('btn-new').onclick = resetForm; 
+    $('btn-save').onclick = saveItem; 
+    $('btn-copy').onclick = copyItem; 
+    $('btn-delete').onclick = deleteItem;
+    $('btn-save-img').onclick = saveAsImage; // 이미지 저장 이벤트 연결
+    $('btn-export').onclick = exportExcel; 
+    $('btn-add-stack').onclick = addStackRow;
+    $('btn-toggle-view').onclick = toggleView;
+    $('search-input').onkeyup = renderList;
+
+    window.onload = async () => {
+        try {
+            await initDB();
+            
+            const existing = await getAllFromDB();
+            if(existing.length === 0) {
+                const demoData = [
+                    { id: generateId(), order: 0, env: "운영", name: "WEB", os: "Linux", stacks: [{id: '1', name: 'WEB(Nginx)'}, {id: '2', name: 'SSL 인증서'}, {id: '3', name: '백신, 관제'}] },
+                    { id: generateId(), order: 1, env: "운영", name: "WAS", os: "Linux", stacks: [{id: '1', name: 'WAS(Tomcat)'}, {id: '2', name: 'JDK 1.8 이상'}, {id: '3', name: '백신, 관제'}] },
+                    { id: generateId(), order: 2, env: "운영", name: "DB", os: "Linux", stacks: [{id: '1', name: 'DBMS'}, {id: '2', name: 'DB접근제어'}, {id: '3', name: '백업, 백신, 관제'}] },
+                    { id: generateId(), order: 3, env: "관리", name: "형상관리", os: "Linux", stacks: [{id: '1', name: 'Jenkins'}, {id: '2', name: 'Git'}, {id: '3', name: '백신, 관제'}] }
+                ];
+                for(let d of demoData) await putToDB(d);
+            }
+
+            await refreshDataList();
+            resetForm();
+        } catch (error) {
+            console.error(error);
+            alert('데이터베이스를 로드하는데 실패했습니다.');
+        }
+    };
+</script>
+</body>
+</html>

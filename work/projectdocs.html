@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Project Docs</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@300;400;500;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+
+<link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+<script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+<script src="https://unpkg.com/quill-image-resize@3.0.9/image-resize.min.js"></script>
+
+<style>
+/* === Modern SaaS Theme === */
+:root {
+    --bg-app: #f8fafc; --bg-panel: #ffffff; --border: #e2e8f0;
+    --primary: #4f46e5; --primary-hover: #4338ca; --primary-light: #eef2ff;
+    --text-main: #0f172a; --text-sub: #64748b; --danger: #ef4444;
+    --radius: 8px; --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+    --font-ui: 'Inter', 'Noto Sans KR', sans-serif;
+    --font-code: 'JetBrains Mono', monospace;
+}
+
+* { box-sizing: border-box; outline: none; }
+body { margin: 0; background: var(--bg-app); color: var(--text-main); font-family: var(--font-ui); font-size: 13px; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* Header */
+header { height: 56px; background: #fff; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 24px; flex-shrink: 0; justify-content: space-between; z-index: 20; }
+header .brand { font-weight: 700; font-size: 16px; color: var(--text-main); display: flex; align-items: center; gap: 10px; }
+header .brand i { color: var(--primary); font-size: 20px; }
+header .header-tools { display: flex; gap: 8px; }
+
+/* Layout */
+.workspace { display: flex; flex: 1; overflow: hidden; }
+.pane-list { width: 340px; background: #fff; border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; }
+.search-area { padding: 16px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px; background: var(--primary-light); }
+.search-input { width: 100%; height: 36px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; transition: 0.2s; background: #fff; }
+.search-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1); }
+.list-scroll { flex: 1; overflow-y: auto; background: #f8fafc; padding: 10px; }
+
+/* Item Card */
+.item-card { padding: 16px; border-radius: var(--radius); background: #fff; cursor: pointer; border: 1px solid transparent; transition: 0.2s; margin-bottom: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.02); }
+.item-card:hover { background: #f1f5f9; }
+.item-card.active { background: #eef2ff; border-color: var(--primary); }
+.item-meta { display: flex; justify-content: space-between; margin-bottom: 6px; align-items: center; }
+.item-id { font-family: var(--font-code); font-weight: 700; color: var(--primary); background: #e0e7ff; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+.item-prj { font-size: 11px; font-weight: 700; color: var(--text-sub); margin-bottom: 4px; display: block; }
+.item-preview { font-size: 13px; color: var(--text-main); line-height: 1.5; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-weight: 500; }
+
+/* Editor Pane */
+.pane-editor { flex: 1; background: var(--bg-app); display: flex; flex-direction: column; position: relative; }
+.toolbar { height: 56px; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 32px; justify-content: space-between; background: #fff; flex-shrink: 0; z-index: 10; }
+.editor-scroll { flex: 1; overflow-y: auto; padding: 40px; }
+
+/* 중앙 정렬되는 문서(Paper) 컨테이너 추가 */
+.editor-paper {
+    width: 100%;
+    max-width: 900px;
+    margin: 0 auto;
+    background: #fff;
+    padding: 50px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+}
+
+/* Forms */
+.form-section { margin-bottom: 36px; }
+
+/* 항목명 정렬 문제 해결: span으로 묶고 flex-start 적용 */
+.section-title { font-size: 14px; font-weight: 700; color: #1e293b; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; }
+.section-title > span { display: flex; align-items: center; gap: 8px; }
+
+.form-grid { display: grid; grid-template-columns: 2fr 1.5fr 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+.label { display: block; font-size: 13px; font-weight: 600; color: var(--text-sub); margin-bottom: 8px; }
+.input-field { width: 100%; height: 40px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--radius); font-family: var(--font-ui); font-size: 14px; transition: 0.2s; }
+.input-field:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1); }
+.input-field.filled { background-color: #f8fafc; color: #334155; font-weight: 600; }
+#inp-id { font-family: var(--font-code); color: var(--primary); font-weight: 700; }
+
+/* Quill Editor Styles */
+.editor-wrapper { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; transition: 0.2s; background: #fff; }
+.editor-wrapper:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1); }
+.ql-container.ql-snow { border: none !important; font-family: var(--font-ui) !important; }
+.ql-editor { min-height: 250px; font-size: 15px; line-height: 1.8; padding: 24px !important; }
+.ql-editor img.img-highlight { outline: 4px solid #FDBA74 !important; outline-offset: 2px !important; }
+#inp-note-container .ql-editor { min-height: 120px; background: #fffbeb; } /* Note background */
+
+/* ✅ 붙여넣기 한 표(Table) 원본 유지용 래퍼 스타일 */
+.quill-raw-table {
+    margin: 1.5rem 0;
+    width: 100%;
+    overflow-x: auto;
+    border-radius: var(--radius);
+    box-shadow: 0 0 0 1px var(--border);
+    background: #fff;
+}
+.quill-raw-table table {
+    border-collapse: collapse !important;
+    width: 100%;
+    margin: 0;
+    font-size: 13px;
+    color: var(--text-main);
+    text-align: left;
+}
+.quill-raw-table th, .quill-raw-table td {
+    border: 1px solid var(--border);
+    padding: 8px 12px;
+}
+.quill-raw-table thead th, .quill-raw-table th {
+    background-color: #f8fafc;
+    font-weight: 600;
+}
+
+/* Attachment Grid (Repository Style) */
+.attach-box { background: #f8fafc; padding: 20px; border-radius: var(--radius); border: 1px dashed #cbd5e1; }
+.attach-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 12px; }
+.img-thumb-box { position: relative; width: 100%; aspect-ratio: 1; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); background: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+.img-thumb-box img { width: 100%; height: 100%; object-fit: cover; cursor: zoom-in; transition: transform 0.2s; }
+.img-thumb-box img:hover { transform: scale(1.05); }
+.btn-del-img { position: absolute; top: 5px; right: 5px; width: 22px; height: 22px; background: rgba(0,0,0,0.6); color: #fff; border-radius: 50%; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px; opacity: 0; transition: 0.2s; z-index: 2; }
+.img-thumb-box:hover .btn-del-img { opacity: 1; background: var(--danger); }
+.upload-placeholder { width: 100%; aspect-ratio: 1; border: 2px dashed #cbd5e1; border-radius: 8px; background: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #94a3b8; cursor: pointer; font-weight: 600; font-size: 12px; transition: 0.2s; }
+.upload-placeholder:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
+
+/* Links */
+.link-list { display: flex; flex-direction: column; gap: 8px; }
+.link-row { display: flex; align-items: center; gap: 8px; }
+.link-input-title { width: 180px; height: 36px; padding: 0 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; background: #fff; }
+.link-input-url { flex: 1; height: 36px; padding: 0 12px; border: 1px solid var(--border); border-radius: 4px; font-family: var(--font-code); font-size: 13px; color: var(--primary); background: #fff; }
+.btn-link-action { width: 36px; height: 36px; border-radius: 4px; border: 1px solid var(--border); background: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-sub); transition: 0.2s; flex-shrink: 0; }
+.btn-link-action:hover { background: #f1f5f9; color: var(--primary); }
+.btn-link-del { color: #ef4444; border-color: #fecaca; }
+.btn-link-del:hover { background: #fef2f2; }
+
+/* Buttons */
+.btn { height: 36px; padding: 0 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid transparent; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; transition: 0.2s; }
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: var(--primary-hover); }
+.btn-secondary { background: #fff; border-color: #cbd5e1; color: var(--text-sub); }
+.btn-secondary:hover { background: #f8fafc; border-color: #94a3b8; color: var(--text-main); }
+.btn-gray { background: #64748b; color: #fff; }
+.btn-gray:hover { background: #475569; }
+.btn-danger { background: #fff; border-color: #fecaca; color: #ef4444; }
+.btn-danger:hover { background: #fef2f2; border-color: #ef4444; }
+.btn-icon { width: 36px; padding: 0; justify-content: center; font-size: 16px; color: var(--text-sub); }
+.btn-sm { height: 30px; font-size: 12px; padding: 0 12px; }
+
+/* Modals */
+.modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(4px); z-index: 2000; display: none; align-items: center; justify-content: center; }
+.modal-content { position: relative; max-width: 90vw; max-height: 90vh; }
+.modal-img { max-width: 100%; max-height: 90vh; border-radius: 8px; box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
+.modal-close { position: absolute; top: -40px; right: 0; color: #fff; font-size: 30px; cursor: pointer; transition: 0.2s; }
+.settings-box { background: #fff; width: 500px; padding: 24px; border-radius: 12px; box-shadow: 0 20px 40px -10px rgba(0,0,0,0.15); max-height: 80vh; overflow-y: auto; }
+.config-textarea { width: 100%; height: 200px; font-family: var(--font-code); font-size: 12px; padding: 12px; border: 1px solid var(--border); border-radius: 6px; line-height: 1.6; resize: vertical; }
+
+/* Shortcut Modal Styles */
+.modal-panel { background: #ffffff; border-radius: 16px; width: 100%; max-width: 440px; padding: 32px; box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.15); animation: slideUpFade 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+@keyframes slideUpFade { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+.modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; }
+.modal-header h3 { margin: 0; font-size: 18px; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
+.btn-close { background: none; border: none; font-size: 20px; color: #94a3b8; cursor: pointer; transition: 0.2s; padding: 4px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+.btn-close:hover { background: #f1f5f9; color: var(--danger); }
+.shortcut-list { display: flex; flex-direction: column; gap: 16px; }
+.shortcut-item { display: flex; justify-content: space-between; align-items: center; padding-bottom: 12px; border-bottom: 1px solid #f1f5f9; }
+.shortcut-item:last-child { border-bottom: none; padding-bottom: 0; }
+.shortcut-desc { font-size: 14px; color: var(--text-sub); font-weight: 500; }
+.shortcut-keys { display: flex; gap: 6px; align-items: center; color: #94a3b8; font-size: 13px; font-weight: 500; }
+kbd { background-color: #f8fafc; border: 1px solid #cbd5e1; border-bottom-width: 2px; border-radius: 6px; padding: 4px 8px; font-family: var(--font-ui); font-size: 12px; font-weight: 600; color: #475569; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+
+.hidden { display: none !important; }
+.empty-state { position: absolute; top: 56px; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--bg-app); color: #94a3b8; z-index: 10; }
+
+#toast { position: fixed; bottom: 30px; right: 30px; background: #1e293b; color: #fff; padding: 12px 24px; border-radius: 30px; font-size: 14px; z-index: 2000; opacity: 0; transition: 0.3s; box-shadow: var(--shadow); pointer-events: none; }
+
+/* === PRINT TEMPLATE STYLES === */
+#print-container { display: none; }
+@media print {
+    header, .pane-list, .workspace, .modal-overlay, #toast { display: none !important; }
+    body { background: #fff !important; height: auto !important; overflow: visible !important; }
+    #print-container { display: block !important; width: 100%; max-width: 210mm; margin: 0 auto; padding: 20px; font-family: var(--font-ui); color: #1e293b; }
+    .p-header { border-bottom: 2px solid #334155; padding-bottom: 10px; margin-bottom: 20px; }
+    .p-title { font-size: 24px; font-weight: 800; color: #0f172a; margin: 0 0 10px 0; }
+    .p-meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; background: #f8fafc; padding: 15px; border-radius: 6px; border: 1px solid #e2e8f0; margin-bottom: 30px; }
+    .p-meta-row { display: flex; flex-direction: column; }
+    .p-label { font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; margin-bottom: 2px; }
+    .p-value { font-size: 14px; font-weight: 600; color: #334155; }
+    .p-id-val { font-family: var(--font-code); color: var(--primary); }
+    .p-section { margin-bottom: 30px; break-inside: avoid; }
+    .p-sec-title { font-size: 15px; font-weight: 700; color: #0f172a; border-left: 4px solid var(--primary); padding-left: 10px; margin-bottom: 15px; }
+    .p-content { font-size: 14px; line-height: 1.6; color: #334155; text-align: justify; }
+    .p-content img { max-width: 100%; height: auto; display: block; margin: 10px 0; }
+    .p-note-box { background: #fffbeb; padding: 15px; border-radius: 6px; border: 1px solid #fcd34d; }
+    .p-img-wrapper { display: flex; flex-direction: column; gap: 20px; }
+    .p-img-item { width: 100%; border: 1px solid #e2e8f0; border-radius: 4px; padding: 4px; break-inside: avoid; page-break-inside: avoid; }
+    .p-img-item img { width: 100%; height: auto; display: block; }
+    .p-link-list { font-size: 13px; font-family: var(--font-ui); color: #4f46e5; }
+    .p-link-item { margin-bottom: 8px; display: flex; align-items: center; gap: 6px; text-decoration: none; color: #4f46e5; border-bottom: 1px dotted #e2e8f0; padding-bottom: 4px; }
+}
+</style>
+</head>
+<body>
+
+<header>
+    <div class="brand"><i class="fas fa-folder-tree"></i>Project Docs</div>
+    <div class="header-tools">
+        <button class="btn btn-secondary btn-icon" id="btn-settings" title="환경설정"><i class="fas fa-cog"></i></button>
+        <button class="btn btn-secondary" id="btn-export"><i class="fas fa-file-excel" style="color:#10b981"></i> 엑셀 내보내기</button>
+    </div>
+</header>
+
+<div class="workspace">
+    <aside class="pane-list">
+        <div class="search-area">
+            <input type="text" id="search-input" class="search-input" placeholder="검색 (자료명, ID, 내용)...">
+            <select id="filter-cat" class="search-input" style="height:34px;">
+                <option value="">전체 단계(All Stages)</option>
+            </select>
+        </div>
+        <div class="list-scroll" id="item-list"></div>
+        <div style="padding:12px; text-align:center; font-size:11px; color:#94a3b8; border-top:1px solid var(--border);">
+            Total <span id="total-count" style="font-weight:700; color:#0f172a;">0</span> items
+        </div>
+    </aside>
+
+    <main class="pane-editor">
+        <div class="toolbar">
+            <div id="editor-title" style="font-weight:700; font-size:15px; color:#1e293b;">신규 자료 등록</div>
+            <div style="display:flex; gap:8px;">
+                <button class="btn btn-secondary" onclick="openShortcutModal()"><i class="fas fa-keyboard"></i> 단축키</button>
+                <button class="btn btn-secondary" id="btn-new" title="Ctrl+Alt+N"><i class="fas fa-plus"></i> 신규</button>
+                <button class="btn btn-danger" id="btn-delete" style="display:none;"><i class="fas fa-trash"></i> 삭제</button>
+                <button class="btn btn-gray" id="btn-pdf"><i class="fas fa-file-pdf"></i> 출력</button>
+                <button class="btn btn-primary" id="btn-save" title="Ctrl+S"><i class="fas fa-save"></i> 저장</button>				
+            </div>
+        </div>
+
+        <div class="editor-scroll">
+            <div class="editor-paper">
+                <div class="form-section">
+                    <div class="section-title"><span><i class="fas fa-cube"></i> 프로젝트 정보</span></div>
+                    <div><label class="label">프로젝트명(Project Name)</label><input type="text" id="inp-project" class="input-field filled" placeholder="환경설정에서 기본값 설정 가능" spellcheck="false"></div>
+                </div>
+
+                <div class="form-section">
+                    <div class="section-title"><span><i class="fas fa-file-signature"></i> 자료(문서) 기본 정보</span></div>
+                    <div class="form-grid">
+                        <div><label class="label">진행 단계</label><input list="cat-options" id="inp-cat" class="input-field" placeholder="단계 선택" spellcheck="false"><datalist id="cat-options"></datalist></div>
+                        <div><label class="label">문서 ID</label><input type="text" id="inp-id" class="input-field" placeholder="자동 생성" spellcheck="false"></div>
+                        <div><label class="label">작성자</label><input type="text" id="inp-author" class="input-field" placeholder="이름" spellcheck="false"></div>
+                        <div><label class="label">버전</label><input type="text" id="inp-version" class="input-field" placeholder="v1.0" spellcheck="false"></div>
+                    </div>
+                    <div style="margin-top: 16px;">
+                        <label class="label">자료명/제목</label><input type="text" id="inp-summary" class="input-field" placeholder="제목 입력" spellcheck="false">
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <div class="section-title"><span><i class="fas fa-align-left"></i> 상세 내용 및 이력</span></div>
+                    <div style="margin-bottom:24px;">
+                        <label class="label" style="color:var(--primary);">설명</label>
+                        <div class="editor-wrapper" id="inp-desc-container">
+                            <div id="inp-desc" spellcheck="false"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="label" style="color:#d97706;">메모</label>
+                        <div class="editor-wrapper" id="inp-note-container" style="border-color: #fcd34d;">
+                             <div id="inp-note" spellcheck="false"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <div class="section-title">
+                        <span><i class="fas fa-paperclip"></i> 기타 첨부 파일</span>
+                        <span id="img-count" style="font-size:11px; background:#e2e8f0; padding:2px 8px; border-radius:10px;">0/10</span>
+                    </div>
+                    <div class="attach-box">
+                        <div id="img-grid" class="attach-grid"></div>
+                        <input type="file" id="inp-file" style="display:none;" onchange="handleFileUpload(this)"> 
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <div class="section-title"><span><i class="fas fa-project-diagram"></i> 참조 링크 (최대 10개)</span></div>
+                    <div style="background:#fff; border:1px solid var(--border); padding:16px; border-radius:var(--radius);">
+                        <div id="link-container" class="link-list"></div>
+                        <div style="margin-top:12px;">
+                            <button class="btn btn-secondary btn-sm" id="btn-add-link" style="border-style:dashed; width:100%;"><i class="fas fa-plus"></i> 링크 추가</button>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top:20px; display:flex; justify-content:flex-end;">
+                        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:600; font-size:14px; color:#1e293b;">
+                            <input type="checkbox" id="inp-check" style="width:16px; height:16px;"> 최종 승인/완료
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="empty-state" class="empty-state">
+            <i class="fas fa-folder-plus" style="font-size:48px; margin-bottom:16px; color:#cbd5e1;"></i>
+            <p>관리할 자료를 선택하거나 신규 작성하세요.</p>
+            <button class="btn btn-primary" id="btn-new-center" style="margin-top:16px;"><i class="fas fa-plus"></i> 신규 자료 등록</button>
+        </div>
+    </main>
+</div>
+
+<div id="print-container">
+    <div class="p-header">
+        <h1 class="p-title" id="p-summary-out"></h1>
+    </div>
+    <div class="p-meta-grid">
+        <div class="p-meta-row">
+            <span class="p-label">프로젝트명</span>
+            <span class="p-value" id="p-project-out"></span>
+        </div>
+        <div class="p-meta-row">
+            <span class="p-label">진행 단계</span>
+            <span class="p-value" id="p-cat-out"></span>
+        </div>
+        <div class="p-meta-row">
+            <span class="p-label">문서 ID</span>
+            <span class="p-value p-id-val" id="p-id-out"></span>
+        </div>
+        <div class="p-meta-row">
+            <span class="p-label">버전</span>
+            <span class="p-value" id="p-ver-out"></span>
+        </div>
+    </div>
+    <div class="p-section">
+        <div class="p-sec-title">상세 설명</div>
+        <div class="p-content" id="p-desc-out"></div>
+    </div>
+    <div class="p-section" id="p-sec-note">
+        <div class="p-sec-title">메모</div>
+        <div class="p-content p-note-box" id="p-note-out"></div>
+    </div>
+    <div class="p-section" id="p-sec-img">
+        <div class="p-sec-title">첨부 이미지</div>
+        <div class="p-img-wrapper" id="p-img-out"></div>
+    </div>
+    <div class="p-section" id="p-sec-links">
+        <div class="p-sec-title">참조 링크</div>
+        <div class="p-link-list" id="p-links-out"></div>
+    </div>
+</div>
+
+<div id="settings-modal" class="modal-overlay">
+    <div class="settings-box" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3><i class="fas fa-cog" style="color:var(--primary);"></i> 환경 설정</h3>
+            <button class="btn-close" id="btn-close-settings" title="닫기"><i class="fas fa-times"></i></button>
+        </div>
+        <div style="margin-bottom:24px;">
+            <label class="label">기본 프로젝트명</label>
+            <input type="text" id="setting-def-project" class="input-field" spellcheck="false">
+        </div>
+        <div>
+            <label class="label"><span>단계 및 ID Prefix 설정(형식: 단계명, 프리픽스)</span></label>
+            <textarea id="setting-rfp-map" class="config-textarea" spellcheck="false"></textarea>
+            <div style="text-align:right; margin-top:8px;">
+                <button class="btn btn-secondary btn-sm" id="btn-reset-settings">기본값 복원</button>
+            </div>
+        </div>
+        <div style="text-align:right; margin-top:24px; padding-top:16px; border-top:1px solid #f1f5f9;">
+            <button class="btn btn-primary" id="btn-save-settings">설정 저장</button>
+        </div>
+    </div>
+</div>
+
+<div id="shortcut-modal" class="modal-overlay" onclick="closeShortcutModal()">
+    <div class="modal-panel" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3><i class="fas fa-keyboard" style="color:var(--primary);"></i> 에디터 단축키</h3>
+            <button class="btn-close" onclick="closeShortcutModal()" title="닫기"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="shortcut-list">
+            <div class="shortcut-item">
+                <span class="shortcut-desc">볼드 / 이탤릭 / 밑줄</span>
+                <div class="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>B</kbd> / <kbd>I</kbd> / <kbd>U</kbd></div>
+            </div>
+            <div class="shortcut-item">
+                <span class="shortcut-desc">취소선</span>
+                <div class="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>0</kbd></div>
+            </div>
+            <div class="shortcut-item">
+                <span class="shortcut-desc">글자색 (빨강 / 파랑)</span>
+                <div class="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>R</kbd> / <kbd>B</kbd></div>
+            </div>
+            <div class="shortcut-item">
+                <span class="shortcut-desc">형광펜 강조 (7가지 색상)</span>
+                <div class="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>1~7</kbd></div>
+            </div>
+            <div class="shortcut-item">
+                <span class="shortcut-desc">표(Table) 지우기</span>
+                <div class="shortcut-keys"><kbd>Backspace</kbd></div>
+            </div>
+            <div class="shortcut-item">
+                <span class="shortcut-desc">서식 모두 지우기</span>
+                <div class="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>X</kbd></div>
+            </div>
+            <div class="shortcut-item">
+                <span class="shortcut-desc">글꼴 크기 조절</span>
+                <div class="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>+</kbd> / <kbd>-</kbd></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="img-modal" class="modal-overlay" onclick="this.style.display='none'">
+    <div class="modal-content">
+        <span class="modal-close" id="modal-close">&times;</span>
+        <img id="modal-img-tag" class="modal-img" src="">
+    </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// --- Constants & Variables ---
+const DEFAULT_STAGE_MAP = [
+    { name: "1. 프로젝트 준비", prefix: "PRE" },
+    { name: "2. 제안 작업", prefix: "PROP" },
+    { name: "3. 시스템 구현", prefix: "IMPL" },
+    { name: "4. 테스트/검수", prefix: "TEST" },
+    { name: "5. 프로젝트 종료", prefix: "CLOSE" }
+];
+let currentStageMap = [];
+let currentFiles = [];
+let currentLinks = [];
+let quillDesc, quillNote;
+
+const $ = s => document.querySelector(s);
+function toast(m) { const t = $('#toast'); t.textContent = m; t.style.opacity = '1'; setTimeout(() => t.style.opacity = '0', 1500); }
+function openShortcutModal() { $('#shortcut-modal').style.display = 'flex'; }
+function closeShortcutModal() { $('#shortcut-modal').style.display = 'none'; }
+
+// --- Quill Initialization ---
+// ✅ 표(Table) 붙여넣기 원본 보호를 위한 커스텀 모듈 등록
+const BlockEmbed = Quill.import('blots/block/embed');
+class RawTableBlot extends BlockEmbed {
+    static create(value) {
+        const node = super.create();
+        node.innerHTML = value;
+        node.setAttribute('contenteditable', 'false'); // 에디터 내부에서 표 구조가 깨지는 방지
+        return node;
+    }
+    static value(node) {
+        return node.innerHTML;
+    }
+}
+RawTableBlot.blotName = 'rawTable';
+RawTableBlot.tagName = 'div';
+RawTableBlot.className = 'quill-raw-table';
+Quill.register(RawTableBlot, true);
+
+function initEditors() {
+    const SizeStyle = Quill.import('attributors/style/size');
+    SizeStyle.whitelist = null; 
+    Quill.register(SizeStyle, true);
+
+    const quillOptions = {
+        theme: 'snow',
+        scrollingContainer: '.editor-scroll', // 스크롤 튐 현상 해결의 핵심
+        modules: { toolbar: false, imageResize: { displaySize: true } }
+    };
+    
+    quillDesc = new Quill('#inp-desc', quillOptions);
+    quillNote = new Quill('#inp-note', quillOptions);
+
+    // ✅ 표(Table) 붙여넣기 가로채기 설정 (설명, 메모 에디터 모두 적용)
+    const Delta = Quill.import('delta');
+    const tableMatcher = function(node, delta) {
+        return new Delta().insert({ rawTable: node.outerHTML });
+    };
+    quillDesc.clipboard.addMatcher('TABLE', tableMatcher);
+    quillNote.clipboard.addMatcher('TABLE', tableMatcher);
+}
+
+// --- Core DB Logic ---
+const DOC_CORE = {
+    db: null, DB_NAME: 'ProjectDocDB', STORE_NAME: 'doc_items',
+    state: { items: [], search: '', filterCat: '', selectedId: null },
+
+    openDB: function() {
+        return new Promise((resolve) => {
+            const req = indexedDB.open(this.DB_NAME, 1); 
+            req.onupgradeneeded = (e) => e.target.result.createObjectStore(this.STORE_NAME, { keyPath: 'uid' });
+            req.onsuccess = (e) => { this.db = e.target.result; resolve(); };
+        });
+    },
+    getAll: function() {
+        return new Promise((resolve) => {
+            const tx = this.db.transaction(this.STORE_NAME, 'readonly');
+            tx.objectStore(this.STORE_NAME).getAll().onsuccess = (e) => {
+                this.state.items = e.target.result || [];
+                this.state.items.sort((a, b) => {
+                    const catDiff = (a.category || '').localeCompare(b.category || '');
+                    if (catDiff !== 0) return catDiff;
+                    const projDiff = (a.project_name || '').localeCompare(b.project_name || '');
+                    if (projDiff !== 0) return projDiff;
+                    return (a.doc_id || '').localeCompare(b.doc_id || '');
+                });
+                resolve(this.state.items);
+            };
+        });
+    },
+    save: function(item) {
+        return new Promise((resolve) => {
+            const tx = this.db.transaction(this.STORE_NAME, 'readwrite');
+            tx.objectStore(this.STORE_NAME).put(item).onsuccess = () => resolve(item);
+        });
+    },
+    remove: function(uid) {
+        return new Promise((resolve) => {
+            const tx = this.db.transaction(this.STORE_NAME, 'readwrite');
+            tx.objectStore(this.STORE_NAME).delete(uid).onsuccess = () => resolve();
+        });
+    },
+    exportExcel: async function() {
+        if(!window.ExcelJS) return alert('ExcelJS 로드 실패');
+        const wb = new ExcelJS.Workbook();
+        const ws = wb.addWorksheet('목록');
+        ws.columns = [
+            { header: '프로젝트', key: 'prj', width: 20 }, { header: '단계', key: 'cat', width: 15 },
+            { header: 'ID', key: 'id', width: 15 }, { header: '제목', key: 'summary', width: 40 },
+            { header: '내용', key: 'desc', width: 50 },
+            { header: '참조링크', key: 'links', width: 30 }
+        ];
+        const { items, search, filterCat } = this.state;
+        const exportItems = items.filter(i => {
+            if(filterCat && i.category !== filterCat) return false;
+            if(search) {
+                const searchTarget = (i.project_name+i.doc_id+i.summary).toLowerCase();
+                if(!searchTarget.includes(search)) return false;
+            }
+            return true;
+        });
+        exportItems.forEach(i => {
+            const linkStr = (i.graphLinks || []).map(l => {
+                if(typeof l === 'object') return l.title ? `[${l.title}] ${l.url}` : l.url;
+                return l; 
+            }).join('\n');
+            ws.addRow({
+                prj: i.project_name, cat: i.category, id: i.doc_id, summary: i.summary, 
+                desc: (i.description || '').replace(/<[^>]*>/g, ''),
+                links: linkStr
+            });
+        });
+        const buf = await wb.xlsx.writeBuffer();
+        const url = URL.createObjectURL(new Blob([buf]));
+        const a = document.createElement('a'); a.href = url; a.download = 'export.xlsx'; a.click();
+    },
+    printTemplate: function() {
+        $('#p-summary-out').textContent = $('#inp-summary').value;
+        $('#p-project-out').textContent = $('#inp-project').value;
+        $('#p-cat-out').textContent = $('#inp-cat').value;
+        $('#p-id-out').textContent = $('#inp-id').value;
+        $('#p-ver-out').textContent = $('#inp-version').value;
+        
+        $('#p-desc-out').innerHTML = quillDesc.root.innerHTML;
+        const noteContent = quillNote.root.innerHTML;
+        if(!noteContent || noteContent === '<p><br></p>') {
+            $('#p-sec-note').style.display = 'none';
+        } else {
+            $('#p-sec-note').style.display = 'block';
+            $('#p-note-out').innerHTML = noteContent;
+        }
+
+        const imgContainer = $('#p-img-out');
+        imgContainer.innerHTML = '';
+        let hasImg = false;
+        currentFiles.forEach(f => {
+            if(f.type.startsWith('image/')) {
+                hasImg = true;
+                const wrapper = document.createElement('div');
+                wrapper.className = 'p-img-item';
+                const img = document.createElement('img');
+                img.src = f.data;
+                wrapper.appendChild(img);
+                imgContainer.appendChild(wrapper);
+            }
+        });
+        $('#p-sec-img').style.display = hasImg ? 'block' : 'none';
+
+        const linkContainer = $('#p-links-out');
+        linkContainer.innerHTML = '';
+        if(currentLinks && currentLinks.length > 0) {
+            $('#p-sec-links').style.display = 'block';
+            currentLinks.forEach(lnk => {
+                let url = '', title = '';
+                if(typeof lnk === 'string') { url = lnk; title = lnk; }
+                else { url = lnk.url; title = lnk.title || lnk.url; }
+                if(url && url.trim()) {
+                    const a = document.createElement('a');
+                    a.className = 'p-link-item';
+                    a.href = url;
+                    a.innerHTML = `<i class="fas fa-external-link-alt"></i> ${title}`;
+                    linkContainer.appendChild(a);
+                }
+            });
+        } else {
+            $('#p-sec-links').style.display = 'none';
+        }
+
+        window.print();
+    }
+};
+
+function getNextId(prefix, projectName) {
+    const targetProj = (projectName || '').trim();
+    const pattern = new RegExp(`^${prefix}-(\\d+)$`);
+    let max = 0;
+    DOC_CORE.state.items.forEach(item => {
+        if(!item.doc_id) return;
+        if((item.project_name || '').trim() !== targetProj) return;
+        const match = item.doc_id.match(pattern);
+        if(match) max = Math.max(max, parseInt(match[1], 10));
+    });
+    return `${prefix}-${String(max + 1).padStart(3, '0')}`;
+}
+
+(async () => {
+    initEditors();
+    await DOC_CORE.openDB();
+    loadConfig();
+    bindEvents();
+    await refreshList(); 
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const targetUid = urlParams.get('uid');
+    if (targetUid) {
+        const targetItem = DOC_CORE.state.items.find(i => i.uid === targetUid);
+        if (targetItem) {
+            loadItem(targetItem);
+            setTimeout(() => {
+                const activeEl = document.querySelector('.item-card.active');
+                if(activeEl) activeEl.scrollIntoView({block: 'center', behavior: 'smooth'});
+            }, 100);
+        } else toast('요청하신 문서를 찾을 수 없습니다.');
+    }
+})();
+
+function loadConfig() {
+    const stored = localStorage.getItem('PROJ_DOC_MAP');
+    currentStageMap = stored ? JSON.parse(stored) : [...DEFAULT_STAGE_MAP];
+    const list = $('#cat-options'); list.innerHTML = '';
+    const filterSelect = $('#filter-cat'); filterSelect.innerHTML = '<option value="">전체 단계(All Stages)</option>';
+    currentStageMap.forEach(i => { 
+        const op = document.createElement('option'); op.value = i.name; list.appendChild(op); 
+        const fOp = document.createElement('option'); fOp.value = i.name; fOp.textContent = i.name; filterSelect.appendChild(fOp);
+    });
+}
+
+function bindEvents() {
+    $('#btn-new').onclick = $('#btn-new-center').onclick = showNewForm;
+    $('#btn-save').onclick = saveCurrent;
+    $('#btn-delete').onclick = deleteCurrent;
+    $('#btn-export').onclick = () => DOC_CORE.exportExcel();
+    
+    $('#btn-pdf').onclick = () => {
+        if($('#empty-state').classList.contains('hidden')) DOC_CORE.printTemplate();
+        else alert("출력할 문서를 선택하거나 작성해주세요.");
+    };
+    
+    $('#search-input').onkeyup = (e) => { DOC_CORE.state.search = e.target.value.toLowerCase(); renderList(); };
+    $('#filter-cat').onchange = (e) => { DOC_CORE.state.filterCat = e.target.value; renderList(); };
+
+    const autoGenId = () => {
+        const catVal = $('#inp-cat').value.trim();
+        const projVal = $('#inp-project').value;
+        const found = currentStageMap.find(x => x.name === catVal);
+        const idIn = $('#inp-id');
+        if(found && (!idIn.value || idIn.value.startsWith(found.prefix + '-'))) {
+            idIn.value = getNextId(found.prefix, projVal);
+        }
+    };
+    $('#inp-cat').addEventListener('input', autoGenId);
+    $('#inp-project').addEventListener('blur', autoGenId); 
+
+    $('#btn-settings').onclick = () => {
+        $('#setting-def-project').value = localStorage.getItem('PROJ_DEF_NAME') || '';
+        $('#setting-rfp-map').value = currentStageMap.map(i => `${i.name}, ${i.prefix}`).join('\n');
+        $('#settings-modal').style.display = 'flex';
+    };
+    $('#btn-close-settings').onclick = () => $('#settings-modal').style.display = 'none';
+    $('#btn-save-settings').onclick = () => {
+        localStorage.setItem('PROJ_DEF_NAME', $('#setting-def-project').value);
+        const newMap = [];
+        $('#setting-rfp-map').value.split('\n').forEach(l => {
+            if(l.includes(',')) { const [n, p] = l.split(','); newMap.push({name:n.trim(), prefix:p.trim()}); }
+        });
+        if(newMap.length) { currentStageMap = newMap; localStorage.setItem('PROJ_DOC_MAP', JSON.stringify(newMap)); loadConfig(); }
+        $('#settings-modal').style.display = 'none'; toast('설정 저장됨');
+    };
+
+    $('#btn-add-link').onclick = () => {
+        if(currentLinks.length >= 10) return alert('링크는 최대 10개까지 가능합니다.');
+        currentLinks.push({ title: '', url: '' });
+        renderLinkList();
+    };
+
+    // --- 단축키 지원 (에디터 포커스 및 전역 단축키) ---
+    document.addEventListener('keydown', e => {
+        const isCmd = (navigator.platform.includes('Mac')) ? e.metaKey : e.ctrlKey;
+        
+        // 전역 저장 / 신규 등록
+        if(isCmd && !e.altKey && (e.key === 's' || e.key === 'S')) {
+            e.preventDefault();
+            if($('#empty-state').classList.contains('hidden')) saveCurrent();
+            return;
+        }
+        if(isCmd && e.altKey && (e.key === 'n' || e.key === 'N')) {
+            e.preventDefault();
+            showNewForm();
+            return;
+        }
+
+        // Quill 포커스 시 서식 단축키 적용
+        let activeQuill = null;
+        if (quillDesc.hasFocus()) activeQuill = quillDesc;
+        else if (quillNote.hasFocus()) activeQuill = quillNote;
+
+        if(isCmd && activeQuill) {
+            const range = activeQuill.getSelection();
+            if(!range) return;
+
+            // 크기 조절 (Ctrl + Plus/Minus)
+            if(e.key === '+' || e.key === '=' || e.key === '-') {
+                e.preventDefault();
+                const fmt = activeQuill.getFormat(range);
+                const cur = fmt.size ? parseInt(fmt.size) : 14;
+                const next = (e.key === '-') ? Math.max(10, cur-1) : cur+1;
+                activeQuill.format('size', next + 'px');
+                return;
+            }
+
+            // 서식 지우기 (Ctrl + Shift + X)
+            if(e.shiftKey && (e.key === 'x' || e.key === 'X')) {
+                e.preventDefault();
+                if(range.length > 0) activeQuill.removeFormat(range.index, range.length);
+                else {
+                    const formats = activeQuill.getFormat(range);
+                    Object.keys(formats).forEach(k => activeQuill.format(k, false));
+                }
+                return;
+            }
+
+            // 취소선 (Ctrl + 0)
+            if(!e.altKey && !e.shiftKey && e.key === '0') {
+                e.preventDefault();
+                const f = activeQuill.getFormat(range);
+                activeQuill.format('strike', !f['strike']);
+                return;
+            }
+
+            // 마커 형광펜 (Ctrl + 1~7)
+            if(!e.altKey && !e.shiftKey && ['1','2','3','4','5','6','7'].includes(e.key)) {
+                e.preventDefault();
+                const hls = {
+                    '1':'#ffedd5', '2':'#e0f2fe', '3':'#fef08a', '4':'#dcfce7',
+                    '5':'#fce7f3', '6':'#e6d5c3', '7':'#f3f4f6'
+                };
+                const f = activeQuill.getFormat(range);
+                activeQuill.format('background', (f['background'] === hls[e.key]) ? false : hls[e.key]);
+                return;
+            }
+
+            // 텍스트 색상 (Ctrl + Alt + R / B)
+            if(e.altKey && !e.shiftKey) {
+                const key = e.key.toLowerCase();
+                const f = activeQuill.getFormat(range);
+                if(key === 'r') { e.preventDefault(); activeQuill.format('color', f['color'] === '#ef4444' ? false : '#ef4444'); return; }
+                if(key === 'b') { e.preventDefault(); activeQuill.format('color', f['color'] === '#4f46e5' ? false : '#4f46e5'); return; }
+            }
+        }
+    });
+
+    // --- 외부 복사 붙여넣기 첨부파일 가로채기 ---
+    document.addEventListener('paste', e => {
+        const active = document.activeElement;
+        const inEditor = active && (active.isContentEditable || active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.closest('.ql-container'));
+        if(inEditor) return; // 에디터 내부에서는 Quill이 자체 처리하게 둠 (본문에 이미지 삽입, 표 붙여넣기 등)
+        
+        if(!$('#empty-state').classList.contains('hidden')) return;
+        const items = (e.clipboardData || window.clipboardData).items;
+        for(let i of items) {
+            if(i.type.indexOf('image') !== -1) {
+                e.preventDefault();
+                if(currentFiles.length >= 10) return toast('첨부파일은 최대 10개까지만 가능합니다.');
+                const r = new FileReader();
+                r.onload = ev => { 
+                    currentFiles.push({name:`pasted_${Date.now()}.png`, type:'image/png', data:ev.target.result}); 
+                    renderAttachGrid(); 
+                    toast('클립보드 이미지가 첨부파일로 추가되었습니다.');
+                };
+                r.readAsDataURL(i.getAsFile());
+                return;
+            }
+        }
+    });
+}
+
+function handleFileUpload(input) {
+    if(!input.files[0]) return;
+    const f = input.files[0];
+    const r = new FileReader();
+    r.onload = e => {
+        if(currentFiles.length >= 10) return alert('첨부파일은 최대 10개까지만 가능합니다.');
+        currentFiles.push({ name: f.name, type: f.type || 'application/octet-stream', data: e.target.result });
+        renderAttachGrid();
+        input.value = '';
+    };
+    r.readAsDataURL(f);
+}
+
+async function refreshList() { await DOC_CORE.getAll(); renderList(); }
+
+function renderList() {
+    const el = $('#item-list'); el.innerHTML = '';
+    const { search, filterCat, items, selectedId } = DOC_CORE.state;
+    items.filter(i => {
+        if(filterCat && i.category !== filterCat) return false;
+        if(search) {
+            const searchTarget = (i.project_name+i.doc_id+i.summary).toLowerCase();
+            return searchTarget.includes(search);
+        }
+        return true;
+    }).forEach(item => {
+        const div = document.createElement('div');
+        div.className = `item-card ${selectedId === item.uid ? 'active' : ''}`;
+        div.onclick = () => loadItem(item);
+        div.innerHTML = `<span class="item-prj">${item.project_name || ''}</span><div class="item-meta"><span class="item-id">${item.doc_id}</span></div><div class="item-preview">${item.summary}</div>`;
+        el.appendChild(div);
+    });
+    $('#total-count').textContent = el.children.length;
+}
+
+function renderAttachGrid() {
+    const grid = $('#img-grid'); grid.innerHTML = '';
+    currentFiles.forEach((f, idx) => {
+        const box = document.createElement('div'); box.className = 'img-thumb-box';
+        if(f.type.startsWith('image/')) {
+            box.innerHTML = `<img src="${f.data}"><button class="btn-del-img" onclick="currentFiles.splice(${idx},1);renderAttachGrid();event.stopPropagation();" title="삭제"><i class="fas fa-times"></i></button>`;
+            box.onclick = () => { $('#modal-img-tag').src = f.data; $('#img-modal').style.display = 'flex'; };
+        } else {
+            box.innerHTML = `<i class="fas fa-file-alt" style="font-size:24px;color:#94a3b8;margin-bottom:5px;"></i><span style="font-size:10px;text-align:center;padding:0 5px;line-height:1.2;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${f.name}</span><button class="btn-del-img" onclick="currentFiles.splice(${idx},1);renderAttachGrid();event.stopPropagation();" title="삭제"><i class="fas fa-times"></i></button>`;
+            box.onclick = () => { const a = document.createElement('a'); a.href = f.data; a.download = f.name; a.click(); };
+        }
+        grid.appendChild(box);
+    });
+    if(currentFiles.length < 10) {
+        grid.innerHTML += `<div class="upload-placeholder" onclick="document.getElementById('inp-file').click()"><i class="fas fa-plus"></i><span style="margin-top:4px">추가</span></div>`;
+    }
+    $('#img-count').innerText = `${currentFiles.length}/10`;
+}
+
+function renderLinkList() {
+    const el = $('#link-container'); el.innerHTML = '';
+    currentLinks.forEach((linkObj, idx) => {
+        const row = document.createElement('div');
+        row.className = 'link-row';
+        let tVal = linkObj.title || '';
+        let uVal = linkObj.url || (typeof linkObj === 'string' ? linkObj : '');
+
+        row.innerHTML = `<input type="text" class="link-input-title" placeholder="링크 제목" value="${tVal}" oninput="currentLinks[${idx}].title=this.value">
+                         <input type="text" class="link-input-url" placeholder="URL 주소" value="${uVal}" oninput="currentLinks[${idx}].url=this.value">
+                         <button class="btn-link-action" title="링크 열기" onclick="if(currentLinks[${idx}].url){window.open(currentLinks[${idx}].url,'_blank')}else{toast('URL을 입력하세요.')}"><i class="fas fa-external-link-alt"></i></button>
+                         <button class="btn-link-action btn-link-del" title="삭제" onclick="currentLinks.splice(${idx},1); renderLinkList();"><i class="fas fa-trash-alt"></i></button>`;
+        el.appendChild(row);
+    });
+}
+
+function showNewForm() {
+    DOC_CORE.state.selectedId = null; renderList();
+    $('#empty-state').classList.add('hidden'); $('#btn-delete').style.display = 'none';
+    $('#inp-project').value = localStorage.getItem('PROJ_DEF_NAME') || '';
+    $('#inp-cat').value = $('#inp-id').value = $('#inp-author').value = $('#inp-version').value = $('#inp-summary').value = '';
+    
+    quillDesc.setText('');
+    quillNote.setText('');
+    
+    currentFiles = []; renderAttachGrid();
+    currentLinks = []; renderLinkList(); 
+}
+
+function loadItem(i) {
+    DOC_CORE.state.selectedId = i.uid; renderList();
+    $('#empty-state').classList.add('hidden'); $('#btn-delete').style.display = 'inline-flex';
+    $('#inp-project').value = i.project_name || ''; $('#inp-cat').value = i.category || '';
+    $('#inp-id').value = i.doc_id || ''; $('#inp-author').value = i.author || '';
+    $('#inp-version').value = i.version || ''; $('#inp-summary').value = i.summary || '';
+    
+    quillDesc.clipboard.dangerouslyPasteHTML(i.description || '');
+    quillNote.clipboard.dangerouslyPasteHTML(i.note || '');
+    
+    $('#inp-check').checked = !!i.checked;
+    currentFiles = i.attachments || []; renderAttachGrid();
+    
+    const rawLinks = i.graphLinks || [];
+    currentLinks = rawLinks.map(l => {
+        if(typeof l === 'string') return { title: '', url: l };
+        return l;
+    });
+    renderLinkList(); 
+}
+
+async function saveCurrent() {
+    if(!$('#inp-summary').value) return toast('제목 입력 필요');
+    
+    const cleanLinks = currentLinks.filter(l => l.url && l.url.trim() !== '');
+
+    const item = {
+        uid: DOC_CORE.state.selectedId || Date.now().toString(36),
+        project_name: $('#inp-project').value, category: $('#inp-cat').value,
+        doc_id: $('#inp-id').value, author: $('#inp-author').value, version: $('#inp-version').value,
+        summary: $('#inp-summary').value, 
+        description: quillDesc.root.innerHTML,
+        note: quillNote.root.innerHTML, 
+        checked: $('#inp-check').checked,
+        attachments: currentFiles,
+        graphLinks: cleanLinks
+    };
+    await DOC_CORE.save(item); DOC_CORE.state.selectedId = item.uid;
+    refreshList(); toast('저장 완료');
+}
+
+async function deleteCurrent() {
+    if(confirm('이 문서를 삭제하시겠습니까?')) { 
+        await DOC_CORE.remove(DOC_CORE.state.selectedId); 
+        refreshList(); 
+        $('#empty-state').classList.remove('hidden'); 
+    }
+}
+</script>
+</body>
+</html>

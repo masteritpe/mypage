@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Project Q&A</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@300;400;500;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+
+<style>
+/* === Theme & Variables === */
+:root {
+    --bg-app: #f8fafc; --bg-panel: #ffffff; --border: #e2e8f0;
+    --primary: #2563eb; --primary-hover: #1d4ed8;
+    --text-main: #0f172a; --text-sub: #64748b;
+    --radius: 8px;
+    --font-ui: 'Inter', 'Noto Sans KR', sans-serif;
+    --font-code: 'JetBrains Mono', monospace;
+}
+
+* { box-sizing: border-box; outline: none; }
+body { margin: 0; background: var(--bg-app); color: var(--text-main); font-family: var(--font-ui); font-size: 13px; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* Header */
+header { height: 56px; background: #fff; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 24px; flex-shrink: 0; justify-content: space-between; z-index: 20; }
+header .brand { font-weight: 700; font-size: 16px; color: var(--text-main); display: flex; align-items: center; gap: 10px; }
+header .brand i { color: var(--primary); font-size: 20px; }
+header .header-tools { display: flex; gap: 8px; }
+
+/* Layout */
+.workspace { display: flex; flex: 1; overflow: hidden; }
+.pane-list { width: 380px; background: #fff; border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; }
+.search-area { padding: 16px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px; background: #f8fafc; }
+.search-input { width: 100%; height: 36px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; transition: 0.2s; background: #fff; }
+.search-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+.list-scroll { flex: 1; overflow-y: auto; background: #fff; }
+
+/* Item Card */
+.item-card { padding: 16px; border-bottom: 1px solid var(--border); background: #fff; cursor: pointer; border-left: 3px solid transparent; transition: background 0.1s; }
+.item-card:hover { background: #f8fafc; }
+.item-card.active { background: #eff6ff; border-left-color: var(--primary); }
+.item-meta { display: flex; justify-content: space-between; margin-bottom: 6px; align-items: center; }
+.item-tag { font-family: var(--font-code); font-weight: 700; color: var(--primary); background: #dbeafe; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+.item-cat { font-size: 11px; font-weight: 700; color: var(--text-sub); display: inline-block; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; margin-right: 6px; }
+.item-preview { font-size: 14px; color: var(--text-main); line-height: 1.5; font-weight: 600; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.item-vendor { font-size: 12px; color: #64748b; }
+
+/* Editor Pane */
+.pane-editor { flex: 1; background: #fff; display: flex; flex-direction: column; position: relative; }
+.toolbar { height: 56px; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 32px; justify-content: space-between; background: #fff; flex-shrink: 0; }
+
+.editor-scroll { flex: 1; overflow-y: auto; width: 100%; } 
+.editor-inner { width: 100%; max-width: 1400px; margin: 0 auto; padding: 32px 40px; }
+
+/* Forms */
+.form-section { margin-bottom: 32px; }
+.section-title { font-size: 13px; font-weight: 700; color: #1e293b; border-bottom: 2px solid #f1f5f9; padding-bottom: 8px; margin-bottom: 16px; display: flex; align-items: center; gap: 6px; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+.label { display: block; font-size: 13px; font-weight: 600; color: var(--text-sub); margin-bottom: 8px; }
+.input-field { width: 100%; height: 40px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--radius); font-family: var(--font-ui); font-size: 14px; transition: 0.2s; }
+.input-field:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+.input-field.filled { background-color: #f8fafc; color: #334155; font-weight: 600; }
+
+/* Editor */
+.editor-wrapper { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; transition: 0.2s; background: #fff; min-height: 200px; }
+.editor-wrapper:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+
+.wysiwyg { min-height: 180px; padding: 20px; font-size: 14px; line-height: 1.8; overflow-y: auto; outline: none; white-space: pre-wrap; word-break: break-all; font-family: var(--font-ui); }
+
+/* 리스트 스타일 충돌 방지 및 들여쓰기 정상화 */
+.wysiwyg ul, .wysiwyg ol {
+    padding-left: 24px !important;
+    margin: 8px 0 !important;
+    list-style-position: outside !important;
+    text-indent: 0 !important;
+}
+
+.wysiwyg li { 
+    margin: 4px 0 !important; 
+    padding: 0 !important;
+    text-indent: 0 !important;
+    list-style-type: disc; 
+}
+.wysiwyg ol li { list-style-type: decimal; }
+
+.wysiwyg p, .wysiwyg div {
+    margin: 0 0 8px 0 !important;
+    text-indent: 0 !important;
+}
+
+/* 인용구 스타일 */
+.wysiwyg blockquote {
+    margin: 12px 0 !important;
+    padding-left: 16px !important;
+    border-left: 4px solid #cbd5e1;
+    color: #475569;
+}
+
+.wysiwyg h1, .wysiwyg h2, .wysiwyg h3 { margin: 16px 0 8px 0; line-height: 1.4; }
+
+/* Attachments */
+.attach-box { background: #f8fafc; padding: 20px; border-radius: var(--radius); border: 1px dashed #cbd5e1; }
+.img-grid { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
+.img-slot { position: relative; width: 100px; height: 100px; border-radius: 6px; overflow: hidden; border: 1px solid #cbd5e1; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.img-thumb { width: 100%; height: 100%; object-fit: cover; cursor: zoom-in; transition: transform 0.2s; }
+.img-thumb:hover { transform: scale(1.05); }
+.file-thumb { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; background: #fff; padding: 8px; text-align: center; }
+.file-thumb i { font-size: 28px; color: #64748b; margin-bottom: 6px; }
+.file-thumb span { font-size: 10px; color: #334155; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-all; }
+.btn-img-del { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 50%; background: rgba(0,0,0,0.6); color: #fff; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px; z-index: 2; }
+.btn-add-img { width: 100px; height: 100px; border-radius: 6px; border: 2px dashed #cbd5e1; background: #fff; color: #94a3b8; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; transition: 0.2s; }
+
+/* [NEW] Link Section Styles */
+.link-list { display: flex; flex-direction: column; gap: 8px; }
+.link-row { display: flex; align-items: center; gap: 8px; }
+.link-input-title { width: 180px; height: 38px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; font-family: var(--font-ui); background: #fff; transition: 0.2s; }
+.link-input-title:focus { border-color: var(--primary); }
+.link-input-url { flex: 1; height: 38px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--radius); font-family: var(--font-code); font-size: 12px; color: var(--primary); background: #fff; transition: 0.2s; }
+.link-input-url:focus { border-color: var(--primary); }
+
+.btn-link-action { width: 38px; height: 38px; border: 1px solid var(--border); border-radius: var(--radius); background: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-sub); transition: 0.2s; flex-shrink: 0; }
+.btn-link-action:hover { border-color: var(--primary); color: var(--primary); }
+.btn-link-del { color: #ef4444; border-color: #fecaca; }
+.btn-link-del:hover { background: #fef2f2; border-color: #ef4444; }
+
+
+/* Buttons & Modal */
+.btn { height: 36px; padding: 0 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid transparent; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; transition: 0.2s; }
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: var(--primary-hover); }
+.btn-secondary { background: #fff; border-color: #cbd5e1; color: var(--text-sub); }
+.btn-secondary:hover { background: #f8fafc; border-color: #94a3b8; color: var(--text-main); }
+.btn-icon { width: 36px; padding: 0; justify-content: center; font-size: 16px; color: var(--text-sub); }
+.btn-danger { background: #fff; border-color: #fecaca; color: #ef4444; }
+.btn-danger:hover { background: #fef2f2; border-color: #ef4444; }
+
+/* Settings Modal */
+.settings-box { background: #fff; width: 450px; padding: 24px; border-radius: 12px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); }
+.config-textarea { width: 100%; height: 150px; font-family: var(--font-ui); font-size: 13px; padding: 12px; border: 1px solid var(--border); border-radius: 6px; line-height: 1.6; resize: vertical; margin-top: 6px; }
+
+/* Overlays & Common */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1000; display: none; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+.modal-content { position: relative; max-width: 90vw; max-height: 90vh; }
+.modal-img { max-width: 100%; max-height: 90vh; border-radius: 4px; box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
+.modal-close { position: absolute; top: -40px; right: 0; color: #fff; font-size: 30px; cursor: pointer; transition: 0.2s; }
+.hidden { display: none !important; }
+.empty-state { position: absolute; top: 56px; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #fff; color: #94a3b8; z-index: 10; }
+#toast { position:fixed; bottom:30px; right:30px; background:#1e293b; color:#fff; padding:12px 20px; border-radius:8px; opacity:0; transition:0.3s; pointer-events:none; z-index:2000; }
+
+/* === Memo Sidebar (Imported) === */
+.memo-sidebar {
+    position: fixed; top: 0; right: -360px;
+    width: 360px; height: 100vh;
+    background: #fffbeb; 
+    border-left: 1px solid #fcd34d;
+    box-shadow: -4px 0 15px rgba(0,0,0,0.1);
+    z-index: 3000; 
+    display: flex; flex-direction: column;
+    transition: right 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+}
+.memo-sidebar.open { right: 0; }
+
+.memo-header {
+    padding: 16px; border-bottom: 1px solid #fcd34d;
+    display: flex; justify-content: space-between; align-items: center;
+    background: rgba(255, 251, 235, 0.95);
+}
+.memo-title {
+    font-weight: 700; color: #b45309; display: flex; align-items: center; gap: 6px;
+    font-size: 14px;
+}
+#memo-textarea {
+    flex: 1; border: none; padding: 16px; display: block;
+    background: transparent; resize: none; outline: none;
+    font-family: var(--font-ui); font-size: 14px; line-height: 1.6;
+    color: #451a03; width: 100%; min-height: 0;
+}
+#memo-textarea::placeholder { color: #d97706; opacity: 0.5; }
+
+.memo-footer {
+    padding: 8px 16px; border-top: 1px solid #fcd34d;
+    font-size: 12px; color: #b45309;
+    display: flex; justify-content: space-between; align-items: center;
+    background: #fffbeb;
+}
+
+.btn-icon-memo { border: none; background: transparent; color: #b45309; font-size: 16px; cursor: pointer; }
+.btn-icon-memo:hover { color: #d97706; }
+
+</style>
+</head>
+<body>
+
+<header>
+    <div class="brand"><i class="fas fa-comments"></i>Project Q&A</div>
+    <div class="header-tools">
+        <button class="btn btn-secondary" id="btn-memo" style="color:#b45309; border-color:#fcd34d; background:#fffbeb;">
+            <i class="fas fa-sticky-note"></i> 메모
+        </button>
+        <button class="btn btn-secondary btn-icon" id="btn-settings" title="환경설정"><i class="fas fa-cog"></i></button>
+        <button class="btn btn-secondary" id="btn-export"><i class="fas fa-file-excel" style="color:#10b981"></i> 엑셀 다운로드</button>
+    </div>
+</header>
+
+<div class="workspace">
+    <aside class="pane-list">
+        <div class="search-area">
+            <input type="text" id="search-input" class="search-input" placeholder="검색(내용, 업체)">
+            <div style="display:flex; gap:8px;">
+                <select id="filter-cat" class="search-input" style="flex:1;">
+                    <option value="">전체 분야</option>
+                </select>
+            </div>
+            <div style="display:flex; gap:8px;">
+                <select id="filter-vendor" class="search-input" style="flex:1;">
+                    <option value="">전체 업체</option>
+                </select>
+            </div>
+        </div>
+        <div class="list-scroll" id="item-list"></div>
+        <div style="padding:12px; text-align:center; font-size:11px; color:#94a3b8; border-top:1px solid var(--border);">
+            Total <span id="total-count" style="font-weight:700; color:#0f172a;">0</span> Items
+        </div>
+    </aside>
+
+    <main class="pane-editor">
+        <div class="toolbar">
+            <div id="editor-title" style="font-weight:700; font-size:15px; color:#1e293b;">Q&A 작성</div>
+            <div style="display:flex; gap:8px;">
+                <button class="btn btn-secondary" id="btn-new" title="Ctrl+Alt+N"><i class="fas fa-plus"></i> 신규 질문</button>
+                <button class="btn btn-danger" id="btn-delete" style="display:none;"><i class="fas fa-trash"></i> 삭제</button>
+                <button class="btn btn-primary" id="btn-save" title="Ctrl+S"><i class="fas fa-save"></i> 저장</button>				
+            </div>
+        </div>
+
+        <div class="editor-scroll">
+            <div class="editor-inner">
+                <div class="form-section">
+                    <div class="section-title"><i class="fas fa-cube"></i> 기본 정보</div>
+                    <div><label class="label">프로젝트명</label><input type="text" id="inp-project" class="input-field filled" spellcheck="false"></div>
+                    <div class="form-grid" style="margin-top:16px;">
+                        <div><label class="label">질의 업체(Vendor)</label><input type="text" id="inp-vendor" class="input-field" list="vendor-list-inp"></div>
+                        <div><label class="label">해당 분야(Category)</label><input type="text" id="inp-field" class="input-field" list="field-list-inp"></div>
+                    </div>
+                    <input type="hidden" id="inp-no">
+                    
+                    <datalist id="vendor-list-inp"></datalist>
+                    <datalist id="field-list-inp"></datalist>
+                </div>
+                <div class="form-section">
+                    <div class="section-title"><i class="fas fa-question-circle"></i> 예상 질의(Question)</div>
+                    <div>
+                        <input type="text" id="inp-question" class="input-field" placeholder="질문 요약(Title)" style="margin-bottom:8px; font-weight:600;">
+                        <textarea id="inp-question-detail" class="input-field" style="height:80px; padding:10px; resize:vertical;" placeholder="질문 상세 내용"></textarea>
+                    </div>
+                </div>
+                <div class="form-section">
+                    <div class="section-title"><i class="fas fa-comment-dots"></i> 예상 답변(Answer)</div>
+                    <div class="editor-wrapper">
+                        <div id="inp-answer" class="wysiwyg" contenteditable="true" spellcheck="false" placeholder="답변 내용"></div>
+                    </div>
+                </div>
+                <div class="form-section">
+                    <div class="section-title"><i class="fas fa-paperclip"></i> 첨부 파일(최대 10개)</div>
+                    <div class="attach-box">
+                        <div id="img-grid" class="img-grid"></div>
+                        <input type="file" id="inp-file" style="display:none;"> 
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <div class="section-title"><i class="fas fa-link"></i> 그래프 참조 링크 (최대 10개)</div>
+                    <div style="background:#fff; border:1px solid var(--border); padding:16px; border-radius:var(--radius);">
+                        <div id="link-container" class="link-list">
+                            </div>
+                        <div style="margin-top:12px;">
+                            <button class="btn btn-secondary" id="btn-add-link"><i class="fas fa-plus"></i> 링크 추가</button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <div id="empty-state" class="empty-state">
+            <i class="fas fa-clipboard-question" style="font-size:48px; margin-bottom:16px; color:#e2e8f0;"></i>
+            <p>작성된 질의응답이 없습니다.</p>
+            <button class="btn btn-primary" id="btn-new-center" style="margin-top:16px;"><i class="fas fa-plus"></i> 신규 질문 등록</button>
+        </div>
+    </main>
+</div>
+
+<div id="settings-modal" class="modal-overlay">
+    <div class="settings-box">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <span style="font-weight:700; font-size:16px;"><i class="fas fa-cog"></i> 환경 설정</span>
+            <button class="btn btn-secondary btn-icon" id="btn-close-settings" style="border:none;"><i class="fas fa-times"></i></button>
+        </div>
+        
+        <div style="margin-bottom:20px;">
+            <label class="label">기본 프로젝트명</label>
+            <input type="text" id="set-def-project" class="input-field" placeholder="신규 작성시 자동 입력값">
+        </div>
+
+        <div style="margin-bottom:20px;">
+            <label class="label">카테고리</label>
+            <div style="font-size:11px; color:#64748b; margin-bottom:4px;">* 한 줄에 하나씩 입력하세요. 상단에 있을수록 리스트에서 먼저 보입니다.</div>
+            <textarea id="set-cat-order" class="config-textarea" placeholder="예:&#13;&#10;상세 전략&#13;&#10;백앤드&#13;&#10;프론트&#13;&#10;보안"></textarea>
+        </div>
+
+        <div style="text-align:right; border-top:1px solid #f1f5f9; padding-top:16px;">
+            <button class="btn btn-primary" id="btn-save-settings">설정 저장</button>
+        </div>
+    </div>
+</div>
+
+<div id="img-modal" class="modal-overlay">
+    <div class="modal-content">
+        <span class="modal-close" id="modal-close">&times;</span>
+        <img id="modal-img-tag" class="modal-img" src="">
+    </div>
+</div>
+
+<div id="toast"></div>
+
+<div id="memo-sidebar" class="memo-sidebar">
+    <div class="memo-header">
+        <div class="memo-title">
+            <i class="fas fa-paste"></i> Quick Memo
+        </div>
+        <div style="display:flex; gap:8px;">
+            <button id="btn-copy-memo" class="btn-icon-memo" title="전체 복사"><i class="fas fa-copy"></i></button>
+            <button id="btn-close-memo" class="btn-icon-memo" title="닫기"><i class="fas fa-times"></i></button>
+        </div>
+    </div>
+    <textarea id="memo-textarea" placeholder="여기에 붙여넣으면 서식이 제거됩니다. (자동 저장됨)"></textarea>
+    <div class="memo-footer">
+        <span id="memo-status">Ready</span>
+        <button id="btn-clear-memo" class="btn" style="padding:4px 8px; font-size:11px; background:#fff; border-color:#d97706; color:#b45309;">비우기</button>
+    </div>
+</div>
+
+<script>
+// --- Utilities ---
+const RichText = {
+    handleKey: function(e) {
+        const isCtrl = e.ctrlKey || e.metaKey;
+        const isAlt = e.altKey;
+        const isShift = e.shiftKey;
+
+        // 기존 단축키
+        if (isCtrl && isAlt && (e.key === 'r' || e.key === 'R')) { e.preventDefault(); document.execCommand('foreColor', false, '#ef4444'); }
+        if (isCtrl && isAlt && (e.key === 'b' || e.key === 'B')) { e.preventDefault(); document.execCommand('foreColor', false, '#2563eb'); }
+        if (isCtrl && !isAlt && (e.key === 'm' || e.key === 'M')) { e.preventDefault(); document.execCommand('hiliteColor', false, '#ffedd5'); }
+
+        // [추가] 취소선: Ctrl + Alt + 5
+        if (isCtrl && isAlt && e.key === '5') {
+            e.preventDefault();
+            document.execCommand('strikeThrough', false, null);
+        }
+
+        // [추가] 서식 지우기: Ctrl + Shift + X
+        if (isCtrl && isShift && (e.key === 'x' || e.key === 'X')) {
+            e.preventDefault();
+            document.execCommand('removeFormat', false, null);
+        }
+    }
+};
+
+let currentFiles = [];
+let currentLinks = []; // [NEW] Links
+
+// --- Config & Settings ---
+const CONFIG = {
+    defaultProject: '',
+    categoryOrder: [],
+    
+    load: function() {
+        const stored = localStorage.getItem('QA_CONFIG');
+        if(stored) {
+            const data = JSON.parse(stored);
+            this.defaultProject = data.defaultProject || '';
+            this.categoryOrder = data.categoryOrder || [];
+        }
+    },
+    save: function(project, orderStr) {
+        this.defaultProject = project;
+        this.categoryOrder = orderStr.split('\n').map(s => s.trim()).filter(Boolean);
+        localStorage.setItem('QA_CONFIG', JSON.stringify({
+            defaultProject: this.defaultProject,
+            categoryOrder: this.categoryOrder
+        }));
+    }
+};
+
+// --- IndexedDB Core Logic ---
+const QA_CORE = {
+    db: null, DB_NAME: 'ProjectQADB', STORE_NAME: 'qa_items',
+    state: { items: [], search: '', filterVendor: '', filterCat: '', selectedId: null },
+
+    openDB: function() {
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(this.DB_NAME, 1); // Version Bump
+            req.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains(this.STORE_NAME)) {
+                    db.createObjectStore(this.STORE_NAME, { keyPath: 'uid' });
+                }
+            };
+            req.onsuccess = (e) => { this.db = e.target.result; resolve(); };
+            req.onerror = (e) => { console.error("IndexedDB Open Error:", e); reject(e); };
+        });
+    },
+
+    getAll: function() {
+        return new Promise((resolve) => {
+            if (!this.db) return resolve([]);
+            const tx = this.db.transaction(this.STORE_NAME, 'readonly');
+            tx.objectStore(this.STORE_NAME).getAll().onsuccess = (e) => {
+                this.state.items = e.target.result || [];
+                
+                // === Sorting Logic ===
+                const catOrder = CONFIG.categoryOrder;
+                
+                this.state.items.sort((a, b) => {
+                    const catA = (a.field || '').trim();
+                    const catB = (b.field || '').trim();
+                    
+                    let idxA = catOrder.indexOf(catA);
+                    let idxB = catOrder.indexOf(catB);
+                    
+                    if(idxA === -1) idxA = 9999;
+                    if(idxB === -1) idxB = 9999;
+
+                    if (idxA !== idxB) return idxA - idxB;
+
+                    const catDiff = catA.localeCompare(catB);
+                    if (catDiff !== 0) return catDiff;
+
+                    const qDiff = (a.question || '').localeCompare(b.question || '');
+                    if (qDiff !== 0) return qDiff;
+
+                    return (a.vendor || '').localeCompare(b.vendor || '');
+                });
+
+                updateFilters(this.state.items);
+                resolve(this.state.items);
+            };
+        });
+    },
+
+    save: function(item) {
+        return new Promise((resolve, reject) => {
+            const tx = this.db.transaction(this.STORE_NAME, 'readwrite');
+            tx.objectStore(this.STORE_NAME).put(item).onsuccess = () => resolve(item);
+            tx.onerror = (e) => reject(e);
+        });
+    },
+
+    remove: function(uid) {
+        return new Promise((resolve) => {
+            const tx = this.db.transaction(this.STORE_NAME, 'readwrite');
+            tx.objectStore(this.STORE_NAME).delete(uid).onsuccess = () => resolve();
+        });
+    },
+
+    fileProcess: function(file) {
+        return new Promise(resolve => {
+            const r = new FileReader();
+            r.onload = e => resolve({ name: file.name, type: file.type || 'application/octet-stream', data: e.target.result });
+            r.readAsDataURL(file);
+        });
+    },
+
+    exportExcel: async function() {
+        if(!window.ExcelJS) return alert('ExcelJS 라이브러리 로드 실패');
+        const wb = new ExcelJS.Workbook();
+        const ws = wb.addWorksheet('Q&A 목록');
+        
+        ws.columns = [
+            { header: '프로젝트명', key: 'prj', width: 20 },
+            { header: '질의업체', key: 'vendor', width: 15 },
+            { header: '해당 분야', key: 'field', width: 15 },
+            { header: '예상 질의', key: 'question', width: 40 },
+            { header: '예상 답변', key: 'answer', width: 50 },
+            { header: '참조링크', key: 'links', width: 30 }
+        ];
+
+        ws.getRow(1).font = { bold: true };
+        ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
+
+        const { items, search, filterVendor, filterCat } = this.state;
+        const exportItems = filterItems(items);
+
+        exportItems.forEach(i => {
+            const answerText = i.answer.replace(/<br>/g, '\n').replace(/<[^>]*>/g, '').trim();
+            const questionFull = i.question + (i.questionDetail ? '\n(' + i.questionDetail + ')' : '');
+            
+            // Format links
+            const linkStr = (i.graphLinks || []).map(l => {
+                if(typeof l === 'object') return l.title ? `[${l.title}] ${l.url}` : l.url;
+                return l;
+            }).join('\n');
+
+            ws.addRow({
+                prj: i.project, 
+                vendor: i.vendor, 
+                field: i.field, 
+                question: questionFull, 
+                answer: answerText,
+                links: linkStr
+            });
+        });
+
+        const buf = await wb.xlsx.writeBuffer();
+        const now = new Date();
+        const dateStr = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
+        const url = URL.createObjectURL(new Blob([buf]));
+        const a = document.createElement('a'); a.href = url; a.download = `QA_List_${dateStr}.xlsx`; a.click();
+    }
+};
+
+const $ = s => document.querySelector(s);
+
+// --- Initialization ---
+(async () => {
+    try {
+        CONFIG.load();
+        await QA_CORE.openDB();
+        bindEvents();
+        setupMemo();
+        await refreshList();
+        checkDeepLink();
+    } catch (e) {
+        console.error(e);
+        alert("애플리케이션 초기화 실패.");
+    }
+})();
+
+function checkDeepLink() {
+    const params = new URLSearchParams(window.location.search);
+    const uid = params.get('uid');
+    if (uid) {
+        const item = QA_CORE.state.items.find(i => i.uid === uid);
+        if (item) {
+            loadItem(item);
+            setTimeout(() => {
+                const activeEl = document.querySelector('.item-card.active');
+                if(activeEl) activeEl.scrollIntoView({block: 'center', behavior: 'smooth'});
+            }, 100);
+        } else {
+            toast('요청하신 항목을 찾을 수 없습니다.');
+        }
+    }
+}
+
+function bindEvents() {
+    $('#btn-new').onclick = $('#btn-new-center').onclick = showNewForm;
+    $('#btn-save').onclick = saveCurrent;
+    $('#btn-delete').onclick = deleteCurrent;
+    $('#btn-export').onclick = () => QA_CORE.exportExcel();
+    
+    // Filters & Search
+    $('#search-input').onkeyup = (e) => { QA_CORE.state.search = e.target.value.toLowerCase(); renderList(); };
+    $('#filter-vendor').onchange = (e) => { QA_CORE.state.filterVendor = e.target.value; renderList(); };
+    $('#filter-cat').onchange = (e) => { QA_CORE.state.filterCat = e.target.value; renderList(); };
+
+    // Settings
+    $('#btn-settings').onclick = () => {
+        $('#set-def-project').value = CONFIG.defaultProject;
+        $('#set-cat-order').value = CONFIG.categoryOrder.join('\n');
+        $('#settings-modal').style.display = 'flex';
+    };
+    $('#btn-close-settings').onclick = () => $('#settings-modal').style.display = 'none';
+    $('#btn-save-settings').onclick = () => {
+        CONFIG.save($('#set-def-project').value, $('#set-cat-order').value);
+        $('#settings-modal').style.display = 'none';
+        refreshList();
+        toast('설정이 저장되었습니다.');
+    };
+
+    // Editor & Files
+    document.querySelector('.wysiwyg').addEventListener('keydown', e => RichText.handleKey(e));
+    
+    // 텍스트 붙여넣기 정제 및 전역 이미지 붙여넣기 감지
+    document.addEventListener('paste', handlePasteEvent);
+
+    $('#inp-file').onchange = async (e) => {
+        if(e.target.files[0]) {
+            const f = await QA_CORE.fileProcess(e.target.files[0]);
+            currentFiles.push(f); renderAttachGrid(); e.target.value = '';
+        }
+    };
+    $('#modal-close').onclick = () => $('#img-modal').style.display = 'none';
+
+    document.addEventListener('keydown', e => {
+        if((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 's' || e.key === 'S')) {
+            e.preventDefault();
+            if(!$('#empty-state').classList.contains('hidden')) return;
+            saveCurrent();
+        }
+        if((e.ctrlKey || e.metaKey) && e.altKey && (e.key === 'n' || e.key === 'N')) {
+            e.preventDefault();
+            showNewForm();
+        }
+    });
+
+    // Link Section Event
+    $('#btn-add-link').onclick = () => {
+        if(currentLinks.length >= 10) return alert('링크는 최대 10개까지 가능합니다.');
+        currentLinks.push({ title: '', url: '' });
+        renderLinkList();
+    };
+}
+
+// --- Logic Functions ---
+
+async function handlePasteEvent(e) {
+    if(e.target.id === 'memo-textarea') return;
+
+    const clipboardData = (e.clipboardData || window.clipboardData);
+    if (!clipboardData) return;
+    const types = clipboardData.types;
+
+    // 1. 이미지 붙여넣기 전역 처리
+    if (types && types.includes('Files')) {
+        const items = clipboardData.items;
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf("image") !== -1) {
+                // 입력창(input/textarea) 등에 파일명 텍스트가 붙여넣어지는 것을 방지
+                e.preventDefault(); 
+                
+                // 빈 화면(empty-state) 상태일 때는 새 질문 폼을 열어줌
+                if (!$('#empty-state').classList.contains('hidden')) {
+                    showNewForm();
+                }
+
+                if(currentFiles.length >= 10) return alert('첨부파일은 최대 10개까지만 가능합니다.');
+                toast('이미지 변환 중...');
+                try {
+                    const blob = items[i].getAsFile();
+                    const pngDataUrl = await convertBlobToPng(blob);
+                    const now = new Date();
+                    currentFiles.push({ name: `pasted_${now.getTime()}.png`, type: 'image/png', data: pngDataUrl });
+                    renderAttachGrid();
+                    toast('이미지가 첨부되었습니다.');
+                } catch(err) { console.error(err); toast('이미지 처리 실패'); }
+                return;
+            }
+        }
+    }
+
+    // 2. HTML/텍스트 붙여넣기 정제 및 삽입 (.wysiwyg 내부에 포커스되었을 때만 실행)
+    if (e.target.closest('.wysiwyg')) {
+        e.preventDefault();
+        
+        let pastedHtml = clipboardData.getData('text/html');
+        let pastedText = clipboardData.getData('text/plain');
+
+        if (pastedHtml) {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(pastedHtml, 'text/html');
+            
+            doc.body.querySelectorAll('*').forEach(el => {
+                el.removeAttribute('style');
+                el.removeAttribute('class');
+                el.removeAttribute('id');
+
+                if (el.tagName === 'A') {
+                    const span = document.createElement('span');
+                    span.innerHTML = el.innerHTML;
+                    el.parentNode.replaceChild(span, el);
+                }
+
+                if (['BUTTON', 'SVG', 'PATH', 'IMG'].includes(el.tagName)) {
+                   if(el.tagName !== 'IMG') el.remove(); 
+                }
+            });
+
+            document.execCommand('insertHTML', false, doc.body.innerHTML);
+        } else {
+            document.execCommand('insertText', false, pastedText);
+        }
+    }
+}
+
+function convertBlobToPng(blob) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width; canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            try { resolve(canvas.toDataURL('image/png')); } catch (e) { reject(e); }
+        };
+        img.onerror = reject;
+        img.src = URL.createObjectURL(blob);
+    });
+}
+
+function updateFilters(items) {
+    const vendors = [...new Set(items.map(i => i.vendor).filter(Boolean))].sort();
+    const cats = [...new Set(items.map(i => i.field).filter(Boolean))].sort();
+
+    const updateSelect = (id, list, current) => {
+        const sel = $(id);
+        const savedVal = current || sel.value;
+        const first = sel.firstElementChild;
+        sel.innerHTML = '';
+        sel.appendChild(first);
+        list.forEach(v => {
+            const op = document.createElement('option');
+            op.value = v; op.textContent = v;
+            sel.appendChild(op);
+        });
+        if(list.includes(savedVal)) sel.value = savedVal;
+    };
+
+    updateSelect('#filter-vendor', vendors, QA_CORE.state.filterVendor);
+    updateSelect('#filter-cat', cats, QA_CORE.state.filterCat);
+
+    const vInp = $('#vendor-list-inp'); vInp.innerHTML = '';
+    vendors.forEach(v => vInp.appendChild(new Option(v, v)));
+    const fInp = $('#field-list-inp'); fInp.innerHTML = '';
+    const allCats = [...new Set([...CONFIG.categoryOrder, ...cats])];
+    allCats.forEach(f => fInp.appendChild(new Option(f, f)));
+}
+
+function filterItems(items) {
+    const { search, filterVendor, filterCat } = QA_CORE.state;
+    return items.filter(i => {
+        if(filterVendor && i.vendor !== filterVendor) return false;
+        if(filterCat && i.field !== filterCat) return false;
+        if(search) {
+            const searchTarget = (i.project+i.vendor+i.field+i.question+i.answer).toLowerCase();
+            return searchTarget.includes(search);
+        }
+        return true;
+    });
+}
+
+async function refreshList() { await QA_CORE.getAll(); renderList(); }
+
+function renderList() {
+    const el = $('#item-list'); el.innerHTML = '';
+    const filtered = filterItems(QA_CORE.state.items);
+
+    filtered.forEach(item => {
+        const div = document.createElement('div');
+        div.className = `item-card ${QA_CORE.state.selectedId === item.uid ? 'active' : ''}`;
+        div.onclick = () => loadItem(item);
+        
+        const catHtml = item.field ? `<span class="item-cat">${item.field}</span>` : '';
+        const vendorHtml = item.vendor ? `<span class="item-vendor">${item.vendor}</span>` : '';
+
+        div.innerHTML = `
+            <div class="item-preview">${item.question}</div>
+            <div class="item-meta">
+                <div>${catHtml}${vendorHtml}</div>
+            </div>
+        `;
+        el.appendChild(div);
+    });
+    $('#total-count').textContent = filtered.length;
+}
+
+function renderAttachGrid() {
+    const grid = $('#img-grid'); grid.innerHTML = '';
+    currentFiles.forEach((f, idx) => {
+        const slot = document.createElement('div'); slot.className = 'img-slot';
+        if(f.type.startsWith('image/')) {
+            const img = document.createElement('img'); img.className = 'img-thumb'; img.src = f.data;
+            img.onclick = () => { $('#modal-img-tag').src = f.data; $('#img-modal').style.display = 'flex'; };
+            slot.appendChild(img);
+        } else {
+            const th = document.createElement('div'); th.className = 'file-thumb';
+            th.innerHTML = `<i class="fas fa-file-alt"></i><span>${f.name}</span>`;
+            th.onclick = () => { const a = document.createElement('a'); a.href = f.data; a.download = f.name; a.click(); };
+            slot.appendChild(th);
+        }
+        const del = document.createElement('button'); del.className = 'btn-img-del'; del.innerHTML = '&times;';
+        del.onclick = (e) => { e.stopPropagation(); currentFiles.splice(idx, 1); renderAttachGrid(); };
+        slot.appendChild(del); grid.appendChild(slot);
+    });
+    if(currentFiles.length < 10) {
+        const add = document.createElement('label'); add.className = 'btn-add-img'; add.setAttribute('for', 'inp-file');
+        add.innerHTML = '<i class="fas fa-plus"></i><span>추가</span>'; grid.appendChild(add);
+    }
+}
+
+// [NEW] Link List Renderer
+function renderLinkList() {
+    const el = $('#link-container'); el.innerHTML = '';
+    currentLinks.forEach((linkObj, idx) => {
+        const row = document.createElement('div');
+        row.className = 'link-row';
+        
+        // Ensure object structure
+        let tVal = linkObj.title || '';
+        let uVal = linkObj.url || (typeof linkObj === 'string' ? linkObj : '');
+
+        // Title Input
+        const inpTitle = document.createElement('input');
+        inpTitle.type = 'text';
+        inpTitle.className = 'link-input-title';
+        inpTitle.placeholder = '링크 제목';
+        inpTitle.value = tVal;
+        inpTitle.oninput = (e) => { 
+            currentLinks[idx].title = e.target.value; 
+        };
+
+        // URL Input
+        const inpUrl = document.createElement('input');
+        inpUrl.type = 'text';
+        inpUrl.className = 'link-input-url';
+        inpUrl.placeholder = 'URL 주소 (예: file:///...)';
+        inpUrl.value = uVal;
+        inpUrl.oninput = (e) => { 
+            currentLinks[idx].url = e.target.value; 
+        };
+        
+        // Go Button
+        const btnGo = document.createElement('button');
+        btnGo.className = 'btn-link-action';
+        btnGo.innerHTML = '<i class="fas fa-external-link-alt"></i>';
+        btnGo.title = "링크 열기";
+        btnGo.onclick = () => {
+            const freshUrl = currentLinks[idx].url; 
+            if(!freshUrl || freshUrl.trim() === '') {
+                 toast('URL을 입력하세요.');
+                 return;
+            }
+            window.open(freshUrl, '_blank');
+        };
+
+        // Del Button
+        const btnDel = document.createElement('button');
+        btnDel.className = 'btn-link-action btn-link-del';
+        btnDel.innerHTML = '<i class="fas fa-trash-alt"></i>';
+        btnDel.title = "삭제";
+        btnDel.onclick = () => { currentLinks.splice(idx, 1); renderLinkList(); };
+
+        row.appendChild(inpTitle);
+        row.appendChild(inpUrl);
+        row.appendChild(btnGo);
+        row.appendChild(btnDel);
+        el.appendChild(row);
+    });
+}
+
+function showNewForm() {
+    QA_CORE.state.selectedId = null; renderList();
+    $('#empty-state').classList.add('hidden'); $('#btn-delete').style.display = 'none';
+    
+    $('#inp-project').value = CONFIG.defaultProject;
+    $('#inp-vendor').value = '';
+    $('#inp-field').value = '';
+    $('#inp-no').value = '';
+    $('#inp-question').value = '';
+    $('#inp-question-detail').value = '';
+    $('#inp-answer').innerHTML = '';
+    
+    currentFiles = []; renderAttachGrid();
+    currentLinks = []; renderLinkList(); // Reset Links
+    $('#inp-question').focus();
+}
+
+function loadItem(i) {
+    QA_CORE.state.selectedId = i.uid; renderList();
+    $('#empty-state').classList.add('hidden'); $('#btn-delete').style.display = 'inline-flex';
+    
+    $('#inp-project').value = i.project;
+    $('#inp-vendor').value = i.vendor;
+    $('#inp-field').value = i.field;
+    $('#inp-no').value = i.no; 
+    $('#inp-question').value = i.question;
+    $('#inp-question-detail').value = i.questionDetail || '';
+    $('#inp-answer').innerHTML = i.answer;
+    
+    currentFiles = i.attachments || []; renderAttachGrid();
+    
+    // Links migration support
+    const rawLinks = i.graphLinks || [];
+    currentLinks = rawLinks.map(l => {
+        if(typeof l === 'string') return { title: '', url: l };
+        return l;
+    });
+    renderLinkList();
+}
+
+function getNextNo(project, vendor) {
+    let max = 0;
+    QA_CORE.state.items.forEach(item => {
+        if(item.project === project && item.vendor === vendor) {
+            const n = parseInt(item.no, 10);
+            if(!isNaN(n) && n > max) max = n;
+        }
+    });
+    return max + 1;
+}
+
+async function saveCurrent() {
+    if(!$('#inp-question').value) return toast('질문 요약(Title)을 입력해주세요.');
+    
+    const project = $('#inp-project').value;
+    let noVal = $('#inp-no').value;
+    if(!noVal) noVal = getNextNo(project, $('#inp-vendor').value);
+
+    const cleanLinks = currentLinks.filter(l => l.url && l.url.trim() !== '');
+
+    const item = {
+        uid: QA_CORE.state.selectedId || Date.now().toString(36),
+        project: project,
+        vendor: $('#inp-vendor').value,
+        field: $('#inp-field').value,
+        no: noVal,
+        question: $('#inp-question').value,
+        questionDetail: $('#inp-question-detail').value,
+        answer: $('#inp-answer').innerHTML,
+        attachments: currentFiles,
+        graphLinks: cleanLinks 
+    };
+    
+    try {
+        await QA_CORE.save(item); 
+        QA_CORE.state.selectedId = item.uid;
+        refreshList(); 
+        toast('저장되었습니다.');
+    } catch (e) { console.error(e); toast('저장 실패: DB 오류'); }
+}
+
+async function deleteCurrent() {
+    if(confirm('삭제하시겠습니까?')) { 
+        await QA_CORE.remove(QA_CORE.state.selectedId); 
+        refreshList(); 
+        $('#empty-state').classList.remove('hidden'); 
+    }
+}
+
+// --- Memo Feature ---
+function setupMemo() {
+    const btnOpen = document.getElementById('btn-memo');
+    const btnClose = document.getElementById('btn-close-memo');
+    const sidebar = document.getElementById('memo-sidebar');
+    const textarea = document.getElementById('memo-textarea');
+    const status = document.getElementById('memo-status');
+    const btnCopy = document.getElementById('btn-copy-memo');
+    const btnClear = document.getElementById('btn-clear-memo');
+
+    if(!btnOpen || !sidebar) return;
+
+    const toggleMemo = () => sidebar.classList.toggle('open');
+    btnOpen.addEventListener('click', toggleMemo);
+    btnClose.addEventListener('click', () => sidebar.classList.remove('open'));
+
+    const saved = localStorage.getItem('QA_MEMO');
+    if (saved) textarea.value = saved;
+
+    textarea.addEventListener('input', () => {
+        localStorage.setItem('QA_MEMO', textarea.value);
+        if(status){
+            status.textContent = 'Saved';
+            setTimeout(() => status.textContent = 'Ready', 1000);
+        }
+    });
+
+    btnCopy.addEventListener('click', () => {
+        textarea.select();
+        document.execCommand('copy');
+        toast('메모 내용이 복사되었습니다.');
+    });
+
+    btnClear.addEventListener('click', () => {
+        if(confirm('메모를 모두 지우시겠습니까?')) {
+            textarea.value = '';
+            localStorage.removeItem('QA_MEMO');
+        }
+    });
+}
+
+function toast(m) { const t = $('#toast'); t.textContent = m; t.style.opacity = '1'; setTimeout(() => t.style.opacity = '0', 2000); }
+</script>
+</body>
+</html>
