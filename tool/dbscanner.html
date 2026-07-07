@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IndexedDB Scanner</title>
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <style>
+    :root {
+      /* Color Palette: Modern Slate & Soft Indigo */
+      --bg-color: #F8FAFC;
+      --card-bg: #FFFFFF;
+      --primary: #6366F1;
+      --primary-hover: #4F46E5;
+      --primary-light: #EEF2FF;
+      --text-title: #0F172A;
+      --text-main: #334155;
+      --text-muted: #64748B;
+      --border: #E2E8F0;
+      --border-hover: #CBD5E1;
+      --success-bg: #F0FDF4;
+      --success-text: #166534;
+      
+      --radius-sm: 8px;
+      --radius-md: 16px;
+      --radius-lg: 24px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: 'Pretendard', system-ui, -apple-system, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      margin: 0;
+      padding: 40px 20px;
+      display: flex;
+      justify-content: center;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container {
+      background: var(--card-bg);
+      width: 100%;
+      max-width: 760px;
+      padding: 40px;
+      border-radius: var(--radius-lg);
+      box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.05), 0 8px 10px -6px rgba(15, 23, 42, 0.01);
+      height: fit-content;
+    }
+
+    .header-group {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    h1 {
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--text-title);
+      margin: 0 0 12px 0;
+      letter-spacing: -0.02em;
+    }
+
+    p.desc {
+      color: var(--text-muted);
+      margin: 0;
+      font-size: 15px;
+      line-height: 1.6;
+      word-break: keep-all;
+    }
+
+    code {
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      background-color: #F1F5F9;
+      color: #DB2777;
+      padding: 2px 6px;
+      border-radius: 6px;
+      font-size: 0.9em;
+    }
+
+    /* Upload Box */
+    .upload-box {
+      position: relative;
+      border: 2px dashed var(--border);
+      border-radius: var(--radius-md);
+      padding: 50px 20px;
+      text-align: center;
+      background-color: var(--card-bg);
+      cursor: pointer;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      margin-bottom: 32px;
+    }
+
+    .upload-box:hover, .upload-box.drag-active {
+      border-color: var(--primary);
+      background-color: var(--primary-light);
+    }
+
+    .upload-icon {
+      color: var(--primary);
+      margin-bottom: 16px;
+      transition: transform 0.2s;
+    }
+
+    .upload-box:hover .upload-icon {
+      transform: translateY(-4px);
+    }
+
+    .upload-box label {
+      cursor: pointer;
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--primary);
+      display: block;
+      margin-bottom: 8px;
+    }
+
+    .upload-box .hint {
+      color: var(--text-muted);
+      font-size: 14px;
+      margin: 0;
+    }
+
+    input[type="file"] {
+      display: none;
+    }
+
+    /* Results */
+    .result-section {
+      border-top: 1px solid var(--border);
+      padding-top: 28px;
+    }
+
+    .stats {
+      display: flex;
+      align-items: center;
+      font-size: 14.5px;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+      font-weight: 500;
+    }
+
+    .stats .highlight {
+      color: var(--primary);
+      font-weight: 600;
+      margin: 0 4px;
+    }
+
+    .result-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .result-item {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      padding: 18px 20px;
+      border-radius: var(--radius-sm);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      transition: box-shadow 0.2s, border-color 0.2s;
+      animation: fadeIn 0.4s ease-out forwards;
+    }
+
+    .result-item:hover {
+      border-color: var(--border-hover);
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    }
+
+    .file-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .file-icon {
+      color: #94A3B8;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .file-name {
+      font-weight: 600;
+      font-size: 15px;
+      color: var(--text-title);
+      word-break: break-all;
+      line-height: 1.4;
+    }
+
+    .badges-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding-left: 30px;
+    }
+
+    /* Badge & Copy Action */
+    .db-badge {
+      display: inline-flex;
+      align-items: center;
+      background: var(--primary-light);
+      color: var(--primary-hover);
+      padding: 6px 12px;
+      border-radius: 9999px;
+      font-weight: 600;
+      font-size: 13px;
+      letter-spacing: 0.01em;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      user-select: none;
+    }
+
+    .db-badge:hover {
+      background: #E0E7FF;
+      transform: translateY(-1px);
+      box-shadow: 0 2px 4px rgba(99, 102, 241, 0.1);
+    }
+
+    .db-badge:active {
+      transform: translateY(0) scale(0.96);
+    }
+
+    .db-badge.copied {
+      background: var(--success-bg);
+      color: var(--success-text);
+      pointer-events: none;
+    }
+
+    .empty-result {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      padding: 40px 20px;
+      background: var(--bg-color);
+      border-radius: var(--radius-md);
+      font-size: 15px;
+      gap: 12px;
+    }
+
+    /* Animations */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Spinner */
+    .loader {
+      display: none;
+      width: 24px;
+      height: 24px;
+      border: 3px solid #E2E8F0;
+      border-bottom-color: var(--primary);
+      border-radius: 50%;
+      animation: rotation 1s linear infinite;
+      margin: 0 auto 16px auto;
+    }
+
+    @keyframes rotation {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <div class="header-group">
+      <h1>IndexedDB 스캐너</h1>
+      <p class="desc">
+        폴더를 선택하거나 드래그하여 HTML, JS, TS 파일을 분석하세요.<br>
+        <code>indexedDB.open()</code> 함수로 생성된 데이터베이스 이름을 추출합니다.
+      </p>
+    </div>
+
+    <div class="upload-box" id="dropZone">
+      <svg class="upload-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+        <polyline points="17 8 12 3 7 8"></polyline>
+        <line x1="12" y1="3" x2="12" y2="15"></line>
+      </svg>
+      <label for="folderInput">폴더를 선택하거나 여기로 드래그하세요</label>
+      <p class="hint">하위 폴더의 파일까지 모두 스캔합니다.</p>
+      <input type="file" id="folderInput" webkitdirectory directory multiple>
+    </div>
+
+    <div class="result-section" id="resultSection" style="display: none;">
+      <div id="stats" class="stats"></div>
+      <div id="resultContainer" class="result-list"></div>
+    </div>
+  </div>
+
+  <script>
+    const dropZone = document.getElementById('dropZone');
+    const folderInput = document.getElementById('folderInput');
+    const resultSection = document.getElementById('resultSection');
+    const resultContainer = document.getElementById('resultContainer');
+    const stats = document.getElementById('stats');
+
+    dropZone.addEventListener('click', () => folderInput.click());
+
+    folderInput.addEventListener('change', (event) => {
+      handleFiles(event.target.files);
+    });
+
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('drag-active');
+    });
+
+    dropZone.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-active');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-active');
+      
+      const files = e.dataTransfer.files;
+      if (files && files.length > 0) {
+        handleFiles(files);
+      }
+    });
+
+    async function handleFiles(files) {
+      if (!files || files.length === 0) return;
+
+      resultSection.style.display = 'block';
+      resultContainer.innerHTML = '';
+      stats.innerHTML = `<div class="loader" style="display:block;"></div>스캔 중입니다...`;
+
+      let scannedCount = 0;
+      let foundCount = 0;
+
+      setTimeout(async () => {
+        for (const file of files) {
+          if (file.name.match(/\.(html|js|ts)$/i)) {
+            scannedCount++;
+            try {
+              const text = await file.text();
+              const dbNames = extractDBNames(text);
+              
+              if (dbNames.length > 0) {
+                foundCount++;
+                appendResultItem(file, dbNames);
+              }
+            } catch (e) {
+              console.error(`파일을 읽는 중 오류 발생: ${file.name}`, e);
+            }
+          }
+        }
+
+        renderStats(scannedCount, foundCount);
+      }, 100);
+    }
+
+    function appendResultItem(file, dbNames) {
+      const resultItem = document.createElement('div');
+      resultItem.className = 'result-item';
+      
+      const filePath = file.webkitRelativePath || file.name;
+      
+      const fileHeader = document.createElement('div');
+      fileHeader.className = 'file-header';
+      fileHeader.innerHTML = `
+        <svg class="file-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+          <polyline points="13 2 13 9 20 9"></polyline>
+        </svg>
+        <div class="file-name">${filePath}</div>
+      `;
+      resultItem.appendChild(fileHeader);
+      
+      const badgesContainer = document.createElement('div');
+      badgesContainer.className = 'badges-container';
+      
+      dbNames.forEach(dbName => {
+        const badge = document.createElement('span');
+        badge.className = 'db-badge';
+        badge.innerText = dbName;
+        badge.title = "클릭하여 복사"; // 툴팁 힌트 추가
+        
+        // 클릭 시 복사 이벤트 추가
+        badge.addEventListener('click', async () => {
+          try {
+            await navigator.clipboard.writeText(dbName);
+            
+            // 시각적 피드백 (복사됨 텍스트 및 스타일 변경)
+            const originalText = badge.innerText;
+            badge.innerText = '복사 완료!';
+            badge.classList.add('copied');
+            
+            // 1.5초 후 원래 상태로 복구
+            setTimeout(() => {
+              badge.innerText = originalText;
+              badge.classList.remove('copied');
+            }, 1500);
+          } catch (err) {
+            console.error('복사 실패:', err);
+            alert('클립보드 복사에 실패했습니다.');
+          }
+        });
+
+        badgesContainer.appendChild(badge);
+      });
+      
+      resultItem.appendChild(badgesContainer);
+      resultContainer.appendChild(resultItem);
+    }
+
+    function renderStats(scannedCount, foundCount) {
+      if (scannedCount === 0) {
+        stats.innerHTML = `스캔 가능한 웹 파일(HTML, JS, TS)을 찾지 못했습니다.`;
+        resultContainer.innerHTML = `
+          <div class="empty-result">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+            스캔된 파일이 없습니다.
+          </div>`;
+        return;
+      }
+
+      stats.innerHTML = `총 <span class="highlight">${scannedCount}개</span>의 파일을 스캔하여 <span class="highlight">${foundCount}개</span>의 파일에서 DB를 발견했습니다.`;
+
+      if (foundCount === 0) {
+        resultContainer.innerHTML = `
+          <div class="empty-result">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="17 8 12 3 7 8"></polyline>
+              <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+            IndexedDB 이름이 발견되지 않았습니다.
+          </div>`;
+      }
+    }
+
+    function extractDBNames(text) {
+      const names = new Set();
+      
+      const directPattern = /indexedDB\.open\(\s*['"`]([^'"`]+)['"`]/g;
+      let match;
+      while ((match = directPattern.exec(text)) !== null) {
+        names.add(match[1]);
+      }
+
+      const varPattern = /indexedDB\.open\(\s*([a-zA-Z0-9_]+)/g;
+      while ((match = varPattern.exec(text)) !== null) {
+        const varName = match[1];
+        
+        if (varName && !varName.match(/['"`]/)) {
+          const assignPattern = new RegExp(`(?:const|let|var)\\s+${varName}\\s*=\\s*['"\`]([^'"\`]+)['"\`]`, 'g');
+          let assignMatch;
+          while ((assignMatch = assignPattern.exec(text)) !== null) {
+            names.add(assignMatch[1]);
+          }
+        }
+      }
+      
+      return Array.from(names);
+    }
+  </script>
+</body>
+</html>

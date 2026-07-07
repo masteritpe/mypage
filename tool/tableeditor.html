@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Table Editor</title>
+  
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  
+  <style>
+    :root {
+      --bg-body: #F9FAFB;
+      --bg-surface: #FFFFFF;
+      --border-light: #F3F4F6;
+      --border-base: #E5E7EB;
+      --text-main: #111827;
+      --text-muted: #6B7280;
+      --primary: #111827;       
+      --primary-hover: #374151;
+      --secondary: #FFFFFF;
+      --secondary-hover: #F9FAFB;
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+      --radius-md: 8px;
+      --radius-lg: 12px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background: var(--bg-body);
+      color: var(--text-main);
+      margin: 0;
+      padding: 40px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .dashboard-header { max-width: 100%; margin: 0 auto 24px auto; }
+    .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 16px; }
+    .title-area { display: flex; align-items: center; gap: 12px; }
+    .title-area i { font-size: 28px; color: var(--text-main); }
+    h2 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 10px 18px; border-radius: var(--radius-md);
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      border: 1px solid transparent;
+    }
+    .btn-primary { background: var(--primary); color: white; box-shadow: var(--shadow-sm); }
+    .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
+    .btn-outline { background: var(--secondary); color: var(--text-main); border-color: var(--border-base); box-shadow: var(--shadow-sm); }
+    .btn-outline:hover { background: var(--secondary-hover); border-color: #D1D5DB; }
+
+    .btn-group {
+      display: flex; gap: 4px; background: var(--bg-surface); padding: 4px;
+      border-radius: var(--radius-md); border: 1px solid var(--border-base);
+    }
+    .btn-group .btn { border: none; box-shadow: none; }
+    .btn-group .btn-outline:hover { background: var(--bg-body); }
+
+    .instructions {
+      display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+      font-size: 13px; color: var(--text-muted);
+      background: var(--bg-surface); padding: 12px 20px;
+      border-radius: var(--radius-md); border: 1px solid var(--border-base);
+    }
+    .instructions span { display: inline-flex; align-items: center; gap: 6px; }
+    
+    .clickable-icon { cursor: pointer; transition: color 0.2s; }
+    .clickable-icon:hover { color: var(--primary) !important; }
+
+    #column-toggles { display: none; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 20px; max-width: 100%; }
+    .toggle-title { font-size: 13px; font-weight: 600; color: var(--text-muted); margin-right: 8px; }
+    .col-toggle {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 13px; font-weight: 500; color: var(--text-main);
+      background: var(--bg-surface); padding: 6px 14px;
+      border-radius: 99px; cursor: pointer; border: 1px solid var(--border-base);
+      transition: all 0.2s; user-select: none; box-shadow: var(--shadow-sm);
+    }
+    .col-toggle:hover { border-color: #D1D5DB; background: var(--bg-body); }
+    .col-toggle input { display: none; } 
+    .col-toggle.hidden-col { background: transparent; border-color: dashed var(--border-base); color: #9CA3AF; box-shadow: none; opacity: 0.6; }
+
+    #table-wrapper {
+      max-width: 100%; margin: 0 auto; background: var(--bg-surface);
+      border: 1px solid var(--border-base); border-radius: var(--radius-lg);
+      overflow: auto; max-height: calc(100vh - 220px); box-shadow: var(--shadow-md);
+      user-select: none; position: relative;
+    }
+    #table-wrapper::-webkit-scrollbar { width: 8px; height: 8px; }
+    #table-wrapper::-webkit-scrollbar-track { background: transparent; }
+    #table-wrapper::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 4px; }
+    #table-wrapper::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
+
+    table { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; font-size: 15px; text-align: left; }
+    th, td {
+      padding: 12px 16px; white-space: pre-wrap; word-break: break-all; cursor: cell; position: relative;
+      border-bottom: 1px solid var(--border-light); border-right: 1px solid var(--border-light);
+      transition: background 0.15s ease; line-height: 1.5;
+    }
+    th:last-child, td:last-child { border-right: none; }
+    tr:last-child td { border-bottom: none; }
+    th { font-weight: 600; color: var(--text-muted); position: sticky; top: 0; z-index: 10; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(8px); }
+    
+    .chk-col { width: 44px; text-align: center; padding: 0 !important; cursor: default; background-color: var(--bg-surface); border-right: 1px solid var(--border-base) !important; z-index: 11; }
+    .row-chk { cursor: pointer; width: 16px; height: 16px; margin-top: 5px; }
+
+    .resizer { position: absolute; top: 0; right: 0; width: 6px; cursor: col-resize; user-select: none; height: 100%; z-index: 15; transition: background-color 0.2s ease; }
+    .resizer:hover, .resizer.resizing { background-color: var(--primary); }
+
+    .selected-cell::after { 
+      content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; 
+      box-shadow: inset 0 0 0 1px var(--primary); pointer-events: none; z-index: 2;
+    }
+    .copied-cell::after { 
+      content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; 
+      box-shadow: inset 0 0 0 2px #10B981; pointer-events: none; z-index: 2; transition: opacity 0.2s;
+    }
+
+    [contenteditable="true"] { outline: none; background-color: var(--bg-surface) !important; cursor: text; user-select: text; }
+    [contenteditable="true"]::after { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; box-shadow: inset 0 0 0 2px var(--primary); pointer-events: none; z-index: 5; }
+    
+    .empty-msg { padding: 80px 20px; text-align: center; color: var(--text-muted); display: flex; flex-direction: column; align-items: center; gap: 12px; }
+    .empty-msg i { font-size: 40px; color: #D1D5DB; }
+  </style>
+</head>
+<body>
+
+  <div class="dashboard-header">
+    <div class="header-top">
+      <div class="title-area">
+        <i class="ph ph-magic-wand"></i>
+        <h2>Table Editor</h2>
+      </div>
+      
+      <div class="actions">
+        <button class="btn btn-outline" onclick="applySelectionToPreview()">
+          <i class="ph ph-crop"></i> 영역 자르기
+        </button>
+        
+        <div class="btn-group">
+          <button class="btn btn-outline" onclick="exportToExcel()">
+            <i class="ph ph-table"></i> 엑셀로 복사
+          </button>
+          <button class="btn btn-primary" onclick="exportMarkdown()">
+            <i class="ph ph-markdown-logo"></i> MD로 복사
+          </button>
+          <button class="btn btn-outline" onclick="exportHybrid()">
+            <i class="ph ph-files"></i> MD 래핑
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="instructions" title="편집 모드(더블클릭)에서 다양한 키보드 단축키(Ctrl+B, Ctrl+Shift+X 등)를 지원합니다.">
+      <span><i class="ph ph-clipboard-text"></i> <b>Ctrl+V</b>: 붙여넣기</span>
+      <span style="color: #D1D5DB;">|</span>
+      <span><i class="ph ph-mouse-left"></i> 클릭: 셀 복사</span>
+      <span style="color: #D1D5DB;">|</span>
+      <span><i class="ph ph-cursor-click"></i> 더블클릭: 내용 수정</span>
+    </div>
+  </div>
+
+  <div id="column-toggles"></div>
+
+  <div id="table-wrapper">
+    <div class="empty-msg">
+      <i class="ph ph-clipboard"></i>
+      표를 선택해서 화면에 붙여넣기(Ctrl+V)
+    </div>
+  </div>
+
+  <script>
+    let isDragging = false;
+    let startCell = null;
+    let endCell = null;
+    const wrapper = document.getElementById('table-wrapper');
+    const toggleContainer = document.getElementById('column-toggles');
+    
+    // --- [신규 추가] 편집 모드 텍스트 서식 키보드 단축키 처리 로직 ---
+    document.addEventListener('keydown', function(e) {
+      const activeEl = document.activeElement;
+      // 현재 포커스된 요소가 contenteditable(편집 모드)일 때만 동작하도록 제한
+      if (!activeEl || !activeEl.hasAttribute('contenteditable')) return;
+
+      // 표준 span 태그 방식으로 스타일을 적용하도록 강제
+      document.execCommand('styleWithCSS', false, true);
+      let handled = false;
+      const key = e.key.toLowerCase();
+
+      // [1] CTRL + 기본 키 조합 (Shift, Alt 미포함)
+      if (e.ctrlKey && !e.altKey && !e.shiftKey) {
+        switch(key) {
+          case 'b': document.execCommand('bold'); handled = true; break; // 1) 볼드
+          case 'i': document.execCommand('italic'); handled = true; break; // 2) 이탤릭
+          case 'u': document.execCommand('underline'); handled = true; break; // 3) 밑줄
+          case '0': document.execCommand('strikeThrough'); handled = true; break; // 4) 취소선
+          
+          // 9) 마크(형광펜) 기능
+          case '1': document.execCommand('backColor', false, '#ffe5b4'); handled = true; break; // 연한 주황색
+          case '2': document.execCommand('backColor', false, '#cce5ff'); handled = true; break; // 연한 파란색
+          case '3': document.execCommand('backColor', false, '#fff2cc'); handled = true; break; // 연한 노란색
+          case '4': document.execCommand('backColor', false, '#d5e8d4'); handled = true; break; // 연한 녹색
+          case '5': document.execCommand('backColor', false, '#f8cecc'); handled = true; break; // 연한 분홍색
+          case '6': document.execCommand('backColor', false, '#e6ccb2'); handled = true; break; // 연한 갈색
+          case '7': document.execCommand('backColor', false, '#e0e0e0'); handled = true; break; // 연한 회색
+          
+          // 10) 글꼴 증감 (+, - / =, _ 모두 대응)
+          case '+':
+          case '=': adjustFontSize(1); handled = true; break; // 선택 영역 폰트 +1
+          case '-':
+          case '_': adjustFontSize(-1); handled = true; break; // 선택 영역 폰트 -1
+        }
+      } 
+      // [2] CTRL + ALT + 키 조합
+      else if (e.ctrlKey && e.altKey && !e.shiftKey) {
+        switch(key) {
+          case 'r': document.execCommand('foreColor', false, '#ef4444'); handled = true; break; // 5) 빨간색
+          case 'b': document.execCommand('foreColor', false, '#3b82f6'); handled = true; break; // 6) 파란색
+          case 'g': document.execCommand('foreColor', false, '#10b981'); handled = true; break; // 7) 초록색
+          case 'm': applyDuumEmph(); handled = true; break; // 11) 두음 강조 (남색 배경, 흰 글씨, 볼드)
+        }
+      } 
+      // [3] CTRL + SHIFT + 키 조합
+      else if (e.ctrlKey && e.shiftKey && !e.altKey) {
+        if (key === 'x') {
+          // 8) 서식 지우기
+          document.execCommand('removeFormat');
+          
+          // 커스텀으로 삽입된 span 태그의 속성(크기, 배경색 등)을 완전 초기화하는 로직
+          const sel = window.getSelection();
+          if (sel.rangeCount > 0 && !sel.isCollapsed) {
+              const marker = 'CLEAR_MARKER_' + Date.now();
+              document.execCommand('fontName', false, marker);
+              const elements = document.querySelectorAll(`span[style*="${marker}"], font[face="${marker}"]`);
+              elements.forEach(el => {
+                if (el.tagName.toLowerCase() === 'font') {
+                  const span = document.createElement('span');
+                  span.innerHTML = el.innerHTML;
+                  el.parentNode.replaceChild(span, el);
+                  el = span;
+                }
+                el.removeAttribute('style');
+                el.removeAttribute('color');
+                el.removeAttribute('face');
+              });
+          }
+          handled = true;
+        }
+      }
+
+      // 단축키가 실행된 경우, 브라우저의 기본 동작 방지 (예: 북마크 열기, 확대/축소 등)
+      if (handled) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    });
+
+    // 보조 함수: 폰트 사이즈 미세 조정 (+1px / -1px)
+    function adjustFontSize(delta) {
+      const sel = window.getSelection();
+      if (!sel.rangeCount || sel.isCollapsed) return;
+      
+      const parentNode = sel.anchorNode.nodeType === 3 ? sel.anchorNode.parentNode : sel.anchorNode;
+      const currentSize = parseFloat(window.getComputedStyle(parentNode).fontSize) || 15;
+      const newSize = currentSize + delta;
+
+      const marker = 'FONT_SIZE_' + Date.now();
+      document.execCommand('fontName', false, marker);
+
+      const elements = document.querySelectorAll(`span[style*="${marker}"], font[face="${marker}"]`);
+      elements.forEach(el => {
+        if (el.tagName.toLowerCase() === 'font') {
+          const span = document.createElement('span');
+          span.innerHTML = el.innerHTML;
+          span.style.fontSize = `${newSize}px`;
+          el.parentNode.replaceChild(span, el);
+        } else {
+          el.style.fontFamily = '';
+          if (!el.getAttribute('style').trim()) el.removeAttribute('style');
+          el.style.fontSize = `${newSize}px`;
+        }
+      });
+    }
+
+    // 보조 함수: 두음 강조 적용
+    function applyDuumEmph() {
+      const sel = window.getSelection();
+      if (!sel.rangeCount || sel.isCollapsed) return;
+
+      const marker = 'DUUM_' + Date.now();
+      document.execCommand('fontName', false, marker);
+
+      const elements = document.querySelectorAll(`span[style*="${marker}"], font[face="${marker}"]`);
+      elements.forEach(el => {
+        let targetEl = el;
+        if (el.tagName.toLowerCase() === 'font') {
+          const span = document.createElement('span');
+          span.innerHTML = el.innerHTML;
+          el.parentNode.replaceChild(span, el);
+          targetEl = span;
+        }
+        targetEl.style.fontFamily = '';
+        targetEl.style.backgroundColor = '#0d3a9e';
+        targetEl.style.color = 'white';
+        targetEl.style.fontWeight = 'bold';
+      });
+    }
+    // --- [신규 추가 끝] ---
+
+    // 🔥 파워업된 복사 붙여넣기 감지 로직
+    document.addEventListener('paste', (event) => {
+      if (document.activeElement && document.activeElement.hasAttribute('contenteditable')) return;
+
+      const clipboardData = event.clipboardData || window.clipboardData;
+      const pastedHtml = clipboardData.getData('text/html');
+      const pastedText = clipboardData.getData('text/plain');
+      
+      let parsedData = [];
+
+      // [1단계] HTML 구조 분석 (제미나이 웹 드래그 등)
+      if (pastedHtml) {
+        const doc = new DOMParser().parseFromString(pastedHtml, 'text/html');
+        // table tr 뿐만 아니라 ARIA role까지 싹 다 긁어옴
+        const rows = doc.querySelectorAll('tr, [role="row"]');
+        
+        if (rows.length > 0) {
+          Array.from(rows).forEach(row => {
+            const cells = row.querySelectorAll('th, td, [role="cell"], [role="columnheader"]');
+            if (cells.length > 0) {
+              const rowData = Array.from(cells).map(cell => {
+                const clone = cell.cloneNode(true);
+                // 줄바꿈을 살리기 위한 태그 치환
+                clone.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
+                clone.querySelectorAll('p, div, li').forEach(block => block.append('\n'));
+                return clone.textContent.trim().replace(/\n{2,}/g, '\n');
+              });
+              parsedData.push(rowData);
+            }
+          });
+        }
+      }
+
+      // [2단계] 마크다운 파싱 (제미나이 하단 복사 아이콘 클릭 시)
+      if (parsedData.length === 0 && pastedText && pastedText.includes('|')) {
+        const lines = pastedText.split('\n').map(line => line.trim());
+        const tempTable = [];
+        
+        for (let line of lines) {
+          // 파이프(|)가 포함된 마크다운 테이블 구문 추출
+          if (line.includes('|')) {
+            if (/^\|?(\s*:?-+:?\s*\|?)+\|?$/.test(line)) continue; // 구분선 무시
+            
+            let cells = line.split('|').map(c => c.trim());
+            // 마크다운 양끝 파이프 때문에 생기는 빈 배열 제거
+            if (cells.length > 1 && cells[0] === '') cells.shift();
+            if (cells.length > 0 && cells[cells.length - 1] === '') cells.pop();
+            
+            tempTable.push(cells);
+          }
+        }
+        
+        // 2열 이상의 데이터가 생성되었다면 표로 인정
+        if (tempTable.length > 0 && tempTable[0].length > 1) {
+          parsedData = tempTable;
+        }
+      }
+      
+      // [3단계] 일반 텍스트 분석 (탭 분리 또는 제미나이의 띄어쓰기 복사 오류 대비)
+      if (parsedData.length === 0 && pastedText) {
+        const lines = pastedText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+        
+        if (lines.some(line => line.includes('\t'))) {
+          // 일반적인 엑셀 탭 복사
+          parsedData = lines.map(line => line.split('\t').map(c => c.trim()));
+        } else if (lines.some(line => /\s{2,}/.test(line))) {
+          // 탭이 유실되고 다중 공백으로 구분된 비정상 데이터 복구
+          parsedData = lines.map(line => line.split(/\s{2,}/).map(c => c.trim()));
+        }
+      }
+
+      // 결과 렌더링
+      if (parsedData.length > 0) {
+        renderTable(parsedData);
+      } else {
+        alert('지원되는 표 형식을 찾을 수 없습니다.\n제미나이에서 표 전체를 넉넉하게 드래그하여 복사해보세요.');
+      }
+    });
+
+    function renderTable(data) {
+      if (!data || data.length === 0) return;
+
+      let html = '<table>';
+      let isFirstRow = true;
+
+      data.forEach((row, rowIndex) => {
+        const isEmptyRow = row.every(cell => cell === undefined || cell === null || cell === '');
+        if (isEmptyRow) return;
+
+        html += '<tr>';
+        if (isFirstRow) {
+          html += `<th class="chk-col"><i class="ph ph-check-square clickable-icon" title="전체 숨김 해제" onclick="uncheckAll()" style="font-size: 18px; color: var(--text-muted);"></i></th>`;
+        } else {
+          html += `<td class="chk-col" contenteditable="false"><input type="checkbox" class="row-chk" onchange="hideRow(this)"></td>`;
+        }
+
+        row.forEach(cell => {
+          let text = cell !== undefined ? String(cell) : '';
+          text = text.replace(/<br\s*\/?>/gi, '\n'); 
+          if (isFirstRow) {
+            html += `<th>${text}<div class="resizer"></div></th>`;
+          } else {
+            html += `<td>${text}</td>`;
+          }
+        });
+        html += '</tr>';
+        isFirstRow = false;
+      });
+      html += '</table>';
+      
+      wrapper.innerHTML = html;
+      clearSelection();
+      updateColumnToggles();
+      initResizers();
+    }
+
+    function initResizers() {
+      const ths = document.querySelectorAll('th');
+      ths.forEach(th => {
+        const resizer = th.querySelector('.resizer');
+        if (!resizer) return;
+        
+        let x = 0, w = 0;
+        const mouseDownHandler = function(e) {
+          e.stopPropagation(); 
+          x = e.clientX;
+          w = parseInt(window.getComputedStyle(th).width, 10);
+          document.addEventListener('mousemove', mouseMoveHandler);
+          document.addEventListener('mouseup', mouseUpHandler);
+          resizer.classList.add('resizing');
+          document.body.style.cursor = 'col-resize';
+        };
+
+        const mouseMoveHandler = function(e) {
+          const newWidth = Math.max(30, w + (e.clientX - x)); 
+          th.style.width = `${newWidth}px`;
+          th.style.minWidth = `${newWidth}px`;
+          th.style.maxWidth = `${newWidth}px`;
+        };
+
+        const mouseUpHandler = function() {
+          document.removeEventListener('mousemove', mouseMoveHandler);
+          document.removeEventListener('mouseup', mouseUpHandler);
+          resizer.classList.remove('resizing');
+          document.body.style.cursor = '';
+        };
+
+        resizer.addEventListener('mousedown', mouseDownHandler);
+        resizer.addEventListener('dblclick', (e) => e.stopPropagation()); 
+      });
+    }
+
+    function hideRow(checkbox) {
+      if (checkbox.checked) checkbox.closest('tr').style.display = 'none';
+    }
+
+    function uncheckAll() {
+      document.querySelectorAll('.row-chk').forEach(cb => {
+        if (cb.checked) {
+          cb.checked = false;
+          cb.closest('tr').style.display = ''; 
+        }
+      });
+      clearSelection();
+    }
+
+    function extractVisibleData() {
+      const table = document.querySelector('table');
+      if (!table) return null;
+      
+      const data = [];
+      for (let r = 0; r < table.rows.length; r++) {
+        const row = table.rows[r];
+        if (row.style.display === 'none') continue; 
+        
+        const rowData = [];
+        for (let c = 0; c < row.cells.length; c++) {
+          const cell = row.cells[c];
+          if (cell.classList.contains('chk-col') || cell.style.display === 'none') continue; 
+          
+          const clonedCell = cell.cloneNode(true);
+          const resizer = clonedCell.querySelector('.resizer');
+          if (resizer) resizer.remove();
+          
+          rowData.push(clonedCell.innerText.trim());
+        }
+        data.push(rowData);
+      }
+      return data.length > 0 ? data : null;
+    }
+
+    function generateMDString(data) {
+      let mdString = '';
+      data.forEach((row, index) => {
+        const safeRow = row.map(text => text.replace(/\n/g, '<br>'));
+        mdString += '| ' + safeRow.join(' | ') + ' |\n';
+        if (index === 0) {
+          mdString += '| ' + safeRow.map(() => '---').join(' | ') + ' |\n';
+        }
+      });
+      return mdString;
+    }
+
+    function generateHTMLTable(data) {
+      let html = '<table border="1" style="border-collapse: collapse; width: 100%;">';
+      data.forEach((row, index) => {
+        html += '<tr>';
+        row.forEach(text => {
+          const tag = index === 0 ? 'th' : 'td';
+          const safeText = text.replace(/\n/g, '<br>');
+          html += `<${tag} style="padding: 8px; border: 1px solid #ddd;">${safeText}</${tag}>`;
+        });
+        html += '</tr>';
+      });
+      html += '</table>';
+      return html;
+    }
+
+    function exportToExcel() {
+      const data = extractVisibleData();
+      if (!data) return alert('출력할 데이터가 없습니다.');
+      
+      const tsvString = data.map(row => row.map(cell => cell.replace(/\n/g, ' ')).join('\t')).join('\n');
+      navigator.clipboard.writeText(tsvString).then(() => {
+        alert('엑셀 형식(TSV)으로 복사되었습니다!\n엑셀에 붙여넣기 하세요.');
+      }).catch(() => alert('클립보드 복사에 실패했습니다.'));
+    }
+
+    function exportMarkdown() {
+      const data = extractVisibleData();
+      if (!data) return alert('출력할 데이터가 없습니다.');
+      
+      const mdString = generateMDString(data);
+      navigator.clipboard.writeText(mdString).then(() => {
+        alert('마크다운 표가 복사되었습니다!');
+      }).catch(() => alert('클립보드 복사에 실패했습니다.'));
+    }
+
+    function exportHybrid() {
+      const data = extractVisibleData();
+      if (!data) return alert('출력할 데이터가 없습니다.');
+
+      const mdString = generateMDString(data);
+      const htmlTable = generateHTMLTable(data);
+      
+      const hybridHtml = `
+        ${htmlTable}
+        <br>
+        <pre spellcheck="false" data-language="markdown">${mdString}</pre>
+      `;
+
+      try {
+        const blobHtml = new Blob([hybridHtml], { type: 'text/html' });
+        const blobText = new Blob([mdString], { type: 'text/plain' });
+        
+        const clipboardItem = new window.ClipboardItem({
+          'text/html': blobHtml,
+          'text/plain': blobText
+        });
+
+        navigator.clipboard.write([clipboardItem]).then(() => {
+          alert('하이브리드(표+MD) 복사 완료!\nQuill 에디터에 붙여넣어 보세요.');
+        });
+      } catch (err) {
+        navigator.clipboard.writeText(mdString).then(() => {
+          alert('브라우저가 하이브리드 복사를 지원하지 않아 텍스트(MD)만 복사되었습니다.');
+        });
+      }
+    }
+
+    function updateColumnToggles() {
+      const table = document.querySelector('table');
+      if (!table || table.rows.length === 0) {
+        toggleContainer.style.display = 'none';
+        return;
+      }
+      
+      let html = '<div class="toggle-title"><i class="ph ph-eye"></i> 표시 컬럼</div>';
+      const headerRow = table.rows[0]; 
+      
+      for (let c = 0; c < headerRow.cells.length; c++) {
+        if (headerRow.cells[c].classList.contains('chk-col')) continue; 
+
+        const clonedCell = headerRow.cells[c].cloneNode(true);
+        const resizer = clonedCell.querySelector('.resizer');
+        if (resizer) resizer.remove();
+        
+        let text = clonedCell.innerText.trim() || `Column ${c}`;
+        if (text.length > 15) text = text.substring(0, 15) + '...'; 
+        
+        const isVisible = headerRow.cells[c].style.display !== 'none';
+        const icon = isVisible ? 'ph-check-circle' : 'ph-circle';
+        
+        html += `
+          <label class="col-toggle ${isVisible ? '' : 'hidden-col'}">
+            <input type="checkbox" ${isVisible ? 'checked' : ''} onchange="toggleColumn(${c}, this)">
+            <i class="ph ${icon}"></i> ${text}
+          </label>
+        `;
+      }
+      toggleContainer.innerHTML = html;
+      toggleContainer.style.display = 'flex';
+    }
+
+    function toggleColumn(colIndex, checkbox) {
+      const isVisible = checkbox.checked;
+      const table = document.querySelector('table');
+      if (!table) return;
+      
+      for (let r = 0; r < table.rows.length; r++) {
+        const cell = table.rows[r].cells[colIndex];
+        if (cell) cell.style.display = isVisible ? '' : 'none';
+      }
+      
+      const label = checkbox.parentElement;
+      const icon = label.querySelector('i');
+      if (isVisible) {
+        label.classList.remove('hidden-col');
+        icon.className = 'ph ph-check-circle';
+      } else {
+        label.classList.add('hidden-col');
+        icon.className = 'ph ph-circle';
+      }
+    }
+
+    function getCoords(cell) {
+      return { r: cell.parentElement.rowIndex, c: cell.cellIndex };
+    }
+
+    wrapper.addEventListener('mousedown', (e) => {
+      if (e.target.classList.contains('resizer')) return;
+      const editingCell = document.querySelector('[contenteditable="true"]');
+      if (editingCell && editingCell !== e.target.closest('td, th')) editingCell.blur();
+
+      const cell = e.target.closest('td, th');
+      if (!cell || cell.hasAttribute('contenteditable') || cell.classList.contains('chk-col') || e.button !== 0) return; 
+
+      e.preventDefault(); 
+      isDragging = true;
+      startCell = endCell = getCoords(cell);
+      highlightSelection();
+    });
+
+    wrapper.addEventListener('mouseover', (e) => {
+      if (!isDragging) return;
+      const cell = e.target.closest('td, th');
+      if (!cell || cell.classList.contains('chk-col')) return; 
+      endCell = getCoords(cell);
+      highlightSelection();
+    });
+
+    window.addEventListener('mouseup', (e) => {
+      if (!isDragging) return;
+      isDragging = false;
+      
+      if (startCell && endCell && startCell.r === endCell.r && startCell.c === endCell.c) {
+        const cell = e.target.closest('td, th');
+        if (cell && !cell.classList.contains('chk-col') && !e.target.classList.contains('resizer')) {
+          const clonedCell = cell.cloneNode(true);
+          const resizer = clonedCell.querySelector('.resizer');
+          if (resizer) resizer.remove();
+          
+          const textToCopy = clonedCell.innerText.trim();
+          if (textToCopy) {
+            navigator.clipboard.writeText(textToCopy);
+            cell.classList.add('copied-cell'); 
+            setTimeout(() => cell.classList.remove('copied-cell'), 400);
+          }
+        }
+        clearSelection(); 
+      }
+    });
+
+    wrapper.addEventListener('dblclick', (e) => {
+      if (e.target.classList.contains('resizer')) return;
+      const cell = e.target.closest('td, th');
+      if (!cell || cell.classList.contains('chk-col')) return;
+      
+      cell.setAttribute('contenteditable', 'true');
+      cell.focus();
+      const range = document.createRange();
+      range.selectNodeContents(cell.childNodes[0] || cell); 
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    });
+
+    wrapper.addEventListener('blur', (e) => {
+      const cell = e.target;
+      if (cell.tagName === 'TD' || cell.tagName === 'TH') {
+        cell.removeAttribute('contenteditable');
+        window.getSelection().removeAllRanges();
+      }
+    }, true); 
+
+    function highlightSelection() {
+      document.querySelectorAll('.selected-cell').forEach(c => c.classList.remove('selected-cell'));
+      if (!startCell || !endCell) return;
+      
+      const table = document.querySelector('table');
+      if (!table) return;
+
+      const minRow = Math.min(startCell.r, endCell.r);
+      const maxRow = Math.max(startCell.r, endCell.r);
+      const minCol = Math.min(startCell.c, endCell.c);
+      const maxCol = Math.max(startCell.c, endCell.c);
+
+      for (let r = minRow; r <= maxRow; r++) {
+        const row = table.rows[r];
+        if (!row || row.style.display === 'none') continue; 
+        for (let c = minCol; c <= maxCol; c++) {
+          const cell = row.cells[c];
+          if (cell) cell.classList.add('selected-cell');
+        }
+      }
+    }
+
+    function clearSelection() {
+      document.querySelectorAll('.selected-cell').forEach(c => c.classList.remove('selected-cell'));
+      startCell = null;
+      endCell = null;
+    }
+
+    function applySelectionToPreview() {
+      if (!startCell || !endCell) return alert('남기고 싶은 표 영역을 마우스 드래그로 선택해주세요.');
+      
+      const table = document.querySelector('table');
+      if (!table) return;
+
+      const minRow = Math.min(startCell.r, endCell.r);
+      const maxRow = Math.max(startCell.r, endCell.r);
+      const minCol = Math.min(startCell.c, endCell.c);
+      const maxCol = Math.max(startCell.c, endCell.c);
+
+      for (let r = table.rows.length - 1; r >= 0; r--) {
+        if (r < minRow || r > maxRow) {
+          table.deleteRow(r);
+        } else {
+          const row = table.rows[r];
+          for (let c = row.cells.length - 1; c >= 0; c--) {
+            const cell = row.cells[c];
+            if (cell && cell.classList.contains('chk-col')) continue; 
+            if (c < minCol || c > maxCol) row.deleteCell(c);
+          }
+        }
+      }
+      clearSelection();
+      updateColumnToggles();
+    }
+  </script>
+</body>
+</html>

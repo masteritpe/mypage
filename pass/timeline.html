@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>⏱️ 타임라인</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+    /* --- 기본 스타일 (유지) --- */
+    :root {
+        --bg: #f8f9fa; --card: #ffffff; --text: #343a40; --border: #dee2e6;
+        --primary: #228be6; --primary-dark: #1971c2; --danger: #fa5252;
+        --success: #40c057; --success-dark: #2f9e44;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "Pretendard", "Malgun Gothic", -apple-system, sans-serif; background: var(--bg); color: var(--text); font-size: 13px; height: 100vh; overflow: hidden; }
+
+    /* Layout */
+    .app { display: flex; flex-direction: column; height: 100%; }
+    header { background: var(--card); border-bottom: 1px solid var(--border); padding: 0 24px; height: 60px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; z-index: 100; }
+    h1 { font-size: 18px; margin: 0; font-weight: 800; display: flex; align-items: center; gap: 8px; }
+    main { flex: 1; display: flex; overflow: hidden; }
+    aside { width: 260px; background: var(--bg); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 20px; gap: 20px; flex-shrink: 0; }
+    
+    /* Panels */
+    .panel { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 15px; }
+    .panel-title { font-weight: 700; color: #868e96; font-size: 12px; margin-bottom: 10px; text-transform: uppercase; }
+    
+    /* Navigation */
+    .nav-menu { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+    .nav-item { padding: 10px 12px; border-radius: 6px; cursor: pointer; font-weight: 600; color: #495057; display: flex; justify-content: space-between; align-items: center; }
+    .nav-item:hover { background: #e9ecef; }
+    .nav-item.active { background: #e7f5ff; color: var(--primary); font-weight: 800; border-right: 3px solid var(--primary); }
+
+    /* Input Styles */
+    input[type="date"] { 
+        width: 100%; padding: 4px 8px; border: 1px solid var(--border); border-radius: 4px; 
+        font-family: "Malgun Gothic", "Dotum", sans-serif !important; 
+        font-size: 12px; background: transparent; height: 30px;
+    }
+    ::-webkit-datetime-edit, ::-webkit-datetime-edit-fields-wrapper, ::-webkit-datetime-edit-text, 
+    ::-webkit-datetime-edit-month-field, ::-webkit-datetime-edit-day-field, ::-webkit-datetime-edit-year-field {
+        font-family: "Malgun Gothic", "Dotum", sans-serif !important; 
+    }
+
+    /* Content */
+    .content { flex: 1; display: flex; flex-direction: column; padding: 20px; overflow: hidden; }
+    .view-section { display: none; flex-direction: column; height: 100%; }
+    .view-section.active { display: flex; }
+    
+    /* Toolbar */
+    .toolbar { display: flex; gap: 8px; margin-bottom: 15px; align-items: center; background: var(--card); padding: 12px; border-radius: 8px; border: 1px solid var(--border); }
+    .toolbar-title { font-weight:700; color:var(--primary); margin-right:5px; }
+    
+    /* Buttons */
+    .btn { padding: 0 14px; height: 32px; border-radius: 5px; border: 1px solid #ced4da; background: #fff; color: #495057; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 5px; font-size: 13px; line-height: 1; }
+    .btn:hover { background: #f1f3f5; }
+    .btn-primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn-success { background: var(--success); color: #fff; border-color: var(--success); }
+    .btn-success:hover { background: var(--success-dark); }
+    .btn-danger { color: var(--danger); border-color: #ffa8a8; background: #fff5f5; }
+    .btn-sm { height: 28px; font-size: 12px; }
+
+    .btn-delete {
+        width: 24px !important; height: 24px !important; padding: 0 !important;
+        font-size: 16px !important; font-weight: bold; line-height: 1; 
+        display: inline-flex !important; align-items: center !important; justify-content: center !important;
+        border-radius: 4px;
+    }
+    .btn-delete:hover { background-color: #ffe3e3; border-color: #fa5252; }
+    
+    /* Table */
+    .table-wrapper { flex: 1; background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: auto; position: relative; }
+    table { width: 100%; border-collapse: collapse; min-width: 100%; table-layout: fixed; }
+    th, td { padding: 0 10px; border-bottom: 1px solid var(--border); text-align: center; white-space: nowrap; height: 40px; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
+    th { background: #f8f9fa; font-weight: 700; position: sticky; top: 0; z-index: 10; border-right: 1px solid #dee2e6; }
+    td { border-right: 1px solid #f1f3f5; font-size: 12px; }
+    
+    td input[type="text"], td input[type="time"] { 
+        width: 100%; border: none; text-align: center; background: transparent; 
+        font-family: inherit; font-size: inherit; height: 100%; 
+    }
+    td input:focus { outline: none; box-shadow: inset 0 0 0 2px var(--primary); background: #fff; }
+
+    /* Timeline Visualization */
+    .timeline-container { 
+        flex: 1; background: var(--card); border: 1px solid var(--border); border-radius: 8px; 
+        overflow: auto; position: relative; display: flex; flex-direction: column; 
+    }
+    .tl-header { 
+        height: 40px; border-bottom: 1px solid var(--border); 
+        position: relative; top: 0; background: #f8f9fa; z-index: 20; flex-shrink: 0; 
+    }
+    .tl-body { 
+        position: relative; flex: 1; overflow: hidden; min-height: 300px; 
+    }
+    .tl-time-label {
+        position: absolute; top: 0; height: 100%; 
+        display: flex; align-items: center; justify-content: center;
+        font-size: 11px; font-weight: bold; color: #868e96;
+        border-left: 1px solid #dee2e6; box-sizing: border-box;
+    }
+    .tl-grid-line {
+        position: absolute; top: 0; bottom: 0;
+        border-left: 1px dashed #f1f3f5;
+        z-index: 0; pointer-events: none;
+    }
+    .task-item { 
+        position: absolute; height: 30px; top: 3px; 
+        background: var(--primary); color: white; border-radius: 4px; 
+        display: flex; align-items: center; padding: 0 8px; 
+        font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; 
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1); border: 1px solid rgba(0,0,0,0.1); 
+        cursor: pointer; transition: transform 0.1s; z-index: 10;
+    }
+    .task-item:hover { transform: translateY(-2px); z-index: 100; box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
+    .c-0 { background: #228be6; } .c-1 { background: #40c057; } .c-2 { background: #fab005; } .c-3 { background: #fa5252; } .c-4 { background: #7950f2; } .c-5 { background: #15aabf; }
+
+    #save-indicator { position: fixed; bottom: 20px; right: 20px; background: rgba(0,0,0,0.7); color: #fff; padding: 8px 16px; border-radius: 20px; font-size: 12px; opacity: 0; transition: opacity 0.5s; pointer-events: none; z-index: 9999; }
+</style>
+</head>
+<body>
+
+<div id="save-indicator">저장됨</div>
+
+<div class="app">
+    <header>
+        <h1>⏱️ 타임라인</h1>
+        <div style="display:flex; gap:10px;">
+             <button class="btn btn-danger" onclick="resetDB()">🗑️ 전체 초기화</button>
+        </div>
+    </header>
+
+    <main>
+        <aside>
+            <div class="panel filter-group">
+                <div class="panel-title">📅 날짜 선택(검색)</div>
+                <input type="date" id="global-date-filter" onchange="applyDateFilter()" autocomplete="off">
+                <div style="display:flex; gap:5px; margin-top:5px;">
+                    <button class="btn btn-sm btn-primary" style="flex:1" onclick="setTodayFilter()">오늘</button>
+                    <button class="btn btn-sm" style="flex:1" onclick="clearDateFilter()">전체 보기</button>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-title">Menu</div>
+                <ul class="nav-menu">
+                    <li class="nav-item active" onclick="switchTab('tab-input', this)">① 데이터 입력</li>
+                    <li class="nav-item" onclick="switchTab('tab-timeline', this); renderTimeline();">② 타임라인 분석</li>
+                </ul>
+            </div>
+            
+            <div class="panel">
+                <div class="panel-title">Summary</div>
+                <div id="summary-text" style="font-size:12px; color:#555; line-height:1.6;">로딩 중...</div>
+            </div>
+
+            <div class="panel" style="margin-top:auto">
+                <div class="panel-title">Guide</div>
+                <div style="font-size:11px; color:#868e96; line-height:1.4;">
+                    * <b>입력 후 엔터(Enter)</b>를 치거나<br>
+                    다른 칸을 클릭하면 저장됩니다.
+                </div>
+            </div>
+        </aside>
+
+        <div class="content">
+            <div id="tab-input" class="view-section active">
+                <div class="toolbar">
+                    <span class="toolbar-title">📝 태스크 리스트</span>
+                    <span id="filter-status-text" style="font-size:12px; color:#868e96; margin-left:10px;">(전체 보기)</span>
+                    <span style="flex:1"></span>
+                    <input type="file" id="excel-file" accept=".xlsx, .xls" style="display:none" onchange="importExcel(this)">
+                    <button class="btn" onclick="addRow()">+ 행 추가</button>
+                    <button class="btn btn-success" onclick="document.getElementById('excel-file').click()">📂 엑셀 업로드</button>
+                    <button class="btn btn-primary" onclick="exportToExcel()">📥 엑셀 다운로드</button>
+                </div>
+                <div class="table-wrapper">
+                    <table id="input-table">
+                        <colgroup>
+                            <col style="width: 50px;">  
+                            <col style="width: 130px;">
+                            <col style="width: 120px;">
+                            <col style="width: auto;">
+                            <col style="width: 120px;">
+                            <col style="width: 120px;">
+                            <col style="width: 300px;">
+                        </colgroup>
+                        <thead>
+                            <tr>
+                                <th>삭제</th>
+                                <th>작성일</th>
+                                <th>작업자</th>
+                                <th>태스크명</th>
+                                <th>시작</th>
+                                <th>종료</th>
+                                <th>비고</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="tab-timeline" class="view-section">
+                <div class="toolbar">
+                    <span class="toolbar-title">📊 타임라인</span>
+                    <div style="margin-left: 20px;">
+                         <label>보기 비율:</label>
+                         <select id="scale-select" style="padding:4px; border-radius:4px; border:1px solid #ccc;" onchange="renderTimeline()">
+                            <option value="60">좁게(1시간=60px)</option>
+                            <option value="120" selected>보통(1시간=120px)</option>
+                            <option value="240">넓게(1시간=240px)</option>
+                        </select>
+                    </div>
+                    <span style="flex:1"></span>
+                    <button class="btn btn-primary" onclick="renderTimeline()">🔄 새로고침</button>
+                </div>
+                <div class="timeline-container" id="timeline-box">
+                    <div class="tl-header" id="tl-header-target"></div>
+                    <div class="tl-body" id="tl-body-target"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script>
+    /* ==========================================================================
+       Utility
+       ========================================================================== */
+    function getTodayDate() {
+        const now = new Date();
+        const offset = now.getTimezoneOffset() * 60000; 
+        const localDate = new Date(now - offset);
+        return localDate.toISOString().split('T')[0];
+    }
+
+    /* ==========================================================================
+       DB & State
+       ========================================================================== */
+    const DB_NAME = "TimelineDB";
+    const STORE_NAME = "tasks";
+    let db = null;
+    let allTasks = []; 
+    let filterDate = getTodayDate(); 
+
+    window.onload = async function() {
+        document.getElementById('global-date-filter').value = filterDate;
+        await initDB();
+        await loadData();
+    };
+
+    function initDB() {
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(DB_NAME, 1);
+            req.onupgradeneeded = (e) => {
+                db = e.target.result;
+                if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME, { keyPath: "id" });
+            };
+            req.onsuccess = (e) => { db = e.target.result; resolve(); };
+            req.onerror = (e) => reject(e);
+        });
+    }
+
+    async function loadData() {
+        if (!db) return;
+        const tx = db.transaction(STORE_NAME, "readonly");
+        const req = tx.objectStore(STORE_NAME).getAll();
+        req.onsuccess = () => {
+            allTasks = req.result;
+            if(allTasks.length === 0) {
+                const today = getTodayDate();
+                allTasks = [];
+                saveToDB(false);
+            }
+            refreshUI();
+        };
+    }
+
+    function refreshUI() {
+        updateFilterStatus();
+        renderTable();
+        if(document.getElementById('tab-timeline').classList.contains('active')) renderTimeline();
+        updateSummary();
+    }
+
+    function getFilteredTasks() {
+        if (!filterDate) return allTasks;
+        return allTasks.filter(t => t.date === filterDate);
+    }
+
+    async function saveFromUI(manual = false) {
+        const tbody = document.querySelector('#input-table tbody');
+        const rows = tbody.querySelectorAll('tr');
+        const uiTasks = [];
+        rows.forEach((tr) => {
+            const inputs = tr.querySelectorAll('input');
+            if (inputs[2].value || inputs[3].value || inputs[4].value) {
+                uiTasks.push({
+                    id: tr.dataset.id ? parseInt(tr.dataset.id) : Date.now() + Math.random(),
+                    date: inputs[0].value,
+                    worker: inputs[1].value,
+                    task: inputs[2].value,
+                    start: inputs[3].value,
+                    end: inputs[4].value,
+                    note: inputs[5].value
+                });
+            }
+        });
+
+        if (filterDate) {
+            const otherTasks = allTasks.filter(t => t.date !== filterDate);
+            allTasks = [...otherTasks, ...uiTasks];
+        } else {
+            allTasks = uiTasks;
+        }
+        await saveToDB(manual);
+    }
+
+    async function saveToDB(manual) {
+        const tx = db.transaction(STORE_NAME, "readwrite");
+        const store = tx.objectStore(STORE_NAME);
+        await new Promise((resolve) => {
+            store.clear().onsuccess = () => {
+                let cnt = 0;
+                if(allTasks.length === 0) resolve();
+                allTasks.forEach(t => {
+                    store.put(t).onsuccess = () => {
+                        cnt++;
+                        if(cnt === allTasks.length) resolve();
+                    };
+                });
+            };
+        });
+        refreshUI();
+        if(manual) alert("저장되었습니다.");
+        else showSaveIndicator();
+    }
+
+    function showSaveIndicator() {
+        const el = document.getElementById('save-indicator');
+        el.style.opacity = '1';
+        setTimeout(() => el.style.opacity = '0', 1000);
+    }
+
+    async function resetDB() {
+        if(confirm("모든 데이터를 삭제하시겠습니까?")) {
+            allTasks = [];
+            await saveToDB(true);
+        }
+    }
+
+    function applyDateFilter() {
+        filterDate = document.getElementById('global-date-filter').value;
+        refreshUI();
+    }
+    function setTodayFilter() {
+        filterDate = getTodayDate();
+        document.getElementById('global-date-filter').value = filterDate;
+        refreshUI();
+    }
+    function clearDateFilter() {
+        filterDate = "";
+        document.getElementById('global-date-filter').value = "";
+        refreshUI();
+    }
+    function updateFilterStatus() {
+        const span = document.getElementById('filter-status-text');
+        span.innerText = filterDate ? `(${filterDate} 조회 중)` : "(전체 날짜 조회 중)";
+        span.style.color = filterDate ? "#228be6" : "#868e96";
+        span.style.fontWeight = filterDate ? "bold" : "normal";
+    }
+
+    /* ==========================================================================
+       Table (onchange Event Applied)
+       ========================================================================== */
+    function renderTable() {
+        const tbody = document.querySelector('#input-table tbody');
+        // 현재 포커스 된 요소가 있다면, 리렌더링 시 포커스를 잃게 되므로 주의해야 함.
+        // 하지만 onchange 방식을 쓰면 입력 중에 리렌더링 되지 않으므로 안전함.
+        tbody.innerHTML = "";
+        const displayTasks = getFilteredTasks();
+        displayTasks.sort((a,b) => {
+            if(a.date !== b.date) return b.date.localeCompare(a.date);
+            return (a.start || "").localeCompare(b.start || "");
+        });
+
+        displayTasks.forEach(item => {
+            const tr = document.createElement('tr');
+            tr.dataset.id = item.id; 
+            tr.innerHTML = `
+                <td><button class="btn btn-danger btn-delete" onclick="removeRow(this)">&times;</button></td>
+                <td><input type="date" value="${item.date}" onchange="saveFromUI()" autocomplete="off"></td>
+                <td><input type="text" value="${item.worker}" placeholder="이름" onchange="saveFromUI()" autocomplete="off"></td>
+                <td style="text-align:left;"><input type="text" value="${item.task}" placeholder="업무명" style="text-align:left;" onchange="saveFromUI()" autocomplete="off"></td>
+                <td><input type="time" value="${item.start}" onchange="saveFromUI()" autocomplete="off"></td>
+                <td><input type="time" value="${item.end}" onchange="saveFromUI()" autocomplete="off"></td>
+                <td><input type="text" value="${item.note || ''}" placeholder="-" onchange="saveFromUI()" autocomplete="off"></td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function addRow() {
+        const defaultDate = filterDate || getTodayDate();
+        const tbody = document.querySelector('#input-table tbody');
+        const tr = document.createElement('tr');
+        tr.dataset.id = Date.now(); 
+        tr.innerHTML = `
+            <td><button class="btn btn-danger btn-delete" onclick="removeRow(this)">&times;</button></td>
+            <td><input type="date" value="${defaultDate}" onchange="saveFromUI()" autocomplete="off"></td>
+            <td><input type="text" placeholder="이름" onchange="saveFromUI()" autocomplete="off"></td>
+            <td style="text-align:left;"><input type="text" placeholder="업무명" style="text-align:left;" onchange="saveFromUI()" autocomplete="off"></td>
+            <td><input type="time" value="09:00" onchange="saveFromUI()" autocomplete="off"></td>
+            <td><input type="time" value="10:00" onchange="saveFromUI()" autocomplete="off"></td>
+            <td><input type="text" placeholder="-" onchange="saveFromUI()" autocomplete="off"></td>
+        `;
+        tbody.prepend(tr); 
+        // 행 추가 시에는 즉시 저장하지 않아도 됨(빈 값이므로). 
+        // 입력 후 엔터 칠 때 저장됨.
+    }
+    function removeRow(btn) {
+        btn.closest('tr').remove();
+        saveFromUI(); // 삭제는 즉시 저장
+    }
+    function updateSummary() {
+        const displayTasks = getFilteredTasks();
+        const uniqueWorkers = new Set(displayTasks.map(t => t.worker).filter(w=>w)).size;
+        let html = `조회된 태스크: <b>${displayTasks.length}</b>건<br>참여 작업자: <b>${uniqueWorkers}</b>명`;
+        if(filterDate) html += `<br><span style="color:blue">📅 ${filterDate} 기준</span>`;
+        document.getElementById('summary-text').innerHTML = html;
+    }
+
+    /* ==========================================================================
+       Timeline Logic
+       ========================================================================== */
+    function timeToMin(tStr) {
+        if(!tStr) return 0;
+        const [h, m] = tStr.split(':').map(Number);
+        return h * 60 + m;
+    }
+
+    function renderTimeline() {
+        const headerTarget = document.getElementById('tl-header-target');
+        const bodyTarget = document.getElementById('tl-body-target');
+        
+        headerTarget.innerHTML = "";
+        bodyTarget.innerHTML = "";
+        
+        const displayTasks = getFilteredTasks();
+        const validTasks = displayTasks.filter(t => t.start && t.end && t.task);
+
+        if(validTasks.length === 0) {
+            bodyTarget.innerHTML = `<div style="padding:40px; text-align:center; color:#999; position:absolute; width:100%;">표시할 데이터가 없습니다.</div>`;
+            return;
+        }
+
+        const START_HOUR = 6; 
+        const END_HOUR = 22;
+        const TOTAL_HOURS = END_HOUR - START_HOUR;
+        const PIXELS_PER_HOUR = parseInt(document.getElementById('scale-select').value);
+        const PIXELS_PER_MIN = PIXELS_PER_HOUR / 60;
+        const TOTAL_WIDTH = TOTAL_HOURS * PIXELS_PER_HOUR;
+
+        headerTarget.style.width = `${TOTAL_WIDTH}px`;
+        bodyTarget.style.width = `${TOTAL_WIDTH}px`;
+
+        for(let h = 0; h <= TOTAL_HOURS; h++) {
+            const currentHour = START_HOUR + h;
+            const leftPos = h * PIXELS_PER_HOUR;
+
+            const label = document.createElement('div');
+            label.className = 'tl-time-label';
+            label.style.left = `${leftPos}px`;
+            label.style.width = `${PIXELS_PER_HOUR}px`; 
+            label.innerText = `${currentHour < 10 ? '0'+currentHour : currentHour}:00`;
+            headerTarget.appendChild(label);
+
+            const gridLine = document.createElement('div');
+            gridLine.className = 'tl-grid-line';
+            gridLine.style.left = `${leftPos}px`;
+            bodyTarget.appendChild(gridLine);
+        }
+
+        const tasksToRender = validTasks.map(t => ({
+            ...t,
+            startMin: timeToMin(t.start),
+            endMin: timeToMin(t.end)
+        })).sort((a,b) => a.startMin - b.startMin);
+
+        const lanes = [];
+        tasksToRender.forEach(task => {
+            let placed = false;
+            for(let i=0; i<lanes.length; i++) {
+                if(lanes[i] <= task.startMin) {
+                    task.laneIdx = i;
+                    lanes[i] = task.endMin;
+                    placed = true;
+                    break;
+                }
+            }
+            if(!placed) {
+                task.laneIdx = lanes.length;
+                lanes.push(task.endMin);
+            }
+        });
+
+        const colorMap = {};
+        let cIdx = 0;
+
+        tasksToRender.forEach(task => {
+            if(!colorMap[task.worker]) colorMap[task.worker] = `c-${cIdx++ % 6}`;
+            
+            const item = document.createElement('div');
+            item.className = `task-item ${colorMap[task.worker]}`;
+            
+            const offsetMin = task.startMin - (START_HOUR * 60);
+            const durationMin = task.endMin - task.startMin;
+
+            const leftPx = offsetMin * PIXELS_PER_MIN;
+            const widthPx = durationMin * PIXELS_PER_MIN;
+            const topPx = (task.laneIdx * 40) + 10; 
+
+            item.style.left = `${leftPx}px`;
+            item.style.width = `${Math.max(widthPx, 2)}px`; 
+            item.style.top = `${topPx}px`;
+            item.innerHTML = `<b>${task.worker}</b>: ${task.task}`;
+            item.title = `[${task.date}] ${task.start}~${task.end} (${task.worker})`;
+            
+            bodyTarget.appendChild(item);
+        });
+        
+        bodyTarget.style.height = `${(lanes.length * 40) + 50}px`;
+    }
+
+    function switchTab(tabId, el) {
+        document.querySelectorAll('.view-section').forEach(d => d.classList.remove('active'));
+        document.getElementById(tabId).classList.add('active');
+        document.querySelectorAll('.nav-item').forEach(li => li.classList.remove('active'));
+        el.classList.add('active');
+    }
+
+    function exportToExcel() {
+        const data = getFilteredTasks().map(t => ({
+            "작성일": t.date, "작업자": t.worker, "태스크명": t.task,
+            "시작": t.start, "종료": t.end, "비고": t.note
+        }));
+        if(data.length===0) { alert("데이터 없음"); return; }
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Tasks");
+        XLSX.writeFile(wb, `timeline_${filterDate||'all'}.xlsx`);
+    }
+
+    function importExcel(input) {
+        const file = input.files[0];
+        if(!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const wb = XLSX.read(e.target.result, {type:'binary'});
+            const ws = wb.Sheets[wb.SheetNames[0]];
+            const json = XLSX.utils.sheet_to_json(ws);
+            if(json.length === 0) { alert("데이터 없음"); return; }
+            const newTasks = json.map(r => ({
+                id: Date.now() + Math.random(),
+                date: r["작성일"] || r["Date"] || getTodayDate(),
+                worker: r["작업자"] || r["이름"] || "",
+                task: r["태스크명"] || r["Task"] || "",
+                start: formatTime(r["시작"] || r["Start"]),
+                end: formatTime(r["종료"] || r["End"]),
+                note: r["비고"] || ""
+            })).filter(t => t.task || t.worker);
+            allTasks = [...allTasks, ...newTasks];
+            saveToDB(false);
+            alert(`${newTasks.length}건 추가됨`);
+            input.value = "";
+        };
+        reader.readAsBinaryString(file);
+    }
+    function formatTime(val) {
+        if(typeof val === 'number') {
+            const sec = Math.round(val * 86400);
+            const h = Math.floor(sec/3600)%24;
+            const m = Math.floor((sec%3600)/60);
+            return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+        }
+        return val ? String(val).trim().substring(0,5) : "";
+    }
+</script>
+</body>
+</html>

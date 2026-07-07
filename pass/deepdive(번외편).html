@@ -1,0 +1,1387 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Deep Dive(번외편)</title>
+  
+  <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://webfontworld.github.io/kopub/KoPubWorldBatang.css">
+
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  
+  <style>
+    :root {
+      --bg-app: #f1f5f9;
+      --bg-surface: #ffffff;
+      --border: #cbd5e1;
+      --border-light: #e2e8f0;
+      
+      /* 번외편 구분용 색상 (인디고 톤) */
+      --primary: #4f46e5;      
+      --primary-hover: #4338ca;
+      --primary-bg: #e0e7ff;
+      
+      --text-main: #0f172a;
+      --text-sub: #64748b;
+      --text-muted: #94a3b8;
+
+      --header-h: 60px;
+      --radius-md: 8px;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
+
+      --font-book: 'KoPubWorldBatang', 'Noto Serif KR', serif; 
+    }
+
+    * { box-sizing: border-box; outline: none; }
+    body { margin: 0; font-family: 'Pretendard', sans-serif; background: var(--bg-app); color: var(--text-main); height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+
+    /* --- Header --- */
+    .header { height: var(--header-h); background: var(--bg-surface); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; padding: 0 24px; z-index: 100; box-shadow: var(--shadow-sm); }
+    .header-title { font-size: 20px; font-weight: 800; color: var(--primary); display: flex; align-items: center; gap: 8px; margin: 0; letter-spacing: -0.5px; }
+    
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 16px; border-radius: var(--radius-md); font-size: 13.5px; font-weight: 600; cursor: pointer; transition: 0.2s; border: 1px solid transparent; }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-outline { background: #fff; border-color: var(--border); color: var(--text-main); }
+    .btn-outline:hover { background: #f8fafc; border-color: #94a3b8; }
+    .btn-danger { background: #fff; border-color: #fecaca; color: #ef4444; }
+    .btn-danger:hover { background: #fef2f2; border-color: #f87171; }
+
+    kbd { background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px; padding: 2px 6px; font-size: 12px; font-family: monospace; color: #334155; box-shadow: 0 1px 1px rgba(0,0,0,0.1); margin: 0 2px; }
+
+    /* --- Layout --- */
+    .app-layout { display: flex; flex-direction: row; flex: 1; height: calc(100vh - var(--header-h)); overflow: hidden; background: var(--bg-app); }
+    .sidebar, .editor-panel, .preview-panel { transition: flex 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s, padding 0.3s, border-width 0.3s; overflow: hidden; }
+
+    /* --- Sidebar --- */
+    .sidebar { background: var(--bg-surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; z-index: 10; }
+    .filter-area { padding: 16px 20px; border-bottom: 1px solid var(--border-light); background: #f8fafc; display: flex; flex-direction: column; gap: 10px; }
+    .search-box { position: relative; }
+    .search-box i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 16px; }
+    .search-box input { width: 100%; padding: 10px 12px 10px 36px; border: 1px solid var(--border); border-radius: var(--radius-md); font-size: 14px; transition: 0.2s; }
+    .search-box input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-bg); }
+    
+    /* 필터 8개 (2x4 그리드) */
+    .filter-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .filter-grid select { padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-md); font-size: 13px; outline: none; background: #fff; cursor: pointer; width: 100%; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
+    
+    .list-header { padding: 12px 20px; font-size: 13px; font-weight: 700; color: var(--text-sub); border-bottom: 1px solid var(--border-light); display: flex; justify-content: space-between; }
+    .item-list { flex: 1; overflow-y: auto; list-style: none; margin: 0; padding: 12px; background: var(--bg-app); scroll-behavior: smooth; }
+    .list-item { padding: 14px; border-radius: var(--radius-md); cursor: pointer; margin-bottom: 8px; border: 1px solid var(--border-light); background: #fff; box-shadow: var(--shadow-sm); transition: 0.2s; }
+    .list-item:hover { border-color: var(--primary); transform: translateY(-1px); }
+    .list-item.active { border-color: var(--primary); background: var(--primary-bg); box-shadow: none; }
+    .item-meta { display: flex; gap: 6px; font-size: 11.5px; font-weight: 600; color: var(--text-sub); margin-bottom: 8px; flex-wrap: wrap; }
+    .item-meta span { background: #f1f5f9; padding: 3px 6px; border-radius: 4px; border: 1px solid #e2e8f0; display: inline-flex; align-items: center; }
+    
+    .item-title { font-size: 14px; font-weight: 600; color: var(--text-main); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-all; }
+    body.list-view-mode .item-title { -webkit-line-clamp: unset; }
+    
+    .item-attach { margin-top: 8px; font-size: 12px; color: #ef4444; display: flex; align-items: center; gap: 4px; font-weight: 600;}
+
+    /* --- Editor Panel --- */
+    .editor-panel { padding: 24px 32px; background: var(--bg-surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; position: relative; }
+    
+    /* 폼 입력 7칸 분할, 넘침 방지를 위해 minmax(0, 1fr) 적용 */
+    .form-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; width: 100%; }
+    .form-group { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+    .form-group label { font-size: 12.5px; font-weight: 700; color: var(--text-sub); }
+    .form-group input, .form-group select { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-md); font-size: 13.5px; transition: 0.2s; box-sizing: border-box; }
+    
+    /* ContentEditable Editor Styling */
+    .rich-editor { 
+      min-height: 150px; 
+      line-height: 1.6; 
+      font-family: var(--font-book); 
+      font-size: 17px; 
+      padding: 16px; 
+      letter-spacing: -0.3px; 
+      flex: 1; 
+      border: 1px solid var(--border); 
+      border-radius: var(--radius-md); 
+      background: #fff; 
+      overflow-y: auto; 
+      outline: none; 
+      transition: 0.2s; 
+    }
+    .rich-editor:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-bg); }
+    .rich-editor:empty:before { content: attr(placeholder); color: var(--text-muted); pointer-events: none; }
+    
+    .rich-editor img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 4px;
+      margin: 8px 0;
+      cursor: pointer;
+      transition: opacity 0.2s, outline 0.1s;
+    }
+    .rich-editor img:hover {
+      opacity: 0.85;
+      outline: 2px solid var(--primary);
+      outline-offset: 2px;
+    }
+
+    .pdf-upload-box { border: 1px dashed var(--border); border-radius: var(--radius-md); padding: 16px; background: #f8fafc; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+
+    /* --- PDF Preview --- */
+    .preview-panel { display: flex; flex-direction: column; background: #525659; }
+    .preview-header { padding: 8px 16px; background: #323639; color: #fff; font-size: 13px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;}
+    .pdf-frame { width: 100%; height: 100%; border: none; flex: 1; background: #525659;}
+    .empty-pdf { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #9ca3af; font-size: 15px; text-align: center; }
+
+    /* --- Modal & Toast --- */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); display: none; align-items: center; justify-content: center; z-index: 1000; backdrop-filter: blur(2px); }
+    .modal-card { background: #fff; width: 450px; border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; max-height: 90vh; }
+    .modal-header { padding: 16px 20px; border-bottom: 1px solid var(--border-light); font-size: 16px; font-weight: 700; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+    .modal-body { padding: 20px; overflow-y: auto; background: var(--bg-app); flex: 1; }
+    .setting-title { font-size: 14px; font-weight: 700; color: var(--text-main); margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+    .setting-list-wrapper { max-height: 160px; overflow-y: auto; padding-right: 4px; }
+    .domain-item { display: flex; justify-content: space-between; align-items: center; background: #fff; padding: 10px 14px; border: 1px solid var(--border-light); border-radius: var(--radius-md); font-size: 14px; margin-bottom: 8px; }
+    
+    /* 추가: 전체 목록 테이블 스타일 */
+    .table-wrap { overflow-y: auto; flex: 1; border: 1px solid var(--border-light); border-radius: var(--radius-md); background: #fff; }
+    .data-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13.5px; }
+    .data-table th, .data-table td { padding: 12px 14px; border-bottom: 1px solid var(--border-light); }
+    .data-table th { background: #f8fafc; font-weight: 600; color: var(--text-sub); position: sticky; top: 0; z-index: 1;}
+    .data-table tbody tr { cursor: pointer; transition: 0.2s; }
+    .data-table tbody tr:hover { background: #f1f5f9; }
+    .data-table td.ellipsis { max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .toast { position: fixed; bottom: 30px; left: 50%; transform: translate(-50%, 20px); background: #000; color: #fff; padding: 12px 24px; border-radius: 30px; opacity: 0; transition: 0.3s; pointer-events: none; z-index: 2000; font-size: 14px; display: flex; gap: 8px; align-items: center; }
+    .toast.show { opacity: 1; transform: translate(-50%, 0); }
+    .highlight { background: #fef08a; padding: 0 2px; border-radius: 2px; color: #b45309; }
+
+    /* --- Image Viewer Modal --- */
+    .image-viewer-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(4px); display: none; justify-content: center; align-items: center; z-index: 10000; opacity: 0; transition: opacity 0.2s ease-in-out; }
+    .image-viewer-overlay.show { display: flex; opacity: 1; }
+    .image-viewer-content { position: relative; max-width: 90%; max-height: 90%; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+    .image-viewer-content img { max-width: 100%; max-height: 80vh; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); object-fit: contain; background: white; }
+    .image-viewer-close { position: absolute; top: -40px; right: 0; background: none; border: none; color: white; font-size: 32px; cursor: pointer; padding: 8px; transition: color 0.2s; }
+    .image-viewer-close:hover { color: #cbd5e1; }
+    .image-viewer-actions { display: flex; gap: 12px; }
+
+    /* --- Image Resizer --- */
+    #image-resizer { position: fixed; border: 2px dashed var(--primary); display: none; pointer-events: none; z-index: 5000; }
+    .resizer-handle { position: absolute; width: 12px; height: 12px; background-color: #fff; border: 2.5px solid var(--primary); border-radius: 50%; right: -7px; bottom: -7px; cursor: se-resize; pointer-events: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+  </style>
+</head>
+<body>
+
+  <header class="header" id="mainHeader">
+    <h1 class="header-title">
+      <i class="ph-fill ph-waves"></i> Deep Dive 
+      <span style="font-size: 14px; font-weight: 600; color: var(--text-sub); border-left: 2px solid var(--border); padding-left: 10px; margin-left: 4px;">번외편</span>
+    </h1>
+    <div style="display: flex; gap: 10px;">
+      <button class="btn btn-outline" onclick="openShortcutModal()"><i class="ph ph-keyboard"></i> 단축키</button>
+      
+      <button class="btn btn-outline" onclick="openAllListModal()"><i class="ph ph-list-dashes"></i> 전체 목록</button>
+      
+      <button class="btn btn-outline" onclick="exportJson()"><i class="ph ph-download-simple"></i> 백업</button>
+      <input type="file" id="importJsonInput" accept=".json" style="display:none;" onchange="importJson(event)">
+      <button class="btn btn-outline" onclick="document.getElementById('importJsonInput').click()"><i class="ph ph-upload-simple"></i> 복구</button>
+      <div style="width: 1px; background: var(--border); margin: 0 4px;"></div>
+      <button class="btn btn-outline" onclick="openSettingsModal()"><i class="ph ph-gear"></i> 환경 설정</button>
+    </div>
+  </header>
+
+  <div class="app-layout">
+    <aside class="sidebar" id="panelSidebar">
+      <div class="filter-area">
+        <div class="search-box">
+          <i class="ph ph-magnifying-glass"></i>
+          <input type="text" id="searchInput" placeholder="문제 또는 전략 검색..." oninput="applyFilter()">
+        </div>
+        <div class="filter-grid">
+          <select id="filterDomain" onchange="applyFilter()"><option value="">도메인 전체</option></select>
+          <select id="filterInstitution" onchange="applyFilter()"><option value="">출제기관 전체</option></select>
+          <select id="filterMonth" onchange="applyFilter()"><option value="">출제월 전체</option></select>
+          <select id="filterExamCategory" onchange="applyFilter()"><option value="">시험유형 전체</option></select>
+          <select id="filterRound" onchange="applyFilter()"><option value="">회차 전체</option></select>
+          <select id="filterType" onchange="applyFilter()"><option value="">종목 전체</option></select>
+          <select id="filterSession" onchange="applyFilter()"><option value="">교시 전체</option></select>
+          <select id="filterImportance" onchange="applyFilter()">
+            <option value="">중요도 전체</option>
+            <option value="빈출">빈출 포함</option>
+            <option value="예상">예상 포함</option>
+            <option value="전략">전략 포함</option>
+            <option value="기본">기본 포함</option>
+          </select>
+        </div>
+      </div>
+      <div class="list-header"><span>조회된 문제</span><span style="color: var(--primary);" id="listCount">0건</span></div>
+      <ul class="item-list" id="itemList"></ul>
+    </aside>
+
+    <main class="editor-panel" id="panelEditor">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-shrink: 0;">
+        <div style="display: flex; align-items: center;">
+          <h2 style="margin: 0; font-size: 18px; display: flex; align-items: center; gap: 8px;"><i class="ph-fill ph-note-pencil" style="color:var(--primary)"></i> 문제</h2>
+          <div style="display: flex; gap: 12px; align-items: center; margin-left: 24px; background: #f8fafc; padding: 6px 16px; border-radius: 20px; border: 1px solid var(--border-light);">
+            <span style="font-size: 12.5px; font-weight: 800; color: var(--primary);">중요도</span>
+            <label style="font-size: 13px; display: flex; align-items: center; gap: 4px; cursor: pointer; font-weight: 600; color: var(--text-main);"><input type="checkbox" value="빈출" class="form-importance" style="accent-color: var(--primary); width: 14px; height: 14px; margin: 0;">빈출</label>
+            <label style="font-size: 13px; display: flex; align-items: center; gap: 4px; cursor: pointer; font-weight: 600; color: var(--text-main);"><input type="checkbox" value="예상" class="form-importance" style="accent-color: var(--primary); width: 14px; height: 14px; margin: 0;">예상</label>
+            <label style="font-size: 13px; display: flex; align-items: center; gap: 4px; cursor: pointer; font-weight: 600; color: var(--text-main);"><input type="checkbox" value="전략" class="form-importance" style="accent-color: var(--primary); width: 14px; height: 14px; margin: 0;">전략</label>
+            <label style="font-size: 13px; display: flex; align-items: center; gap: 4px; cursor: pointer; font-weight: 600; color: var(--text-main);"><input type="checkbox" value="기본" class="form-importance" style="accent-color: var(--primary); width: 14px; height: 14px; margin: 0;">기본</label>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-danger" id="btnDelete" onclick="deleteCurrent()" style="display: none;"><i class="ph ph-trash"></i> 삭제</button>
+          <button class="btn btn-primary" onclick="createNew()"><i class="ph ph-plus-circle"></i> 새 문제</button>
+          <button class="btn btn-primary" onclick="saveCurrent()"><i class="ph ph-floppy-disk"></i> 저장하기</button>
+        </div>
+      </div>
+      
+      <div class="form-grid" style="flex-shrink: 0;">
+        <div class="form-group"><label>도메인</label><select id="formDomain"><option value="">선택</option></select></div>
+        <div class="form-group"><label>출제기관</label><select id="formInstitution"><option value="">선택</option></select></div>
+        <div class="form-group"><label>출제월</label><input type="text" id="formMonth" placeholder="예: 2026.04"></div>
+        <div class="form-group">
+          <label>시험유형</label>
+          <select id="formExamCategory">
+            <option value="">선택</option>
+            <option value="모의고사">모의고사</option>
+            <option value="합숙문제">합숙문제</option>
+          </select>
+        </div>
+        <div class="form-group"><label>회차</label><input type="text" id="formRound" placeholder="예: 129"></div>
+        <div class="form-group"><label>종목</label><select id="formType"><option value="">선택</option></select></div>
+        <div class="form-group">
+          <label>교시</label>
+          <select id="formSession">
+            <option value="">선택</option><option value="1교시">1교시</option><option value="2교시">2교시</option><option value="3교시">3교시</option><option value="4교시">4교시</option><option value="면접">면접</option>
+          </select>
+        </div>
+      </div>
+      
+      <div style="display: flex; gap: 16px; flex: 1; margin-bottom: 16px; min-height: 0;">
+        <div class="form-group" style="flex: 6.5; display: flex; flex-direction: column;">
+          <label>문제 내용</label>
+          <div id="formQuestion" class="rich-editor" contenteditable="true" spellcheck="false" placeholder="기출 문제 내용을 작성하세요..."></div>
+        </div>
+        <div class="form-group" style="flex: 3.5; display: flex; flex-direction: column;">
+          <label>답안 전략</label>
+          <div id="formStrategy" class="rich-editor" contenteditable="true" spellcheck="false" placeholder="답안 작성 전략을 작성하세요..."></div>
+        </div>
+      </div>
+
+      <div class="pdf-upload-box">
+        <div id="pdfStatus" style="font-size: 13px; font-weight: 600; color: var(--text-sub);">파일 없음</div>
+        <div>
+          <input type="file" id="pdfInput" accept="application/pdf" style="display: none;" onchange="handlePdfUpload(event)">
+          <button class="btn btn-outline" id="btnRemovePdf" style="display:none; color:#ef4444;" onclick="removePdf()">삭제</button>
+          <button class="btn btn-outline" onclick="document.getElementById('pdfInput').click()">PDF 첨부</button>
+        </div>
+      </div>
+    </main>
+
+    <div class="preview-panel" id="panelPdf">
+      <div class="preview-header">
+        <span id="pdfViewerTitle"><i class="ph ph-file-pdf"></i> PDF 미리보기</span>
+        <button class="btn btn-primary" id="btnPopPdf" style="display:none; padding: 4px 10px; font-size: 12px;" onclick="popPdf()">새 창 열기</button>
+      </div>
+      <iframe id="pdfFrame" class="pdf-frame" style="display: none;"></iframe>
+      <div id="pdfEmpty" class="empty-pdf"><i class="ph ph-file-dashed" style="font-size: 48px; margin-bottom: 16px;"></i><span>PDF 파일 없음</span></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="allListModal">
+    <div class="modal-card" style="width: 1000px; height: 85vh;">
+      <div class="modal-header">
+        <div><i class="ph-fill ph-list-dashes" style="color:var(--primary)"></i> 전체 항목 리스트 <span id="modalListCount" style="font-size: 13px; color: var(--text-sub); font-weight: 500; margin-left: 8px;"></span></div>
+        <button style="border:none; background:none; cursor:pointer; font-size:20px;" onclick="closeAllListModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="display: flex; flex-direction: column;">
+        <div class="filter-grid" style="grid-template-columns: repeat(5, 1fr); margin-bottom: 12px; gap: 8px;">
+          <select id="modalFilterDomain" onchange="renderAllListTable()"><option value="">도메인 전체</option></select>
+          <select id="modalFilterInstitution" onchange="renderAllListTable()"><option value="">출제기관 전체</option></select>
+          <select id="modalFilterMonth" onchange="renderAllListTable()"><option value="">출제월 전체</option></select>
+          <select id="modalFilterExamCategory" onchange="renderAllListTable()"><option value="">시험유형 전체</option></select>
+          <select id="modalFilterRound" onchange="renderAllListTable()"><option value="">회차 전체</option></select>
+          <select id="modalFilterType" onchange="renderAllListTable()"><option value="">종목 전체</option></select>
+          <select id="modalFilterSession" onchange="renderAllListTable()"><option value="">교시 전체</option></select>
+          <select id="modalFilterImportance" onchange="renderAllListTable()">
+            <option value="">중요도 전체</option>
+            <option value="빈출">빈출 포함</option>
+            <option value="예상">예상 포함</option>
+            <option value="전략">전략 포함</option>
+            <option value="기본">기본 포함</option>
+          </select>
+          <div class="search-box" style="grid-column: span 2;">
+            <i class="ph ph-magnifying-glass"></i>
+            <input type="text" id="modalSearchInput" placeholder="검색..." oninput="renderAllListTable()" style="padding: 8px 12px 8px 32px; height: 100%;">
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width:10%">중요도</th>
+                <th style="width:12%">도메인</th>
+                <th style="width:10%">기관</th>
+                <th style="width:8%">출제월</th>
+                <th style="width:10%">유형</th>
+                <th style="width:8%">회차</th>
+                <th style="width:10%">종목</th>
+                <th style="width:8%">교시</th>
+                <th style="width:24%">문제 내용</th>
+              </tr>
+            </thead>
+            <tbody id="allListTableBody">
+              </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="settingsModal">
+    <div class="modal-card">
+      <div class="modal-header">환경 설정<button style="border:none; background:none; cursor:pointer; font-size:20px;" onclick="closeSettingsModal()">&times;</button></div>
+      <div class="modal-body">
+        
+        <div class="setting-title"><i class="ph-fill ph-buildings"></i> 출제기관 설정</div>
+        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+          <input type="text" id="newInstitutionInput" placeholder="새 출제기관 (예: 빅업)" style="flex:1; padding:10px; border:1px solid var(--border); border-radius:var(--radius-md);">
+          <button class="btn btn-primary" onclick="addInstitution()">추가</button>
+        </div>
+        <div class="setting-list-wrapper" id="institutionList"></div>
+
+        <hr style="border: 0; border-top: 1px solid var(--border-light); margin: 24px 0;">
+
+        <div class="setting-title"><i class="ph-fill ph-folder"></i> 도메인 설정</div>
+        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+          <input type="text" id="newDomainName" placeholder="새 도메인..." style="flex:1; padding:10px; border:1px solid var(--border); border-radius:var(--radius-md);">
+          <button class="btn btn-primary" onclick="addDomain()">추가</button>
+        </div>
+        <div class="setting-list-wrapper" id="domainList"></div>
+
+        <hr style="border: 0; border-top: 1px solid var(--border-light); margin: 24px 0;">
+
+        <div class="setting-title"><i class="ph-fill ph-books"></i> 종목 설정</div>
+        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+          <input type="text" id="newTypeName" placeholder="새 종목..." style="flex:1; padding:10px; border:1px solid var(--border); border-radius:var(--radius-md);">
+          <button class="btn btn-primary" onclick="addType()">추가</button>
+        </div>
+        <div class="setting-list-wrapper" id="typeList"></div>
+
+      </div>
+    </div>
+  </div>
+  
+  <div class="modal-overlay" id="shortcutModal">
+    <div class="modal-card" style="width: 520px;">
+      <div class="modal-header">단축키 안내<button style="border:none; background:none; cursor:pointer; font-size:20px;" onclick="closeShortcutModal()">&times;</button></div>
+      <div class="modal-body" style="font-size: 14px; line-height: 1.6;">
+        <div class="setting-title"><i class="ph-fill ph-monitor"></i> 뷰 & 레이아웃 변경 (어디서나)</div>
+        <ul style="padding-left: 20px; margin-bottom: 16px;">
+          <li><kbd>Alt</kbd> + <kbd>1</kbd> : 에디터 모드</li>
+          <li><kbd>Alt</kbd> + <kbd>2</kbd> : PDF 모드 (탐색창 숨김)</li>
+          <li><kbd>Alt</kbd> + <kbd>3</kbd> : PDF 전체 모드 (탐색창 표시)</li>
+          <li><kbd>Alt</kbd> + <kbd>0</kbd> / <kbd>ESC</kbd> : 기본 화면으로 복구</li>
+          <li><kbd>Ctrl</kbd> + <kbd>H</kbd> : 몰입 모드 (문제 편집 상세)</li>
+          <li><kbd>Ctrl</kbd> + <kbd>M</kbd> : 프리젠테이션 모드 (PDF 포커스)</li>
+          <li><kbd>Ctrl</kbd> + <kbd>Q</kbd> : 리스트 모드 (문제 목록 위주)</li>
+        </ul>
+
+        <div class="setting-title"><i class="ph-fill ph-text-aa"></i> 텍스트 서식 지정 (에디터 내)</div>
+        <ul style="padding-left: 20px; margin-bottom: 16px;">
+          <li><kbd>Ctrl</kbd> + <kbd>B</kbd> / <kbd>I</kbd> / <kbd>U</kbd> : 굵게 / 기울임 / 밑줄</li>
+          <li><kbd>Ctrl</kbd> + <kbd>0</kbd> : 취소선 그기</li>
+          <li><kbd>Ctrl</kbd> + <kbd>1</kbd> ~ <kbd>7</kbd> : 형광펜 칠하기 (다양한 색상)</li>
+          <li><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>R</kbd> / <kbd>B</kbd> / <kbd>G</kbd> : 글자 색상 (빨/파/초)</li>
+          <li><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>M</kbd> : 텍스트 블록 씌우기 (키워드 강조용)</li>
+          <li><kbd>Ctrl</kbd> + <kbd>+</kbd> / <kbd>-</kbd> : 선택된 폰트 크기 확대/축소</li>
+          <li><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>X</kbd> : 지정된 텍스트 서식 초기화</li>
+        </ul>
+
+        <div class="setting-title"><i class="ph-fill ph-gear"></i> 시스템 및 탐색</div>
+        <ul style="padding-left: 20px; margin-bottom: 0;">
+          <li><kbd>Ctrl</kbd> + <kbd>S</kbd> : 현재 작성중인 내용 저장하기</li>
+          <li><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>N</kbd> : 새 문제 만들기</li>
+          <li><kbd>↑</kbd> / <kbd>↓</kbd> (방향키) : 다음/이전 문제로 이동 (입력창 포커스 해제 시)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"><i class="ph-fill ph-check-circle"></i><span id="toastMsg"></span></div>
+
+  <div id="imageViewerModal" class="image-viewer-overlay" onclick="closeImageViewer()">
+    <div class="image-viewer-content" onclick="event.stopPropagation()">
+      <button class="image-viewer-close" onclick="closeImageViewer()"><i class="ph ph-x"></i></button>
+      <img id="imageViewerImg" src="" alt="확대된 이미지">
+      <div class="image-viewer-actions">
+        <button class="btn btn-outline" style="background: rgba(255,255,255,0.9);" onclick="copyImageToClipboard()">
+          <i class="ph ph-copy"></i> 복사
+        </button>
+        <button class="btn btn-outline" style="background: rgba(255,255,255,0.9);" onclick="downloadImageView()">
+          <i class="ph ph-download-simple"></i> 저장
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="image-resizer">
+    <div class="resizer-handle" id="resizer-handle"></div>
+  </div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    
+    // 수정: &nbsp; 등의 엔티티도 공백으로 치환되도록 개선 (unescapeHtml)
+    const escapeHtml = str => String(str).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m]));
+    const unescapeHtml = str => String(str).replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ');
+    
+    const highlightText = (text, kw) => {
+      if (!kw) return text;
+      const escapedKw = escapeHtml(kw);
+      const regex = new RegExp(`(${escapedKw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+      return text.replace(regex, '<span class="highlight">$1</span>');
+    };
+
+    let toastTimeout, db, allQuestions = [], currentFilteredQuestions = [], currentId = null, currentPdfBlob = null, currentPdfName = '', currentObjectUrl = null;
+    let currentZoom = 75, currentNav = 0;
+    
+    let currentLayoutMode = 'default';
+
+    // 로컬 스토리지 데이터 관리
+    let customInstitutions = JSON.parse(localStorage.getItem('deepdive_extra_institutions') || '["KPC", "ITPE", "빅업"]');
+    let customDomains = JSON.parse(localStorage.getItem('deepdive_extra_domains') || '[]');
+    let customTypes = JSON.parse(localStorage.getItem('deepdive_extra_types') || '[]');
+
+    const showToast = msg => { 
+      $('toastMsg').textContent = msg; $('toast').classList.add('show'); 
+      clearTimeout(toastTimeout); toastTimeout = setTimeout(() => $('toast').classList.remove('show'), 1000); 
+    };
+
+    function setLayout(s, e, p, zoom = null, nav = null) {
+      const applyFlex = (id, val, isEditor) => {
+        const el = $(id);
+        if (val === 0) { el.style.flex = '0 0 0%'; el.style.opacity = '0'; el.style.pointerEvents = 'none'; if(isEditor) el.style.padding = '0'; }
+        else { el.style.flex = `${val} 1 0%`; el.style.opacity = '1'; el.style.pointerEvents = 'auto'; if(isEditor) el.style.padding = '24px 32px'; }
+      };
+      applyFlex('panelSidebar', s, false); applyFlex('panelEditor', e, true); applyFlex('panelPdf', p, false);
+      
+      let needPdfUpdate = false;
+      if (zoom !== null && currentZoom !== zoom) { currentZoom = zoom; needPdfUpdate = true; }
+      if (nav !== null && currentNav !== nav) { currentNav = nav; needPdfUpdate = true; }
+      
+      if (currentObjectUrl && needPdfUpdate) {
+        const targetUrl = `${currentObjectUrl}#zoom=${currentZoom}&navpanes=${currentNav}`;
+        $('pdfFrame').src = '';
+        setTimeout(() => { $('pdfFrame').src = targetUrl; }, 10);
+      } else if (currentObjectUrl && !needPdfUpdate && !$('pdfFrame').src) {
+        $('pdfFrame').src = `${currentObjectUrl}#zoom=${currentZoom}&navpanes=${currentNav}`;
+      }
+    }
+
+    function getPlainText(html) {
+      if (!html) return '';
+      const tmp = document.createElement("DIV");
+      tmp.innerHTML = html.replace(/<br\s*[\/]?>/gi, " ");
+      return tmp.textContent || tmp.innerText || "";
+    }
+
+    // --- DB & Logic ---
+    function initDB() {
+      const req = indexedDB.open('DeepDiveExtraDB', 1);
+      req.onupgradeneeded = e => {
+        const d = e.target.result;
+        if (!d.objectStoreNames.contains('questions')) d.createObjectStore('questions', { keyPath: 'id' });
+      };
+      req.onsuccess = e => { 
+        db = e.target.result; 
+        updateFormInstitutions();
+        updateFormDomains();
+        updateFormTypes();
+        loadQuestions(); 
+      };
+    }
+
+    function loadQuestions() {
+      db.transaction('questions').objectStore('questions').getAll().onsuccess = e => {
+        allQuestions = e.target.result || [];
+        updateFilterOptions();
+        applyFilter();
+      };
+    }
+
+    function updateFilterOptions() {
+      const domains = new Set(), institutions = new Set(), months = new Set(), examCategories = new Set(), rounds = new Set(), types = new Set(), sessions = new Set();
+      allQuestions.forEach(q => {
+        if(q.domain) domains.add(q.domain);
+        if(q.institution) institutions.add(q.institution);
+        if(q.month) months.add(q.month);
+        if(q.examCategory) examCategories.add(q.examCategory);
+        if(q.round) rounds.add(q.round);
+        if(q.type) types.add(q.type);
+        if(q.session) sessions.add(q.session);
+      });
+      
+      const fillSelect = (id, set, defaultText) => {
+        const select = $(id);
+        if (!select) return;
+        const curVal = select.value;
+        select.innerHTML = `<option value="">${defaultText}</option>` + 
+          [...set].sort().map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+        select.value = set.has(curVal) ? curVal : "";
+      };
+
+      // 사이드바 필터
+      fillSelect('filterDomain', domains, '도메인 전체');
+      fillSelect('filterInstitution', institutions, '출제기관 전체');
+      fillSelect('filterMonth', months, '출제월 전체');
+      fillSelect('filterExamCategory', examCategories, '시험유형 전체');
+      fillSelect('filterRound', rounds, '회차 전체');
+      fillSelect('filterType', types, '종목 전체');
+      fillSelect('filterSession', sessions, '교시 전체');
+
+      // 모달 전용 필터
+      fillSelect('modalFilterDomain', domains, '도메인 전체');
+      fillSelect('modalFilterInstitution', institutions, '출제기관 전체');
+      fillSelect('modalFilterMonth', months, '출제월 전체');
+      fillSelect('modalFilterExamCategory', examCategories, '시험유형 전체');
+      fillSelect('modalFilterRound', rounds, '회차 전체');
+      fillSelect('modalFilterType', types, '종목 전체');
+      fillSelect('modalFilterSession', sessions, '교시 전체');
+    }
+
+    // 공통 필터링 & 정렬 로직 (번외편 전용)
+    function filterAndSortQuestions(sourceArray, kw, fDomain, fInstitution, fMonth, fExamCategory, fRound, fType, fSession, fImportance) {
+      return sourceArray.filter(q => {
+        const plainText = getPlainText(q.questionText).toLowerCase();
+        const plainStrategyText = getPlainText(q.strategyText).toLowerCase(); 
+        
+        const matchKw = !kw || plainText.includes(kw) || plainStrategyText.includes(kw);
+        const matchDomain = !fDomain || q.domain === fDomain;
+        const matchInstitution = !fInstitution || q.institution === fInstitution;
+        const matchMonth = !fMonth || q.month === fMonth;
+        const matchExamCategory = !fExamCategory || q.examCategory === fExamCategory;
+        const matchRound = !fRound || q.round === fRound;
+        const matchType = !fType || q.type === fType;
+        const matchSession = !fSession || q.session === fSession;
+        const matchImportance = !fImportance || (q.importance && q.importance.includes(fImportance));
+
+        return matchKw && matchDomain && matchInstitution && matchMonth && matchExamCategory && matchRound && matchType && matchSession && matchImportance;
+      }).sort((a,b) => b.ts - a.ts);
+    }
+
+    function applyFilter() {
+      const kw = $('searchInput').value.trim().toLowerCase();
+      const fDomain = $('filterDomain').value;
+      const fInstitution = $('filterInstitution').value;
+      const fMonth = $('filterMonth').value;
+      const fExamCategory = $('filterExamCategory').value;
+      const fRound = $('filterRound').value;
+      const fType = $('filterType').value;
+      const fSession = $('filterSession').value;
+      const fImportance = $('filterImportance').value;
+
+      currentFilteredQuestions = filterAndSortQuestions(allQuestions, kw, fDomain, fInstitution, fMonth, fExamCategory, fRound, fType, fSession, fImportance);
+      
+      $('listCount').textContent = currentFilteredQuestions.length + '건';
+      $('itemList').innerHTML = currentFilteredQuestions.map(q => {
+        const snippet = getPlainText(q.questionText);
+        let titleSnippet = snippet.length > 300 ? snippet.substring(0, 300) + '...' : (snippet || '이미지 또는 내용 없음');
+        titleSnippet = escapeHtml(titleSnippet);
+        
+        let importanceHtml = '';
+        if (q.importance && q.importance.length > 0) {
+            importanceHtml = q.importance.map(imp => `<span style="background: var(--primary-bg); border-color: #c7d2fe; color: var(--primary);"><i class="ph-fill ph-star" style="font-size: 10px; margin-right: 2px;"></i>${escapeHtml(imp)}</span>`).join('');
+        }
+
+        return `
+        <li class="list-item ${q.id === currentId ? 'active' : ''}" onclick="loadItem('${q.id}')">
+          <div class="item-meta">
+            ${importanceHtml}
+            ${q.domain ? `<span>${escapeHtml(q.domain)}</span>` : ''}
+            ${q.institution ? `<span>${escapeHtml(q.institution)}</span>` : ''}
+            ${q.month ? `<span>${escapeHtml(q.month)}</span>` : ''}
+            ${q.examCategory ? `<span>${escapeHtml(q.examCategory)}</span>` : ''}
+            ${q.round ? `<span>${escapeHtml(q.round)}회</span>` : ''}
+            ${q.type ? `<span>${escapeHtml(q.type)}</span>` : ''}
+            ${q.session ? `<span>${escapeHtml(q.session)}</span>` : ''}
+          </div>
+          <div class="item-title">${highlightText(titleSnippet, kw)}</div>
+          ${q.pdfName ? `<div class="item-attach"><i class="ph-fill ph-paperclip"></i> 첨부됨</div>` : ''}
+        </li>`;
+      }).join('');
+    }
+
+    function loadItem(id) {
+      const q = allQuestions.find(x => x.id === id);
+      currentId = q.id; currentPdfBlob = q.pdfBlob; currentPdfName = q.pdfName;
+      
+      let content = q.questionText || '';
+      let strategy = q.strategyText || '';
+      
+      // 순수 HTML 태그뿐만 아니라 &nbsp; 등의 HTML 엔티티가 포함되어 있는지도 검사하여 이중 이스케이프 방지
+      if (content && !/(<[a-z\/][\s\S]*>|&[#a-z0-9]+;)/i.test(content)) {
+          content = escapeHtml(content).replace(/\n/g, '<br>');
+      }
+      if (strategy && !/(<[a-z\/][\s\S]*>|&[#a-z0-9]+;)/i.test(strategy)) {
+          strategy = escapeHtml(strategy).replace(/\n/g, '<br>');
+      }
+      
+      // Load Importance
+      const impArr = q.importance || [];
+      document.querySelectorAll('.form-importance').forEach(el => {
+        el.checked = impArr.includes(el.value);
+      });
+
+      $('formDomain').value = q.domain || '';
+      
+      if (q.institution && !customInstitutions.includes(q.institution)) {
+        const option = document.createElement("option");
+        option.value = q.institution;
+        option.text = q.institution;
+        $('formInstitution').appendChild(option);
+      }
+      $('formInstitution').value = q.institution || '';
+      $('formMonth').value = q.month || '';
+      $('formExamCategory').value = q.examCategory || '';
+      $('formRound').value = q.round || '';
+      
+      if (q.type && !customTypes.includes(q.type)) {
+        const option = document.createElement("option");
+        option.value = q.type;
+        option.text = q.type;
+        $('formType').appendChild(option);
+      }
+      $('formType').value = q.type || '';
+      
+      $('formSession').value = q.session || '';
+      
+      $('formQuestion').innerHTML = content;
+      $('formStrategy').innerHTML = strategy; 
+      $('btnDelete').style.display = 'inline-flex';
+      
+      updatePdfUI();
+      applyFilter();
+    }
+
+    function createNew() {
+      // 이전 입력 세팅을 유지하기 위해 form 항목들의 값을 초기화하지 않음.
+      // 중요도 체크리스트 역시 중복 입력을 줄이기 위해 기존 상태 유지.
+      currentId = null; currentPdfBlob = null; currentPdfName = '';
+      $('formQuestion').innerHTML = '';
+      $('formStrategy').innerHTML = '';
+      $('btnDelete').style.display = 'none';
+      updatePdfUI(); applyFilter(); $('formQuestion').focus();
+    }
+
+    function updatePdfUI() {
+      if (currentObjectUrl) {
+        URL.revokeObjectURL(currentObjectUrl);
+        currentObjectUrl = null;
+      }
+
+      // --- [버그 수정] 15바이트 가짜 파일 렌더링 방지 및 DB 자동 치료 ---
+      if (currentPdfBlob && currentPdfBlob.size === 15) {
+        currentPdfBlob = null;
+        currentPdfName = '';
+        
+        if (currentId) {
+           const q = allQuestions.find(x => x.id === currentId);
+           if (q) {
+               delete q.pdfBlob;
+               q.pdfName = '';
+               db.transaction('questions', 'readwrite').objectStore('questions').put(q);
+           }
+        }
+      }
+
+      if (currentPdfBlob) {
+        currentObjectUrl = URL.createObjectURL(currentPdfBlob); 
+        
+        $('pdfFrame').src = `${currentObjectUrl}#zoom=${currentZoom}&navpanes=${currentNav}`;
+        $('pdfFrame').style.display = 'block'; 
+        $('pdfEmpty').style.display = 'none'; 
+        $('btnPopPdf').style.display = 'inline-flex';
+        $('btnRemovePdf').style.display = 'inline-flex';
+        $('pdfStatus').textContent = currentPdfName;
+      } else {
+        $('pdfFrame').removeAttribute('src'); 
+        $('pdfFrame').style.display = 'none'; 
+        $('pdfEmpty').style.display = 'flex'; 
+        $('btnPopPdf').style.display = 'none';
+        $('btnRemovePdf').style.display = 'none';
+        $('pdfStatus').textContent = '파일 없음';
+      }
+    }
+
+    function saveCurrent() {
+      const txt = $('formQuestion').innerHTML.trim();
+      const strategyTxt = $('formStrategy').innerHTML.trim();
+      if(!txt) return showToast('문제 내용을 입력해 주세요.'); 
+      
+      const importanceEls = document.querySelectorAll('.form-importance:checked');
+      const importanceArr = Array.from(importanceEls).map(el => el.value);
+
+      const item = { 
+        id: currentId || 'Q_'+Date.now(), 
+        importance: importanceArr,
+        domain: $('formDomain').value,
+        institution: $('formInstitution').value,
+        month: $('formMonth').value.trim(),
+        examCategory: $('formExamCategory').value,
+        round: $('formRound').value.trim(),
+        type: $('formType').value,
+        session: $('formSession').value,
+        questionText: txt, 
+        strategyText: strategyTxt, 
+        pdfBlob: currentPdfBlob, 
+        pdfName: currentPdfName, 
+        ts: currentId ? allQuestions.find(q=>q.id===currentId).ts : Date.now() 
+      };
+      db.transaction('questions', 'readwrite').objectStore('questions').put(item).onsuccess = () => { 
+        currentId = item.id; 
+        loadQuestions();
+        showToast('저장 완료'); 
+      };
+    }
+
+    function deleteCurrent() {
+      if(confirm('삭제하시겠습니까?')) db.transaction('questions', 'readwrite').objectStore('questions').delete(currentId).onsuccess = () => { currentId=null; loadQuestions(); showToast('삭제됨'); };
+    }
+
+    function handlePdfUpload(e) {
+      const f = e.target.files[0]; if(!f) return;
+      currentPdfBlob = f; currentPdfName = f.name; updatePdfUI();
+    }
+    function removePdf() { currentPdfBlob = null; currentPdfName = ''; updatePdfUI(); }
+    
+    function popPdf() { if(currentObjectUrl) window.open(currentObjectUrl, '_blank'); }
+
+    // --- 전체 목록(All List) 모달 관련 로직 ---
+    function openAllListModal() {
+      $('allListModal').style.display = 'flex';
+      $('modalSearchInput').value = '';
+      $('modalFilterDomain').value = '';
+      $('modalFilterInstitution').value = '';
+      $('modalFilterMonth').value = '';
+      $('modalFilterExamCategory').value = '';
+      $('modalFilterRound').value = '';
+      $('modalFilterType').value = '';
+      $('modalFilterSession').value = '';
+      $('modalFilterImportance').value = '';
+      renderAllListTable();
+    }
+
+    function closeAllListModal() {
+      $('allListModal').style.display = 'none';
+    }
+
+    function renderAllListTable() {
+      const kw = $('modalSearchInput').value.trim().toLowerCase();
+      const fDomain = $('modalFilterDomain').value;
+      const fInstitution = $('modalFilterInstitution').value;
+      const fMonth = $('modalFilterMonth').value;
+      const fExamCategory = $('modalFilterExamCategory').value;
+      const fRound = $('modalFilterRound').value;
+      const fType = $('modalFilterType').value;
+      const fSession = $('modalFilterSession').value;
+      const fImportance = $('modalFilterImportance').value;
+
+      const filtered = filterAndSortQuestions(allQuestions, kw, fDomain, fInstitution, fMonth, fExamCategory, fRound, fType, fSession, fImportance);
+      $('modalListCount').textContent = filtered.length + '건';
+
+      $('allListTableBody').innerHTML = filtered.map(q => {
+        let snippet = getPlainText(q.questionText);
+        snippet = snippet.length > 70 ? snippet.substring(0, 70) + '...' : snippet;
+        
+        let importanceText = q.importance && q.importance.length > 0 ? q.importance.join(', ') : '-';
+
+        return `
+          <tr onclick="selectItemFromAllList('${q.id}')">
+            <td><span style="font-weight:600; color:var(--primary);">${escapeHtml(importanceText)}</span></td>
+            <td>${escapeHtml(q.domain || '-')}</td>
+            <td>${escapeHtml(q.institution || '-')}</td>
+            <td>${escapeHtml(q.month || '-')}</td>
+            <td>${escapeHtml(q.examCategory || '-')}</td>
+            <td>${escapeHtml(q.round ? q.round + '회' : '-')}</td>
+            <td>${escapeHtml(q.type || '-')}</td>
+            <td>${escapeHtml(q.session || '-')}</td>
+            <td class="ellipsis" title="${escapeHtml(snippet)}">${highlightText(escapeHtml(snippet), kw)}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function selectItemFromAllList(id) {
+      closeAllListModal();
+      
+      if (currentLayoutMode !== 'default' && currentLayoutMode !== 'editor') {
+        exitFullscreen();
+      }
+      
+      loadItem(id);
+      
+      setTimeout(() => {
+        const activeEl = document.querySelector('.list-item.active');
+        if (activeEl) activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
+    }
+
+    // --- 커스텀 이미지 리사이즈 로직 ---
+    const imageResizer = $('image-resizer');
+    const resizerHandle = $('resizer-handle');
+    let activeResizingImage = null;
+    let isResizing = false;
+    let startX, startW;
+
+    function updateResizerPosition() {
+      if (activeResizingImage) {
+        const rect = activeResizingImage.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) {
+          hideResizer();
+          return;
+        }
+        imageResizer.style.left = rect.left + 'px';
+        imageResizer.style.top = rect.top + 'px';
+        imageResizer.style.width = rect.width + 'px';
+        imageResizer.style.height = rect.height + 'px';
+      }
+    }
+
+    function hideResizer() {
+      activeResizingImage = null;
+      imageResizer.style.display = 'none';
+      isResizing = false;
+    }
+
+    document.addEventListener('mousedown', function(e) {
+      if (e.target === resizerHandle) {
+        isResizing = true;
+        startX = e.clientX;
+        startW = activeResizingImage.offsetWidth;
+        e.preventDefault(); 
+        return;
+      }
+      if (e.target.tagName === 'IMG' && e.target.closest('.rich-editor')) {
+        activeResizingImage = e.target;
+        imageResizer.style.display = 'block';
+        updateResizerPosition();
+      } 
+      else if (!e.target.closest('#image-resizer')) {
+        hideResizer();
+      }
+    });
+
+    document.addEventListener('mousemove', function(e) {
+      if (isResizing && activeResizingImage) {
+        const dx = e.clientX - startX;
+        let newWidth = startW + dx;
+        if (newWidth < 30) newWidth = 30; 
+        activeResizingImage.style.width = newWidth + 'px';
+        activeResizingImage.style.height = 'auto'; 
+        updateResizerPosition(); 
+      }
+    });
+
+    document.addEventListener('mouseup', function(e) {
+      if (isResizing) isResizing = false;
+    });
+
+    document.addEventListener('dragstart', function(e) {
+      if (e.target.tagName === 'IMG') hideResizer();
+    });
+
+    window.addEventListener('resize', hideResizer);
+    $('panelEditor').addEventListener('scroll', hideResizer);
+    document.querySelectorAll('.rich-editor').forEach(el => {
+      el.addEventListener('scroll', hideResizer);
+      el.addEventListener('input', hideResizer); 
+    });
+
+
+    // --- 이미지 뷰어 로직 ---
+    function openImageViewer(src) {
+      document.getElementById('imageViewerImg').src = src;
+      document.getElementById('imageViewerModal').classList.add('show');
+    }
+    
+    function closeImageViewer() {
+      const modal = document.getElementById('imageViewerModal');
+      modal.classList.remove('show');
+      setTimeout(() => { document.getElementById('imageViewerImg').src = ''; }, 200); 
+    }
+
+    async function copyImageToClipboard() {
+      const imgUrl = document.getElementById('imageViewerImg').src;
+      try {
+        const response = await fetch(imgUrl);
+        const blob = await response.blob();
+        await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+        showToast('이미지가 클립보드에 복사되었습니다.');
+      } catch (err) {
+        console.error('복사 실패:', err);
+        showToast('이미지 복사에 실패했습니다.');
+      }
+    }
+
+    function downloadImageView() {
+      const imgUrl = document.getElementById('imageViewerImg').src;
+      const a = document.createElement('a');
+      a.href = imgUrl;
+      a.download = 'deepdive_image_' + new Date().getTime() + '.png';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+
+    document.addEventListener('dblclick', function(e) {
+      if (e.target.tagName === 'IMG' && e.target.closest('.rich-editor')) {
+        openImageViewer(e.target.src);
+        window.getSelection().removeAllRanges(); 
+      }
+    }, true);
+
+    // --- 붙여넣기(Paste) 이벤트: 이미지 및 일반 텍스트 처리 ---
+    document.querySelectorAll('.rich-editor').forEach(editor => {
+      editor.addEventListener('paste', function(e) {
+        const clipboardData = e.clipboardData || window.clipboardData;
+        const items = clipboardData.items;
+        let hasImage = false;
+
+        if (items) {
+          for (let i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf('image') !== -1) {
+              hasImage = true;
+              e.preventDefault(); 
+              
+              const blob = items[i].getAsFile();
+              const reader = new FileReader();
+              reader.onload = function(event) {
+                const imgHtml = `<img src="${event.target.result}">`;
+                document.execCommand('insertHTML', false, imgHtml);
+              };
+              reader.readAsDataURL(blob);
+              break; 
+            }
+          }
+        }
+
+        if (!hasImage) {
+          e.preventDefault();
+          let t = clipboardData.getData('text/plain');
+          if (t) {
+            // PDF 등에서 복사 시 이미 포함되어 있는 HTML 엔티티를 제거하여 이중 이스케이프 방지
+            t = unescapeHtml(t);
+            t = t.split(/\r?\n/).map(l => escapeHtml(l.trim())).filter(l => l.length > 0).join('<br>');
+            document.execCommand('insertHTML', false, t);
+          }
+        }
+      });
+    });
+
+    // --- 에디터 폰트 크기 및 서식 단축키 지원 ---
+    function adjustFontSize(delta) {
+        const sel = window.getSelection();
+        if (!sel.rangeCount || sel.isCollapsed) return;
+        const range = sel.getRangeAt(0);
+        let parent = range.commonAncestorContainer;
+        if (parent.nodeType === 3) parent = parent.parentNode;
+        const compStyle = window.getComputedStyle(parent);
+        let currentSize = 17;
+        if (compStyle.fontSize) currentSize = parseFloat(compStyle.fontSize);
+        const newSize = currentSize + delta;
+        const div = document.createElement('div');
+        div.appendChild(range.cloneContents());
+        document.execCommand('insertHTML', false, `<span style="font-size: ${newSize}px;">${div.innerHTML}</span>`);
+    }
+
+    document.querySelectorAll('.rich-editor').forEach(editor => {
+      editor.addEventListener('keydown', e => {
+        const isCtrl = e.ctrlKey || e.metaKey;
+        const isAlt = e.altKey;
+        const isShift = e.shiftKey;
+        if (!isCtrl) return; 
+
+        let handled = false;
+        const code = e.code; 
+
+        if (!isAlt && !isShift) {
+          if (code === 'KeyB') { document.execCommand('bold', false, null); handled = true; }
+          else if (code === 'KeyI') { document.execCommand('italic', false, null); handled = true; }
+          else if (code === 'KeyU') { document.execCommand('underline', false, null); handled = true; }
+          else if (code === 'Digit0') { document.execCommand('strikeThrough', false, null); handled = true; }
+          else if (['Digit1','Digit2','Digit3','Digit4','Digit5','Digit6','Digit7'].includes(code)) {
+            const colors = { 'Digit1':'#fed7aa', 'Digit2':'#bae6fd', 'Digit3':'#fef08a', 'Digit4':'#bbf7d0', 'Digit5':'#fbcfe8', 'Digit6':'#e6cba8', 'Digit7':'#e2e8f0' };
+            document.execCommand('styleWithCSS', false, true);
+            document.execCommand('hiliteColor', false, colors[code]); 
+            handled = true;
+          }
+        }
+        else if (isAlt && !isShift) {
+          if (code === 'KeyR') { document.execCommand('styleWithCSS', false, true); document.execCommand('foreColor', false, '#ef4444'); handled = true; }
+          else if (code === 'KeyB') { document.execCommand('styleWithCSS', false, true); document.execCommand('foreColor', false, '#3b82f6'); handled = true; }
+          else if (code === 'KeyG') { document.execCommand('styleWithCSS', false, true); document.execCommand('foreColor', false, '#22c55e'); handled = true; }
+          else if (code === 'KeyM') {
+            const sel = window.getSelection();
+            if (!sel.isCollapsed) {
+              const html = `<span style="background-color: #0d3a9e; color: #ffffff; font-weight: bold; padding: 0 3px; border-radius: 3px;">${escapeHtml(sel.toString())}</span>`;
+              document.execCommand('insertHTML', false, html);
+            }
+            handled = true;
+          }
+        }
+        else if (!isAlt && isShift) {
+          if (code === 'KeyX') { document.execCommand('removeFormat', false, null); handled = true; }
+        }
+
+        if (!isAlt && (code === 'Equal' || code === 'NumpadAdd' || code === 'Minus' || code === 'NumpadSubtract')) {
+          adjustFontSize((code === 'Minus' || code === 'NumpadSubtract') ? -1 : 1);
+          handled = true;
+        }
+
+        if (handled || code === 'KeyH' || code === 'KeyM' || code === 'KeyQ') { 
+          e.stopPropagation(); 
+        }
+      });
+    });
+
+    // --- JSON 데이터 백업/복원 로직 ---
+    function blobToBase64(blob) {
+      return new Promise((resolve) => {
+        if (!blob) return resolve(null);
+        
+        if (!(blob instanceof Blob)) {
+          console.warn('유효하지 않은 파일 데이터 무시됨');
+          return resolve(null);
+        }
+
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = () => resolve(null); 
+        reader.readAsDataURL(blob);
+      });
+    }
+
+    function base64ToBlob(base64Data) {
+      const arr = base64Data.split(',');
+      const mime = arr[0].match(/:(.*?);/)[1];
+      const bstr = atob(arr[1]);
+      let n = bstr.length;
+      const u8arr = new Uint8Array(n);
+      while(n--) { u8arr[n] = bstr.charCodeAt(n); }
+      return new Blob([u8arr], {type: mime});
+    }
+
+    async function exportJson() {
+      if (currentFilteredQuestions.length === 0) return showToast('백업할 데이터가 없습니다.');
+      showToast('백업 파일을 생성 중입니다...');
+      
+      try {
+        const exportData = await Promise.all(currentFilteredQuestions.map(async q => {
+          const item = { ...q };
+          if (item.pdfBlob) {
+            const base64Str = await blobToBase64(item.pdfBlob);
+            if (base64Str) {
+              item.pdfBase64 = base64Str;
+            }
+            delete item.pdfBlob;
+          }
+          return item;
+        }));
+
+        const dataStr = JSON.stringify(exportData, null, 2);
+        const blob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        
+        // [수정된 부분] 파일명에 도메인명 반영
+        const selectedDomain = $('filterDomain').value;
+        const domainStr = selectedDomain ? selectedDomain : '전체';
+        const dateStr = new Date().toISOString().slice(0,10).replace(/-/g, '');
+        
+        a.download = `DeepDive_Extra_Backup_${domainStr}_${dateStr}.json`;
+        
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('JSON 백업이 완료되었습니다.');
+      } catch (e) {
+        console.error(e);
+        showToast('백업 중 오류가 발생했습니다.');
+      }
+    }
+
+    function importJson(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      
+      reader.onload = async (event) => {
+        try {
+          const importedData = JSON.parse(event.target.result);
+          if (!Array.isArray(importedData)) throw new Error('올바른 백업 형식이 아닙니다.');
+          
+          showToast('데이터를 복구(업데이트) 중입니다...');
+          const tx = db.transaction('questions', 'readwrite');
+          const store = tx.objectStore('questions');
+          let count = 0;
+          
+          for (const item of importedData) {
+            if (item.pdfBase64) {
+              item.pdfBlob = base64ToBlob(item.pdfBase64);
+              delete item.pdfBase64;
+            }
+            store.put(item);
+            count++;
+          }
+          
+          tx.oncomplete = () => {
+            showToast(`${count}개의 문제가 성공적으로 복구되었습니다.`);
+            loadQuestions();
+            e.target.value = '';
+          };
+          tx.onerror = () => { throw new Error('DB 트랜잭션 에러'); };
+
+        } catch (err) {
+          console.error(err);
+          showToast('복구 실패: 잘못된 파일이거나 오류가 발생했습니다.');
+          e.target.value = '';
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    // --- 환경설정 모달 및 설정 로직 ---
+    function openSettingsModal() {
+      $('settingsModal').style.display = 'flex';
+      renderInstitutionList();
+      renderDomainList();
+      renderTypeList();
+    }
+    
+    function closeSettingsModal() {
+      $('settingsModal').style.display = 'none';
+      applyFilter();
+    }
+
+    function openShortcutModal() { $('shortcutModal').style.display = 'flex'; }
+    function closeShortcutModal() { $('shortcutModal').style.display = 'none'; }
+    
+    // 출제기관 설정
+    function addInstitution() {
+      const val = $('newInstitutionInput').value.trim();
+      if (val && !customInstitutions.includes(val)) {
+        customInstitutions.push(val);
+        localStorage.setItem('deepdive_extra_institutions', JSON.stringify(customInstitutions));
+        $('newInstitutionInput').value = '';
+        renderInstitutionList();
+        updateFormInstitutions();
+      }
+    }
+    function renderInstitutionList() {
+      $('institutionList').innerHTML = customInstitutions.map((d, i) => `
+        <div class="domain-item">
+          <span>${escapeHtml(d)}</span>
+          <button class="btn btn-danger" style="padding:4px 8px;" onclick="removeInstitution(${i})"><i class="ph ph-trash"></i></button>
+        </div>
+      `).join('');
+    }
+    function removeInstitution(idx) {
+      customInstitutions.splice(idx, 1);
+      localStorage.setItem('deepdive_extra_institutions', JSON.stringify(customInstitutions));
+      renderInstitutionList();
+      updateFormInstitutions();
+    }
+    function updateFormInstitutions() {
+      const curVal = $('formInstitution').value;
+      $('formInstitution').innerHTML = `<option value="">선택</option>` + customInstitutions.map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join('');
+      if(customInstitutions.includes(curVal) || curVal === "") $('formInstitution').value = curVal;
+    }
+
+    // 도메인 설정
+    function addDomain() {
+      const val = $('newDomainName').value.trim();
+      if (val && !customDomains.includes(val)) {
+        customDomains.push(val);
+        localStorage.setItem('deepdive_extra_domains', JSON.stringify(customDomains));
+        $('newDomainName').value = '';
+        renderDomainList();
+        updateFormDomains();
+      }
+    }
+    function renderDomainList() {
+      $('domainList').innerHTML = customDomains.map((d, i) => `
+        <div class="domain-item">
+          <span>${escapeHtml(d)}</span>
+          <button class="btn btn-danger" style="padding:4px 8px;" onclick="removeDomain(${i})"><i class="ph ph-trash"></i></button>
+        </div>
+      `).join('');
+    }
+    function removeDomain(idx) {
+      customDomains.splice(idx, 1);
+      localStorage.setItem('deepdive_extra_domains', JSON.stringify(customDomains));
+      renderDomainList();
+      updateFormDomains();
+    }
+    function updateFormDomains() {
+      const curVal = $('formDomain').value;
+      $('formDomain').innerHTML = `<option value="">선택</option>` + customDomains.map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join('');
+      if(customDomains.includes(curVal) || curVal === "") $('formDomain').value = curVal;
+    }
+
+    // 종목 설정
+    function addType() {
+      const val = $('newTypeName').value.trim();
+      if (val && !customTypes.includes(val)) {
+        customTypes.push(val);
+        localStorage.setItem('deepdive_extra_types', JSON.stringify(customTypes));
+        $('newTypeName').value = '';
+        renderTypeList();
+        updateFormTypes();
+      }
+    }
+    function renderTypeList() {
+      $('typeList').innerHTML = customTypes.map((d, i) => `
+        <div class="domain-item">
+          <span>${escapeHtml(d)}</span>
+          <button class="btn btn-danger" style="padding:4px 8px;" onclick="removeType(${i})"><i class="ph ph-trash"></i></button>
+        </div>
+      `).join('');
+    }
+    function removeType(idx) {
+      customTypes.splice(idx, 1);
+      localStorage.setItem('deepdive_extra_types', JSON.stringify(customTypes));
+      renderTypeList();
+      updateFormTypes();
+    }
+    function updateFormTypes() {
+      const curVal = $('formType').value;
+      $('formType').innerHTML = `<option value="">선택</option>` + customTypes.map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join('');
+      if(customTypes.includes(curVal) || curVal === "") $('formType').value = curVal;
+    }
+
+    function exitFullscreen() {
+      currentLayoutMode = 'default';
+      $('mainHeader').style.display = 'flex'; 
+      setLayout(2, 4.5, 3.5, 75, 0); 
+      document.body.classList.remove('list-view-mode'); 
+      window.focus(); 
+      showToast('기본 모드 복구'); 
+    }
+
+    window.addEventListener('keydown', e => {
+      const isAlt = e.altKey;
+      const isCtrl = e.ctrlKey || e.metaKey;
+      const isShift = e.shiftKey;
+      
+      const keyStr = e.key ? e.key.toLowerCase() : '';
+      const codeStr = e.code || '';
+
+      if (!isCtrl && isAlt && !isShift) {
+        if (codeStr === 'Digit1') { e.preventDefault(); currentLayoutMode = 'editor'; setLayout(2, 8, 0); showToast('에디터 모드'); }
+        else if (codeStr === 'Digit2') { e.preventDefault(); currentLayoutMode = 'split-pdf'; setLayout(2, 0, 8, 100, 0); showToast('PDF 모드 (100%, 탐색창 숨김)'); }
+        else if (codeStr === 'Digit3') { 
+          e.preventDefault(); 
+          currentLayoutMode = 'full-pdf'; 
+          setLayout(0, 0, 10, 100, 1); 
+          showToast('PDF 전체 (100%, 탐색창 표시)'); 
+          $('pdfFrame').focus(); 
+        }
+        else if (codeStr === 'Digit0') { e.preventDefault(); exitFullscreen(); }
+      }
+      
+      if (isCtrl && !isAlt && !isShift && codeStr === 'KeyS') { e.preventDefault(); saveCurrent(); }
+      if (isCtrl && isAlt && !isShift && codeStr === 'KeyN') { e.preventDefault(); createNew(); }
+
+      if (isCtrl && !isAlt && !isShift && (keyStr === 'h' || codeStr === 'KeyH')) { 
+        e.preventDefault(); 
+        if (currentLayoutMode === 'immersion') {
+          exitFullscreen(); 
+        } else {
+          currentLayoutMode = 'immersion';
+          $('mainHeader').style.display = 'none'; 
+          setLayout(0, 10, 0); 
+          showToast('몰입 모드 (문제 상세)'); 
+        }
+      }
+      
+      else if (isCtrl && !isAlt && !isShift && (keyStr === 'm' || codeStr === 'KeyM')) { 
+        e.preventDefault(); 
+        if (currentLayoutMode === 'presentation') {
+          exitFullscreen(); 
+        } else {
+          currentLayoutMode = 'presentation';
+          $('mainHeader').style.display = 'none'; 
+          setLayout(0, 0, 10, 100, 0); 
+          showToast('프리젠테이션 모드 (PDF)'); 
+          $('pdfFrame').focus(); 
+        }
+      }
+
+      else if (isCtrl && !isAlt && !isShift && (keyStr === 'q' || codeStr === 'KeyQ')) { 
+        e.preventDefault(); 
+        if (currentLayoutMode === 'list') {
+          exitFullscreen(); 
+        } else {
+          currentLayoutMode = 'list';
+          $('mainHeader').style.display = 'none'; 
+          setLayout(10, 0, 0); 
+          document.body.classList.add('list-view-mode'); 
+          showToast('리스트 모드 (문제 목록)'); 
+        }
+      }
+      
+      else if (keyStr === 'escape' || codeStr === 'Escape') { 
+        // 닫혀야 할 모달이 열려있는지 확인
+        const isModalOpen = ['allListModal', 'settingsModal', 'shortcutModal', 'imageViewerModal']
+                            .some(id => $(id).classList.contains('show') || $(id).style.display === 'flex');
+        
+        if (isModalOpen) {
+           closeAllListModal(); closeSettingsModal(); closeShortcutModal(); closeImageViewer();
+        } else if (currentLayoutMode !== 'default') {
+          exitFullscreen();
+        }
+      }
+
+      const activeElement = document.activeElement;
+      const isTyping = activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'SELECT' || activeElement.isContentEditable);
+      
+      if (!isTyping && !isCtrl && !isAlt && !isShift) {
+        if (codeStr === 'ArrowUp' || codeStr === 'ArrowDown') {
+            if (currentLayoutMode === 'presentation' || currentLayoutMode === 'full-pdf') return; 
+
+            e.preventDefault(); 
+            
+            if (currentFilteredQuestions.length > 0) {
+              let currentIndex = currentFilteredQuestions.findIndex(q => q.id === currentId);
+              let newIndex = currentIndex;
+
+              if (codeStr === 'ArrowUp') {
+                if (currentIndex > 0) newIndex = currentIndex - 1;
+              } else if (codeStr === 'ArrowDown') {
+                if (currentIndex === -1) newIndex = 0; 
+                else if (currentIndex < currentFilteredQuestions.length - 1) newIndex = currentIndex + 1;
+              }
+
+              if (newIndex !== -1 && newIndex !== currentIndex) {
+                loadItem(currentFilteredQuestions[newIndex].id);
+                
+                setTimeout(() => {
+                  const activeEl = document.querySelector('.list-item.active');
+                  if (activeEl) {
+                    activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                  }
+                }, 10);
+              }
+            }
+        }
+      }
+    });
+
+    window.onload = () => { 
+      setLayout(2, 4.5, 3.5); 
+      initDB(); 
+    };
+  </script>
+</body>
+</html>

@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>기플래시(이미지)</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    body {
+      font-family: 'Noto Sans KR', sans-serif;
+      background: #f0f2f5;
+      color: #212529;
+      margin: 0;
+      padding: 5px; /* 전체 여백 최소화 */
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      user-select: none;
+      overflow: hidden;
+    }
+
+    /* 상단 컨트롤 패널 */
+    .control-panel {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px; /* 상단 여백 축소 */
+      flex-wrap: wrap;
+      justify-content: center;
+      z-index: 10;
+    }
+    .btn-control {
+      background: white;
+      border: 1px solid #ced4da;
+      color: #495057;
+      padding: 6px 12px; /* 버튼 크기 살짝 컴팩트하게 */
+      border-radius: 6px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 600;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .btn-control:hover { background: #e9ecef; transform: translateY(-1px); }
+    
+    .btn-refresh { color: #1098ad; border-color: #99e9f2; }
+    .btn-refresh:hover { background: #e3fafc; }
+    
+    .btn-danger { color: #e03131; border-color: #ffc9c9; }
+    .btn-danger:hover { background: #fff5f5; }
+
+    /* 플래시 카드 영역 (패딩 축소 및 크기 확대) */
+    .flashcard {
+      background: white;
+      width: 96vw;          /* 너비 96%로 확대 */
+      max-width: 1800px;    
+      height: 90vh;         /* 높이 90%로 확대 */
+      padding: 8px;         /* [핵심] 내부 패딩 15px -> 8px로 축소 */
+      border-radius: 12px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      position: relative;
+    }
+
+    /* 이미지 영역 */
+    .image-container {
+      flex: 1;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      margin-bottom: 8px; /* 하단 여백 축소 */
+      background: #fafafa;
+      border-radius: 6px;
+      border: 1px solid #f1f3f5;
+    }
+    
+    .flashcard img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      transition: opacity 0.2s;
+    }
+
+    /* 빈 상태 안내 */
+    .empty-state {
+      text-align: center;
+      color: #adb5bd;
+    }
+    .empty-state i { font-size: 3rem; margin-bottom: 0.5rem; color: #dee2e6; }
+    .empty-state p { font-size: 1rem; }
+
+    /* 하단 버튼 및 카운터 */
+    .flashcard-footer {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px; /* 버튼과 카운터 사이 간격 축소 */
+    }
+
+    .nav-buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-nav {
+      border: none;
+      padding: 10px 24px;
+      border-radius: 8px;
+      font-weight: bold;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .btn-prev, .btn-next { background: #f8f9fa; color: #495057; border: 1px solid #dee2e6; }
+    .btn-complete { background: #4a90e2; color: white; min-width: 110px; }
+    
+    .btn-nav:hover { transform: translateY(-2px); filter: brightness(0.95); }
+    .btn-nav:active { transform: translateY(0); }
+
+    .card-counter {
+      font-size: 0.9rem;
+      color: #868e96;
+      font-weight: 600;
+    }
+
+    /* 토스트 메시지 */
+    .toast {
+      position: fixed;
+      bottom: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(33, 37, 41, 0.95);
+      color: #fff;
+      padding: 10px 24px;
+      border-radius: 50px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+      font-size: 0.95rem;
+      z-index: 9999;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    .toast.show { opacity: 1; pointer-events: auto; }
+  </style>
+</head>
+<body>
+
+  <div class="control-panel">
+    <button class="btn-control" onclick="document.getElementById('fileInput').click()">
+      <i class="fas fa-plus"></i> 이미지 추가
+    </button>
+    <button class="btn-control btn-refresh" onclick="undoAllCompletion()">
+      <i class="fas fa-undo-alt"></i> 전체 완료 해제
+    </button>
+    <button class="btn-control btn-danger" onclick="resetAllData()">
+      <i class="fas fa-trash-alt"></i> 데이터 삭제
+    </button>
+    <input type="file" id="fileInput" multiple accept="image/*" hidden onchange="handleFileUpload(this)">
+  </div>
+
+  <div class="flashcard">
+    <div class="image-container" id="imageContainer">
+      <div class="empty-state">
+        <i class="far fa-images"></i>
+        <p>학습할 카드가 없습니다.<br>'이미지 추가' 또는 '전체 완료 해제'를 해주세요.</p>
+      </div>
+    </div>
+
+    <div class="flashcard-footer">
+      <div class="nav-buttons">
+        <button class="btn-nav btn-prev" onclick="moveCard(-1)" title="키보드: ←">이전</button>
+        <button class="btn-nav btn-complete" onclick="completeCard()" title="키보드: Enter">완료</button>
+        <button class="btn-nav btn-next" onclick="moveCard(1)" title="키보드: →">다음</button>
+      </div>
+      <div class="card-counter" id="cardCounter">0 / 0</div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script>
+    // --- IndexedDB 설정 ---
+    let db;
+    let cardList = []; 
+    let currentIndex = 0;
+    const DB_NAME = 'FlashImageDB'; 
+    const DB_VERSION = 1;
+    const STORE_NAME = 'cards';
+
+    const initDB = () => {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        request.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains(STORE_NAME)) {
+            const store = db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
+            store.createIndex('isCompleted', 'isCompleted', { unique: false });
+          }
+        };
+        request.onsuccess = (e) => {
+          db = e.target.result;
+          loadCardsFromDB();
+          resolve(db);
+        };
+        request.onerror = (e) => reject(e);
+      });
+    };
+
+    const loadCardsFromDB = () => {
+      const transaction = db.transaction([STORE_NAME], 'readonly');
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.getAll();
+
+      request.onsuccess = (e) => {
+        const allCards = e.target.result;
+        cardList = allCards.filter(card => !card.isCompleted);
+        currentIndex = 0;
+        renderCard();
+      };
+    };
+
+    const handleFileUpload = (input) => {
+      const files = input.files;
+      if (!files.length) return;
+      let processedCount = 0;
+      
+      Array.from(files).forEach(file => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const transaction = db.transaction([STORE_NAME], 'readwrite');
+          const store = transaction.objectStore(STORE_NAME);
+          const request = store.add({
+            imageData: e.target.result,
+            fileName: file.name,
+            created: new Date(),
+            isCompleted: false 
+          });
+          request.onsuccess = () => {
+            processedCount++;
+            if (processedCount === files.length) {
+              showToast(`📸 ${files.length}장 추가 완료`);
+              loadCardsFromDB();
+              input.value = '';
+            }
+          };
+        };
+        reader.readAsDataURL(file);
+      });
+    };
+
+    // --- 핵심 로직 ---
+
+    function renderCard() {
+      const container = document.getElementById('imageContainer');
+      const counter = document.getElementById('cardCounter');
+
+      if (cardList.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <i class="fas fa-check-circle" style="color:var(--accent);"></i>
+            <p>모든 학습 완료! 🎉<br><span style="font-size:0.9rem; color:#888;">다시 하려면 '전체 완료 해제'를 누르세요.</span></p>
+          </div>
+        `;
+        counter.textContent = '0 / 0';
+        return;
+      }
+
+      if (currentIndex >= cardList.length) currentIndex = 0;
+      if (currentIndex < 0) currentIndex = cardList.length - 1;
+
+      const currentCard = cardList[currentIndex];
+      container.innerHTML = `<img src="${currentCard.imageData}" alt="Card">`;
+      counter.textContent = `${currentIndex + 1} / ${cardList.length}`;
+    }
+
+    function moveCard(direction) {
+      if (cardList.length === 0) return;
+      currentIndex = (currentIndex + direction + cardList.length) % cardList.length;
+      renderCard();
+    }
+
+    function completeCard() {
+      if (cardList.length === 0) return;
+
+      const currentCard = cardList[currentIndex];
+      currentCard.isCompleted = true; 
+
+      const transaction = db.transaction([STORE_NAME], 'readwrite');
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.put(currentCard); 
+
+      request.onsuccess = () => {
+        showToast("✅ 완료! (숨김)");
+        cardList.splice(currentIndex, 1); 
+        if (currentIndex >= cardList.length) currentIndex = 0;
+        renderCard();
+      };
+    }
+
+    function undoAllCompletion() {
+      const transaction = db.transaction([STORE_NAME], 'readwrite');
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.getAll();
+
+      request.onsuccess = (e) => {
+        const allItems = e.target.result;
+        if (allItems.length === 0) return showToast("데이터가 없습니다.");
+
+        let updateCount = 0;
+        allItems.forEach(item => {
+          if (item.isCompleted) {
+            item.isCompleted = false;
+            store.put(item);
+            updateCount++;
+          }
+        });
+
+        transaction.oncomplete = () => {
+          if (updateCount > 0) {
+            showToast(`🔄 ${updateCount}개의 카드 복구 완료!`);
+            loadCardsFromDB();
+          } else {
+            showToast("이미 모든 카드가 대기 중입니다.");
+          }
+        };
+      };
+    }
+
+    function resetAllData() {
+      if (!confirm("⚠ 경고: 모든 이미지가 영구 삭제됩니다.\n계속하시겠습니까?")) return;
+      
+      const transaction = db.transaction([STORE_NAME], 'readwrite');
+      const store = transaction.objectStore(STORE_NAME);
+      store.clear().onsuccess = () => {
+        showToast("🗑 모든 데이터가 삭제되었습니다.");
+        loadCardsFromDB();
+      };
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 2000);
+    }
+
+    document.addEventListener('keydown', (event) => {
+      if (cardList.length === 0) return;
+      switch (event.key) {
+        case 'ArrowLeft': moveCard(-1); break;
+        case 'ArrowRight': moveCard(1); break;
+        case 'Enter': completeCard(); break;
+      }
+    });
+
+    initDB();
+  </script>
+</body>
+</html>

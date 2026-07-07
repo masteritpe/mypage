@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PDF Editor</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css" />
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+<script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+</script>
+
+<style>
+/* === Executive Theme === */
+:root {
+    --bg-body: #f1f5f9; --bg-sidebar: #ffffff;
+    --primary: #334155; --primary-hover: #1e293b;
+    --accent: #e11d48; --accent-light: #ffe4e6;
+    --text-main: #0f172a; --text-sub: #64748b; --text-muted: #94a3b8;
+    --border: #e2e8f0; --radius-md: 10px;
+    --shadow-float: 0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
+    --font-ui: 'Pretendard', 'Inter', sans-serif;
+    --font-code: 'JetBrains Mono', monospace;
+}
+
+* { box-sizing: border-box; outline: none; }
+body { margin: 0; background: var(--bg-body); color: var(--text-main); font-family: var(--font-ui); font-size: 14px; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+
+header { height: 64px; background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 28px; flex-shrink: 0; justify-content: space-between; z-index: 50; }
+header .brand { font-weight: 800; font-size: 20px; color: var(--primary); display: flex; align-items: center; gap: 12px; }
+header .brand i { font-size: 22px; color: var(--accent); }
+
+.workspace { display: flex; flex: 1; overflow: hidden; height: calc(100vh - 64px); position: relative; }
+
+.pane-list { width: 280px; background: var(--bg-sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; z-index: 20; }
+.upload-area { padding: 30px 20px; display: flex; flex-direction: column; gap: 12px; border-bottom: 1px solid var(--border); background: var(--bg-sidebar); flex-shrink: 0; }
+.section-label { font-size: 12px; font-weight: 700; color: var(--text-sub); margin-bottom: 4px; display: flex; align-items: center; gap: 6px; text-transform: uppercase; }
+
+.upload-box { border: 2px dashed #cbd5e1; border-radius: var(--radius-md); padding: 24px 15px; text-align: center; cursor: pointer; transition: all 0.2s ease; background: #f8fafc; }
+.upload-box:hover, .upload-box.dragover { border-color: var(--accent); background: var(--accent-light); }
+.upload-box i { font-size: 24px; color: var(--text-muted); margin-bottom: 8px; transition: 0.2s; }
+.upload-box:hover i, .upload-box.dragover i { color: var(--accent); }
+.upload-box .title { font-weight: 600; color: var(--primary); margin-bottom: 4px; font-size: 13px; }
+.upload-box .desc { font-size: 11px; color: var(--text-muted); }
+
+.file-info { padding: 20px; flex: 1; overflow-y: auto; display: none; flex-direction: column; gap: 12px; }
+.info-card { background: var(--bg-body); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px; }
+.info-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12px; }
+.info-row:last-child { margin-bottom: 0; }
+.info-label { color: var(--text-sub); font-weight: 500; }
+.info-val { color: var(--primary); font-weight: 600; font-family: var(--font-code); max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.pane-editor { flex: 1; background: var(--bg-body); display: flex; flex-direction: column; position: relative; min-width: 0; overflow: hidden; }
+
+.toolbar { height: 60px; display: flex; align-items: center; padding: 0 40px; justify-content: space-between; flex-shrink: 0; z-index: 30; background: var(--bg-body); border-bottom: 1px solid transparent; }
+.toolbar-title { font-size: 18px; font-weight: 700; color: var(--primary); display: flex; align-items: center; gap: 8px; }
+.edit-hint { font-size: 13px; color: var(--text-sub); display: flex; align-items: center; gap: 6px; background: #ffe4e6; padding: 6px 12px; border-radius: 6px; color: #be123c; font-weight: 500; }
+
+.editor-wrapper { flex: 1; overflow-y: auto; overflow-x: auto; padding: 20px 40px 60px 40px; display: block; position: relative; z-index: 10; }
+.paper-sheet { width: 100%; max-width: 1200px; background: #fff; border-radius: 16px; box-shadow: var(--shadow-float); padding: 40px; margin: 0 auto; min-height: 100%; border: 1px solid #f1f5f9; display: flex; flex-direction: column; }
+
+.empty-state { position: absolute; top: 60px; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--bg-body); z-index: 100; }
+.empty-content { text-align: center; max-width: 400px; }
+
+.table-container { width: 100%; overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
+.viewer-table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
+.viewer-table th, .viewer-table td { border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); padding: 12px 16px; word-break: keep-all; line-height: 1.6; transition: background 0.2s; }
+.viewer-table th:last-child, .viewer-table td:last-child { border-right: none; }
+.viewer-table th { background: #f8fafc; font-weight: 600; color: var(--primary); position: sticky; top: 0; z-index: 2; border-bottom: 2px solid #cbd5e1; }
+
+.viewer-table td[contenteditable="true"], .viewer-table th[contenteditable="true"] { cursor: text; outline: none; }
+.viewer-table td[contenteditable="true"]:hover { background: #f8fafc; }
+.viewer-table td[contenteditable="true"]:focus, .viewer-table th[contenteditable="true"]:focus { background: #fff; box-shadow: inset 0 0 0 2px var(--accent); border-radius: 2px; }
+
+.action-col { width: 100px; text-align: center !important; vertical-align: middle; background: #f8fafc; user-select: none; }
+.action-flex { display: flex; gap: 4px; justify-content: center; }
+.btn-action-sm { width: 26px; height: 26px; border-radius: 6px; border: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: 0.2s; background: #e2e8f0; color: #475569; }
+.btn-action-sm:hover { background: #cbd5e1; color: #0f172a; transform: scale(1.1); }
+.btn-delete-row { width: 26px; height: 26px; border-radius: 6px; border: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: 0.2s; background: transparent; color: #ef4444; }
+.btn-delete-row:hover { background: #fee2e2; transform: scale(1.1); }
+
+.viewer-table ul { padding-left: 20px; margin: 4px 0; }
+.viewer-table li { margin-bottom: 4px; }
+
+.btn { height: 36px; padding: 0 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid transparent; display: inline-flex; align-items: center; gap: 8px; transition: 0.2s; font-family: var(--font-ui); }
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: var(--primary-hover); }
+.btn-accent { background: var(--accent); color: #fff; }
+.btn-accent:hover { background: #be123c; }
+.btn-secondary { background: #fff; border-color: var(--border); color: var(--text-main); }
+.btn-secondary:hover { background: #f8fafc; }
+
+#toast { position: fixed; bottom: 30px; right: 30px; background: #1e293b; color: #fff; padding: 12px 24px; border-radius: 8px; opacity: 0; transition: 0.3s; z-index: 2000; pointer-events: none; display: flex; align-items: center; gap: 8px; font-weight: 500; }
+
+/* === Modal & Filter CSS === */
+.modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.5); backdrop-filter: blur(4px); z-index: 1000; display: flex; align-items: center; justify-content: center; opacity: 0; visibility: hidden; transition: 0.2s; }
+.modal-overlay.active { opacity: 1; visibility: visible; }
+.modal-content { background: #fff; width: 600px; border-radius: 12px; box-shadow: var(--shadow-float); transform: translateY(20px); transition: 0.3s; display: flex; flex-direction: column; overflow: hidden; max-height: 90vh; }
+.modal-overlay.active .modal-content { transform: translateY(0); }
+.modal-header { padding: 16px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: #f8fafc; flex-shrink: 0; }
+.modal-header h3 { margin: 0; font-size: 16px; color: var(--primary); display: flex; align-items: center; gap: 8px; }
+.btn-close { background: none; border: none; font-size: 18px; color: var(--text-muted); cursor: pointer; transition: 0.2s; }
+.btn-close:hover { color: var(--accent); }
+.modal-body { padding: 24px; overflow-y: auto; }
+
+.filter-item { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; background: #f8fafc; padding: 10px; border-radius: 8px; border: 1px solid var(--border); }
+.filter-input { flex: 1; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; font-family: var(--font-ui); color: var(--text-main); }
+.filter-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-light); }
+.chk-label { font-size: 12px; display: flex; align-items: center; gap: 4px; cursor: pointer; color: var(--primary); font-weight: 600; white-space: nowrap; user-select: none; }
+.btn-remove-filter { background: none; border: none; color: #ef4444; font-size: 18px; cursor: pointer; padding: 4px; transition: 0.2s; }
+.btn-remove-filter:hover { transform: scale(1.1); color: #b91c1c; }
+.btn-add-filter { background: #fff; border: 1px dashed #cbd5e1; width: 100%; padding: 12px; border-radius: 8px; cursor: pointer; color: #64748b; font-weight: 600; margin-top: 4px; transition: 0.2s; }
+.btn-add-filter:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
+
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+.fa-spinner { animation: spin 1s linear infinite; }
+</style>
+</head>
+<body>
+
+<header>
+    <div class="brand"><i class="fas fa-file-pdf"></i> PDF Editor</div>
+    <div style="display:flex; gap:10px;">
+        <button class="btn btn-secondary" id="btn-settings" title="환경설정">
+            <i class="fas fa-cog" style="color:#64748b; font-size:16px;"></i> 필터 설정 (Settings)
+        </button>
+        <button class="btn btn-secondary" id="btn-copy-md" style="display:none;">
+            <i class="fab fa-markdown" style="color:#e11d48; font-size:16px;"></i> Copy Markdown
+        </button>
+    </div>
+</header>
+
+<div id="settings-modal" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3><i class="fas fa-filter"></i> 본문 텍스트 제거 필터 (다중 등록)</h3>
+            <button id="btn-close-settings" class="btn-close"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+            <div id="filter-list"></div>
+            <button class="btn-add-filter" onclick="addFilter()">
+                <i class="fas fa-plus"></i> 새 제거 문구 추가
+            </button>
+            
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 20px; line-height: 1.6; padding: 16px; background: #eff6ff; border-radius: 8px; border: 1px solid #bfdbfe;">
+                <i class="fas fa-magic" style="color:#3b82f6;"></i> <strong>디코딩 스마트 엔진 탑재 완료!</strong><br>
+                복사 시 꼬여버린 특수문자(&amp; 등)를 자동으로 해독하고, 글자 사이의 온갖 공백/줄바꿈을 깡그리 무시한 채 <strong>오직 글자와 기호만 맞으면 무조건 추적해 박살냅니다.</strong> <br>
+                <span style="color:#e11d48; font-weight:600;">(※ 주의: Regex 체크박스는 정규표현식 문법 전용입니다. 일반 문구는 꼭 체크를 해제하세요!)</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="workspace">
+    <aside class="pane-list">
+        <div class="upload-area">
+            <div class="section-label"><i class="fas fa-file-import"></i> Data Source</div>
+            <label class="upload-box" id="drop-zone" for="inp-file">
+                <i class="fas fa-cloud-arrow-up"></i>
+                <div class="title">Click or Drag PDF to upload</div>
+                <div class="desc">Supports .pdf only</div>
+                <input type="file" id="inp-file" accept=".pdf" style="display:none;">
+            </label>
+        </div>
+
+        <div class="file-info" id="file-info-panel">
+            <div class="section-label"><i class="fas fa-circle-info"></i> Document Info</div>
+            <div class="info-card">
+                <div class="info-row">
+                    <span class="info-label">File Name</span>
+                    <span class="info-val" id="info-name">-</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Total Pages</span>
+                    <span class="info-val" id="info-pages">-</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Images Found</span>
+                    <span class="info-val" id="info-images">0</span>
+                </div>
+            </div>
+            
+            <button class="btn btn-secondary" id="btn-extract-local" style="width:100%; margin-top:8px; display:none; border-color:#10b981; color:#047857; background:#ecfdf5; justify-content:center;">
+                <i class="fas fa-folder-plus"></i> 폴더로 이미지 추출
+            </button>
+            <div id="extract-hint" style="font-size:11px; color:var(--text-muted); margin-top:6px; line-height:1.4; display:none;">
+                * Chrome, Edge 브라우저 권장<br>
+                * 표의 1열(Page), 2열(Content 요약)을 폴더명으로 사용합니다.
+            </div>
+        </div>
+    </aside>
+
+    <main class="pane-editor">
+        <div class="toolbar" id="main-toolbar" style="display:none;">
+            <div class="toolbar-title" id="view-title">PDF Content</div>
+            <div class="edit-hint" title="편집 단축키 지원">
+                <i class="fas fa-keyboard"></i> 편집 (Ctrl+B,I,U) / 형광펜 (Ctrl+Alt+M)
+            </div>
+        </div>
+
+        <div class="editor-wrapper">
+            <div class="paper-sheet" id="paper-view" style="display:none;">
+                <div class="table-container" id="table-container"></div>
+            </div>
+
+            <div id="empty-state" class="empty-state">
+                <div class="empty-content">
+                    <i class="fas fa-file-pdf" style="font-size:56px; color:#cbd5e1; margin-bottom:24px;"></i>
+                    <h2 style="font-size:24px; color:var(--primary); margin-bottom:10px;">No File Selected</h2>
+                    <p style="color:var(--text-sub); line-height:1.6; margin-bottom:30px;">왼쪽 패널에 PDF를 업로드하면<br>페이지별 텍스트가 표로 추출됩니다.</p>
+                    <button class="btn btn-accent" onclick="document.getElementById('inp-file').click()" style="height:44px; padding:0 32px; justify-content:center;">
+                        <i class="fas fa-folder-open"></i> Browse Files
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<div id="toast"><i class="fas fa-check-circle"></i> <span id="toast-msg"></span></div>
+
+<script>
+    const fileInput = document.getElementById('inp-file');
+    const dropZone = document.getElementById('drop-zone');
+    const emptyState = document.getElementById('empty-state');
+    const paperView = document.getElementById('paper-view');
+    const mainToolbar = document.getElementById('main-toolbar');
+    const tableContainer = document.getElementById('table-container');
+    const fileInfoPanel = document.getElementById('file-info-panel');
+    const btnCopyMd = document.getElementById('btn-copy-md');
+    const btnExtractLocal = document.getElementById('btn-extract-local');
+    const extractHint = document.getElementById('extract-hint');
+    
+    const modalSettings = document.getElementById('settings-modal');
+    const btnSettings = document.getElementById('btn-settings');
+    const btnCloseSettings = document.getElementById('btn-close-settings');
+    const filterListContainer = document.getElementById('filter-list');
+
+    let currentPdfImages = [];
+
+    // ==========================================
+    // 필터 리스트 동적 UI 및 완벽한 기본값 강제 세팅
+    // ==========================================
+    window.addEventListener('DOMContentLoaded', () => {
+        renderFilterList();
+    });
+
+    function renderFilterList() {
+        filterListContainer.innerHTML = '';
+        
+        // V6 전용 로컬스토리지 키 (이전 버전의 찌꺼기를 완전히 초기화)
+        let filters = JSON.parse(localStorage.getItem('PDF_FILTER') || 'null');
+        
+        // 🌟 문제의 그 지독한 문구를 기본값으로 확실히 세팅!
+        if (!filters) {
+            filters = [
+                { text: "Copyright 2026 By Big & Up 기술사회 & 인포레버컨설팅 . All rights reserved.", isRegex: false },
+                { text: "-\\s*\\d+\\s*-", isRegex: true } // - 1 - 등 페이지 번호 날리는 정규식
+            ];
+            localStorage.setItem('PDF_FILTER', JSON.stringify(filters));
+        }
+
+        filters.forEach((f, idx) => {
+            const div = document.createElement('div');
+            div.className = 'filter-item';
+            div.innerHTML = `
+                <input type="text" class="filter-input" value="${f.text.replace(/"/g, '&quot;')}" placeholder="제거할 문구 입력">
+                <label class="chk-label" title="체크하면 입력값을 정규표현식 문법으로 해석합니다.">
+                    <input type="checkbox" class="filter-regex-chk" ${f.isRegex ? 'checked' : ''}> Regex
+                </label>
+                <button class="btn-remove-filter" onclick="removeFilter(${idx})" title="삭제"><i class="fas fa-minus-circle"></i></button>
+            `;
+            filterListContainer.appendChild(div);
+        });
+
+        // 실시간 로컬스토리지 저장
+        document.querySelectorAll('.filter-input').forEach((inp, i) => {
+            inp.addEventListener('input', (e) => {
+                filters[i].text = e.target.value;
+                localStorage.setItem('PDF_FILTER', JSON.stringify(filters));
+            });
+        });
+        document.querySelectorAll('.filter-regex-chk').forEach((chk, i) => {
+            chk.addEventListener('change', (e) => {
+                filters[i].isRegex = e.target.checked;
+                localStorage.setItem('PDF_FILTER', JSON.stringify(filters));
+            });
+        });
+    }
+
+    window.addFilter = function() {
+        let filters = JSON.parse(localStorage.getItem('PDF_FILTER') || '[]');
+        filters.push({ text: "", isRegex: false });
+        localStorage.setItem('PDF_FILTER', JSON.stringify(filters));
+        renderFilterList();
+    };
+
+    window.removeFilter = function(idx) {
+        let filters = JSON.parse(localStorage.getItem('PDF_FILTER') || '[]');
+        filters.splice(idx, 1);
+        localStorage.setItem('PDF_FILTER', JSON.stringify(filters));
+        renderFilterList();
+    };
+
+    // 모달 제어
+    btnSettings.addEventListener('click', () => modalSettings.classList.add('active'));
+    btnCloseSettings.addEventListener('click', () => modalSettings.classList.remove('active'));
+    modalSettings.addEventListener('click', (e) => {
+        if(e.target === modalSettings) modalSettings.classList.remove('active');
+    });
+
+    // ==========================================
+    // 단축키 설정
+    // ==========================================
+    document.addEventListener('keydown', function(e) {
+        const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+        const isCmd = isMac ? e.metaKey : e.ctrlKey;
+        
+        if (isCmd && (e.key === '+' || e.key === '=' || e.key === '-' || e.code === 'NumpadAdd' || e.code === 'NumpadSubtract')) {
+            e.preventDefault();
+            const activeEl = document.activeElement;
+            if (activeEl && activeEl.getAttribute('contenteditable') === 'true') {
+                const delta = (e.key === '-' || e.code === 'NumpadSubtract') ? -2 : 2;
+                changeFontSize(delta);
+            }
+            return;
+        }
+
+        const activeEl = document.activeElement;
+        if (!activeEl || activeEl.getAttribute('contenteditable') !== 'true') return;
+
+        if (isCmd) {
+            const code = e.code; 
+            if (e.shiftKey && (code === 'Backspace' || code === 'Delete')) {
+                e.preventDefault();
+                const row = activeEl.closest('tr');
+                if (row) {
+                    row.remove();
+                    showToast('해당 행이 삭제되었습니다.');
+                }
+                return;
+            }
+
+            if (e.altKey && code === 'KeyM') {
+                e.preventDefault();
+                document.execCommand('hiliteColor', false, '#ffedd5'); 
+                document.execCommand('backColor', false, '#ffedd5');
+                return;
+            }
+
+            if (code === 'KeyB' && !e.altKey && !e.shiftKey) { e.preventDefault(); document.execCommand('bold'); }
+            if (code === 'KeyI' && !e.altKey && !e.shiftKey) { e.preventDefault(); document.execCommand('italic'); }
+            if (code === 'KeyU' && !e.altKey && !e.shiftKey) { e.preventDefault(); document.execCommand('underline'); }
+            if (code === 'KeyL' && !e.altKey && !e.shiftKey) { e.preventDefault(); document.execCommand('insertUnorderedList'); }
+            if (e.altKey && (code === 'Digit5' || code === 'Numpad5')) { e.preventDefault(); document.execCommand('strikeThrough'); }
+            if (e.altKey && code === 'KeyR') { e.preventDefault(); document.execCommand('foreColor', false, '#e11d48'); }
+            if (e.altKey && code === 'KeyB' && !e.shiftKey) { e.preventDefault(); document.execCommand('foreColor', false, '#3b82f6'); }
+            
+            if (e.shiftKey && code === 'KeyX') { 
+                e.preventDefault(); 
+                document.execCommand('removeFormat', false, null);
+                document.execCommand('foreColor', false, '#0f172a');
+                document.execCommand('hiliteColor', false, 'transparent');
+                document.execCommand('backColor', false, 'transparent');
+            }
+        }
+    }, { passive: false });
+
+    function changeFontSize(delta) {
+        const selection = window.getSelection();
+        if (!selection.rangeCount || selection.isCollapsed) return;
+        let parentEl = selection.anchorNode.nodeType === 3 ? selection.anchorNode.parentElement : selection.anchorNode;
+        let currentSize = parseInt(window.getComputedStyle(parentEl).fontSize) || 13;
+        let newSize = Math.max(10, currentSize + delta); 
+
+        document.execCommand("fontSize", false, "7");
+        let tempFonts = document.activeElement.querySelectorAll('font[size="7"]');
+        tempFonts.forEach(f => {
+            let span = document.createElement('span');
+            span.style.fontSize = newSize + "px";
+            span.innerHTML = f.innerHTML;
+            f.parentNode.replaceChild(span, f);
+        });
+    }
+
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+        if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+    });
+
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length) handleFile(e.target.files[0]);
+        e.target.value = ''; 
+    });
+
+
+    // ==========================================
+    // HTML 엔티티를 완벽히 해독하는 헬퍼 함수
+    // ==========================================
+    function decodeHTMLEntities(text) {
+        if (!text) return "";
+        return text.replace(/&amp;/gi, '&')
+                   .replace(/&lt;/gi, '<')
+                   .replace(/&gt;/gi, '>')
+                   .replace(/&quot;/gi, '"')
+                   .replace(/&#39;/gi, "'")
+                   .replace(/&nbsp;/gi, ' ');
+    }
+
+    // ==========================================
+    // PDF 파싱 및 디코딩 스마트 필터링 엔진 (V6.0)
+    // ==========================================
+    async function handleFile(file) {
+        if (!file.name.match(/\.(pdf)$/i)) {
+            alert('지원하지 않는 파일 형식입니다. PDF 파일만 업로드 가능합니다.');
+            return;
+        }
+        
+        showToast('PDF 분석 중...');
+        currentPdfImages = []; 
+
+        const filters = JSON.parse(localStorage.getItem('PDF_FILTER') || '[]');
+
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+            const typedarray = new Uint8Array(e.target.result);
+
+            try {
+                const loadingTask = pdfjsLib.getDocument(typedarray);
+                const pdf = await loadingTask.promise;
+                
+                let tableData = [["Page", "Content"]]; 
+                let totalImagesFound = 0;
+
+                for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                    const page = await pdf.getPage(pageNum);
+                    const textContent = await page.getTextContent();
+                    
+                    let pageText = "";
+                    let lastY = null;
+
+                    // 줄바꿈 보존 로직
+                    textContent.items.forEach(item => {
+                        const currentY = item.transform[5];
+                        if (lastY !== null && Math.abs(currentY - lastY) > 4) {
+                            pageText += "\n";
+                        }
+                        pageText += item.str;
+                        lastY = currentY;
+                    });
+
+                    // 1단계: 정규식 동작을 방해하는 온갖 투명/제어문자(널, ZWSP 등) 일괄 삭제
+                    pageText = pageText.replace(/[\x00-\x09\x0B-\x1F\x7F-\x9F\u200B-\u200F\u202A-\u202E\uFEFF]/g, '');
+
+                    // 2단계: PDF 안에 꼬여있는 HTML 엔티티(&amp; 등)를 일반 텍스트(&)로 완전히 풀어버림!
+                    pageText = decodeHTMLEntities(pageText);
+
+                    // 3단계: NFKC 정규화 적용 (전각/반각 문자 병합)
+                    if (pageText.normalize) pageText = pageText.normalize('NFKC');
+
+                    // 🌟 초강력 디코딩 스마트 필터링 로직 🌟
+                    if (filters.length > 0) {
+                        filters.forEach(f => {
+                            let line = f.text.trim();
+                            if(!line) return;
+
+                            if (f.isRegex) {
+                                // 사용자가 Regex 체크한 경우 그대로 정규식 적용
+                                try {
+                                    pageText = pageText.replace(new RegExp(line, 'gi'), '');
+                                } catch(err) { console.warn('Regex Error:', err); }
+                            } else {
+                                // 일반 문구인 경우 (스마트 매칭 모드)
+                                // 유저가 입력한 필터의 &amp; 등도 디코딩해서 동일선상에 맞춤
+                                line = decodeHTMLEntities(line);
+                                if (line.normalize) line = line.normalize('NFKC');
+                                
+                                // 유저 입력 텍스트에서 띄어쓰기와 제어문자만 제거 (특수기호는 그대로 살림!)
+                                let noSpaceLine = line.replace(/[\s\u200B-\u200D\uFEFF\u00A0]+/g, '');
+                                
+                                if (noSpaceLine.length > 0) {
+                                    // 한 글자씩 쪼갠 후 특수문자 이스케이프 적용, 그 사이에 '모든 형태의 공백/줄바꿈' 허용 정규식 삽입
+                                    let smartRegexStr = noSpaceLine.split('').map(char => {
+                                        return char.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                                    }).join('[\\s\\n\\u200B-\\u200D\\uFEFF\\u00A0]*');
+                                    
+                                    pageText = pageText.replace(new RegExp(smartRegexStr, 'gi'), '');
+                                }
+                            }
+                        });
+                        
+                        // 결과물 깔끔하게 포매팅 (찌꺼기 엔터, 공백 제거)
+                        pageText = pageText.replace(/[ \t]+/g, ' '); 
+                        pageText = pageText.replace(/\n {1,}/g, '\n'); 
+                        pageText = pageText.replace(/\n{3,}/g, '\n\n').trim();
+                        pageText = pageText.replace(/^\n+|\n+$/g, '');
+                    }
+
+                    tableData.push([`Page ${pageNum}`, pageText]);
+
+                    // 이미지 추출 로직
+                    const ops = await page.getOperatorList();
+                    for (let i = 0; i < ops.fnArray.length; i++) {
+                        if (ops.fnArray[i] === pdfjsLib.OPS.paintImageXObject || ops.fnArray[i] === pdfjsLib.OPS.paintJpegXObject) {
+                            const imgName = ops.argsArray[i][0];
+                            try {
+                                const imgObj = await page.objs.get(imgName);
+                                if (imgObj && imgObj.data) {
+                                    const blob = await convertImageObjToBlob(imgObj);
+                                    if(blob) {
+                                        currentPdfImages.push({ page: pageNum, blob: blob, name: `page${pageNum}_img${totalImagesFound}.png` });
+                                        totalImagesFound++;
+                                    }
+                                }
+                            } catch(err) { console.warn('이미지 추출 실패:', err); }
+                        }
+                    }
+                }
+                
+                renderEditableTable(tableData, file.name, pdf.numPages, totalImagesFound);
+                
+                if(totalImagesFound > 0) {
+                    btnExtractLocal.style.display = 'inline-flex';
+                    extractHint.style.display = 'block';
+                } else {
+                    btnExtractLocal.style.display = 'none';
+                    extractHint.style.display = 'none';
+                }
+            } catch (error) {
+                console.error(error);
+                alert("PDF 파싱 중 오류가 발생했습니다.");
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    function convertImageObjToBlob(imgObj) {
+        return new Promise((resolve) => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = imgObj.width;
+            canvas.height = imgObj.height;
+
+            const imgData = ctx.createImageData(imgObj.width, imgObj.height);
+            if (imgObj.kind === /* RGB */ 3 || imgObj.data.length === imgObj.width * imgObj.height * 4) {
+                imgData.data.set(imgObj.data);
+            } else {
+                for (let i = 0, j = 0; i < imgObj.data.length; i += 3, j += 4) {
+                    imgData.data[j] = imgObj.data[i];
+                    imgData.data[j+1] = imgObj.data[i+1];
+                    imgData.data[j+2] = imgObj.data[i+2];
+                    imgData.data[j+3] = 255;
+                }
+            }
+            ctx.putImageData(imgData, 0, 0);
+            canvas.toBlob((blob) => { resolve(blob); }, 'image/png');
+        });
+    }
+
+    btnExtractLocal.addEventListener('click', async () => {
+        if (!window.showDirectoryPicker) {
+            alert('현재 사용 중인 브라우저는 File System Access API를 지원하지 않습니다.\n(Chrome, Edge 브라우저 권장)');
+            return;
+        }
+
+        const originalIcon = btnExtractLocal.innerHTML;
+        btnExtractLocal.innerHTML = '<i class="fas fa-spinner"></i> 저장 중...';
+        btnExtractLocal.disabled = true;
+
+        try {
+            const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+            const tbody = document.querySelector('#edit-table tbody');
+            const rows = tbody ? Array.from(tbody.querySelectorAll('tr')) : [];
+            let successCount = 0;
+
+            for (let i = 0; i < currentPdfImages.length; i++) {
+                const imgData = currentPdfImages[i];
+                let pageFolderName = `Page_${imgData.page}`;
+                let contentFolderName = "Images";
+
+                const targetRow = rows[imgData.page - 1]; 
+                if (targetRow) {
+                    const cells = targetRow.querySelectorAll('td:not(.action-col)');
+                    if (cells.length >= 1) pageFolderName = sanitizeFolderName(cells[0].innerText) || pageFolderName;
+                    if (cells.length >= 2) contentFolderName = sanitizeFolderName(cells[1].innerText.substring(0, 15)) || contentFolderName;
+                }
+
+                const pageDirHandle = await dirHandle.getDirectoryHandle(pageFolderName, { create: true });
+                const contentDirHandle = await pageDirHandle.getDirectoryHandle(contentFolderName, { create: true });
+                const fileHandle = await contentDirHandle.getFileHandle(imgData.name, { create: true });
+                const writable = await fileHandle.createWritable();
+                await writable.write(imgData.blob);
+                await writable.close();
+                
+                successCount++;
+            }
+
+            showToast(`${successCount}개의 이미지가 정상적으로 저장되었습니다!`);
+        } catch (error) {
+            if (error.name !== 'AbortError') alert(`저장 중 오류가 발생했습니다: ${error.message}`);
+        } finally {
+            btnExtractLocal.innerHTML = originalIcon;
+            btnExtractLocal.disabled = false;
+        }
+    });
+
+    function sanitizeFolderName(name) {
+        if (!name) return "";
+        let safeName = name.replace(/[\\/:*?"<>|\n\r\t]/g, "_").trim();
+        safeName = safeName.replace(/[\s.]+$/, "");
+        if (safeName === "." || safeName === "..") safeName = "_";
+        return safeName;
+    }
+
+    const getActionColHTML = () => `
+        <td class="action-col" contenteditable="false">
+            <div class="action-flex">
+                <button class="btn-action-sm" onclick="insertRow(this, 'above')" title="위로 행 추가"><i class="fas fa-arrow-up"></i></button>
+                <button class="btn-action-sm" onclick="insertRow(this, 'below')" title="아래로 행 추가"><i class="fas fa-arrow-down"></i></button>
+                <button class="btn-delete-row" onclick="deleteRowElement(this)" title="행 삭제"><i class="fas fa-trash-alt"></i></button>
+            </div>
+        </td>
+    `;
+
+    function renderEditableTable(data, fileName, totalPages, totalImages) {
+        const headers = data[0];
+        let html = '<table class="viewer-table" id="edit-table"><thead><tr>';
+        headers.forEach(h => { html += `<th contenteditable="true" spellcheck="false">${h}</th>`; });
+        html += `<th class="action-col" contenteditable="false">
+                    <button class="btn-action-sm" style="background:#e11d48; color:#fff;" onclick="insertRowAtTop()" title="첫 줄에 행 추가"><i class="fas fa-plus"></i></button>
+                 </th></tr></thead><tbody>`;
+
+        for (let i = 1; i < data.length; i++) {
+            html += `<tr><td contenteditable="true" spellcheck="false" style="font-weight:bold; color:var(--primary);">${formatHTMLCell(data[i][0])}</td>
+                     <td contenteditable="true" spellcheck="false">${formatHTMLCell(data[i][1])}</td>
+                     ${getActionColHTML()}</tr>`;
+        }
+        html += '</tbody></table>';
+
+        tableContainer.innerHTML = html;
+
+        document.getElementById('view-title').innerHTML = `<i class="fas fa-file-pdf" style="color:#e11d48;"></i> PDF Data`;
+        document.getElementById('info-name').textContent = fileName;
+        document.getElementById('info-pages').textContent = totalPages;
+        document.getElementById('info-images').textContent = totalImages;
+
+        emptyState.style.display = 'none';
+        paperView.style.display = 'flex';
+        mainToolbar.style.display = 'flex';
+        fileInfoPanel.style.display = 'flex';
+        btnCopyMd.style.display = 'inline-flex';
+    }
+
+    function formatHTMLCell(cell) {
+        if (cell === undefined || cell === null) return "";
+        return String(cell).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>");
+    }
+
+    function insertRow(btn, direction) {
+        const currentRow = btn.closest('tr');
+        const newRow = document.createElement('tr');
+        newRow.innerHTML = `<td contenteditable="true" spellcheck="false"></td><td contenteditable="true" spellcheck="false"></td>${getActionColHTML()}`;
+        if (direction === 'above') currentRow.parentNode.insertBefore(newRow, currentRow);
+        else currentRow.parentNode.insertBefore(newRow, currentRow.nextSibling);
+        showToast((direction === 'above' ? '위' : '아래') + '에 새 행이 추가되었습니다.');
+    }
+
+    function insertRowAtTop() {
+        const tbody = document.querySelector('#edit-table tbody');
+        const newRow = document.createElement('tr');
+        newRow.innerHTML = `<td contenteditable="true" spellcheck="false"></td><td contenteditable="true" spellcheck="false"></td>${getActionColHTML()}`;
+        tbody.insertBefore(newRow, tbody.firstChild);
+        showToast('첫 줄에 새 행이 추가되었습니다.');
+    }
+
+    function deleteRowElement(btn) { btn.closest('tr').remove(); }
+
+    // ==========================================
+    // 마크다운 변환 시 &amp; 잔상 완벽 복원
+    // ==========================================
+    btnCopyMd.addEventListener('click', () => {
+        const table = document.getElementById('edit-table');
+        if (!table) return;
+        let md = "";
+        table.querySelectorAll('tr').forEach((row, rowIndex) => {
+            const cells = row.querySelectorAll('th:not(.action-col), td:not(.action-col)');
+            if (cells.length === 0) return; 
+            let rowData = Array.from(cells).map(cell => extractMarkdownFromCell(cell));
+            md += "| " + rowData.join(" | ") + " |\n";
+            if (rowIndex === 0) md += "| " + Array(cells.length).fill("---").join(" | ") + " |\n";
+        });
+        
+        navigator.clipboard.writeText(md).then(() => showToast('마크다운 코드가 복사되었습니다.'));
+    });
+
+    function extractMarkdownFromCell(cell) {
+        let clone = cell.cloneNode(true);
+        let lists = clone.querySelectorAll('ul, ol');
+        lists.forEach(list => {
+            let listStr = Array.from(list.querySelectorAll('li')).map(item => "<br>- " + item.innerHTML).join("");
+            list.outerHTML = listStr; 
+        });
+        clone.querySelectorAll('div, p').forEach(block => {
+            block.outerHTML = block.innerHTML === '<br>' ? "<br>" : "<br>" + block.innerHTML;
+        });
+        
+        let text = clone.innerHTML;
+        text = text.replace(/\n/g, ""); 
+        text = text.replace(/^(<br>)+/, '').replace(/(<br>)+$/, '');
+        text = text.replace(/\|/g, "\\|");
+        // HTML 엔티티를 마크다운 텍스트로 완전히 복원
+        text = text.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&nbsp;/g, " ");
+        return text;
+    }
+
+    function showToast(msg) {
+        const toast = document.getElementById('toast');
+        document.getElementById('toast-msg').textContent = msg;
+        toast.style.opacity = '1';
+        toast.style.bottom = '30px';
+        setTimeout(() => { toast.style.opacity = '0'; toast.style.bottom = '-50px'; }, 2500);
+    }
+</script>
+</body>
+</html>

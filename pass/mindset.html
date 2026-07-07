@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>✨ 마인드 셋</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+    /* --- 기본 스타일 --- */
+    :root {
+        --bg: #f8f9fa; --card: #ffffff; --text: #343a40; --border: #dee2e6;
+        --primary: #228be6; --primary-dark: #1971c2; --danger: #fa5252;
+        --success: #40c057; --success-dark: #2f9e44;
+        --accent: #ae3ec9; --accent-light: #f3d9fa; --accent-dark: #9c36b5;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "Pretendard", "Malgun Gothic", -apple-system, sans-serif; background: var(--bg); color: var(--text); font-size: 13px; height: 100vh; overflow: hidden; }
+
+    /* Layout */
+    .app { display: flex; flex-direction: column; height: 100%; }
+    
+    header { 
+        background: var(--card); border-bottom: 1px solid var(--border); padding: 0 24px; height: 60px; 
+        display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; z-index: 100; 
+        /* [수정] 트랜지션 추가 */
+        transition: margin-top 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    /* [추가] Immersive Mode Styles */
+    body.immersive-mode header {
+        margin-top: -61px; /* 헤더 높이+보더 만큼 숨김 */
+    }
+    
+    h1 { font-size: 18px; margin: 0; font-weight: 800; display: flex; align-items: center; gap: 8px; color: var(--accent); }
+    
+    main { flex: 1; display: flex; overflow: hidden; }
+    
+    aside { 
+        width: 260px; background: var(--bg); border-right: 1px solid var(--border); 
+        display: flex; flex-direction: column; padding: 20px; gap: 20px; flex-shrink: 0; 
+        /* [수정] 트랜지션 추가 */
+        transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                    padding 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                    border 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        overflow: hidden;
+    }
+
+    body.immersive-mode aside {
+        width: 0;
+        padding: 0;
+        border-right: none;
+    }
+    
+    /* Toggle Button */
+    .toggle-view-btn {
+        position: fixed; top: 12px; right: 12px; z-index: 1001;
+        width: 36px; height: 36px;
+        background: rgba(255,255,255,0.9); border: 1px solid var(--border);
+        border-radius: 8px; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        color: #868e96; transition: 0.2s;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+    .toggle-view-btn:hover { background: #fff; color: var(--accent); }
+    body.immersive-mode .toggle-view-btn { opacity: 0.5; }
+    body.immersive-mode .toggle-view-btn:hover { opacity: 1; }
+
+    /* Panels */
+    .panel { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 15px; white-space: nowrap; }
+    .panel-title { font-weight: 700; color: #868e96; font-size: 12px; margin-bottom: 10px; text-transform: uppercase; }
+    
+    /* Navigation */
+    .nav-menu { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+    .nav-item { padding: 10px 12px; border-radius: 6px; cursor: pointer; font-weight: 600; color: #495057; display: flex; justify-content: space-between; align-items: center; }
+    .nav-item:hover { background: #e9ecef; }
+    .nav-item.active { background: var(--accent-light); color: var(--accent); font-weight: 800; border-right: 3px solid var(--accent); }
+
+    /* Content & Views */
+    .content { flex: 1; display: flex; flex-direction: column; padding: 20px; overflow: hidden; transition: padding 0.3s; }
+    .view-section { display: none; flex-direction: column; height: 100%; }
+    .view-section.active { display: flex; }
+    
+    /* Toolbar */
+    .toolbar { display: flex; gap: 8px; margin-bottom: 15px; align-items: center; background: var(--card); padding: 12px; border-radius: 8px; border: 1px solid var(--border); }
+    .toolbar-title { font-weight:700; color: var(--accent); margin-right:5px; }
+    
+    /* Buttons */
+    .btn { padding: 0 14px; height: 32px; border-radius: 5px; border: 1px solid #ced4da; background: #fff; color: #495057; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 5px; font-size: 13px; line-height: 1; transition: all 0.2s; }
+    .btn:hover { background: #f1f3f5; transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
+    
+    .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .btn-primary:hover { background: var(--accent-dark); border-color: var(--accent-dark); }
+    
+    .btn-success { background: var(--success); color: #fff; border-color: var(--success); }
+    .btn-success:hover { background: var(--success-dark); border-color: var(--success-dark); }
+
+    .btn-danger { color: var(--danger); border-color: #ffa8a8; background: #fff5f5; }
+    
+    .btn-delete {
+        width: 24px !important; height: 24px !important; padding: 0 !important;
+        font-size: 16px !important; font-weight: bold; 
+        border-radius: 4px; border: 1px solid transparent; background: transparent;
+        cursor: pointer;
+    }
+    .btn-delete:hover { background-color: #ffe3e3; color: #fa5252; }
+
+    /* Focus Mode */
+    .focus-container {
+        flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+        background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+        padding: 40px; text-align: center; position: relative;
+    }
+    .affirmation-text {
+        font-size: 28px; line-height: 1.5; font-weight: 700; color: #333;
+        margin-bottom: 30px; word-break: keep-all; max-width: 800px;
+        animation: fadeUp 0.6s ease-out;
+    }
+    @keyframes fadeUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .affirmation-category {
+        display: inline-block; padding: 6px 12px; border-radius: 20px;
+        background: var(--accent-light); color: var(--accent); font-weight: 700; font-size: 12px;
+        margin-bottom: 20px;
+    }
+    .controls { display: flex; gap: 10px; margin-top: 20px; }
+
+    /* Tables & Sorting */
+    .table-wrapper { flex: 1; background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: auto; }
+    table { width: 100%; border-collapse: collapse; min-width: 600px; }
+    th, td { padding: 0 15px; border-bottom: 1px solid var(--border); text-align: left; height: 45px; vertical-align: middle; }
+    th { background: #f8f9fa; font-weight: 700; position: sticky; top: 0; color: #555; z-index: 10; user-select: none; }
+    
+    /* Sorting Styles */
+    th.sortable { cursor: pointer; transition: background 0.2s; }
+    th.sortable:hover { background: #e9ecef; color: var(--accent); }
+    .sort-icon { display: inline-block; width: 12px; text-align: center; margin-left: 4px; font-size: 10px; color: #adb5bd; }
+    .sortable.active .sort-icon { color: var(--accent); font-weight: bold; }
+
+    td input[type="text"] { width: 100%; border: 1px solid transparent; padding: 8px; border-radius: 4px; font-family: inherit; font-size: 13px; background: transparent; }
+    td input[type="text"]:focus { border-color: var(--accent); outline: none; background: #fff; }
+
+    /* Chips */
+    .category-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; background: var(--card); padding: 15px; border-radius: 8px; border: 1px solid var(--border); }
+    .chip {
+        padding: 6px 14px; border-radius: 20px; border: 1px solid var(--border); background: #fff;
+        cursor: pointer; font-weight: 600; color: #495057; transition: all 0.2s; user-select: none;
+        display: flex; align-items: center; gap: 5px;
+    }
+    .chip:hover { background: #f1f3f5; }
+    .chip.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    
+    .check-row { cursor: pointer; }
+    .check-row:hover { background-color: #f8f9fa; }
+    .check-row.inactive td { color: #adb5bd; }
+    .checkbox-custom { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+
+    #save-indicator { position: fixed; bottom: 20px; right: 20px; background: rgba(0,0,0,0.7); color: #fff; padding: 8px 16px; border-radius: 20px; font-size: 12px; opacity: 0; transition: opacity 0.5s; pointer-events: none; z-index: 9999; }
+
+    /* Mobile */
+    @media (max-width: 768px) {
+        aside { position: absolute; left: 0; top: 60px; height: calc(100% - 60px); z-index: 50; box-shadow: 2px 0 10px rgba(0,0,0,0.1); transform: translateX(0); }
+        
+        /* 모바일에서 몰입 모드 시 사이드바 숨김 */
+        body.immersive-mode aside { width: 0; padding: 0; border: none; transform: translateX(-100%); }
+    }
+</style>
+</head>
+<body>
+
+<button class="toggle-view-btn" onclick="toggleImmersive()" title="몰입 모드 (H)">
+    <i id="toggle-icon" class="fas fa-eye-slash"></i>
+</button>
+
+<div id="save-indicator">저장됨</div>
+
+<div class="app">
+    <header>
+        <h1>✨ 마인드 셋</h1>
+        <div style="display:flex; gap:10px;">
+             </div>
+    </header>
+
+    <main>
+        <aside>
+            <div class="panel">
+                <div class="panel-title">Menu</div>
+                <ul class="nav-menu">
+                    <li class="nav-item active" onclick="switchTab('tab-focus', this); renderRandomAffirmation();">① 오늘의 확언</li>
+                    <li class="nav-item" onclick="switchTab('tab-manage', this); renderList();">② 확언 관리</li>
+                    <li class="nav-item" onclick="switchTab('tab-set', this); renderSetView();">③ 확언 SET</li>
+                </ul>
+            </div>
+            
+            <div class="panel">
+                <div class="panel-title">Stats</div>
+                <div id="stats-text" style="font-size:12px; color:#555; line-height:1.6;">
+                    DB 연결 중...
+                </div>
+            </div>
+
+            <div class="panel" style="margin-top:auto">
+                <div class="panel-title">Guide</div>
+                <div style="font-size:11px; color:#868e96; line-height:1.4;">
+                    * <b>확언 셋</b>에서 체크된 문장만<br>오늘의 확언에 재생됩니다.<br>
+                    * 테이블 헤더를 눌러<br><b>정렬(오름/내림차순)</b>할 수 있습니다.<br>
+                    * <b>H 키</b>로 전체 화면 전환 가능
+                </div>
+            </div>
+        </aside>
+
+        <div class="content">
+            <div id="tab-focus" class="view-section active">
+                <div class="toolbar">
+                    <span class="toolbar-title">🧘 Focus Mode</span>
+                    <span style="flex:1"></span>
+                    <button class="btn" onclick="copyToClipboard()">📋 복사하기</button>
+                </div>
+                <div class="focus-container">
+                    <div id="display-area">
+                        <span class="affirmation-category" id="focus-category">Ready</span>
+                        <div class="affirmation-text" id="focus-text">
+                            데이터 로딩 중...
+                        </div>
+                    </div>
+                    <div class="controls">
+                        <button class="btn" onclick="renderRandomAffirmation()">🎲 다른 확언</button>
+                        <button class="btn btn-primary" onclick="toggleAutoPlay()" id="btn-autoplay">▶ 자동 재생</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tab-manage" class="view-section">
+                <div class="toolbar">
+                    <span class="toolbar-title">📝 확언 리스트 관리</span>
+                    <span style="flex:1"></span>
+                    <input type="file" id="excel-file" accept=".xlsx, .xls" style="display:none" onchange="importExcel(this)">
+                    <button class="btn btn-primary" onclick="addEmptyRow()">+ 새 문장 추가</button>
+                    <button class="btn btn-success" onclick="document.getElementById('excel-file').click()">📂 엑셀 불러오기</button>
+                    <button class="btn" onclick="exportToExcel()">📥 엑셀 내보내기</button>
+                </div>
+                <div class="table-wrapper">
+                    <table id="manage-table">
+                        <colgroup>
+                            <col style="width: 50px;">
+                            <col style="width: 150px;">
+                            <col style="width: auto;">
+                        </colgroup>
+                        <thead>
+                            <tr>
+                                <th style="text-align:center">삭제</th>
+                                <th class="sortable" onclick="handleSort('category')" data-key="category">
+                                    카테고리 <span class="sort-icon"></span>
+                                </th>
+                                <th class="sortable" onclick="handleSort('text')" data-key="text">
+                                    확언 내용 <span class="sort-icon"></span>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="tab-set" class="view-section">
+                <div class="toolbar">
+                    <span class="toolbar-title">⚙️ 재생 확언 선택</span>
+                    <span style="flex:1"></span>
+                    <button class="btn" onclick="toggleAllSets(true)">전체 선택</button>
+                    <button class="btn" onclick="toggleAllSets(false)">전체 해제</button>
+                </div>
+                
+                <div class="panel-title" style="margin-left:5px;">📂 카테고리별 일괄 선택</div>
+                <div class="category-chips" id="set-category-chips">
+                    </div>
+
+                <div class="table-wrapper">
+                    <table id="set-table">
+                        <colgroup>
+                            <col style="width: 60px;">
+                            <col style="width: 150px;">
+                            <col style="width: auto;">
+                        </colgroup>
+                        <thead>
+                            <tr>
+                                <th style="text-align:center">사용</th>
+                                <th class="sortable" onclick="handleSort('category')" data-key="category">
+                                    카테고리 <span class="sort-icon"></span>
+                                </th>
+                                <th class="sortable" onclick="handleSort('text')" data-key="text">
+                                    확언 내용 <span class="sort-icon"></span>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script>
+    /* ==========================================================================
+       IndexedDB Service
+       ========================================================================== */
+    const DB_NAME = 'MindsetDB';
+    const DB_VERSION = 1;
+    const STORE_NAME = 'affirmations';
+
+    const dbService = {
+        db: null,
+
+        async init() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+                request.onupgradeneeded = (event) => {
+                    const db = event.target.result;
+                    if (!db.objectStoreNames.contains(STORE_NAME)) {
+                        db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+                    }
+                };
+
+                request.onsuccess = (event) => {
+                    this.db = event.target.result;
+                    resolve(this.db);
+                };
+
+                request.onerror = (event) => {
+                    console.error("Database error:", event.target.error);
+                    reject(event.target.error);
+                };
+            });
+        },
+
+        async getAll() {
+            return new Promise((resolve, reject) => {
+                const transaction = this.db.transaction([STORE_NAME], 'readonly');
+                const store = transaction.objectStore(STORE_NAME);
+                const request = store.getAll();
+
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+        },
+
+        async put(item) {
+            return new Promise((resolve, reject) => {
+                const transaction = this.db.transaction([STORE_NAME], 'readwrite');
+                const store = transaction.objectStore(STORE_NAME);
+                const request = store.put(item);
+
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+        },
+
+        async delete(id) {
+            return new Promise((resolve, reject) => {
+                const transaction = this.db.transaction([STORE_NAME], 'readwrite');
+                const store = transaction.objectStore(STORE_NAME);
+                const request = store.delete(id);
+
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject(request.error);
+            });
+        },
+
+        async bulkPut(items) {
+            return new Promise((resolve, reject) => {
+                const transaction = this.db.transaction([STORE_NAME], 'readwrite');
+                const store = transaction.objectStore(STORE_NAME);
+                
+                items.forEach(item => store.put(item));
+
+                transaction.oncomplete = () => resolve();
+                transaction.onerror = () => reject(transaction.error);
+            });
+        },
+
+        async clear() {
+            return new Promise((resolve, reject) => {
+                const transaction = this.db.transaction([STORE_NAME], 'readwrite');
+                const store = transaction.objectStore(STORE_NAME);
+                const request = store.clear();
+
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject(request.error);
+            });
+        }
+    };
+
+    /* ==========================================================================
+       App State & Sort Logic
+       ========================================================================== */
+    let affirmations = [];
+    let autoPlayInterval = null;
+    
+    // 정렬 상태 관리 (key: 정렬 기준 필드, order: 'asc' | 'desc')
+    let sortState = {
+        key: 'id',
+        order: 'desc' // 기본값: 최신순 (id 역순)
+    };
+
+    const DEFAULT_DATA = [
+        { id: 1, category: "긍정", text: "나는 날마다 모든 면에서 점점 더 좋아지고 있다.", isActive: true },
+        { id: 2, category: "자존감", text: "나는 내 모습 그대로 사랑받을 가치가 있다.", isActive: true },
+        { id: 3, category: "성공", text: "내가 꿈꾸는 모든 것은 현실이 된다.", isActive: true },
+        { id: 4, category: "치유", text: "나의 몸과 마음은 완벽한 조화를 이루고 있다.", isActive: true },
+        { id: 5, category: "용기", text: "나는 두려움을 넘어 도전하는 사람이다.", isActive: true },
+        { id: 6, category: "부", text: "나는 경제적 풍요를 누릴 자격이 있다.", isActive: true },
+        { id: 7, category: "감사", text: "오늘 나에게 주어진 모든 것에 감사합니다.", isActive: true },
+        { id: 8, category: "관계", text: "나는 좋은 사람들과 긍정적인 에너지를 주고받는다.", isActive: true },
+        { id: 9, category: "현재", text: "나는 과거에 얽매이지 않고 현재를 온전히 즐긴다.", isActive: true },
+        { id: 10, category: "능력", text: "나는 어떤 문제든 해결할 수 있는 지혜를 가지고 있다.", isActive: true }
+    ];
+
+    /* ==========================================================================
+       Lifecycle & Init
+       ========================================================================== */
+    window.onload = async function() {
+        try {
+            await dbService.init();
+            await loadData();
+        } catch (e) {
+            console.error("Initialization failed:", e);
+            document.getElementById('stats-text').innerText = "DB 오류 발생";
+        }
+
+        // [추가] 단축키 이벤트 리스너
+        document.addEventListener('keydown', (e) => {
+            // H 키: 몰입 모드 토글 (입력창 포커스 아닐 때만)
+            if (e.key.toLowerCase() === 'h' && e.target.tagName !== 'INPUT') { 
+                e.preventDefault(); 
+                toggleImmersive(); 
+            }
+        });
+    };
+
+    // [추가] 몰입 모드 토글 함수
+    function toggleImmersive() {
+        document.body.classList.toggle('immersive-mode');
+        const isImmersive = document.body.classList.contains('immersive-mode');
+        const icon = document.getElementById('toggle-icon');
+        if(icon) icon.className = isImmersive ? 'fas fa-eye' : 'fas fa-eye-slash';
+    }
+
+    async function loadData() {
+        const dbData = await dbService.getAll();
+        
+        if (dbData.length === 0) {
+            const localData = localStorage.getItem("AffirmationDB_v1");
+            if (localData) {
+                const parsed = JSON.parse(localData);
+                const migrated = parsed.map(item => ({
+                    ...item,
+                    id: item.id || Date.now() + Math.random(),
+                    isActive: item.isActive !== undefined ? item.isActive : true
+                }));
+                affirmations = migrated;
+                await dbService.bulkPut(migrated);
+                localStorage.removeItem("AffirmationDB_v1");
+            } else {
+                affirmations = JSON.parse(JSON.stringify(DEFAULT_DATA));
+                await dbService.bulkPut(affirmations);
+            }
+        } else {
+            affirmations = dbData;
+        }
+
+        renderRandomAffirmation();
+        updateStats();
+    }
+
+    /* ==========================================================================
+       Sorting Functions
+       ========================================================================== */
+    function handleSort(key) {
+        if (sortState.key === key) {
+            // 같은 키를 누르면 순서 토글 (asc <-> desc)
+            sortState.order = sortState.order === 'asc' ? 'desc' : 'asc';
+        } else {
+            // 새로운 키를 누르면 기본 오름차순
+            sortState.key = key;
+            sortState.order = 'asc';
+        }
+        refreshCurrentTab();
+    }
+
+    function getSortedData() {
+        const data = [...affirmations];
+        const { key, order } = sortState;
+
+        return data.sort((a, b) => {
+            let valA = a[key] || "";
+            let valB = b[key] || "";
+
+            // ID 정렬 (숫자)
+            if(key === 'id') {
+                return order === 'asc' ? valA - valB : valB - valA;
+            }
+
+            // 문자열 정렬 (한글 포함)
+            valA = String(valA);
+            valB = String(valB);
+            
+            if(order === 'asc') return valA.localeCompare(valB);
+            else return valB.localeCompare(valA);
+        });
+    }
+
+    function updateSortIcons() {
+        // 모든 sort-icon 초기화
+        document.querySelectorAll('.sort-icon').forEach(el => el.innerText = '↕');
+        document.querySelectorAll('th.sortable').forEach(el => el.classList.remove('active'));
+
+        // 현재 활성화된 키에 아이콘 및 active 클래스 부여
+        if(sortState.key !== 'id') {
+            const activeHeaders = document.querySelectorAll(`th[data-key="${sortState.key}"]`);
+            activeHeaders.forEach(th => {
+                th.classList.add('active');
+                const icon = th.querySelector('.sort-icon');
+                if(icon) icon.innerText = sortState.order === 'asc' ? '▲' : '▼';
+            });
+        }
+    }
+
+    /* ==========================================================================
+       UI Helpers
+       ========================================================================== */
+    function refreshCurrentTab() {
+        if(document.getElementById('tab-manage').classList.contains('active')) renderList();
+        if(document.getElementById('tab-set').classList.contains('active')) renderSetView();
+        if(document.getElementById('tab-focus').classList.contains('active')) renderRandomAffirmation();
+    }
+
+    async function resetData() {
+        if(confirm("모든 데이터를 초기화하고 기본 문장으로 되돌리시겠습니까?")) {
+            await dbService.clear();
+            affirmations = JSON.parse(JSON.stringify(DEFAULT_DATA));
+            await dbService.bulkPut(affirmations);
+            
+            // 초기화 시 정렬도 초기화
+            sortState = { key: 'id', order: 'desc' };
+            refreshCurrentTab();
+            updateStats();
+            alert("초기화되었습니다.");
+        }
+    }
+
+    function showSaveIndicator() {
+        const el = document.getElementById('save-indicator');
+        el.style.opacity = '1';
+        setTimeout(() => el.style.opacity = '0', 1000);
+    }
+
+    function getActiveAffirmations() {
+        return affirmations.filter(item => item.isActive);
+    }
+
+    function switchTab(tabId, el) {
+        document.querySelectorAll('.view-section').forEach(d => d.classList.remove('active'));
+        document.getElementById(tabId).classList.add('active');
+        document.querySelectorAll('.nav-item').forEach(li => li.classList.remove('active'));
+        el.classList.add('active');
+        
+        stopAutoPlay();
+        // 탭 전환 시 뷰 갱신 (정렬 아이콘 등 동기화)
+        refreshCurrentTab();
+    }
+
+    function updateStats() {
+        const total = affirmations.length;
+        const active = getActiveAffirmations().length;
+        document.getElementById('stats-text').innerHTML = `
+            전체 확언: <b>${total}</b>개<br>
+            재생 목록: <b>${active}</b>개 선택됨<br>
+            <span style="color:var(--accent); font-weight:bold;">${Math.round((active/total)*100 || 0)}% 활성화</span>
+        `;
+    }
+
+    /* ==========================================================================
+       1. Focus Mode Logic
+       ========================================================================== */
+    function renderRandomAffirmation() {
+        const targets = getActiveAffirmations();
+        const textEl = document.getElementById('focus-text');
+        const catEl = document.getElementById('focus-category');
+
+        if (targets.length === 0) {
+            textEl.innerText = "선택된 확언이 없습니다. '③ 확언 셋' 메뉴에서 문장을 선택해주세요.";
+            catEl.style.display = 'none';
+            return;
+        }
+
+        const randomIndex = Math.floor(Math.random() * targets.length);
+        const item = targets[randomIndex];
+        
+        textEl.style.animation = 'none';
+        textEl.offsetHeight; 
+        textEl.style.animation = 'fadeUp 0.6s ease-out';
+
+        textEl.innerText = `"${item.text}"`;
+        catEl.innerText = item.category || "General";
+        catEl.style.display = 'inline-block';
+    }
+
+    function toggleAutoPlay() {
+        const btn = document.getElementById('btn-autoplay');
+        if (autoPlayInterval) {
+            stopAutoPlay();
+        } else {
+            renderRandomAffirmation();
+            autoPlayInterval = setInterval(renderRandomAffirmation, 4000);
+            btn.innerText = "⏹ 정지";
+            btn.classList.remove('btn-primary');
+            btn.classList.add('btn-danger');
+        }
+    }
+
+    function stopAutoPlay() {
+        if(autoPlayInterval) {
+            clearInterval(autoPlayInterval);
+            autoPlayInterval = null;
+            const btn = document.getElementById('btn-autoplay');
+            btn.innerText = "▶ 자동 재생";
+            btn.classList.remove('btn-danger');
+            btn.classList.add('btn-primary');
+        }
+    }
+
+    function copyToClipboard() {
+        const text = document.getElementById('focus-text').innerText.replace(/"/g, '');
+        navigator.clipboard.writeText(text).then(() => alert("클립보드에 복사되었습니다."));
+    }
+
+    /* ==========================================================================
+       2. Manage (List) Logic
+       ========================================================================== */
+    function renderList() {
+        const tbody = document.querySelector('#manage-table tbody');
+        tbody.innerHTML = "";
+        
+        // 정렬된 데이터 사용
+        const sortedData = getSortedData();
+
+        sortedData.forEach((item) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td style="text-align:center">
+                    <button class="btn-delete" onclick="deleteItem(${item.id})">&times;</button>
+                </td>
+                <td>
+                    <input type="text" value="${item.category}" placeholder="카테고리" onchange="updateItem(${item.id}, 'category', this.value)">
+                </td>
+                <td>
+                    <input type="text" value="${item.text}" placeholder="확언 내용을 입력하세요" onchange="updateItem(${item.id}, 'text', this.value)">
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+        updateSortIcons();
+    }
+
+    async function addEmptyRow() {
+        const newItem = {
+            id: Date.now(),
+            category: "",
+            text: "",
+            isActive: true
+        };
+        
+        affirmations.push(newItem);
+        await dbService.put(newItem);
+        
+        // 추가 시 자동으로 최신순 정렬 (사용자가 찾기 쉽게)
+        sortState = { key: 'id', order: 'desc' };
+        
+        renderList();
+        showSaveIndicator();
+        updateStats();
+
+        setTimeout(() => {
+            const firstRowInputs = document.querySelector('#manage-table tbody tr input');
+            if(firstRowInputs) firstRowInputs.focus();
+        }, 50);
+    }
+
+    async function deleteItem(id) {
+        if(confirm("정말 삭제하시겠습니까?")) {
+            affirmations = affirmations.filter(a => a.id !== id);
+            await dbService.delete(id);
+            renderList();
+            updateStats();
+        }
+    }
+
+    async function updateItem(id, field, value) {
+        const target = affirmations.find(a => a.id === id);
+        if (target) {
+            target[field] = value;
+            await dbService.put(target);
+            showSaveIndicator();
+        }
+    }
+
+    /* ==========================================================================
+       3. Affirmation Set (Selection) Logic
+       ========================================================================== */
+    function renderSetView() {
+        renderCategoryChips();
+        renderSetTable();
+        updateSortIcons();
+    }
+
+    function renderCategoryChips() {
+        const chipContainer = document.getElementById('set-category-chips');
+        chipContainer.innerHTML = "";
+
+        const categories = [...new Set(affirmations.map(a => a.category).filter(c=>c))];
+        
+        categories.forEach(cat => {
+            const itemsInCat = affirmations.filter(a => a.category === cat);
+            const activeInCat = itemsInCat.filter(a => a.isActive).length;
+            const isAllActive = itemsInCat.length > 0 && itemsInCat.length === activeInCat;
+            
+            const chip = document.createElement('div');
+            chip.className = `chip ${isAllActive ? 'active' : ''}`;
+            chip.innerHTML = `<span>${cat}</span> <span style="font-size:10px; opacity:0.7">${activeInCat}/${itemsInCat.length}</span>`;
+            chip.onclick = () => toggleCategoryBatch(cat, !isAllActive);
+            
+            chipContainer.appendChild(chip);
+        });
+        
+        if(categories.length === 0) {
+            chipContainer.innerHTML = "<span style='color:#999; font-size:12px;'>카테고리가 없습니다.</span>";
+        }
+    }
+
+    async function toggleCategoryBatch(category, turnOn) {
+        let itemsToUpdate = [];
+        
+        affirmations.forEach(item => {
+            if(item.category === category && item.isActive !== turnOn) {
+                item.isActive = turnOn;
+                itemsToUpdate.push(item);
+            }
+        });
+
+        if(itemsToUpdate.length > 0) {
+            await dbService.bulkPut(itemsToUpdate);
+            renderSetView();
+            updateStats();
+            showSaveIndicator();
+        }
+    }
+
+    function renderSetTable() {
+        const tbody = document.querySelector('#set-table tbody');
+        tbody.innerHTML = "";
+        
+        // 정렬된 데이터 사용
+        const sortedData = getSortedData();
+
+        sortedData.forEach(item => {
+            const tr = document.createElement('tr');
+            tr.className = `check-row ${item.isActive ? '' : 'inactive'}`;
+            tr.onclick = (e) => {
+                if(e.target.type !== 'checkbox') toggleSetItem(item.id);
+            };
+
+            tr.innerHTML = `
+                <td style="text-align:center">
+                    <input type="checkbox" class="checkbox-custom" ${item.isActive ? 'checked' : ''} onchange="toggleSetItem(${item.id})">
+                </td>
+                <td>${item.category}</td>
+                <td style="text-align:left;">${item.text}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    async function toggleSetItem(id) {
+        const target = affirmations.find(a => a.id === id);
+        if(target) {
+            target.isActive = !target.isActive;
+            await dbService.put(target);
+            renderSetView();
+            updateStats();
+        }
+    }
+
+    async function toggleAllSets(state) {
+        let itemsToUpdate = [];
+        affirmations.forEach(item => {
+            if(item.isActive !== state) {
+                item.isActive = state;
+                itemsToUpdate.push(item);
+            }
+        });
+        
+        if(itemsToUpdate.length > 0) {
+            await dbService.bulkPut(itemsToUpdate);
+            renderSetView();
+            updateStats();
+            showSaveIndicator();
+        }
+    }
+
+    /* ==========================================================================
+       Excel Export / Import
+       ========================================================================== */
+    function exportToExcel() {
+        const data = affirmations.map(item => ({
+            "카테고리": item.category,
+            "확언 내용": item.text,
+            "사용여부": item.isActive ? "O" : "X"
+        }));
+        
+        if (data.length === 0) { alert("내보낼 데이터가 없습니다."); return; }
+
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Affirmations");
+        const dateStr = new Date().toISOString().slice(0,10);
+        XLSX.writeFile(wb, `affirmations_${dateStr}.xlsx`);
+    }
+
+    function importExcel(input) {
+        const file = input.files[0];
+        if(!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, {type: 'array'});
+            const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+            const json = XLSX.utils.sheet_to_json(worksheet);
+
+            if(json.length === 0) {
+                alert("엑셀 파일에 데이터가 없습니다.");
+                input.value = "";
+                return;
+            }
+
+            const newItems = json.map(row => {
+                const category = row["카테고리"] || row["Category"] || row["구분"] || "기타";
+                const text = row["확언 내용"] || row["Text"] || row["Content"] || row["내용"] || "";
+                if(text.trim()) {
+                    return {
+                        id: Date.now() + Math.random(),
+                        category: category,
+                        text: text,
+                        isActive: true
+                    };
+                }
+            }).filter(item => item !== undefined);
+
+            if(newItems.length > 0) {
+                affirmations = [...affirmations, ...newItems];
+                await dbService.bulkPut(newItems);
+                
+                // 새 데이터 추가 시 최신순 정렬
+                sortState = { key: 'id', order: 'desc' };
+                renderList();
+                updateStats();
+                alert(`${newItems.length}개의 확언이 추가되었습니다!`);
+            } else {
+                alert("추가할 유효한 데이터가 없습니다.");
+            }
+            input.value = "";
+        };
+        reader.readAsArrayBuffer(file);
+    }
+</script>
+</body>
+</html>

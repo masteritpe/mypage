@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wiki Pager</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Noto+Serif+KR:wght@300;400;600&display=swap" rel="stylesheet">
+    
+    <style>
+        /* === Fonts Setup === */
+        @font-face {
+            font-family: 'Ridibatang';
+            src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_twelve@1.0/Ridibatang.woff') format('woff');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        :root {
+            /* 폰트 변수: UI는 고딕, 본문은 명조(리디바탕) */
+            --font-ui: "Noto Sans KR", -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+            --font-read: "Ridibatang", "Noto Serif KR", serif;
+
+            --bg-app: #F6F8FA;       
+            --bg-sidebar: #FFFFFF;
+            --bg-paper: #FFFFFF;
+            
+            --text-title: #111111;   
+            --text-body: #242424;    /* 눈이 편한 진한 회색 */
+            --text-muted: #888888;   
+            
+            --color-brand: #4F46E5;  
+            --color-brand-light: #EEF2FF;
+            --border-line: #ECECEC;
+            
+            --radius-sm: 6px;
+            --radius-md: 12px;
+            --shadow-paper: 0 4px 24px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+            --sidebar-width: 280px;
+            
+            /* 메모장 전용 컬러 */
+            --memo-bg: #fffbeb; 
+            --memo-border: #fcd34d;
+            --memo-text: #451a03;
+        }
+
+        body {
+            margin: 0; padding: 0; 
+            font-family: var(--font-ui); /* UI는 고딕 기본 */
+            background-color: var(--bg-app); color: var(--text-body);
+            display: flex; height: 100vh; overflow: hidden;
+            letter-spacing: -0.02em;
+        }
+
+        /* --- Sidebar --- */
+        aside {
+            width: var(--sidebar-width); background-color: var(--bg-sidebar);
+            border-right: 1px solid var(--border-line);
+            display: flex; flex-direction: column; flex-shrink: 0; z-index: 10;
+            position: relative; 
+        }
+
+        .sidebar-header {
+            padding: 24px 20px 10px 20px; font-size: 1.1rem; font-weight: 700; color: var(--text-title);
+            display: flex; align-items: center; justify-content: space-between;
+            border-bottom: 2px solid transparent; transition: all 0.2s;
+        }
+        .sidebar-header.drag-over { background-color: var(--color-brand-light); border-bottom-color: var(--color-brand); }
+
+        /* 검색창 */
+        .search-box { padding: 10px 20px 10px 20px; position: relative; }
+        .search-box input {
+            width: 100%; padding: 8px 12px; background: #F3F4F6;
+            border: 1px solid transparent; border-radius: var(--radius-sm);
+            font-size: 0.9rem; box-sizing: border-box; color: var(--text-body);
+            font-family: var(--font-ui); transition: all 0.2s;
+        }
+        .search-box input:focus {
+            outline: none; background: #FFF; border-color: var(--color-brand);
+            box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
+        }
+
+        /* 검색 결과 드롭다운 */
+        .search-results {
+            position: absolute; top: 105px; left: 15px; right: 15px;
+            background: white; border-radius: var(--radius-sm);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.05);
+            border: 1px solid var(--border-line);
+            max-height: 300px; overflow-y: auto; z-index: 100;
+        }
+        .search-item { padding: 10px 12px; border-bottom: 1px solid #F1F1F1; cursor: pointer; }
+        .search-item:last-child { border-bottom: none; }
+        .search-item:hover { background-color: #F8FAFC; }
+        .search-item-title { font-size: 0.9rem; font-weight: 600; color: var(--text-title); display: block; margin-bottom: 2px; }
+        .search-item-snippet { font-size: 0.8rem; color: var(--text-muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.4; }
+        .no-results { padding: 15px; text-align: center; color: var(--text-muted); font-size: 0.85rem; }
+
+        .nav-tree { flex: 1; overflow-y: auto; padding: 0 12px 20px 12px; }
+        .tree-item { margin-bottom: 1px; }
+        .nav-item {
+            cursor: pointer; padding: 8px 10px; border-radius: var(--radius-sm);
+            font-size: 0.9rem; font-weight: 500; color: #5F6368;
+            transition: all 0.2s; display: flex; align-items: center;
+            position: relative; text-decoration: none; border: 2px solid transparent; 
+        }
+        .nav-item:hover { background-color: var(--bg-app); color: var(--text-title); }
+        .nav-item.active { background-color: var(--color-brand-light); color: var(--color-brand); font-weight: 600; }
+        .nav-item.drag-over {
+            background-color: var(--color-brand-light); border-color: var(--color-brand);
+            transform: scale(1.02); box-shadow: 0 4px 12px rgba(79, 70, 229, 0.15);
+        }
+        .tree-children { margin-left: 18px; border-left: 1px solid #eee; padding-left: 4px; }
+
+        .sidebar-footer { padding: 12px 20px; display: flex; gap: 8px; border-top: 1px solid var(--border-line); }
+
+        /* Buttons */
+        .btn {
+            padding: 8px 12px; border-radius: var(--radius-sm); border: none; cursor: pointer;
+            font-size: 0.85rem; font-weight: 600; font-family: var(--font-ui);
+            transition: all 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+        }
+        .btn-primary { background: var(--text-title); color: white; flex: 1; }
+        .btn-primary:hover { background: #000; }
+        .btn-save { background: var(--color-brand); color: white; }
+        .btn-ghost { background: transparent; color: #5F6368; border: 1px solid transparent; }
+        .btn-ghost:hover { background: rgba(0,0,0,0.05); color: #000; }
+        
+        /* Main Layout */
+        main { flex: 1; display: flex; flex-direction: column; position: relative; }
+
+        header {
+            padding: 0 5%; display: flex; justify-content: space-between; align-items: center;
+            background: rgba(246, 248, 250, 0.95); backdrop-filter: blur(10px);
+            z-index: 20; height: 56px; flex-shrink: 0; border-bottom: 1px solid rgba(0,0,0,0.03);
+        }
+        
+        .breadcrumbs { font-size: 0.9rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+        .crumb-link { cursor: pointer; color: var(--text-muted); transition: color 0.2s; }
+        .crumb-link:hover { color: var(--color-brand); text-decoration: underline; }
+        .crumb-current { color: var(--text-title); font-weight: 600; }
+        .crumb-separator { opacity: 0.4; font-size: 0.8em; }
+
+        .scroll-container {
+            flex: 1; overflow-y: auto; padding: 30px 0 100px 0;
+            display: flex; justify-content: center; align-items: flex-start;
+        }
+
+        .paper-sheet {
+            width: 100%; max-width: 900px; min-height: 50vh; height: auto;
+            background: var(--bg-paper); padding: 80px 90px;
+            box-shadow: var(--shadow-paper); border-radius: 2px;
+            position: relative; transition: all 0.3s ease;
+        }
+        @media (max-width: 768px) { .paper-sheet { padding: 40px 30px; } }
+
+        .page-title {
+            font-size: 2.6rem; font-weight: 800; color: var(--text-title);
+            margin-bottom: 20px; line-height: 1.2; width: 100%;
+            border: none; outline: none; background: transparent; font-family: var(--font-ui);
+            letter-spacing: -0.03em;
+        }
+
+        .meta-info {
+            font-size: 0.85rem; color: var(--text-muted); margin-bottom: 40px;
+            border-bottom: 1px solid var(--border-line); padding-bottom: 15px;
+            display: flex; justify-content: space-between;
+        }
+
+        /* === Content Body Typography (Readability Optimized) === */
+        /* 기본 상태에서 바로 리디바탕(가독성 폰트) 적용 */
+        .content-body {
+            font-family: var(--font-read); /* 리디바탕 */
+            font-size: 1.15rem;            /* 읽기 좋은 크기 */
+            line-height: 1.8;              /* 넉넉한 줄 간격 */
+            letter-spacing: -0.03em;       /* 명조체 최적 자간 */
+            color: #2e2e2e;                /* 눈이 편한 짙은 회색 */
+            min-height: 150px; 
+            outline: none; 
+            word-break: break-word;
+        }
+
+        /* Content Elements Styling */
+        .content-body h1, .content-body h2, .content-body h3 {
+            margin-top: 1.5em; margin-bottom: 0.6em; font-weight: 700; color: #111;
+            line-height: 1.3; font-family: var(--font-ui); /* 제목은 고딕으로 깔끔하게 */
+        }
+        .content-body h1 { font-size: 1.8em; border-bottom: 1px solid #eee; padding-bottom: 0.3em; }
+        .content-body h2 { font-size: 1.5em; }
+        .content-body h3 { font-size: 1.25em; }
+        
+        .content-body p { margin-bottom: 1.2em; }
+        
+        .content-body blockquote {
+            margin: 1.5em 0; padding: 0.8em 1.2em;
+            border-left: 4px solid var(--color-brand);
+            background: #f8fafc; color: #555;
+            font-style: italic;
+        }
+        
+        .content-body ul, .content-body ol { margin-bottom: 1.2em; padding-left: 1.5em; }
+        .content-body li { margin-bottom: 0.4em; }
+
+        .content-body img { max-width: 100%; height: auto; border-radius: 8px; display: block; margin: 24px 0; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        
+        /* Sub Pages Area */
+        .sub-pages-area { margin-top: 80px; padding-top: 30px; border-top: 1px dashed var(--border-line); }
+        .sub-pages-title { font-size: 0.95rem; font-weight: 700; color: var(--text-muted); margin-bottom: 12px; }
+        .sub-page-list { list-style: none; padding: 0; margin: 0; }
+        .sub-page-link {
+            display: block; padding: 10px 14px; margin-bottom: 6px; border-radius: 6px;
+            background: #F8FAFC; color: var(--text-body); text-decoration: none; cursor: pointer;
+            transition: all 0.2s; font-size: 0.95rem; font-family: var(--font-ui);
+        }
+        .sub-page-link:hover { background: var(--color-brand-light); color: var(--color-brand); }
+        .sub-page-link::before { content: '📄'; margin-right: 8px; opacity: 0.7; font-size: 0.9em; }
+
+        .hidden { display: none !important; }
+        .status-badge { font-size: 0.75rem; color: #059669; background: #D1FAE5; padding: 4px 8px; border-radius: 4px; opacity: 0; transition: opacity 0.5s; font-weight: 600;}
+        .edit-mode .content-body:empty::before { content: attr(placeholder); color: #ADB5BD; }
+
+        ::-webkit-scrollbar { width: 10px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 5px; }
+
+        /* === Memo Sidebar Styles === */
+        .memo-sidebar {
+            position: fixed; top: 0; right: -360px;
+            width: 360px; height: 100vh;
+            background: var(--memo-bg);
+            border-left: 1px solid var(--memo-border);
+            box-shadow: -4px 0 15px rgba(0,0,0,0.1);
+            z-index: 900; 
+            display: flex; flex-direction: column;
+            transition: right 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+        .memo-sidebar.open { right: 0; }
+
+        .memo-header {
+            padding: 16px; border-bottom: 1px solid var(--memo-border);
+            display: flex; justify-content: space-between; align-items: center;
+            background: rgba(255, 251, 235, 0.9);
+        }
+        .memo-title { font-weight: 700; color: #b45309; display: flex; align-items: center; gap: 6px; }
+        
+        #memo-textarea {
+            flex: 1; border: none; padding: 20px;
+            background: transparent; resize: none; outline: none;
+            font-family: var(--font-ui); font-size: 14px; line-height: 1.6;
+            color: var(--memo-text);
+        }
+        #memo-textarea::placeholder { color: #d97706; opacity: 0.5; }
+        
+        .memo-footer {
+            padding: 8px 16px; border-top: 1px solid var(--memo-border);
+            font-size: 12px; color: #b45309;
+            display: flex; justify-content: space-between; align-items: center;
+            background: var(--memo-bg);
+        }
+        
+        .btn-memo-icon { 
+            background: transparent; border: none; cursor: pointer; 
+            font-size: 1rem; color: #b45309; opacity: 0.7; padding: 4px; border-radius: 4px; transition: 0.2s;
+        }
+        .btn-memo-icon:hover { opacity: 1; background: rgba(0,0,0,0.05); }
+
+        /* === PDF Print Styles === */
+        @media print {
+            aside, header, .memo-sidebar, .btn, .meta-info, .sub-pages-area, .status-badge, ::-webkit-scrollbar { display: none !important; }
+            body { background: white !important; height: auto !important; overflow: visible !important; display: block !important; }
+            main { display: block !important; width: 100% !important; height: auto !important; }
+            .scroll-container { padding: 0 !important; overflow: visible !important; height: auto !important; display: block !important; }
+            .paper-sheet { box-shadow: none !important; padding: 0 !important; margin: 0 !important; width: 100% !important; max-width: 100% !important; border: none !important; }
+            body.print-all-mode main { display: none !important; }
+            #print-all-container { display: block !important; }
+            .print-page-break { page-break-after: always; break-after: page; padding-bottom: 30px; border-bottom: 1px solid #eee; margin-bottom: 30px; }
+            .print-page-break:last-child { page-break-after: auto; border-bottom: none; }
+        }
+
+        #print-all-container { display: none; padding: 40px; }
+        .print-only-title { font-size: 2rem; font-weight: 800; margin-bottom: 20px; font-family: var(--font-ui); }
+
+    </style>
+</head>
+<body>
+
+<aside>
+    <div class="sidebar-header" id="wikiHeader" 
+         ondragover="handleDragOverHeader(event)" 
+         ondragleave="handleDragLeaveHeader(event)" 
+         ondrop="handleDropHeader(event)">
+        <span id="sidebarWikiName">📑 Wiki Pager</span>
+        <button class="btn btn-ghost" onclick="createNewPage(null)" title="루트 페이지 추가" style="padding:4px 8px;">+</button>
+    </div>
+    
+    <div class="search-box">
+        <input type="text" id="searchInput" placeholder="검색..." onkeyup="handleSearch(this.value)">
+    </div>
+    <div id="searchResults" class="search-results hidden"></div>
+
+    <div class="nav-tree" id="navTree"></div>
+    <div class="sidebar-footer">
+        <div style="flex:1; font-size:0.8rem; color:#999;">Drag & Drop</div>
+        <button class="btn btn-ghost" onclick="deleteCurrentPage()" title="삭제" style="color:#ef4444;">🗑️</button>
+    </div>
+</aside>
+
+<main>
+    <header>
+        <div class="breadcrumbs" id="breadcrumbs"></div>
+        <div style="display:flex; align-items:center; gap:8px;">
+            <span id="statusMsg" class="status-badge">저장됨</span>
+            <span style="width:1px; height:14px; background:#e2e8f0; margin:0 4px;"></span>
+            
+            <button class="btn btn-ghost" onclick="printPage()" title="현재 페이지 인쇄/PDF">📄 PDF</button>
+            <button class="btn btn-ghost" onclick="printAllPages()" title="전체 페이지 인쇄/PDF">📚 PDF(전체)</button>
+            <span style="width:1px; height:14px; background:#e2e8f0; margin:0 4px;"></span>
+            
+            <button class="btn btn-ghost" id="btn-memo" title="메모장 열기">📝 메모</button>            
+            <button class="btn btn-ghost" id="editBtn" onclick="enableEditMode()" title="단축키: Ctrl+E">✏️ 편집</button>
+            <div id="editToolbar" class="hidden" style="display:flex; gap:8px;">
+                <button class="btn btn-ghost" onclick="cancelEdit()">취소</button>
+                <button class="btn btn-save" onclick="savePage()" title="단축키: Ctrl+S">저장</button>
+            </div>
+            <button class="btn btn-ghost" onclick="changeWikiName()" title="설정">⚙️</button>
+        </div>
+    </header>
+
+    <div class="scroll-container">
+        <article class="paper-sheet" id="paperArea">
+            <h1 id="pageTitleDisplay" class="page-title">Loading...</h1>
+            <input type="text" id="pageTitleInput" class="page-title hidden" placeholder="제목 없음">
+            
+            <div class="meta-info">
+                <span id="lastUpdated">-</span>
+                <button class="btn btn-ghost" style="font-size:0.8rem; padding:4px 8px;" onclick="createSubPage()">+ 하위 페이지 만들기</button>
+            </div>
+
+            <div id="viewContainer" class="content-body"></div>
+            <div id="editContainer" class="content-body hidden" contenteditable="true" placeholder="내용을 입력하세요..."></div>
+
+            <div id="subPagesArea" class="sub-pages-area hidden">
+                <div class="sub-pages-title">📂 하위 문서</div>
+                <div id="subPageList" class="sub-page-list"></div>
+            </div>
+        </article>
+    </div>
+</main>
+
+<div id="print-all-container"></div>
+
+<div id="memo-sidebar" class="memo-sidebar">
+    <div class="memo-header">
+        <div class="memo-title">📝 메모장 (Plain Text)</div>
+        <div style="display:flex; gap:8px;">
+            <button id="btn-copy-memo" class="btn-memo-icon" title="전체 복사">📋</button>
+            <button id="btn-close-memo" class="btn-memo-icon" title="닫기">❌</button>
+        </div>
+    </div>
+    <textarea id="memo-textarea" placeholder="여기에 내용을 붙여넣으면 서식이 제거됩니다. (자동 저장됨)"></textarea>
+    <div class="memo-footer">
+        <span id="memo-status">Ready</span>
+        <button id="btn-clear-memo" class="btn btn-ghost" style="padding:4px 8px; font-size:11px; color:#b45309;">🧹 비우기</button>
+    </div>
+</div>
+
+<script>
+    /* --- Data Logic --- */
+    const DB_NAME = 'WikiDB';
+    const DB_VERSION = 1;
+    let db, currentPageId = null;
+    let WIKI_NAME = localStorage.getItem('wikiName') || 'Wiki';
+    let cachedPages = []; 
+
+    function initDB() {
+        return new Promise((resolve) => {
+            const req = indexedDB.open(DB_NAME, DB_VERSION);
+            req.onupgradeneeded = (e) => {
+                db = e.target.result;
+                if (!db.objectStoreNames.contains('pages')) {
+                    const store = db.createObjectStore('pages', { keyPath: 'id', autoIncrement: true });
+                    store.createIndex('parentId', 'parentId', { unique: false });
+                }
+            };
+            req.onsuccess = (e) => { db = e.target.result; resolve(db); };
+        });
+    }
+
+    async function getPage(id) { return new Promise(r => { const tx = db.transaction('pages', 'readonly'); const req = tx.objectStore('pages').get(Number(id)); req.onsuccess = () => r(req.result); }); }
+    async function getAllPages() { return new Promise(r => { const tx = db.transaction('pages', 'readonly'); const req = tx.objectStore('pages').getAll(); req.onsuccess = () => r(req.result); }); }
+    async function savePageToDB(data) { 
+        return new Promise(r => { 
+            const tx = db.transaction('pages', 'readwrite'); 
+            data.updatedAt = new Date().toLocaleString(); 
+            if(data.id) data.id=Number(data.id); 
+            if(data.parentId === undefined) data.parentId = null; 
+            tx.objectStore('pages').put(data); 
+            tx.oncomplete = () => r(); 
+        }); 
+    }
+    async function deletePageFromDB(id) { return new Promise(r => { const tx = db.transaction('pages', 'readwrite'); tx.objectStore('pages').delete(Number(id)); tx.oncomplete = () => r(); }); }
+
+    /* --- UI Rendering --- */
+    window.onload = async () => {
+        await initDB();
+        updateWikiNameUI();
+        await refreshSidebar();
+        
+        cachedPages = await getAllPages();
+        if (cachedPages.length === 0) {
+            await savePageToDB({ title: "시작하기", content: "<h3>환영합니다!</h3><p>이곳은 당신만의 개인 위키입니다. 왼쪽 사이드바의 <b>+</b> 버튼을 눌러 새 페이지를 만들어보세요.</p><blockquote><p><b>팁:</b> 본문에는 가독성이 뛰어난 <b>'리디바탕'</b> 폰트가 기본 적용되어, 긴 글도 편안하게 읽고 쓸 수 있습니다.</p></blockquote>", parentId: null });
+            await refreshSidebar();
+        }
+        
+        const first = (await getAllPages())[0];
+        if(first) loadPage(first.id);
+        
+        document.addEventListener('click', function(e) {
+            const searchBox = document.querySelector('.search-box');
+            const searchResults = document.getElementById('searchResults');
+            if (!searchBox.contains(e.target)) {
+                searchResults.classList.add('hidden');
+            }
+        });
+
+        setupMemo(); 
+    };
+
+    /* --- Memo Functionality --- */
+    function setupMemo() {
+        const btnOpen = document.getElementById('btn-memo');
+        const btnClose = document.getElementById('btn-close-memo');
+        const sidebar = document.getElementById('memo-sidebar');
+        const textarea = document.getElementById('memo-textarea');
+        const status = document.getElementById('memo-status');
+        const btnCopy = document.getElementById('btn-copy-memo');
+        const btnClear = document.getElementById('btn-clear-memo');
+
+        btnOpen.addEventListener('click', () => { sidebar.classList.add('open'); textarea.focus(); });
+        btnClose.addEventListener('click', () => sidebar.classList.remove('open'));
+
+        const saved = localStorage.getItem('wikipager_memo');
+        if (saved) textarea.value = saved;
+
+        textarea.addEventListener('input', () => {
+            localStorage.setItem('wikipager_memo', textarea.value);
+            status.textContent = 'Saving...';
+            setTimeout(() => status.textContent = 'Saved', 800);
+        });
+
+        textarea.addEventListener('paste', (e) => {
+            e.preventDefault(); 
+            const text = (e.clipboardData || window.clipboardData).getData('text/plain');
+            document.execCommand('insertText', false, text);
+        });
+
+        btnCopy.addEventListener('click', () => {
+            textarea.select();
+            document.execCommand('copy');
+            status.textContent = 'Copied!';
+            setTimeout(() => status.textContent = 'Saved', 1500);
+            textarea.setSelectionRange(textarea.selectionEnd, textarea.selectionEnd);
+        });
+
+        btnClear.addEventListener('click', () => {
+            if(confirm('메모를 모두 지우시겠습니까?')) {
+                textarea.value = '';
+                localStorage.removeItem('wikipager_memo');
+                status.textContent = 'Empty';
+            }
+        });
+    }
+
+    /* --- Search Logic --- */
+    function handleSearch(query) {
+        const resultsContainer = document.getElementById('searchResults');
+        if (!query || query.trim() === '') { resultsContainer.classList.add('hidden'); return; }
+        const lowerQuery = query.toLowerCase();
+        const matches = cachedPages.filter(p => {
+            const titleMatch = (p.title || '').toLowerCase().includes(lowerQuery);
+            const textContent = (p.content || '').replace(/<[^>]*>?/gm, ''); 
+            const contentMatch = textContent.toLowerCase().includes(lowerQuery);
+            return titleMatch || contentMatch;
+        });
+
+        resultsContainer.innerHTML = '';
+        resultsContainer.classList.remove('hidden');
+
+        if (matches.length === 0) {
+            resultsContainer.innerHTML = '<div class="no-results">검색 결과가 없습니다.</div>';
+            return;
+        }
+
+        matches.forEach(p => {
+            const div = document.createElement('div'); div.className = 'search-item';
+            const cleanContent = (p.content || '').replace(/<[^>]*>?/gm, '');
+            const snippet = cleanContent.length > 50 ? cleanContent.substring(0, 50) + '...' : cleanContent;
+            div.innerHTML = `<span class="search-item-title">${p.title}</span><span class="search-item-snippet">${snippet || '내용 없음'}</span>`;
+            div.onclick = () => { loadPage(p.id); resultsContainer.classList.add('hidden'); document.getElementById('searchInput').value = ''; };
+            resultsContainer.appendChild(div);
+        });
+    }
+
+    async function refreshSidebar() {
+        cachedPages = await getAllPages();
+        const nav = document.getElementById('navTree'); 
+        nav.innerHTML = '';
+
+        function buildTree(parentId, container) {
+            const children = cachedPages.filter(p => p.parentId === parentId);
+            if (children.length === 0) return;
+            children.forEach(p => {
+                const wrapper = document.createElement('div'); wrapper.className = 'tree-item';
+                const item = document.createElement('div');
+                item.className = `nav-item ${p.id === currentPageId ? 'active' : ''}`;
+                item.innerText = p.title || '제목 없음';
+                item.draggable = true;
+                item.ondragstart = (e) => handleDragStart(e, p.id);
+                item.ondragover = (e) => handleDragOver(e);
+                item.ondragleave = (e) => handleDragLeave(e);
+                item.ondrop = (e) => handleDrop(e, p.id);
+                item.onclick = (e) => { e.stopPropagation(); loadPage(p.id); };
+                wrapper.appendChild(item);
+                const childContainer = document.createElement('div'); childContainer.className = 'tree-children';
+                buildTree(p.id, childContainer);
+                if (childContainer.hasChildNodes()) wrapper.appendChild(childContainer);
+                container.appendChild(wrapper);
+            });
+        }
+        buildTree(null, nav);
+    }
+
+    /* --- Drag & Drop --- */
+    let draggedItemId = null;
+    function handleDragStart(e, id) { draggedItemId = id; e.dataTransfer.effectAllowed = 'move'; setTimeout(() => e.target.style.opacity = '0.5', 0); }
+    function handleDragOver(e) { e.preventDefault(); e.currentTarget.classList.add('drag-over'); }
+    function handleDragLeave(e) { e.currentTarget.classList.remove('drag-over'); }
+    async function handleDrop(e, targetId) {
+        e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.remove('drag-over'); e.target.style.opacity = '1';
+        if (draggedItemId === null || draggedItemId === targetId) return;
+        if (isDescendant(draggedItemId, targetId)) { alert('자신의 하위 문서로 이동 불가'); return; }
+        await movePage(draggedItemId, targetId);
+    }
+    function handleDragOverHeader(e) { e.preventDefault(); document.getElementById('wikiHeader').classList.add('drag-over'); }
+    function handleDragLeaveHeader(e) { document.getElementById('wikiHeader').classList.remove('drag-over'); }
+    async function handleDropHeader(e) { e.preventDefault(); document.getElementById('wikiHeader').classList.remove('drag-over'); if (draggedItemId) await movePage(draggedItemId, null); }
+    async function movePage(pageId, newParentId) {
+        const page = await getPage(pageId); if (!page) return;
+        page.parentId = newParentId; await savePageToDB(page); await refreshSidebar();
+        if (currentPageId === pageId) updateBreadcrumbs(page);
+        if (currentPageId === newParentId) updateSubPageList(currentPageId);
+    }
+    function isDescendant(draggedId, targetId) {
+        let current = cachedPages.find(p => p.id === targetId);
+        while (current) { if (current.id === draggedId) return true; if (current.parentId === null) break; current = cachedPages.find(p => p.id === current.parentId); }
+        return false;
+    }
+
+    /* --- Page Logic --- */
+    async function loadPage(id) {
+        currentPageId = id;
+        const p = await getPage(id);
+        if(!p) return;
+        document.getElementById('pageTitleDisplay').innerText = p.title;
+        document.getElementById('pageTitleInput').value = p.title;
+        document.getElementById('viewContainer').innerHTML = p.content;
+        document.getElementById('editContainer').innerHTML = p.content;
+        document.getElementById('lastUpdated').innerText = p.updatedAt || '-';
+        updateBreadcrumbs(p);
+        updateSubPageList(id);
+        switchMode('view');
+        refreshSidebar();
+    }
+
+    async function updateBreadcrumbs(page) {
+        const breadcrumbs = document.getElementById('breadcrumbs'); breadcrumbs.innerHTML = '';
+        const rootLink = createCrumbLink(WIKI_NAME, null); breadcrumbs.appendChild(rootLink);
+        let path = []; let current = page;
+        while (current) { path.unshift(current); if (current.parentId) current = cachedPages.find(cp => cp.id === current.parentId); else current = null; }
+        path.forEach((node) => {
+            const sep = document.createElement('span'); sep.className = 'crumb-separator'; sep.innerText = '/'; breadcrumbs.appendChild(sep);
+            if (node.id === page.id) { const span = document.createElement('span'); span.className = 'crumb-current'; span.innerText = node.title; breadcrumbs.appendChild(span); } 
+            else { breadcrumbs.appendChild(createCrumbLink(node.title, node.id)); }
+        });
+    }
+    function createCrumbLink(text, id) { const span = document.createElement('span'); span.className = 'crumb-link'; span.innerText = text; if (id) span.onclick = () => loadPage(id); return span; }
+    function updateSubPageList(parentId) {
+        const listArea = document.getElementById('subPagesArea'); const listContainer = document.getElementById('subPageList'); listContainer.innerHTML = '';
+        const children = cachedPages.filter(p => p.parentId === parentId);
+        if (children.length > 0) { listArea.classList.remove('hidden'); children.forEach(child => { const link = document.createElement('div'); link.className = 'sub-page-link'; link.innerText = child.title; link.onclick = () => loadPage(child.id); listContainer.appendChild(link); }); } 
+        else { listArea.classList.add('hidden'); }
+    }
+    async function createNewPage(parentId = null) {
+        const newTitle = parentId ? "새 하위 페이지" : "새 페이지"; await savePageToDB({ title: newTitle, content: "", parentId: parentId }); await refreshSidebar();
+        const newPage = (await getAllPages()).pop(); await loadPage(newPage.id); enableEditMode(); document.getElementById('pageTitleInput').select();
+    }
+    function createSubPage() { if (currentPageId) createNewPage(currentPageId); }
+    function changeWikiName() { const newName = prompt("위키 이름 변경:", WIKI_NAME); if (newName && newName.trim()) { WIKI_NAME = newName.trim(); localStorage.setItem('wikiName', WIKI_NAME); updateWikiNameUI(); if(currentPageId) loadPage(currentPageId); } }
+    function updateWikiNameUI() { document.getElementById('sidebarWikiName').innerText = `📑 ${WIKI_NAME}`; }
+    function switchMode(mode) {
+        const view = document.getElementById('viewContainer'); const edit = document.getElementById('editContainer');
+        const tDisp = document.getElementById('pageTitleDisplay'); const tInput = document.getElementById('pageTitleInput');
+        const tb = document.getElementById('editToolbar'); const eBtn = document.getElementById('editBtn'); const paper = document.getElementById('paperArea');
+        if(mode === 'edit') { view.classList.add('hidden'); tDisp.classList.add('hidden'); eBtn.classList.add('hidden'); edit.classList.remove('hidden'); tInput.classList.remove('hidden'); tb.classList.remove('hidden'); paper.classList.add('edit-mode'); tInput.focus(); } 
+        else { view.classList.remove('hidden'); tDisp.classList.remove('hidden'); eBtn.classList.remove('hidden'); edit.classList.add('hidden'); tInput.classList.add('hidden'); tb.classList.add('hidden'); paper.classList.remove('edit-mode'); }
+    }
+    function enableEditMode() { switchMode('edit'); }
+    function cancelEdit() { if(confirm('취소하시겠습니까?')) loadPage(currentPageId); }
+    async function savePage() {
+        const title = document.getElementById('pageTitleInput').value; const content = document.getElementById('editContainer').innerHTML;
+        const currPage = await getPage(currentPageId); const updatedData = { ...currPage, title: title, content: content };
+        await savePageToDB(updatedData); const msg = document.getElementById('statusMsg'); msg.style.opacity = 1; setTimeout(() => msg.style.opacity = 0, 2000); loadPage(currentPageId);
+    }
+    async function deleteCurrentPage() { if(confirm('이 페이지와 하위 페이지가 삭제됩니다. 계속하시겠습니까?')) { await deletePageFromDB(currentPageId); location.reload(); } }
+    document.getElementById('editContainer').addEventListener('paste', function(e) {
+        const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+        for (let i in items) { if (items[i].kind === 'file' && items[i].type.includes('image/')) { e.preventDefault(); const reader = new FileReader(); reader.onload = (ev) => document.execCommand('insertHTML', false, `<img src="${ev.target.result}">`); reader.readAsDataURL(items[i].getAsFile()); } }
+    });
+
+    /* === PDF Logic === */
+    function printPage() { window.print(); }
+
+    async function printAllPages() {
+        const allPages = await getAllPages();
+        if(!allPages || allPages.length === 0) return;
+        const sortedPages = getSortedPages(allPages, null);
+        const printContainer = document.getElementById('print-all-container');
+        printContainer.innerHTML = ''; 
+
+        sortedPages.forEach(p => {
+            const section = document.createElement('div'); section.className = 'print-page-break';
+            const title = document.createElement('h1'); title.className = 'print-only-title'; title.innerText = p.title; section.appendChild(title);
+            const content = document.createElement('div'); content.className = 'content-body'; content.innerHTML = p.content; section.appendChild(content);
+            printContainer.appendChild(section);
+        });
+
+        document.body.classList.add('print-all-mode');
+        setTimeout(() => { window.print(); }, 100);
+        window.onafterprint = () => cleanupPrint();
+        setTimeout(() => cleanupPrint(), 2000); 
+    }
+
+    function cleanupPrint() {
+        document.body.classList.remove('print-all-mode');
+        document.getElementById('print-all-container').innerHTML = '';
+        window.onafterprint = null;
+    }
+
+    function getSortedPages(pages, parentId, list = []) {
+        const children = pages.filter(p => p.parentId === parentId);
+        children.forEach(child => { list.push(child); getSortedPages(pages, child.id, list); });
+        return list;
+    }
+
+    /* === Keyboard Shortcuts === */
+    document.addEventListener('keydown', function(e) {
+        if (!currentPageId) return;
+        const isCmdOrCtrl = e.metaKey || e.ctrlKey;
+        const isEditMode = document.getElementById('paperArea').classList.contains('edit-mode');
+        if (isCmdOrCtrl) {
+            if (e.code === 'KeyS') {
+                e.preventDefault(); e.stopPropagation();
+                if (isEditMode) savePage();
+                return false;
+            }
+            if (e.code === 'KeyE') {
+                e.preventDefault(); e.stopPropagation();
+                if (!isEditMode) enableEditMode();
+                return false;
+            }
+        }
+    });
+</script>
+</body>
+</html>

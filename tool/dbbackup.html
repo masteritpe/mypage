@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DB 백업</title>
+    <style>
+        @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+        
+        :root {
+            --bg-body: #f1f5f9; --bg-surface: #ffffff; --bg-sidebar: #f8fafc;
+            --text-main: #0f172a; --text-muted: #64748b; --border-color: #e2e8f0;
+            --primary: #4f46e5; --success: #10b981; --danger: #ef4444;
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05); --radius-md: 8px; --radius-lg: 12px;
+        }
+        
+        * { box-sizing: border-box; }
+        
+        /* 폰트 통일 강제화 */
+        body, button, input, select, textarea {
+            margin: 0; 
+            font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            -webkit-font-smoothing: antialiased;
+        }
+        
+        body { background: var(--bg-body); color: var(--text-main); font-size: 14px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        
+        header { background: var(--bg-surface); border-bottom: 1px solid var(--border-color); height: 60px; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; box-shadow: var(--shadow-sm); z-index: 20; }
+        .app-title { font-size: 19px; font-weight: 800; display: flex; align-items: center; gap: 8px; letter-spacing: -0.5px; color: #0f172a; }
+        .app-title-icon { background: var(--primary); color: white; border-radius: 6px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+        
+        .container { flex: 1; display: flex; overflow: hidden; }
+        aside { width: 280px; background: var(--bg-surface); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; z-index: 10; }
+        .sidebar-header { padding: 20px; font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+        .script-list { list-style: none; padding: 0 10px; margin: 0; overflow-y: auto; flex: 1; }
+        .script-item { padding: 12px 14px; margin-bottom: 4px; cursor: pointer; border-radius: var(--radius-md); display: flex; justify-content: space-between; align-items: center; font-size: 14px; font-weight: 600; color: var(--text-muted); transition: 0.1s; border: 1px solid transparent; }
+        .script-item:hover { background: var(--bg-sidebar); color: var(--text-main); }
+        .script-item.active { background: #eef2ff; color: var(--primary); border-color: #c7d2fe; box-shadow: var(--shadow-sm); }
+        .badge { background: #f1f5f9; padding: 4px 10px; border-radius: 9999px; font-size: 11px; font-weight: 700; letter-spacing: -0.2px; color: #64748b;}
+        .badge.success { background: #d1fae5; color: #047857; }
+        .script-item.active .badge { background: #e0e7ff; color: var(--primary); }
+        
+        main { flex: 1; display: flex; flex-direction: column; padding: 24px 32px; overflow: hidden; }
+        .toolbar { display: flex; gap: 10px; margin-bottom: 24px; align-items: center; }
+        
+        /* 수정 가능한 제목(Input) 스타일 */
+        .editable-title {
+            font-size: 24px; font-weight: 800; color: var(--text-main); letter-spacing: -0.5px;
+            border: 1px solid transparent; background: transparent; padding: 4px 8px; border-radius: 6px;
+            outline: none; transition: all 0.2s; width: 350px;
+        }
+        .editable-title:hover { border-color: var(--border-color); background: #f8fafc; }
+        .editable-title:focus { border-color: var(--primary); background: #fff; box-shadow: 0 0 0 3px rgba(79,70,229,0.1); }
+        
+        .content-split { display: flex; flex-direction: column; gap: 20px; flex: 1; overflow: hidden; }
+        .section-card { background: var(--bg-surface); border-radius: var(--radius-lg); padding: 24px; box-shadow: var(--shadow-sm); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 16px; }
+        .section-card.flex-1 { flex: 1; overflow: hidden; padding: 0; }
+        .section-title { font-size: 15px; font-weight: 700; padding: 20px 24px 0 24px; color: var(--text-main); }
+        
+        .config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+        .config-group { display: flex; flex-direction: column; gap: 8px; }
+        .config-label { font-size: 13px; font-weight: 700; color: var(--text-muted); }
+        .config-select, .config-input { width: 100%; padding: 12px 14px; border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: 14px; font-weight: 500; outline: none; background: #f8fafc; transition: 0.2s; color: var(--text-main); }
+        .config-select:focus, .config-input:focus { border-color: var(--primary); background: #fff; box-shadow: 0 0 0 3px rgba(79,70,229,0.1); }
+        
+        .folder-picker-area { display: flex; gap: 12px; align-items: center; background: #f8fafc; padding: 12px 16px; border-radius: 8px; border: 1px dashed #cbd5e1; }
+        .folder-path { flex: 1; font-family: "D2Coding", "Consolas", monospace; font-size: 13px; color: var(--primary); word-break: break-all; font-weight: 600; }
+
+        .table-wrapper { flex: 1; overflow: auto; border-top: 1px solid var(--border-color); }
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th, td { padding: 14px 24px; border-bottom: 1px solid var(--border-color); font-size: 13px; }
+        th { background: #f8fafc; font-weight: 700; color: var(--text-muted); position: sticky; top: 0; letter-spacing: -0.2px; }
+        td { font-weight: 500; }
+        
+        .btn { padding: 0 16px; border-radius: var(--radius-md); border: 1px solid var(--border-color); background: var(--bg-surface); color: var(--text-main); font-weight: 700; cursor: pointer; font-size: 13px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 38px; transition: 0.15s; letter-spacing: -0.2px; }
+        .btn:hover { background: #f1f5f9; transform: translateY(-1px); }
+        .btn:active { transform: translateY(0); }
+        .btn-primary { background: var(--primary); color: #fff; border: none; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2); }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-success { background: var(--success); color: #fff; border: none; }
+        .btn-success:hover { background: #059669; }
+        .btn-danger { color: var(--danger); border-color: #fecaca; background: #fef2f2; }
+        .btn-danger:hover { background: #fee2e2; }
+        
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.6); z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
+        .modal-box { background: var(--bg-surface); border-radius: var(--radius-lg); width: 450px; display: flex; flex-direction: column; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); }
+        .modal-header { padding: 20px 24px; font-size: 16px; font-weight: 800; display:flex; justify-content:space-between; border-bottom: 1px solid var(--border-color); letter-spacing: -0.5px; }
+        .modal-body { padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+        .modal-footer { padding: 16px 24px; text-align: right; border-top: 1px solid var(--border-color); background: #f8fafc; border-bottom-left-radius: var(--radius-lg); border-bottom-right-radius: var(--radius-lg); }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="app-title"><div class="app-title-icon">💾</div> DB 백업</div>
+        <button class="btn btn-primary" onclick="openAddModal()">＋ 새 스케줄 등록</button>
+    </header>
+
+    <div class="container">
+        <aside>
+            <div class="sidebar-header">백업 리스트</div>
+            <div class="script-list" id="jobList"></div>
+        </aside>
+
+        <main>
+            <div id="mainContent" style="display:none; height:100%; flex-direction:column;">
+                <div class="toolbar">
+                    <input type="text" id="editJobName" class="editable-title" placeholder="백업 스케줄명 입력" title="클릭하여 이름 수정">
+                    
+                    <span style="flex:1"></span>
+                    <button class="btn btn-success" id="btnRun" onclick="runBackupJob('수동실행')">▶ 지금 실행</button>
+                    <button class="btn" onclick="saveJobConfig()" id="btnSaveConfig" title="단축키: Ctrl + S">💾 설정 저장</button>
+                    <button class="btn btn-danger" onclick="deleteJob()">🗑️ 삭제</button>
+                </div>
+
+                <div class="content-split">
+                    <div class="section-card">
+                        <div class="config-grid">
+                            <div class="config-group">
+                                <label class="config-label">백업 대상 DB</label>
+                                <select id="editTargetDB" class="config-select"></select>
+                            </div>
+                            <div class="config-group">
+                                <label class="config-label">실행 주기</label>
+                                <select id="editCycle" class="config-select">
+                                    <option value="daily">매일 1회 (Daily)</option>
+                                    <option value="manual">수동 (Manual)</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="config-group" style="margin-top:10px;">
+                            <label class="config-label">🗂️ 백업 저장소(폴더) 지정</label>
+                            <div class="folder-picker-area">
+                                <button class="btn" onclick="selectSaveDirectory()">폴더 선택</button>
+                                <div class="folder-path" id="savePathDisplay">지정되지 않음 (기본 다운로드)</div>
+                            </div>
+                            <p style="font-size:12px; color:var(--text-muted); margin:0; font-weight:500;">* 보안상 브라우저 재시작 시 최초 1회 폴더 접근 권한을 물어볼 수 있습니다.</p>
+                        </div>
+                    </div>
+
+                    <div class="section-card flex-1">
+                        <div class="section-title">📊 최근 실행 이력</div>
+                        <div class="table-wrapper">
+                            <table>
+                                <thead><tr><th style="width: 180px;">실행 일시</th><th style="width: 100px;">상태</th><th>메시지/파일명</th></tr></thead>
+                                <tbody id="logTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="mainEmpty" style="display:flex; flex:1; align-items:center; justify-content:center; color:var(--text-muted); font-size: 16px; font-weight: 600;">좌측에서 스케줄을 선택하세요.</div>
+        </main>
+    </div>
+
+    <div id="addModal" class="modal-overlay">
+        <div class="modal-box">
+            <div class="modal-header"><span>새 스케줄 등록</span><button style="border:none;background:transparent;cursor:pointer;font-size:20px;color:var(--text-muted);" onclick="closeModal()">×</button></div>
+            <div class="modal-body">
+                <div class="config-group">
+                    <label class="config-label">스케줄 이름</label>
+                    <input type="text" id="newJobName" class="config-input" placeholder="예: 주요 데이터 백업">
+                </div>
+                <div class="config-group">
+                    <label class="config-label">대상 DB</label>
+                    <select id="newTargetDB" class="config-select"></select>
+                </div>
+                <div class="config-group">
+                    <label class="config-label">주기 설정</label>
+                    <select id="newCycle" class="config-select"><option value="daily">매일 1회</option><option value="manual">수동으로만</option></select>
+                </div>
+            </div>
+            <div class="modal-footer"><button class="btn btn-primary" onclick="addNewJob()" style="padding: 0 24px;">완료</button></div>
+        </div>
+    </div>
+
+    <script>
+        const MANAGER_DB_NAME = 'BackupDB';
+        let managerDB, currentJobId = null, availableDBs = [];
+        let directoryHandle = null; 
+
+        window.onload = async () => {
+            await fetchAvailableDBs();
+            await initManagerDB();
+            await loadJobs();
+            await checkDailyBatches();
+        };
+
+        // 단축키 설정 (Ctrl + S / Cmd + S)
+        document.addEventListener('keydown', function(e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                e.preventDefault(); // 브라우저 기본 웹페이지 저장 기능 막기
+                if (currentJobId && document.getElementById('mainContent').style.display !== 'none') {
+                    saveJobConfig();
+                }
+            }
+        });
+
+        async function fetchAvailableDBs() {
+            if (indexedDB.databases) {
+                const dbs = await indexedDB.databases();
+                availableDBs = dbs.map(d => d.name).filter(n => !n.startsWith('BackupSchedulerDB'));
+            }
+            ['newTargetDB', 'editTargetDB'].forEach(id => {
+                const sel = document.getElementById(id);
+                sel.innerHTML = '<option value="">DB 선택...</option>';
+                availableDBs.forEach(db => sel.innerHTML += `<option value="${db}">${db}</option>`);
+            });
+        }
+
+        function initManagerDB() {
+            return new Promise((res, rej) => {
+                const req = indexedDB.open(MANAGER_DB_NAME, 1);
+                req.onupgradeneeded = e => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains('jobs')) db.createObjectStore('jobs', { keyPath: 'id' });
+                    if (!db.objectStoreNames.contains('logs')) db.createObjectStore('logs', { keyPath: 'id', autoIncrement: true }).createIndex('jobId', 'jobId');
+                    if (!db.objectStoreNames.contains('config')) db.createObjectStore('config', { keyPath: 'key' });
+                };
+                req.onsuccess = async e => { 
+                    managerDB = e.target.result; 
+                    await loadDirectoryHandle(); 
+                    res(); 
+                };
+                req.onerror = e => rej(e);
+            });
+        }
+
+        async function selectSaveDirectory() {
+            try {
+                directoryHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+                document.getElementById('savePathDisplay').innerText = `[ ${directoryHandle.name} ]`;
+                managerDB.transaction('config', 'readwrite').objectStore('config').put({ key: 'backupFolder', handle: directoryHandle });
+            } catch (err) { console.log('폴더 선택 취소됨', err); }
+        }
+
+        async function loadDirectoryHandle() {
+            return new Promise((resolve) => {
+                managerDB.transaction('config', 'readonly').objectStore('config').get('backupFolder').onsuccess = async (e) => {
+                    if (e.target.result) {
+                        directoryHandle = e.target.result.handle;
+                        document.getElementById('savePathDisplay').innerText = `[ ${directoryHandle.name} ] (권한 확인 필요)`;
+                    }
+                    resolve();
+                };
+            });
+        }
+
+        async function verifyPermission(fileHandle, readWrite) {
+            const options = { mode: readWrite ? 'readwrite' : 'read' };
+            if ((await fileHandle.queryPermission(options)) === 'granted') return true;
+            if ((await fileHandle.requestPermission(options)) === 'granted') return true;
+            return false;
+        }
+
+        function blobToBase64(blob) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
+        }
+
+        async function processValueForBackup(val) {
+            if (val instanceof Blob || val instanceof File) {
+                const base64 = await blobToBase64(val);
+                return { __type: "Blob", mime: val.type, data: base64, name: val.name || "" };
+            } else if (Array.isArray(val)) {
+                return await Promise.all(val.map(item => processValueForBackup(item)));
+            } else if (val && typeof val === 'object' && val !== null) {
+                const newVal = {};
+                for (const key of Object.keys(val)) { newVal[key] = await processValueForBackup(val[key]); }
+                return newVal;
+            }
+            return val; 
+        }
+
+        function getToday() { return new Date().toISOString().split('T')[0]; }
+
+        async function checkDailyBatches() {
+            managerDB.transaction('jobs').objectStore('jobs').getAll().onsuccess = async e => {
+                const jobs = e.target.result;
+                for (let job of jobs) {
+                    if (job.cycle === 'daily' && job.lastRunDate !== getToday()) {
+                        await executeBackup(job, '자동');
+                        job.lastRunDate = getToday();
+                        managerDB.transaction('jobs', 'readwrite').objectStore('jobs').put(job);
+                    }
+                }
+                loadJobs();
+            };
+        }
+
+        async function runBackupJob(type) {
+            if(!currentJobId) return;
+            const btn = document.getElementById('btnRun');
+            const originText = btn.innerText;
+            btn.innerText = '⏳ 백업 중...';
+            btn.disabled = true;
+
+            try {
+                const job = await new Promise(res => managerDB.transaction('jobs').objectStore('jobs').get(currentJobId).onsuccess = e => res(e.target.result));
+                job.targetDB = document.getElementById('editTargetDB').value;
+                await executeBackup(job, type);
+                job.lastRunDate = getToday();
+                managerDB.transaction('jobs', 'readwrite').objectStore('jobs').put(job);
+            } finally {
+                btn.innerText = originText;
+                btn.disabled = false;
+                loadJobs(); loadLogs(currentJobId);
+            }
+        }
+
+        async function executeBackup(job, type) {
+            let status = '성공', message = '';
+            try {
+                if(!job.targetDB) throw new Error("대상 DB 설정 필요");
+                
+                const request = indexedDB.open(job.targetDB);
+                const db = await new Promise((res, rej) => {
+                    request.onsuccess = e => res(e.target.result);
+                    request.onerror = () => rej("DB 오픈 실패");
+                });
+
+                const exportData = { database: db.name, version: db.version, stores: {} };
+                for (const storeName of Array.from(db.objectStoreNames)) {
+                    const rawData = await new Promise((res) => {
+                        db.transaction(storeName).objectStore(storeName).getAll().onsuccess = e => res(e.target.result);
+                    });
+                    exportData.stores[storeName] = await Promise.all(rawData.map(item => processValueForBackup(item)));
+                }
+                db.close();
+
+                const jsonStr = JSON.stringify(exportData, null, 2);
+                const now = new Date();
+                const timeStr = now.getFullYear() + String(now.getMonth()+1).padStart(2,'0') + String(now.getDate()).padStart(2,'0') + "_" + String(now.getHours()).padStart(2,'0') + String(now.getMinutes()).padStart(2,'0');
+                const fileName = `${job.targetDB}_Backup_${timeStr}.json`;
+
+                if (directoryHandle && await verifyPermission(directoryHandle, true)) {
+                    const fileHandle = await directoryHandle.getFileHandle(fileName, { create: true });
+                    const writable = await fileHandle.createWritable();
+                    await writable.write(jsonStr);
+                    await writable.close();
+                    message = `[폴더] ${fileName}`;
+                    document.getElementById('savePathDisplay').innerText = `[ ${directoryHandle.name} ] (연결됨)`;
+                } else {
+                    const blob = new Blob([jsonStr], { type: "application/json" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url; a.download = fileName;
+                    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    message = `[다운로드] ${fileName}`;
+                }
+
+            } catch (err) {
+                status = '실패'; message = err.message || err;
+            }
+
+            return new Promise(res => managerDB.transaction('logs', 'readwrite').objectStore('logs').add({
+                jobId: job.id, time: new Date().toLocaleString(), type, status, message
+            }).onsuccess = res);
+        }
+
+        function loadJobs() {
+            const list = document.getElementById('jobList');
+            managerDB.transaction('jobs').objectStore('jobs').getAll().onsuccess = e => {
+                list.innerHTML = '';
+                e.target.result.forEach(j => {
+                    const item = document.createElement('li');
+                    item.className = `script-item ${currentJobId === j.id ? 'active' : ''}`;
+                    const badge = j.lastRunDate === getToday() ? '<span class="badge success">오늘완료</span>' : '<span class="badge">대기중</span>';
+                    item.innerHTML = `<span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${j.name}</span>${badge}`;
+                    item.onclick = () => selectJob(j.id);
+                    list.appendChild(item);
+                });
+            };
+        }
+
+        function selectJob(id) {
+            currentJobId = id; loadJobs();
+            document.getElementById('mainEmpty').style.display = 'none';
+            document.getElementById('mainContent').style.display = 'flex';
+            managerDB.transaction('jobs').objectStore('jobs').get(id).onsuccess = e => {
+                const j = e.target.result;
+                document.getElementById('editJobName').value = j.name; // Input Value 바인딩
+                document.getElementById('editTargetDB').value = j.targetDB || '';
+                document.getElementById('editCycle').value = j.cycle;
+                loadLogs(id);
+            };
+        }
+
+        function openAddModal() { 
+            document.getElementById('newJobName').value = '';
+            document.getElementById('addModal').style.display = 'flex'; 
+            document.getElementById('newJobName').focus();
+        }
+        function closeModal() { document.getElementById('addModal').style.display = 'none'; }
+        
+        function addNewJob() {
+            const name = document.getElementById('newJobName').value.trim();
+            if(!name) return alert("스케줄 이름을 입력해주세요.");
+            const newJob = { id: 'job_'+Date.now(), name, targetDB: document.getElementById('newTargetDB').value, cycle: document.getElementById('newCycle').value, lastRunDate: '' };
+            managerDB.transaction('jobs', 'readwrite').objectStore('jobs').add(newJob).onsuccess = () => { closeModal(); loadJobs(); selectJob(newJob.id); };
+        }
+
+        function saveJobConfig() {
+            if(!currentJobId) return;
+            const newName = document.getElementById('editJobName').value.trim();
+            if(!newName) return alert("스케줄명을 입력해주세요.");
+            
+            managerDB.transaction('jobs', 'readwrite').objectStore('jobs').get(currentJobId).onsuccess = e => {
+                const j = e.target.result;
+                j.name = newName; // 이름 업데이트
+                j.targetDB = document.getElementById('editTargetDB').value; 
+                j.cycle = document.getElementById('editCycle').value;
+                
+                managerDB.transaction('jobs', 'readwrite').objectStore('jobs').put(j).onsuccess = () => {
+                    // 저장 시각적 피드백
+                    const btn = document.getElementById('btnSaveConfig');
+                    const originHtml = btn.innerHTML;
+                    btn.innerHTML = '✅ 저장됨';
+                    btn.style.background = '#f0fdf4';
+                    btn.style.borderColor = '#bbf7d0';
+                    setTimeout(() => { btn.innerHTML = originHtml; btn.style.background = ''; btn.style.borderColor = ''; }, 1000);
+                    loadJobs(); // 좌측 리스트 이름 반영
+                };
+            };
+        }
+
+        function deleteJob() {
+            if(!currentJobId || !confirm('삭제하시겠습니까?')) return;
+            managerDB.transaction('jobs', 'readwrite').objectStore('jobs').delete(currentJobId).onsuccess = () => { 
+                currentJobId=null; 
+                document.getElementById('mainContent').style.display='none'; 
+                document.getElementById('mainEmpty').style.display='flex'; 
+                loadJobs(); 
+            };
+        }
+
+        function loadLogs(jobId) {
+            managerDB.transaction('logs').objectStore('logs').index('jobId').getAll(IDBKeyRange.only(jobId)).onsuccess = e => {
+                const logs = e.target.result.sort((a,b) => b.id - a.id);
+                document.getElementById('logTableBody').innerHTML = logs.map(l => `<tr><td style="color:var(--text-muted); font-family:monospace; font-size:12px;">${l.time}</td><td style="color:${l.status==='성공'?'var(--success)':'var(--danger)'}; font-weight:700;">${l.status}</td><td style="word-break:break-all; font-family:monospace; font-size:12px;">${l.message}</td></tr>`).join('');
+            };
+        }
+    </script>
+</body>
+</html>

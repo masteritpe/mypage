@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude JSONL Viewer</title>
+<style>
+  :root {
+    --bg:        #1e1e2e;
+    --surface:   #24273a;
+    --surface1:  #2e3048;
+    --surface2:  #363858;
+    --border:    #414468;
+    --text:      #cdd6f4;
+    --subtext:   #a6adc8;
+    --overlay:   #7480a0;
+    --orange:    #fab387;
+    --orange-dim:#7d4a2a;
+    --blue:      #89b4fa;
+    --blue-dim:  #1e3a5f;
+    --blue-bg:   #2a3f6a;
+    --green:     #a6e3a1;
+    --red:       #f38ba8;
+    --red-bg:    #3a1a2a;
+    --mauve:     #cba6f7;
+    --teal:      #94e2d5;
+    --yellow:    #f9e2af;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Header */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  header h1 { font-size: 16px; font-weight: 600; color: var(--orange); }
+  .file-info { font-size: 12px; color: var(--overlay); margin-left: auto; }
+
+  .btn-reset {
+    background: transparent;
+    border: 1px solid #5a3040;
+    color: #8a5060;
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-reset:hover { background: var(--red-bg); border-color: var(--red); color: var(--red); }
+
+  /* Layout */
+  .layout { display: flex; flex: 1; overflow: hidden; }
+
+  /* Sidebar */
+  .sidebar {
+    width: 300px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+
+  .sidebar-header {
+    padding: 10px 16px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--overlay);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .session-list { overflow-y: auto; flex: 1; }
+
+  .session-item {
+    padding: 11px 16px;
+    border-bottom: 1px solid var(--surface1);
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .session-item:hover { background: var(--surface1); }
+  .session-item.active { background: var(--surface2); border-left: 3px solid var(--orange); }
+
+  .session-name {
+    font-size: 12px;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 4px;
+  }
+  .session-meta { font-size: 11px; color: var(--overlay); display: flex; gap: 8px; }
+  .session-date { color: var(--subtext); }
+  .session-count {
+    background: var(--surface2);
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-size: 10px;
+    color: var(--subtext);
+  }
+  .session-cwd {
+    font-size: 10px;
+    color: var(--overlay);
+    margin-top: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Drop zone */
+  .drop-zone {
+    margin: 12px;
+    border: 2px dashed var(--border);
+    border-radius: 8px;
+    padding: 18px 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+  .drop-zone:hover, .drop-zone.dragover {
+    border-color: var(--orange);
+    background: rgba(250,179,135,0.06);
+  }
+  .drop-zone input { display: none; }
+  .drop-zone p { font-size: 12px; color: var(--overlay); line-height: 1.6; }
+  .drop-zone strong { color: var(--subtext); }
+
+  /* Chat area */
+  .chat-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  .chat-toolbar {
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    background: var(--surface);
+  }
+
+  .session-title {
+    font-size: 13px;
+    color: var(--subtext);
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .btn {
+    background: var(--surface1);
+    border: 1px solid var(--border);
+    color: var(--subtext);
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .btn:hover { background: var(--surface2); color: var(--text); }
+  .btn.active { background: var(--orange-dim); border-color: var(--orange); color: var(--orange); }
+
+  .search-box {
+    background: var(--surface1);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 5px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    width: 180px;
+    outline: none;
+  }
+  .search-box:focus { border-color: var(--orange); }
+  .search-box::placeholder { color: var(--overlay); }
+
+  /* Messages */
+  .messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+  }
+
+  .msg-group { display: flex; flex-direction: column; margin-bottom: 20px; }
+
+  .msg-bubble {
+    max-width: 82%;
+    padding: 12px 16px;
+    border-radius: 14px;
+    font-size: 13.5px;
+    line-height: 1.65;
+  }
+
+  .msg-user .msg-bubble {
+    background: var(--blue-bg);
+    border: 1px solid #3a5a8a;
+    align-self: flex-end;
+    border-bottom-right-radius: 4px;
+    color: #d4ecff;
+  }
+
+  .msg-assistant .msg-bubble {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    align-self: flex-start;
+    border-bottom-left-radius: 4px;
+    color: var(--text);
+  }
+
+  .msg-label {
+    font-size: 11px;
+    margin-bottom: 5px;
+    padding: 0 4px;
+  }
+  .msg-user .msg-label { text-align: right; color: #6aacda; }
+  .msg-assistant .msg-label { color: var(--orange); }
+
+  /* Footer: time + copy button */
+  .msg-footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 5px;
+    padding: 0 4px;
+  }
+  .msg-user .msg-footer { justify-content: flex-end; }
+  .msg-assistant .msg-footer { justify-content: flex-start; }
+
+  .msg-time { font-size: 10px; color: var(--overlay); }
+
+  .btn-copy-md {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--overlay);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+    line-height: 1.4;
+  }
+  .btn-copy-md:hover { background: var(--surface1); border-color: var(--subtext); color: var(--subtext); }
+  .btn-copy-md.copied { border-color: var(--green); color: var(--green); }
+
+  /* Tool use */
+  .tool-block {
+    background: var(--bg);
+    border: 1px solid var(--surface2);
+    border-radius: 8px;
+    margin: 8px 0;
+    overflow: hidden;
+    font-size: 12px;
+  }
+  .tool-header {
+    background: var(--surface1);
+    padding: 6px 12px;
+    color: var(--subtext);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .tool-header:hover { background: var(--surface2); }
+  .tool-name { color: var(--yellow); font-weight: 500; }
+  .tool-hint { color: var(--overlay); font-size: 10px; margin-left: auto; }
+  .tool-body {
+    padding: 10px 12px;
+    color: var(--subtext);
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 11px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 200px;
+    overflow-y: auto;
+    display: none;
+    border-top: 1px solid var(--surface2);
+  }
+  .tool-block.expanded .tool-body { display: block; }
+
+  /* Thinking */
+  .thinking-block {
+    background: var(--bg);
+    border: 1px solid #3a3a6a;
+    border-radius: 8px;
+    margin: 6px 0;
+    overflow: hidden;
+  }
+  .thinking-header {
+    padding: 6px 12px;
+    color: var(--mauve);
+    font-size: 11px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    opacity: 0.8;
+  }
+  .thinking-header:hover { opacity: 1; background: rgba(203,166,247,0.06); }
+  .thinking-body {
+    padding: 10px 12px;
+    color: #9090b8;
+    font-size: 11px;
+    font-style: italic;
+    white-space: pre-wrap;
+    max-height: 150px;
+    overflow-y: auto;
+    display: none;
+    border-top: 1px solid #3a3a6a;
+  }
+  .thinking-block.expanded .thinking-body { display: block; }
+
+  /* Markdown rendering */
+  .msg-text h1, .msg-text h2, .msg-text h3 { color: var(--yellow); margin: 12px 0 6px; }
+  .msg-text h1 { font-size: 17px; }
+  .msg-text h2 { font-size: 15px; }
+  .msg-text h3 { font-size: 13.5px; }
+  .msg-text code {
+    background: var(--surface2);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: 'Consolas', monospace;
+    font-size: 11.5px;
+    color: var(--teal);
+  }
+  .msg-text pre {
+    background: var(--bg);
+    border: 1px solid var(--surface2);
+    border-radius: 7px;
+    padding: 10px 14px;
+    overflow-x: auto;
+    margin: 8px 0;
+  }
+  .msg-text pre code { background: none; padding: 0; color: var(--subtext); font-size: 11.5px; }
+  .msg-text table { border-collapse: collapse; margin: 10px 0; font-size: 12.5px; width: 100%; }
+  .msg-text th {
+    background: var(--surface1);
+    padding: 7px 12px;
+    text-align: left;
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .msg-text td { padding: 6px 12px; border: 1px solid var(--surface2); color: var(--subtext); }
+  .msg-text tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
+  .msg-text ul, .msg-text ol { padding-left: 22px; margin: 6px 0; }
+  .msg-text li { margin: 4px 0; }
+  .msg-text p { margin: 6px 0; }
+  .msg-text strong { color: var(--text); font-weight: 600; }
+  .msg-text em { color: var(--mauve); }
+  .msg-text hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
+  .msg-text a { color: var(--blue); }
+
+  /* Empty state */
+  .empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--overlay);
+    gap: 12px;
+  }
+  .empty-state .icon { font-size: 48px; opacity: 0.4; }
+  .empty-state p { font-size: 13px; }
+
+  /* Error msg */
+  .msg-error .msg-bubble { background: var(--red-bg); border-color: #6a2a3a; color: #e0a0a8; }
+  .msg-error .msg-label { color: var(--red); }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--surface2); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--border); }
+
+  /* Highlight */
+  mark { background: rgba(250,179,135,0.25); color: var(--orange); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Claude JSONL Viewer</h1>
+  <span class="file-info" id="fileInfo">파일을 불러오세요</span>
+  <button class="btn-reset" id="btnReset" onclick="resetViewer()" style="display:none">초기화</button>
+</header>
+
+<div class="layout">
+  <div class="sidebar">
+    <div class="drop-zone" id="dropZone">
+      <input type="file" id="fileInput" accept=".jsonl" multiple>
+      <p><strong>JSONL 파일 드롭</strong><br>또는 클릭하여 선택<br><span style="color:var(--surface2);font-size:10px;">여러 파일 동시 가능</span></p>
+    </div>
+    <div class="sidebar-header">
+      <span>세션 목록</span>
+      <span id="sessionCount">0개</span>
+    </div>
+    <div class="session-list" id="sessionList"></div>
+  </div>
+
+  <div class="chat-area">
+    <div class="chat-toolbar" id="chatToolbar" style="display:none">
+      <span class="session-title" id="sessionTitle"></span>
+      <input type="text" class="search-box" id="searchBox" placeholder="메시지 검색...">
+      <button class="btn" id="btnRaw" onclick="toggleRaw()">RAW</button>
+      <button class="btn" onclick="exportMd()">MD 저장</button>
+    </div>
+    <div class="messages" id="messages">
+      <div class="empty-state">
+        <div class="icon">💬</div>
+        <p>JSONL 파일을 불러오면 대화 내용이 표시됩니다</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const sessions = [];
+let currentSession = null;
+let showRaw = false;
+let searchQuery = '';
+
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  loadFiles(e.dataTransfer.files);
+});
+fileInput.addEventListener('change', e => loadFiles(e.target.files));
+document.getElementById('searchBox').addEventListener('input', e => {
+  searchQuery = e.target.value.toLowerCase();
+  if (currentSession) renderSession(currentSession);
+});
+
+function loadFiles(files) {
+  Array.from(files).forEach(file => {
+    const reader = new FileReader();
+    reader.onload = e => parseJsonl(e.target.result, file.name);
+    reader.readAsText(file, 'utf-8');
+  });
+}
+
+function parseJsonl(text, filename) {
+  const lines = text.trim().split('\n');
+  const entries = [];
+  let sessionId = null, cwd = '';
+  for (const line of lines) {
+    try {
+      const obj = JSON.parse(line);
+      if (!sessionId && obj.sessionId) sessionId = obj.sessionId;
+      if (!cwd && obj.cwd) cwd = obj.cwd;
+      entries.push(obj);
+    } catch {}
+  }
+  const messages = entries.filter(e => e.type === 'user' || e.type === 'assistant');
+  const firstMsg = messages.find(m => m.type === 'user');
+  const firstText = firstMsg ? getTextPreview(firstMsg) : '(빈 세션)';
+  const timestamps = messages.map(m => m.timestamp).filter(Boolean).sort();
+  const startTime = timestamps[0] ? new Date(timestamps[0]) : null;
+  const session = { filename, sessionId, cwd, messages, firstText, startTime, raw: text };
+  const idx = sessions.findIndex(s => s.sessionId === sessionId);
+  if (idx >= 0) sessions[idx] = session;
+  else sessions.push(session);
+  sessions.sort((a, b) => (b.startTime || 0) - (a.startTime || 0));
+  renderSidebar();
+  document.getElementById('fileInfo').textContent = `${sessions.length}개 세션 로드됨`;
+  document.getElementById('btnReset').style.display = 'inline-block';
+  if (sessions.length === 1 || currentSession?.sessionId === sessionId) selectSession(session);
+}
+
+function getTextPreview(msg) {
+  const content = msg.message?.content;
+  if (typeof content === 'string') return content.slice(0, 60);
+  if (Array.isArray(content)) {
+    const t = content.find(c => c.type === 'text');
+    return t ? t.text.slice(0, 60) : '';
+  }
+  return '';
+}
+
+function renderSidebar() {
+  const list = document.getElementById('sessionList');
+  document.getElementById('sessionCount').textContent = sessions.length + '개';
+  list.innerHTML = sessions.map((s, i) => {
+    const active = currentSession?.sessionId === s.sessionId ? 'active' : '';
+    const date = s.startTime ? formatDate(s.startTime) : '날짜 없음';
+    const cwd = s.cwd ? s.cwd.replace(/\\/g, '/').split('/').slice(-2).join('/') : '';
+    return `<div class="session-item ${active}" onclick="selectSession(sessions[${i}])">
+      <div class="session-name">${escHtml(s.firstText || s.filename)}</div>
+      <div class="session-meta">
+        <span class="session-date">${date}</span>
+        <span class="session-count">${s.messages.length}개</span>
+      </div>
+      ${cwd ? `<div class="session-cwd">${escHtml(cwd)}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function selectSession(session) {
+  currentSession = session;
+  showRaw = false;
+  document.getElementById('btnRaw').classList.remove('active');
+  renderSidebar();
+  document.getElementById('chatToolbar').style.display = 'flex';
+  document.getElementById('sessionTitle').textContent = session.filename;
+  renderSession(session);
+}
+
+function renderSession(session) {
+  const container = document.getElementById('messages');
+  if (showRaw) {
+    container.innerHTML = `<pre style="font-size:11px;color:var(--subtext);white-space:pre-wrap;word-break:break-all;">${escHtml(session.raw)}</pre>`;
+    return;
+  }
+  const msgs = session.messages;
+  if (!msgs.length) {
+    container.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>메시지가 없습니다</p></div>';
+    return;
+  }
+  let html = '';
+  msgs.forEach((msg, idx) => {
+    const isUser = msg.type === 'user';
+    const isError = msg.isApiErrorMessage;
+    const cls = isError ? 'msg-error' : (isUser ? 'msg-user' : 'msg-assistant');
+    const label = isUser ? '사용자' : `Claude${msg.message?.model ? ' · ' + msg.message.model.replace('claude-', '') : ''}`;
+    const time = msg.timestamp ? formatTime(new Date(msg.timestamp)) : '';
+    const content = renderContent(msg.message?.content, isUser);
+    if (!content) return;
+    if (searchQuery && !stripHtml(content).toLowerCase().includes(searchQuery)) return;
+    html += `<div class="msg-group ${cls}" data-idx="${idx}">
+      <div class="msg-label">${escHtml(label)}</div>
+      <div class="msg-bubble"><div class="msg-text">${content}</div></div>
+      <div class="msg-footer">
+        <span class="msg-time">${time}</span>
+        <button class="btn-copy-md" onclick="copyMsgMd(${idx}, this)">MD 복사</button>
+      </div>
+    </div>`;
+  });
+  container.innerHTML = html || '<div class="empty-state"><p>검색 결과가 없습니다</p></div>';
+  container.scrollTop = container.scrollHeight;
+  container.querySelectorAll('.tool-header, .thinking-header').forEach(h => {
+    h.addEventListener('click', () => h.parentElement.classList.toggle('expanded'));
+  });
+}
+
+function copyMsgMd(idx, btn) {
+  if (!currentSession) return;
+  const msg = currentSession.messages[idx];
+  if (!msg) return;
+  const role = msg.type === 'user' ? '**사용자**' : '**Claude**';
+  const time = msg.timestamp ? new Date(msg.timestamp).toLocaleString('ko-KR') : '';
+  const text = extractPlainText(msg.message?.content);
+  const md = `### ${role} — ${time}\n\n${text}`;
+  navigator.clipboard.writeText(md).then(() => {
+    btn.textContent = '복사됨!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'MD 복사'; btn.classList.remove('copied'); }, 1800);
+  });
+}
+
+function renderContent(content, isUser) {
+  if (!content) return '';
+  if (typeof content === 'string') return renderMarkdown(content);
+  if (Array.isArray(content)) {
+    return content.map(part => {
+      if (part.type === 'text') return renderMarkdown(part.text);
+      if (part.type === 'thinking') {
+        return `<div class="thinking-block">
+          <div class="thinking-header">🧠 <span>생각 중... (클릭하여 펼치기)</span></div>
+          <div class="thinking-body">${escHtml(part.thinking || '')}</div>
+        </div>`;
+      }
+      if (part.type === 'tool_use') {
+        return `<div class="tool-block">
+          <div class="tool-header">
+            <span>🔧</span>
+            <span class="tool-name">${escHtml(part.name || 'tool')}</span>
+            <span class="tool-hint">클릭하여 펼치기</span>
+          </div>
+          <div class="tool-body">${escHtml(JSON.stringify(part.input, null, 2))}</div>
+        </div>`;
+      }
+      if (part.type === 'tool_result') {
+        const val = Array.isArray(part.content)
+          ? part.content.map(c => c.text || '').join('\n')
+          : (part.content || '');
+        return `<div class="tool-block">
+          <div class="tool-header">
+            <span>📤</span>
+            <span class="tool-name">tool result</span>
+            <span class="tool-hint">클릭하여 펼치기</span>
+          </div>
+          <div class="tool-body">${escHtml(val.slice(0, 2000))}${val.length > 2000 ? '\n...(truncated)' : ''}</div>
+        </div>`;
+      }
+      return '';
+    }).join('');
+  }
+  return '';
+}
+
+function renderMarkdown(text) {
+  if (!text) return '';
+  let html = escHtml(text);
+  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) =>
+    `<pre><code class="lang-${lang}">${code}</code></pre>`);
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  html = html.replace(/^---$/gm, '<hr>');
+  html = html.replace(/((?:\|.+\|\n)+)/g, match => {
+    const rows = match.trim().split('\n');
+    if (rows.length < 2) return match;
+    if (!rows[1].match(/^\|[-| :]+\|$/)) return match;
+    const thCells = rows[0].split('|').filter(c => c.trim()).map(c => `<th>${c.trim()}</th>`).join('');
+    const bodyHtml = rows.slice(2).map(row => {
+      const cells = row.split('|').filter(c => c.trim()).map(c => `<td>${c.trim()}</td>`).join('');
+      return `<tr>${cells}</tr>`;
+    }).join('');
+    return `<table><thead><tr>${thCells}</tr></thead><tbody>${bodyHtml}</tbody></table>`;
+  });
+  html = html.replace(/^(\s*[-*] .+(\n|$))+/gm, match => {
+    const items = match.trim().split('\n').map(l => `<li>${l.replace(/^\s*[-*] /, '')}</li>`).join('');
+    return `<ul>${items}</ul>`;
+  });
+  html = html.replace(/^(\s*\d+\. .+(\n|$))+/gm, match => {
+    const items = match.trim().split('\n').map(l => `<li>${l.replace(/^\s*\d+\. /, '')}</li>`).join('');
+    return `<ol>${items}</ol>`;
+  });
+  html = html.replace(/\n\n+/g, '</p><p>');
+  html = html.replace(/\n/g, '<br>');
+  if (searchQuery) {
+    const esc = searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    html = html.replace(new RegExp(`(${esc})`, 'gi'), '<mark>$1</mark>');
+  }
+  return `<p>${html}</p>`;
+}
+
+function resetViewer() {
+  if (!confirm('모든 세션을 초기화하시겠습니까?')) return;
+  sessions.length = 0;
+  currentSession = null;
+  showRaw = false;
+  searchQuery = '';
+  document.getElementById('searchBox').value = '';
+  document.getElementById('btnRaw').classList.remove('active');
+  document.getElementById('chatToolbar').style.display = 'none';
+  document.getElementById('sessionList').innerHTML = '';
+  document.getElementById('sessionCount').textContent = '0개';
+  document.getElementById('fileInfo').textContent = '파일을 불러오세요';
+  document.getElementById('btnReset').style.display = 'none';
+  document.getElementById('fileInput').value = '';
+  document.getElementById('messages').innerHTML = `
+    <div class="empty-state">
+      <div class="icon">💬</div>
+      <p>JSONL 파일을 불러오면 대화 내용이 표시됩니다</p>
+    </div>`;
+}
+
+function toggleRaw() {
+  showRaw = !showRaw;
+  document.getElementById('btnRaw').classList.toggle('active', showRaw);
+  if (currentSession) renderSession(currentSession);
+}
+
+function exportMd() {
+  if (!currentSession) return;
+  let md = `# ${currentSession.filename}\n\n`;
+  for (const msg of currentSession.messages) {
+    const role = msg.type === 'user' ? '**사용자**' : '**Claude**';
+    const time = msg.timestamp ? new Date(msg.timestamp).toLocaleString('ko-KR') : '';
+    md += `### ${role} — ${time}\n\n${extractPlainText(msg.message?.content)}\n\n---\n\n`;
+  }
+  const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = currentSession.filename.replace('.jsonl', '') + '.md';
+  a.click();
+}
+
+function extractPlainText(content) {
+  if (!content) return '';
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) return content.filter(c => c.type === 'text').map(c => c.text).join('\n');
+  return '';
+}
+
+function formatDate(d) {
+  return d.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+function formatTime(d) {
+  return d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function stripHtml(html) {
+  const d = document.createElement('div');
+  d.innerHTML = html;
+  return d.textContent || '';
+}
+</script>
+</body>
+</html>

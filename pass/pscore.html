@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>열망점수</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@1.4.0"></script>
+  
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  
+  <style>
+    :root {
+      --bg-body: #f1f5f9;
+      --bg-card: #ffffff;
+      
+      --text-main: #1e293b;
+      --text-sub: #64748b;
+      --border: #e2e8f0;
+      
+      --primary: #334155;       
+      --primary-hover: #1e293b; 
+      --accent: #059669;        
+      --danger: #ef4444;
+      
+      --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      --radius: 12px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+      background: var(--bg-body);
+      color: var(--text-main);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    /* Layout */
+    .app-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      display: grid;
+      grid-template-columns: 1fr 450px; 
+      gap: 20px;
+      align-items: start;
+    }
+
+    @media (max-width: 900px) {
+      .app-container { grid-template-columns: 1fr; }
+    }
+
+    /* Header */
+    header {
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 100;
+      padding: 15px 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .header-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 15px;
+    }
+    h1 { margin: 0; font-size: 18px; font-weight: 800; color: var(--primary); }
+
+    /* Stats Chips */
+    .stats-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 4px 12px;
+      font-size: 12px;
+      color: var(--text-sub);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .chip strong { color: var(--text-main); font-weight: 700; }
+
+    /* Card Component */
+    .card {
+      background: var(--bg-card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+    .card-header {
+      padding: 15px 20px;
+      border-bottom: 1px solid var(--border);
+      font-weight: 700;
+      font-size: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #f8fafc;
+    }
+    .card-body { padding: 20px; }
+    .card-body.no-pad { padding: 0; }
+
+    /* Inputs & Controls */
+    .input-group { margin-bottom: 20px; }
+    label.field-label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 13px; color: var(--text-main); }
+    input[type="number"], input[type="date"] {
+      width: 100%; max-width: 200px;
+      padding: 10px; border: 1px solid var(--border);
+      border-radius: 8px; font-size: 14px;
+      outline: none; transition: border-color 0.2s;
+    }
+    input[type="number"]:focus, input[type="date"]:focus { border-color: var(--primary); }
+
+    .checklist-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .checkbox-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s;
+      user-select: none;
+      font-size: 13px;
+    }
+    .checkbox-item:hover { background: #f1f5f9; }
+    .checkbox-item input { margin: 0; accent-color: var(--primary); }
+
+    /* Buttons */
+    .btn-group { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+    .btn {
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 14px;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+    }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-outline { background: white; border: 1px solid var(--border); color: var(--text-sub); }
+    .btn-outline:hover { background: #f8fafc; border-color: #cbd5e1; color: var(--text-main); }
+    
+    .btn-cancel { background: #fee2e2; color: #b91c1c; display: none; } 
+    .btn-cancel:hover { background: #fecaca; }
+
+    /* Chart & Score */
+    .score-display {
+      text-align: right; margin-bottom: 10px;
+      font-size: 15px; font-weight: 600; color: var(--text-sub);
+    }
+    .score-display .val { font-size: 20px; color: var(--accent); margin-left: 5px; }
+    .chart-container { position: relative; height: 300px; width: 100%; }
+
+    /* Table */
+    .table-wrapper {
+      max-height: calc(100vh - 180px);
+      overflow-y: auto;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+    thead th {
+      position: sticky; top: 0;
+      background: #f1f5f9;
+      padding: 12px;
+      font-weight: 600;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-sub);
+      z-index: 10;
+    }
+    tbody td {
+      padding: 10px;
+      border-bottom: 1px solid var(--border);
+      text-align: center;
+      word-break: keep-all;
+      vertical-align: middle;
+    }
+    /* 날짜 줄바꿈 방지 */
+    #history-table td:first-child {
+      white-space: nowrap;
+      letter-spacing: -0.5px;
+    }
+    tbody tr:nth-child(even) { background: #f8fafc; }
+    
+    /* Action Buttons in Table */
+    .action-btn {
+      padding: 4px 8px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: #fff;
+      font-size: 11px;
+      cursor: pointer;
+      margin: 0 2px;
+    }
+    .action-btn:hover { background: #f1f5f9; }
+    .btn-edit { color: var(--primary); }
+    .btn-del { color: var(--danger); }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="header-content">
+      <h1>📈 열망점수</h1>
+      <div class="stats-chips">
+        <div class="chip" id="reward-chip" style="display:none; background-color: #f0fdf4; border-color: #bbf7d0; color: #166534;">
+          🎁 당일 보상: <strong id="val-reward" style="color: #15803d; margin-left:4px;">-</strong>
+        </div>
+        <div class="chip">최근: <strong id="val-recent">-</strong></div>
+        <div class="chip">목표: <strong id="val-goal">-</strong></div>
+        <div class="chip">D-Day: <strong id="val-dday" style="color:var(--danger)">-</strong></div>
+        <div class="chip">누적학습: <strong id="val-totalHours">0.0h</strong></div>
+        <div class="chip">포인트: <strong id="val-totalPoints">0.0pt</strong></div>
+      </div>
+    </div>
+  </header>
+
+  <div class="app-container">
+    
+    <main class="card">
+      <div class="card-header">
+        <span>📝 기록 관리</span>
+        <span style="font-size:12px; font-weight:400; color:var(--text-sub)">오늘의 노력이 합격을 만듭니다</span>
+      </div>
+      <div class="card-body">
+        
+        <div class="input-group" style="display:flex; gap:10px;">
+          <div style="flex:1">
+             <label class="field-label">날짜</label>
+             <input type="date" id="inp-date">
+          </div>
+          <div style="flex:1">
+            <label class="field-label">학습 시간 (Hour)</label>
+            <input type="number" id="inp-time" placeholder="0.0" min="0" step="0.5">
+          </div>
+        </div>
+
+        <label class="field-label" style="margin-bottom:10px;">활동 체크</label>
+        <div class="checklist-grid" id="checklist-container">
+          </div>
+
+        <div class="btn-group">
+          <button class="btn btn-primary" id="btn-save">💾 기록 저장</button>
+          <button class="btn btn-cancel" id="btn-cancel-edit">취소</button>
+          
+          <div style="flex:1"></div> 
+          <button class="btn btn-outline" id="btn-export">📤 내보내기</button>
+          <button class="btn btn-outline" id="btn-import">📥 불러오기</button>
+          <input type="file" id="file-import" accept=".xlsx" style="display:none">
+        </div>
+
+        <div class="score-display">
+          변동 점수: <span class="val" id="display-today-score">0.00</span>
+        </div>
+        <div class="chart-container">
+          <canvas id="chart-canvas"></canvas>
+        </div>
+
+      </div>
+    </main>
+
+    <aside class="card">
+      <div class="card-header">
+        <span>📊 기록 히스토리</span>
+      </div>
+      <div class="card-body no-pad table-wrapper">
+        <table id="history-table">
+          <thead>
+            <tr>
+              <th style="width:24%">날짜</th>
+              <th style="width:13%">점수</th>
+              <th style="width:13%">누적</th>
+              <th style="width:26%">세부사항</th>
+              <th style="width:24%">관리</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </aside>
+
+  </div>
+
+  <script>
+    /**
+     * 1. CONFIGURATION
+     */
+    const CONFIG = {
+      dates: {
+        start: '2026-03-25',
+        exam: '2026-05-16'
+      },
+      scores: {
+        recent: 52,
+        goal: 62,
+        buffer: 3
+      },
+      checklistItems: [
+        { id: 'selftest', label: '셀테', multiplier: 3 },
+        { id: 'writing', label: '글씨 연습', multiplier: 4 },
+        { id: 'whitetiger', label: '백호훈련', multiplier: 4, isToken: true, tokenVal: 1 },
+        { id: 'writing100', label: '100분 쓰기', multiplier: 4, isToken: true, tokenVal: 0.2 },
+        { id: 'nofocus', label: '집중X', multiplier: -2, isToken: true, tokenVal: -1 },
+        { id: 'lazy', label: '나태함', multiplier: -3, isToken: true, tokenVal: -1 },
+        { id: 'nohomework', label: '숙제 미흡', multiplier: -5, isToken: true, tokenVal: -1 }
+      ]
+    };
+
+    /**
+     * 2. STORAGE SERVICE (순수 IndexedDB)
+     */
+    const StorageService = {
+      DB_NAME: 'PScoreDB', 
+      STORE_NAME: 'records',
+      
+      getDB() {
+        return new Promise((resolve) => {
+          if (!window.indexedDB) {
+            console.warn("이 브라우저는 IndexedDB를 지원하지 않습니다.");
+            return resolve(null);
+          }
+          const req = indexedDB.open(this.DB_NAME, 1);
+          req.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(this.STORE_NAME)) {
+              db.createObjectStore(this.STORE_NAME, { keyPath: 'id' });
+            }
+          };
+          req.onsuccess = (e) => resolve(e.target.result);
+          req.onerror = () => resolve(null);
+        });
+      },
+
+      async save(data) {
+        const db = await this.getDB();
+        if (db) {
+          return new Promise((resolve, reject) => {
+            const tx = db.transaction(this.STORE_NAME, 'readwrite');
+            const store = tx.objectStore(this.STORE_NAME);
+            const req = store.put({ id: 'main', ...data });
+            req.onsuccess = () => resolve(true);
+            req.onerror = () => reject(req.error);
+          });
+        }
+      },
+
+      async load() {
+        const db = await this.getDB();
+        const emptyState = { dates: [], deltas: [], checks: [], hours: [] };
+        
+        if (db) {
+          return new Promise(resolve => {
+            const tx = db.transaction(this.STORE_NAME, 'readonly');
+            const req = tx.objectStore(this.STORE_NAME).get('main');
+            req.onsuccess = () => {
+              if (req.result) {
+                const { id, ...data } = req.result;
+                resolve(data);
+              } else {
+                resolve(emptyState); // 데이터가 없으면 빈 초기 상태 반환
+              }
+            };
+            req.onerror = () => resolve(emptyState);
+          });
+        }
+        
+        return emptyState;
+      }
+    };
+
+    /**
+     * 3. DATA MANAGER
+     */
+    const DataManager = {
+      state: { dates: [], deltas: [], checks: [], hours: [] },
+      baseDesireUnit: 0,
+
+      init() {
+        const start = new Date(CONFIG.dates.start);
+        const end = new Date(CONFIG.dates.exam);
+        const diffTime = Math.abs(end - start);
+        const totalDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        const gap = CONFIG.scores.goal - CONFIG.scores.recent + CONFIG.scores.buffer;
+        this.baseDesireUnit = gap / 10 / totalDays;
+        
+        this.updateHeaderStats();
+      },
+
+      updateHeaderStats() {
+        const today = new Date();
+        const end = new Date(CONFIG.dates.exam);
+        const dday = Math.ceil((end - today) / (1000 * 60 * 60 * 24));
+        document.getElementById('val-recent').textContent = CONFIG.scores.recent;
+        document.getElementById('val-goal').textContent = CONFIG.scores.goal;
+        document.getElementById('val-dday').textContent = `D-${dday}`;
+      },
+
+      calculateScore(hours, checkedIds) {
+        let delta = 0;
+        let checkLabels = [];
+        if (hours > 0) {
+          delta += this.baseDesireUnit * 3 * (hours / 4);
+          checkLabels.push(`학습:${hours}h`);
+        }
+        CONFIG.checklistItems.forEach(item => {
+          if (checkedIds.includes(item.id)) {
+            delta += this.baseDesireUnit * item.multiplier;
+            checkLabels.push(item.label);
+          }
+        });
+        return { delta, checkLabel: checkLabels.join(', ') };
+      },
+
+      saveRecord(dateStr, hours, checkedIds, index = -1) {
+        const { delta, checkLabel } = this.calculateScore(hours, checkedIds);
+        
+        if (index > -1) {
+          this.state.dates[index] = dateStr;
+          this.state.deltas[index] = delta;
+          this.state.checks[index] = checkLabel;
+          this.state.hours[index] = hours;
+        } else {
+          this.state.dates.push(dateStr);
+          this.state.deltas.push(delta);
+          this.state.checks.push(checkLabel);
+          this.state.hours.push(hours);
+          this.sortRecords();
+        }
+        
+        StorageService.save(this.state);
+        return delta;
+      },
+
+      deleteRecord(index) {
+        if (index > -1 && index < this.state.dates.length) {
+          this.state.dates.splice(index, 1);
+          this.state.deltas.splice(index, 1);
+          this.state.checks.splice(index, 1);
+          this.state.hours.splice(index, 1);
+          StorageService.save(this.state);
+        }
+      },
+
+      sortRecords() {
+        const combined = this.state.dates.map((d, i) => ({
+          date: d,
+          delta: this.state.deltas[i],
+          check: this.state.checks[i],
+          hour: this.state.hours[i]
+        }));
+        
+        combined.sort((a, b) => new Date(a.date) - new Date(b.date));
+        
+        this.state.dates = combined.map(c => c.date);
+        this.state.deltas = combined.map(c => c.delta);
+        this.state.checks = combined.map(c => c.check);
+        this.state.hours = combined.map(c => c.hour);
+      },
+
+      getAggregatedStats() {
+        let totalHours = this.state.hours.reduce((a, b) => a + (Number(b) || 0), 0);
+        let totalPoints = 0;
+        this.state.checks.forEach((checkStr, i) => {
+          const h = this.state.hours[i] || 0;
+          totalPoints += h * 0.1;
+          const tokens = checkStr.split(',').map(s => s.trim());
+          if (tokens.includes('글씨 연습')) totalPoints += 0.05;
+          CONFIG.checklistItems.forEach(item => {
+            if (item.isToken && tokens.includes(item.label)) {
+              totalPoints += item.tokenVal;
+            }
+          });
+        });
+        return { totalHours, totalPoints };
+      },
+
+      getTodayHours() {
+        const today = new Date().toISOString().substring(0, 10);
+        let hours = 0;
+        for (let i = 0; i < this.state.dates.length; i++) {
+          if (this.state.dates[i] === today) {
+            hours += Number(this.state.hours[i]) || 0;
+          }
+        }
+        return hours;
+      },
+
+      getTodayReward(hours) {
+        if (hours >= 6) return '자유시간(2시간권) 🎫';
+        if (hours >= 5) return '유튜브 시청(1시간권) 📺';
+        if (hours >= 4) return '에너지음료 ⚡';
+        if (hours >= 3) return '초코바 🍫';
+        return null;
+      },
+
+      setState(newState) {
+        this.state = {
+          dates: newState.dates || [],
+          deltas: newState.deltas || [],
+          checks: newState.checks || [],
+          hours: newState.hours || []
+        };
+        this.sortRecords();
+      }
+    };
+
+    /**
+     * 4. UI MANAGER
+     */
+    const UIManager = {
+      chartInstance: null,
+      editingIndex: -1, 
+
+      init() {
+        this.renderCheckboxes();
+        this.bindEvents();
+        
+        const today = new Date().toISOString().substring(0, 10);
+        document.getElementById('inp-date').value = today;
+      },
+
+      renderCheckboxes() {
+        const container = document.getElementById('checklist-container');
+        container.innerHTML = CONFIG.checklistItems.map(item => `
+          <label class="checkbox-item">
+            <input type="checkbox" value="${item.id}" data-label="${item.label}">
+            <span>${item.label}</span>
+          </label>
+        `).join('');
+      },
+
+      updateDisplay() {
+        const { dates, deltas, checks } = DataManager.state;
+        const recentBase = CONFIG.scores.recent;
+
+        // 1. Table Render 
+        const tbody = document.querySelector('#history-table tbody');
+        let cumulative = recentBase;
+        
+        const cumulatives = [];
+        deltas.forEach(d => {
+          cumulative += d;
+          cumulatives.push(cumulative);
+        });
+
+        let rowsHtml = '';
+        for(let i = dates.length - 1; i >= 0; i--) {
+          const delta = deltas[i];
+          const acc = cumulatives[i];
+          rowsHtml += `
+            <tr>
+              <td>${dates[i]}</td>
+              <td style="color:${delta >= 0 ? 'var(--primary)' : 'var(--danger)'}">
+                ${delta > 0 ? '+' : ''}${delta.toFixed(2)}
+              </td>
+              <td><strong>${acc.toFixed(2)}</strong></td>
+              <td style="text-align:left; font-size:12px; color:var(--text-sub)">${checks[i]}</td>
+              <td>
+                <button class="action-btn btn-edit" onclick="UIManager.onEdit(${i})">수정</button>
+                <button class="action-btn btn-del" onclick="UIManager.onDelete(${i})">삭제</button>
+              </td>
+            </tr>
+          `;
+        }
+        tbody.innerHTML = rowsHtml;
+
+        // 2. Stats
+        const stats = DataManager.getAggregatedStats();
+        document.getElementById('val-totalHours').textContent = stats.totalHours.toFixed(1) + 'h';
+        document.getElementById('val-totalPoints').textContent = stats.totalPoints.toFixed(1) + 'pt';
+
+        // 3. Current Score
+        const lastDelta = deltas.length > 0 ? deltas[deltas.length - 1] : 0;
+        document.getElementById('display-today-score').textContent = lastDelta.toFixed(2);
+
+        // 4. Reward Item 
+        const todayHours = DataManager.getTodayHours();
+        const rewardText = DataManager.getTodayReward(todayHours);
+        const rewardChip = document.getElementById('reward-chip');
+        
+        if (rewardText) {
+          rewardChip.style.display = 'inline-flex';
+          document.getElementById('val-reward').textContent = rewardText;
+        } else {
+          rewardChip.style.display = 'none';
+        }
+
+        // 5. Chart
+        this.renderChart(dates, deltas, recentBase);
+      },
+
+      renderChart(labels, deltas, startScore) {
+        const ctx = document.getElementById('chart-canvas').getContext('2d');
+        let acc = startScore;
+        const cumulativeData = deltas.map(d => { acc += d; return acc; });
+
+        if (this.chartInstance) this.chartInstance.destroy();
+
+        this.chartInstance = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: '누적 열망점수',
+              data: cumulativeData,
+              borderColor: '#334155', 
+              backgroundColor: 'rgba(51, 65, 85, 0.1)',
+              borderWidth: 2,
+              pointRadius: 3,
+              fill: true,
+              tension: 0.3
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              annotation: {
+                annotations: {
+                  goalLine: {
+                    type: 'line',
+                    yMin: CONFIG.scores.goal,
+                    yMax: CONFIG.scores.goal,
+                    borderColor: '#ef4444',
+                    borderWidth: 2,
+                    borderDash: [5, 5],
+                    label: { content: 'Goal', enabled: true, position: 'start', backgroundColor: '#ef4444' }
+                  }
+                }
+              }
+            },
+            scales: {
+              x: { grid: { display: false }, ticks: { maxTicksLimit: 8 } },
+              y: { suggestMin: CONFIG.scores.recent - 1 }
+            }
+          }
+        });
+      },
+
+      // --- Actions ---
+
+      onEdit(index) {
+        this.editingIndex = index;
+        const state = DataManager.state;
+        
+        document.getElementById('inp-date').value = state.dates[index];
+        document.getElementById('inp-time').value = state.hours[index];
+        
+        const checkStr = state.checks[index];
+        document.querySelectorAll('#checklist-container input').forEach(box => {
+          const label = box.dataset.label;
+          box.checked = checkStr.includes(label) || checkStr.includes('셀테') && box.value === 'selftest'; 
+        });
+
+        const btnSave = document.getElementById('btn-save');
+        btnSave.textContent = "🔄 수정 완료";
+        btnSave.classList.replace('btn-primary', 'btn-outline');
+        btnSave.style.borderColor = 'var(--primary)';
+        btnSave.style.color = 'var(--primary)';
+        
+        document.getElementById('btn-cancel-edit').style.display = 'inline-flex';
+        
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      },
+
+      cancelEdit() {
+        this.editingIndex = -1;
+        this.resetForm();
+        
+        const btnSave = document.getElementById('btn-save');
+        btnSave.textContent = "💾 기록 저장";
+        btnSave.classList.replace('btn-outline', 'btn-primary');
+        btnSave.style = "";
+        
+        document.getElementById('btn-cancel-edit').style.display = 'none';
+      },
+
+      onDelete(index) {
+        if(confirm('정말 이 기록을 삭제하시겠습니까?')) {
+          DataManager.deleteRecord(index);
+          this.updateDisplay();
+          if(this.editingIndex === index) this.cancelEdit();
+        }
+      },
+
+      resetForm() {
+        document.getElementById('inp-date').value = new Date().toISOString().substring(0, 10);
+        document.getElementById('inp-time').value = "";
+        document.querySelectorAll('#checklist-container input').forEach(box => box.checked = false);
+      },
+
+      bindEvents() {
+        document.getElementById('btn-save').addEventListener('click', () => {
+          const date = document.getElementById('inp-date').value;
+          const time = parseFloat(document.getElementById('inp-time').value) || 0;
+          const checked = Array.from(document.querySelectorAll('#checklist-container input:checked')).map(el => el.value);
+          
+          if (!date) { alert('날짜를 선택해주세요.'); return; }
+
+          DataManager.saveRecord(date, time, checked, this.editingIndex);
+          
+          this.updateDisplay();
+          this.cancelEdit(); 
+        });
+
+        document.getElementById('btn-cancel-edit').addEventListener('click', () => {
+          this.cancelEdit();
+        });
+
+        document.getElementById('btn-import').addEventListener('click', () => {
+          document.getElementById('file-import').click();
+        });
+
+        document.getElementById('file-import').addEventListener('change', (e) => {
+          const file = e.target.files[0];
+          if(!file) return;
+          const reader = new FileReader();
+          reader.onload = (evt) => {
+            const data = new Uint8Array(evt.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            const json = XLSX.utils.sheet_to_json(sheet);
+            const newState = {
+              dates: json.map(r => r['날짜']),
+              deltas: json.map(r => r['변동점수']),
+              checks: json.map(r => r['체크항목'] || ''),
+              hours: json.map(r => r['학습시간'] || 0)
+            };
+            DataManager.setState(newState);
+            StorageService.save(DataManager.state);
+            this.updateDisplay();
+            alert('데이터 로드 완료');
+          };
+          reader.readAsArrayBuffer(file);
+        });
+
+        document.getElementById('btn-export').addEventListener('click', () => {
+          const { dates, deltas, checks, hours } = DataManager.state;
+          let acc = CONFIG.scores.recent;
+          const exportData = [];
+          for(let i=0; i<dates.length; i++) {
+            acc += deltas[i];
+            exportData.push({
+              '날짜': dates[i],
+              '변동점수': deltas[i],
+              '누적점수': Number(acc.toFixed(2)),
+              '학습시간': hours[i],
+              '체크항목': checks[i]
+            });
+          }
+          const wb = XLSX.utils.book_new();
+          const ws = XLSX.utils.json_to_sheet(exportData);
+          XLSX.utils.book_append_sheet(wb, ws, "열망기록");
+          XLSX.writeFile(wb, `열망점수_${new Date().toISOString().slice(0,10)}.xlsx`);
+        });
+      }
+    };
+
+    /**
+     * 5. RUN
+     */
+    (async function initApp() {
+      DataManager.init();
+      UIManager.init();
+      const saved = await StorageService.load();
+      if (saved) {
+        DataManager.setState(saved);
+        UIManager.updateDisplay();
+      }
+    })();
+  </script>
+</body>
+</html>

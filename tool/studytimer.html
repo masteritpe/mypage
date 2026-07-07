@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>학습 타이머(Study Timer)</title>
+  
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+  <style>
+    :root {
+      /* 눈이 편안한 웜톤(Ivory/Beige) 베이스 및 고급스러운 무채색 */
+      --bg-body: #F7F7F5; 
+      --bg-surface: #FFFFFF;
+      --bg-sidebar: #FCFCFA;
+      --border-base: #EBEBE8;
+      --border-focus: #D1D1CE;
+      --text-main: #2C2C2E;
+      --text-muted: #8E8E93;
+      
+      /* 포인트 컬러 */
+      --primary: #2C2C2E;
+      --primary-hover: #48484A;
+      --danger-bg: #FFF4F4;
+      --danger-text: #D94848;
+      --danger-border: #FCE8E8;
+      
+      /* 형태 및 입체감 */
+      --shadow-soft: 0 10px 40px -10px rgba(0, 0, 0, 0.04);
+      --shadow-inner: inset 0 2px 4px rgba(0, 0, 0, 0.02);
+      --radius-sm: 10px;
+      --radius-md: 16px;
+      --radius-lg: 24px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background: var(--bg-body); color: var(--text-main); margin: 0; padding: 0;
+      -webkit-font-smoothing: antialiased; height: 100vh; display: flex; overflow: hidden;
+    }
+
+    /* 헤더 단차 완벽 해결: flex 축소 방지 및 최소 높이 강제 고정 */
+    .header-height { 
+      height: 72px; 
+      min-height: 72px; 
+      flex-shrink: 0; 
+    }
+
+    /* 사이드바 */
+    .sidebar { width: 320px; background: var(--bg-sidebar); border-right: 1px solid var(--border-base); display: flex; flex-direction: column; z-index: 10; }
+    .sidebar-header { 
+      padding: 0 24px; border-bottom: 1px solid var(--border-base); 
+      display: flex; align-items: center; 
+    }
+    .app-title { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px; margin: 0; color: var(--text-main); letter-spacing: -0.01em; }
+    
+    .record-list { flex: 1; overflow-y: auto; padding: 16px; margin: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+    .record-item { padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border-base); background: var(--bg-surface); display: flex; justify-content: space-between; align-items: center; transition: transform 0.2s, box-shadow 0.2s; }
+    .record-item:hover { transform: translateY(-2px); box-shadow: var(--shadow-soft); }
+    .record-date { font-weight: 500; font-size: 14px; color: var(--text-muted); }
+    .record-time { font-size: 15px; color: var(--text-main); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+    /* 총 학습 시간 하단 고정 영역 */
+    .total-time-container { padding: 20px 24px; border-top: 1px solid var(--border-base); background: var(--bg-surface); display: flex; justify-content: space-between; align-items: center; }
+    .total-time-label { font-size: 14px; font-weight: 600; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+    .total-time-value { font-size: 18px; font-weight: 700; color: var(--text-main); }
+
+    /* 기록 삭제 버튼 스타일 */
+    .action-btn { background: transparent; border: none; cursor: pointer; color: rgba(0,0,0,0.4); width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 4px; transition: 0.2s; }
+    .action-btn:hover { background: rgba(0,0,0,0.1); color: var(--text-main); }
+    .action-btn.delete:hover { background: var(--danger-bg); color: var(--danger-text); }
+
+    /* 메인 콘텐츠 */
+    .main-content { flex: 1; display: flex; flex-direction: column; overflow-y: auto; background: var(--bg-body); position: relative; }
+    
+    .top-bar { 
+      position: sticky; top: 0; background: rgba(247, 247, 245, 0.85); backdrop-filter: blur(12px); 
+      padding: 0 40px; border-bottom: 1px solid var(--border-base); display: flex; justify-content: space-between; align-items: center; z-index: 5; 
+    }
+    .page-title { font-size: 18px; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px; letter-spacing: -0.01em; }
+    
+    /* 공통 버튼 스타일 */
+    .btn { 
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px; 
+      padding: 10px 18px; border-radius: var(--radius-sm); font-size: 14px; font-weight: 600; 
+      cursor: pointer; transition: all 0.2s ease; border: 1px solid transparent; outline: none; 
+      white-space: nowrap; 
+    }
+    .btn:active { transform: scale(0.98); }
+    
+    /* 상단 저장 버튼 */
+    .btn-save { background: var(--bg-surface); color: var(--text-main); border-color: var(--border-base); box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+    .btn-save:hover { background: #F0F0EE; border-color: #E2E2DF; }
+
+    /* 타이머 컨트롤용 큰 버튼 */
+    .btn-lg { padding: 14px 28px; font-size: 15px; border-radius: 14px; min-width: 140px; }
+    .btn-play { background: var(--primary); color: white; box-shadow: 0 4px 12px rgba(44, 44, 46, 0.2); }
+    .btn-play:hover { background: var(--primary-hover); transform: translateY(-1px); }
+    .btn-outline { background: var(--bg-surface); color: var(--text-main); border: 1px solid var(--border-base); }
+    .btn-outline:hover { background: #F4F4F2; }
+    .btn-stop { background: var(--danger-bg); color: var(--danger-text); border: 1px solid var(--danger-border); }
+    .btn-stop:hover { background: #FCE8E8; }
+
+    /* 폼 & 타이머 영역 */
+    .form-wrapper { padding: 40px; max-width: 960px; margin: 0 auto; width: 100%; display: flex; flex-direction: column; gap: 32px; }
+    .card { background: var(--bg-surface); border: 1px solid var(--border-base); border-radius: var(--radius-lg); padding: 40px; box-shadow: var(--shadow-soft); }
+    
+    /* 타이머 디스플레이 */
+    .timer-container { text-align: center; }
+    .timer-header { font-size: 15px; font-weight: 600; color: var(--text-muted); display: flex; align-items: center; justify-content: center; gap: 6px; margin-bottom: 8px; }
+    .timer-display { 
+      font-size: 100px; font-weight: 300; font-variant-numeric: tabular-nums; 
+      letter-spacing: -0.03em; color: var(--text-main); margin: 0 0 32px 0; 
+      display: flex; justify-content: center; align-items: baseline; gap: 8px; 
+    }
+    .timer-controls { display: flex; justify-content: center; gap: 16px; }
+
+    /* 텍스트 입력 영역 */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+    .form-group { display: flex; flex-direction: column; gap: 12px; }
+    .form-group label { font-size: 15px; font-weight: 600; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
+    .form-group label i { color: var(--text-muted); font-size: 18px; }
+    
+    .custom-textarea { 
+      width: 100%; min-height: 120px; padding: 18px; border-radius: var(--radius-md); 
+      border: 1px solid transparent; font-size: 15px; background: #F4F4F2; 
+      outline: none; resize: vertical; font-family: inherit; line-height: 1.6;
+      color: var(--text-main); box-shadow: var(--shadow-inner);
+      transition: all 0.2s ease;
+    }
+    .custom-textarea::placeholder { color: #A1A1AA; }
+    .custom-textarea:focus { 
+      background: var(--bg-surface); border-color: var(--border-focus); 
+      box-shadow: 0 0 0 3px rgba(44, 44, 46, 0.05); 
+    }
+
+    /* 알림 모달 */
+    .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(247, 247, 245, 0.8); backdrop-filter: blur(8px); display: none; justify-content: center; align-items: center; z-index: 50; }
+    .modal-content { background: var(--bg-surface); width: 420px; padding: 40px; border-radius: var(--radius-lg); box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.1); border: 1px solid var(--border-base); text-align: center; animation: popIn 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+    .modal-icon { font-size: 56px; color: var(--text-main); margin-bottom: 20px; }
+    .modal-title { font-size: 24px; font-weight: 700; margin-bottom: 12px; color: var(--text-main); letter-spacing: -0.02em; }
+    .modal-desc { font-size: 16px; color: var(--text-muted); margin-bottom: 32px; line-height: 1.6; }
+
+    @keyframes popIn {
+      0% { transform: scale(0.9) translateY(10px); opacity: 0; }
+      100% { transform: scale(1) translateY(0); opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+  <aside class="sidebar">
+    <div class="sidebar-header header-height">
+      <div class="app-title"><i class="ph-fill ph-clock-counter-clockwise" style="font-size: 20px;"></i> 학습 기록</div>
+    </div>
+    
+    <ul class="record-list" id="recordList"></ul>
+
+    <div class="total-time-container">
+      <span class="total-time-label"><i class="ph-fill ph-chart-bar"></i> 총 학습 시간</span>
+      <span class="total-time-value" id="totalTimeDisplay">0분</span>
+    </div>
+  </aside>
+
+  <main class="main-content" id="mainContent">
+    <div class="top-bar header-height">
+      <div class="page-title"><i class="ph-fill ph-target" style="font-size: 22px;"></i> 오늘의 집중 타임</div>
+      <div class="actions">
+        <button class="btn btn-save" onclick="saveData()">
+          <i class="ph ph-check-circle" style="font-size: 18px;"></i> 내용 저장
+        </button>
+      </div>
+    </div>
+
+    <div class="form-wrapper">
+      
+      <div class="card timer-container">
+        <div class="timer-header"><i class="ph-fill ph-hourglass-high"></i> 순공 시간 측정기</div>
+        <div class="timer-display">
+          <span id="hours">00</span>:<span id="minutes">00</span>:<span id="seconds">00</span>
+        </div>
+        
+        <div class="timer-controls">
+          <button id="btnStart" class="btn btn-lg btn-play" onclick="startTimer()">
+            <i class="ph-fill ph-play"></i> 시작
+          </button>
+          <button id="btnPause" class="btn btn-lg btn-outline" style="display: none;" onclick="pauseTimer()">
+            <i class="ph-fill ph-pause"></i> 일시중지
+          </button>
+          <button id="btnStop" class="btn btn-lg btn-stop" onclick="stopTimer()">
+            <i class="ph-fill ph-stop"></i> 중지 및 기록
+          </button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="grid-2">
+          <div class="form-group">
+            <label><i class="ph-fill ph-flag-banner"></i> 현재 목표</label>
+            <textarea id="goalInput" class="custom-textarea" placeholder="이번 타임에 끝낼 구체적인 목표를 적어보세요."></textarea>
+          </div>
+          <div class="form-group">
+            <label><i class="ph-fill ph-trash"></i> 버릴 생각</label>
+            <textarea id="discardInput" class="custom-textarea" placeholder="머릿속을 맴도는 잡념이나 불안감을 적어두고 잊어버리세요."></textarea>
+          </div>
+          <div class="form-group">
+            <label><i class="ph-fill ph-check-square-offset"></i> 하고 싶은 일</label>
+            <textarea id="todoInput" class="custom-textarea" placeholder="공부 끝나고 하고 싶은 일들을 적어두세요."></textarea>
+          </div>
+          <div class="form-group">
+            <label><i class="ph-fill ph-gift"></i> 보상 아이템</label>
+            <textarea id="rewardInput" class="custom-textarea" placeholder="목표 달성 시 스스로에게 줄 보상을 적어보세요!"></textarea>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div id="alertModal" class="modal-overlay">
+      <div class="modal-content">
+        <div class="modal-icon"><i class="ph-fill ph-medal"></i></div>
+        <div id="alertTitle" class="modal-title">1시간 돌파!</div>
+        <div id="alertMessage" class="modal-desc">고생이 많아요! 수석 합격을 향해 한 걸음 더 다가갔습니다.</div>
+        <button class="btn btn-lg btn-play" style="width: 100%;" onclick="closeAlert()">계속 집중하기</button>
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    // 상태 변수
+    let startTime = 0;
+    let elapsedTime = 0;
+    let timerInterval = null;
+    let isRunning = false;
+    let lastAlertHour = 0;
+    
+    // IndexedDB 인스턴스
+    let db;
+
+    const cheerMessages = [
+      "고생이 많아요! 조금만 더 힘내세요.",
+      "대단해요! 수석 합격의 기운이 느껴집니다.",
+      "반드시 합격합니다. 스스로를 믿으세요!",
+      "당신의 노력은 절대 배신하지 않습니다.",
+      "오늘 흘린 땀방울이 내일의 합격증이 될 거예요.",
+      "멋집니다! 페이스 유지하고 끝까지 파이팅!"
+    ];
+
+    const elHours = document.getElementById('hours');
+    const elMinutes = document.getElementById('minutes');
+    const elSeconds = document.getElementById('seconds');
+    const btnStart = document.getElementById('btnStart');
+    const btnPause = document.getElementById('btnPause');
+
+    // 🌟 IndexedDB 초기화
+    const initDB = () => {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open('StudyTimerDB', 1);
+        
+        request.onupgradeneeded = (e) => {
+          const database = e.target.result;
+          // 메모 저장용 스토어 (단일 항목 덮어쓰기 용도)
+          if (!database.objectStoreNames.contains('memos')) {
+            database.createObjectStore('memos', { keyPath: 'id' });
+          }
+          // 타이머 기록 저장용 스토어 (타임스탬프 기준 정렬 용도)
+          if (!database.objectStoreNames.contains('records')) {
+            const recordStore = database.createObjectStore('records', { keyPath: 'id', autoIncrement: true });
+            recordStore.createIndex('timestamp', 'timestamp', { unique: false });
+          }
+        };
+
+        request.onsuccess = (e) => {
+          db = e.target.result;
+          resolve();
+        };
+
+        request.onerror = (e) => {
+          console.error("IndexedDB 초기화 실패", e);
+          reject('DB Error');
+        };
+      });
+    };
+
+    window.onload = async () => {
+      await initDB();
+      loadData();
+      renderRecords();
+    };
+
+    function startTimer() {
+      if (isRunning) return;
+      startTime = Date.now() - elapsedTime;
+      isRunning = true;
+      
+      btnStart.style.display = 'none';
+      btnPause.style.display = 'inline-flex';
+      
+      timerInterval = requestAnimationFrame(updateTimer);
+    }
+
+    function pauseTimer() {
+      if (!isRunning) return;
+      cancelAnimationFrame(timerInterval);
+      elapsedTime = Date.now() - startTime;
+      isRunning = false;
+      
+      btnStart.style.display = 'inline-flex';
+      btnPause.style.display = 'none';
+      btnStart.innerHTML = '<i class="ph-fill ph-play"></i> 계속';
+    }
+
+    function stopTimer() {
+      if (elapsedTime === 0 && !isRunning) return;
+      let finalTime = isRunning ? (Date.now() - startTime) : elapsedTime;
+      pauseTimer(); 
+      
+      if (confirm('측정을 종료하고 학습 시간을 기록하시겠습니까?')) {
+        saveRecord(finalTime);
+        elapsedTime = 0;
+        lastAlertHour = 0;
+        updateDisplay(0);
+        btnStart.innerHTML = '<i class="ph-fill ph-play"></i> 시작';
+      }
+    }
+
+    function updateTimer() {
+      if (!isRunning) return;
+      const currentTime = Date.now() - startTime;
+      updateDisplay(currentTime);
+      checkHourlyAlert(currentTime);
+      timerInterval = requestAnimationFrame(updateTimer);
+    }
+
+    function updateDisplay(time) {
+      const totalSeconds = Math.floor(time / 1000);
+      const h = Math.floor(totalSeconds / 3600);
+      const m = Math.floor((totalSeconds % 3600) / 60);
+      const s = totalSeconds % 60;
+
+      elHours.textContent = String(h).padStart(2, '0');
+      elMinutes.textContent = String(m).padStart(2, '0');
+      elSeconds.textContent = String(s).padStart(2, '0');
+    }
+
+    function checkHourlyAlert(time) {
+      const currentHour = Math.floor(time / 3600000);
+      if (currentHour > lastAlertHour && currentHour > 0) {
+        lastAlertHour = currentHour;
+        showHourlyAlert(currentHour);
+      }
+    }
+
+    function showHourlyAlert(hour) {
+      const modal = document.getElementById('alertModal');
+      document.getElementById('alertTitle').textContent = `축하합니다! ${hour}시간 돌파!`;
+      document.getElementById('alertMessage').textContent = cheerMessages[Math.floor(Math.random() * cheerMessages.length)];
+      modal.style.display = 'flex';
+    }
+
+    function closeAlert() {
+      document.getElementById('alertModal').style.display = 'none';
+    }
+
+    // 🌟 IndexedDB: 메모 저장
+    function saveData() {
+      const data = {
+        id: 'current',
+        goal: document.getElementById('goalInput').value,
+        discard: document.getElementById('discardInput').value,
+        todo: document.getElementById('todoInput').value,
+        reward: document.getElementById('rewardInput').value
+      };
+      
+      const transaction = db.transaction(['memos'], 'readwrite');
+      transaction.objectStore('memos').put(data);
+      
+      transaction.oncomplete = () => {
+        const saveBtn = document.querySelector('.btn-save');
+        const originHtml = saveBtn.innerHTML;
+        saveBtn.innerHTML = '<i class="ph-fill ph-check-circle" style="color: #34C759;"></i> 저장완료';
+        setTimeout(() => { saveBtn.innerHTML = originHtml; }, 1500);
+      };
+    }
+
+    // 🌟 IndexedDB: 메모 불러오기
+    function loadData() {
+      const transaction = db.transaction(['memos'], 'readonly');
+      const request = transaction.objectStore('memos').get('current');
+      
+      request.onsuccess = () => {
+        const data = request.result;
+        if (data) {
+          document.getElementById('goalInput').value = data.goal || '';
+          document.getElementById('discardInput').value = data.discard || '';
+          document.getElementById('todoInput').value = data.todo || '';
+          document.getElementById('rewardInput').value = data.reward || '';
+        }
+      };
+    }
+
+    // 🌟 IndexedDB: 학습 기록 저장
+    function saveRecord(timeMs) {
+      const totalSeconds = Math.floor(timeMs / 1000);
+      
+      if (totalSeconds < 60) {
+        alert('1분 미만은 기록되지 않습니다.');
+        return;
+      }
+      
+      const h = Math.floor(totalSeconds / 3600);
+      const m = Math.floor((totalSeconds % 3600) / 60);
+      const timeString = h > 0 ? `${h}시간 ${m}분` : `${m}분`;
+      
+      const now = new Date();
+      const dateString = `${now.getMonth()+1}/${now.getDate()} ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`;
+
+      const newRecord = { 
+        date: dateString, 
+        time: timeString, 
+        ms: timeMs, 
+        timestamp: Date.now() 
+      };
+
+      const transaction = db.transaction(['records'], 'readwrite');
+      transaction.objectStore('records').add(newRecord);
+      
+      transaction.oncomplete = () => {
+        renderRecords();
+      };
+    }
+
+    // 🌟 IndexedDB: 학습 기록 목록 및 총 시간 렌더링
+    function renderRecords() {
+      const transaction = db.transaction(['records'], 'readonly');
+      const store = transaction.objectStore('records');
+      const index = store.index('timestamp');
+      const request = index.getAll();
+
+      request.onsuccess = () => {
+        // 최신 기록이 위로 오도록 내림차순 정렬
+        const records = request.result.sort((a, b) => b.timestamp - a.timestamp);
+        const list = document.getElementById('recordList');
+        let totalMinutes = 0;
+
+        list.innerHTML = '';
+        
+        if (records.length === 0) {
+          list.innerHTML = `
+            <div style="text-align:center; padding: 40px 20px; color:var(--text-muted);">
+              <i class="ph ph-note-blank" style="font-size: 32px; color: var(--border-focus); margin-bottom: 12px; display: block;"></i>
+              <span style="font-size: 14px;">아직 측정된 기록이 없습니다.</span>
+            </div>`;
+          document.getElementById('totalTimeDisplay').textContent = "0분";
+          return;
+        }
+
+        records.forEach(rec => {
+          // 총 시간 계산을 위해 문자열에서 시간 파싱 (예: "1시간 30분" 또는 "30분")
+          if (rec.time) {
+            let h = 0, m = 0;
+            const matchH = rec.time.match(/(\d+)시간/);
+            const matchM = rec.time.match(/(\d+)분/);
+            if (matchH) h = parseInt(matchH[1], 10);
+            if (matchM) m = parseInt(matchM[1], 10);
+            totalMinutes += (h * 60) + m;
+          }
+
+          const li = document.createElement('li');
+          li.className = 'record-item';
+          li.innerHTML = `
+            <span class="record-date">${rec.date}</span>
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <span class="record-time">${rec.time}</span>
+              <button class="action-btn delete" onclick="deleteRecord(${rec.id})" title="기록 삭제" style="width: 20px; height: 20px;">
+                <i class="ph ph-trash" style="font-size: 15px;"></i>
+              </button>
+            </div>
+          `;
+          list.appendChild(li);
+        });
+
+        // 총 학습 시간 표시 업데이트
+        const displayH = Math.floor(totalMinutes / 60);
+        const displayM = totalMinutes % 60;
+        const totalTimeStr = displayH > 0 ? `${displayH}시간 ${displayM}분` : `${displayM}분`;
+        document.getElementById('totalTimeDisplay').textContent = totalTimeStr;
+      };
+    }
+
+    // 🌟 개별 기록 삭제 기능
+    function deleteRecord(id) {
+      if (confirm('해당 학습 기록을 삭제하시겠습니까?')) {
+        const transaction = db.transaction(['records'], 'readwrite');
+        transaction.objectStore('records').delete(id);
+        transaction.oncomplete = () => {
+          renderRecords();
+        };
+      }
+    }
+  </script>
+</body>
+</html>

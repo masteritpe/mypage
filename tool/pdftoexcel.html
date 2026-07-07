@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDF to Excel</title>
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  
+  <style>
+    /* 참조하신 세련된 UI 스타일 그대로 적용 */
+    :root {
+      --bg-body: #F9FAFB; --bg-surface: #FFFFFF; --border-light: #F3F4F6;
+      --border-base: #E5E7EB; --text-main: #111827; --text-muted: #6B7280;
+      --primary: #111827; --primary-hover: #374151; --secondary: #FFFFFF;
+      --secondary-hover: #F9FAFB; --selection-bg: #F3F4F6;  
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+      --radius-md: 8px; --radius-lg: 12px;
+    }
+
+    * { box-sizing: border-box; }
+    body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif; background: var(--bg-body); color: var(--text-main); margin: 0; padding: 40px; -webkit-font-smoothing: antialiased; }
+
+    .dashboard-header { max-width: 100%; margin: 0 auto 24px auto; }
+    .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 16px; }
+    .title-area { display: flex; align-items: center; gap: 12px; }
+    .title-area i { font-size: 28px; color: var(--text-main); }
+    h2 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+
+    input[type="file"] { display: none; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: var(--radius-md);
+      font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); border: 1px solid transparent;
+    }
+    .btn-primary { background: var(--primary); color: white; box-shadow: var(--shadow-sm); }
+    .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
+    .btn-outline { background: var(--secondary); color: var(--text-main); border-color: var(--border-base); box-shadow: var(--shadow-sm); }
+    .btn-outline:hover { background: var(--secondary-hover); border-color: #D1D5DB; }
+
+    .instructions {
+      display: flex; gap: 16px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--text-muted); background: var(--bg-surface);
+      padding: 12px 20px; border-radius: var(--radius-md); border: 1px solid var(--border-base);
+    }
+    .instructions span { display: inline-flex; align-items: center; gap: 6px; }
+    .clickable-icon { cursor: pointer; transition: color 0.2s; }
+    .clickable-icon:hover { color: var(--primary) !important; }
+
+    /* 필터(알약 모양) */
+    #column-toggles { display: none; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 20px; max-width: 100%; margin-left: auto; margin-right: auto; }
+    .toggle-title { font-size: 13px; font-weight: 600; color: var(--text-muted); margin-right: 8px; }
+    .col-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: var(--text-main); background: var(--bg-surface); padding: 6px 14px; border-radius: 99px; cursor: pointer; border: 1px solid var(--border-base); transition: all 0.2s; user-select: none; box-shadow: var(--shadow-sm); }
+    .col-toggle:hover { border-color: #D1D5DB; background: var(--bg-body); }
+    .col-toggle input { display: none; } 
+    .col-toggle.hidden-col { background: transparent; border-color: dashed var(--border-base); color: #9CA3AF; box-shadow: none; opacity: 0.6; }
+    
+    /* 테이블 컨테이너 */
+    #table-wrapper {
+      max-width: 100%; margin: 0 auto; background: var(--bg-surface); border: 1px solid var(--border-base); border-radius: var(--radius-lg);
+      overflow: auto; max-height: calc(100vh - 220px); box-shadow: var(--shadow-md); user-select: none; position: relative;
+    }
+    #table-wrapper::-webkit-scrollbar { width: 8px; height: 8px; }
+    #table-wrapper::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 4px; }
+    
+    table { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; font-size: 15px; text-align: left; }
+    th, td { padding: 12px 16px; white-space: pre-wrap; word-break: break-all; cursor: cell; position: relative; border-bottom: 1px solid var(--border-light); border-right: 1px solid var(--border-light); line-height: 1.5; }
+    th { font-weight: 600; color: var(--text-muted); position: sticky; top: 0; z-index: 10; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(8px); }
+    
+    .chk-col { width: 44px; text-align: center; padding: 0 !important; cursor: default; background-color: var(--bg-surface); border-right: 1px solid var(--border-base) !important; }
+    .row-chk { cursor: pointer; width: 16px; height: 16px; margin-top: 5px; }
+
+    /* 리사이저 및 선택 UI */
+    .resizer { position: absolute; top: 0; right: 0; width: 6px; cursor: col-resize; user-select: none; height: 100%; z-index: 15; transition: background-color 0.2s; }
+    .resizer:hover, .resizer.resizing { background-color: var(--primary); }
+    .selected-cell { background-color: var(--selection-bg) !important; }
+    .selected-cell::after { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; border: 1px solid #D1D5DB; pointer-events: none; }
+    .copied-cell { background-color: #D1FAE5 !important; transition: background-color 0.2s; } 
+
+    [contenteditable="true"] { outline: none; background-color: var(--bg-surface) !important; cursor: text; user-select: text; }
+    [contenteditable="true"]::after { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; box-shadow: inset 0 0 0 2px var(--primary); pointer-events: none; z-index: 5; }
+    
+    .empty-msg { padding: 80px 20px; text-align: center; color: var(--text-muted); display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  </style>
+</head>
+<body>
+
+  <div class="dashboard-header">
+    <div class="header-top">
+      <div class="title-area">
+        <i class="ph ph-magic-wand"></i>
+        <h2>PDF to Excel</h2>
+      </div>
+      
+      <div class="actions">
+        <label for="upload-pdf" class="btn btn-primary">
+          <i class="ph ph-file-pdf"></i> PDF 불러오기
+        </label>
+        <input type="file" id="upload-pdf" accept=".pdf" />
+        
+        <button class="btn btn-outline" onclick="applySelectionToPreview()">
+          <i class="ph ph-crop"></i> 영역 자르기
+        </button>
+
+        <button class="btn btn-primary" onclick="exportExcel()">
+          <i class="ph ph-download-simple"></i> 엑셀 출력
+        </button>
+      </div>
+    </div>
+
+    <div class="instructions">
+      <span><i class="ph ph-mouse-left"></i> 클릭: 조용히 복사</span>
+      <span style="color: #D1D5DB;">|</span>
+      <span><i class="ph ph-cursor-click"></i> 더블클릭: 텍스트 수정</span>
+      <span style="color: #D1D5DB;">|</span>
+      <span><i class="ph ph-arrows-out"></i> 드래그: 선택(Del/Ctrl+X 내용 삭제)</span>
+      <span style="color: #D1D5DB;">|</span>
+      <span><i class="ph ph-arrows-left-right"></i> 헤더 경계 드래그: 너비 조절</span>
+      <span style="color: #D1D5DB;">|</span>
+      <span title="클릭 시 전체 숨김 해제"><i class="ph ph-check-square clickable-icon" onclick="uncheckAll()"></i> 체크박스: 행 숨기기</span>
+    </div>
+  </div>
+
+  <div id="column-toggles"></div>
+
+  <div id="table-wrapper">
+    <div class="empty-msg">
+      <i class="ph ph-tray" style="font-size: 40px; color: #D1D5DB;"></i>
+      견적서 PDF 파일을 업로드하면 자동으로 표를 구성합니다.
+    </div>
+  </div>
+
+  <script>
+    let isDragging = false;
+    let startCell = null;
+    let endCell = null;
+    const wrapper = document.getElementById('table-wrapper');
+    const toggleContainer = document.getElementById('column-toggles');
+
+    // 1. PDF 파싱 및 병합 로직 (기존 PDF 스마트 추출 엔진 도입)
+    document.getElementById('upload-pdf').addEventListener('change', async function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      wrapper.innerHTML = `<div class="empty-msg"><i class="ph ph-spinner ph-spin" style="font-size: 40px; color: var(--primary);"></i>문서를 분석하여 표를 구성 중입니다...</div>`;
+
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        let finalRows = [];
+
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+          const page = await pdf.getPage(pageNum);
+          const textContent = await page.getTextContent();
+          let items = textContent.items.filter(item => item.str.trim() !== '');
+          if (items.length === 0) continue;
+
+          let xs = items.map(i => i.transform[4]);
+          let minX = Math.min(...xs), maxX = Math.max(...xs), width = maxX - minX;
+          
+          let colsX = [ minX + width * 0.12, minX + width * 0.25, minX + width * 0.55, minX + width * 0.65, minX + width * 0.72, minX + width * 0.85 ];
+          const getColumnIndex = x => { for (let i = 0; i < colsX.length; i++) if (x < colsX[i]) return i; return colsX.length; };
+
+          items.sort((a, b) => b.transform[5] - a.transform[5]);
+          let rawLines = [], currentLine = [], lastY = items[0].transform[5];
+
+          items.forEach(item => {
+            if (Math.abs(item.transform[5] - lastY) > 6) {
+               rawLines.push(currentLine); currentLine = [item]; lastY = item.transform[5];
+            } else currentLine.push(item);
+          });
+          if (currentLine.length > 0) rawLines.push(currentLine);
+
+          let pageGrid = [];
+          rawLines.forEach(lineItems => {
+             let rowData = new Array(7).fill("");
+             lineItems.forEach(item => {
+                let colIdx = getColumnIndex(item.transform[4]);
+                rowData[colIdx] += (rowData[colIdx] ? " " : "") + item.str.trim();
+             });
+             if (rowData.some(cell => cell !== "")) pageGrid.push(rowData);
+          });
+
+          // 다중 라인 병합 처리
+          let mergedGrid = [];
+          for (let i = 0; i < pageGrid.length; i++) {
+             let row = pageGrid[i];
+             if ((row[3] === "" && row[4] === "" && row[5] === "") && mergedGrid.length > 0) {
+                let prevRow = mergedGrid[mergedGrid.length - 1];
+                for (let c = 0; c < 7; c++) if (row[c]) prevRow[c] += (prevRow[c] ? "\n" : "") + row[c];
+             } else mergedGrid.push(row);
+          }
+          finalRows.push(...mergedGrid);
+        }
+
+        // 헤더가 없을 경우 임시 헤더 추가
+        if (finalRows.length > 0 && !finalRows[0][0]) {
+            finalRows.unshift(["순번", "품목", "규격", "단위", "수량", "단가", "금액/비고"]);
+        }
+
+        renderTable(finalRows);
+      } catch (err) {
+        wrapper.innerHTML = `<div class="empty-msg"><i class="ph ph-warning-circle" style="color: #EF4444;"></i>변환 중 오류가 발생했습니다.</div>`;
+      } finally {
+        e.target.value = '';
+      }
+    });
+
+    // 2. 테이블 렌더링 (UI 기능 적용)
+    function renderTable(data) {
+      if (!data || data.length === 0) {
+        wrapper.innerHTML = `<div class="empty-msg"><i class="ph ph-folder-open"></i>추출된 데이터가 없습니다.</div>`;
+        toggleContainer.style.display = 'none';
+        return;
+      }
+      
+      let html = '<table>';
+      let isFirstRow = true;
+      data.forEach((row) => {
+        const isEmptyRow = row.every(cell => cell === undefined || cell === null || String(cell).replace(/\s/g, '') === '');
+        if (isEmptyRow) return;
+        
+        html += '<tr>';
+        if (isFirstRow) {
+          html += `<th class="chk-col"><i class="ph ph-check-square clickable-icon" title="전체 숨김 해제" onclick="uncheckAll()" style="font-size: 18px; color: var(--text-muted);"></i></th>`;
+        } else {
+          html += `<td class="chk-col" contenteditable="false"><input type="checkbox" class="row-chk" onchange="hideRow(this)"></td>`;
+        }
+        
+        row.forEach(cell => {
+          let text = cell !== undefined ? String(cell) : '';
+          text = text.replace(/\r/g, '\n').replace(/\n+/g, '\n').trim(); 
+          if (isFirstRow) html += `<th>${text || 'Column'}<div class="resizer"></div></th>`;
+          else html += `<td>${text}</td>`;
+        });
+        html += '</tr>';
+        isFirstRow = false;
+      });
+      html += '</table>';
+      
+      wrapper.innerHTML = html;
+      clearSelection(); updateColumnToggles(); initResizers(); 
+    }
+
+    // 3. 컬럼 리사이징
+    function initResizers() {
+      document.querySelectorAll('th .resizer').forEach(resizer => {
+        let x = 0, w = 0, th = resizer.parentElement;
+        const mouseMoveHandler = function(e) {
+          th.style.width = Math.max(30, w + (e.clientX - x)) + 'px';
+          th.style.minWidth = th.style.width; th.style.maxWidth = th.style.width;
+        };
+        const mouseUpHandler = function() {
+          document.removeEventListener('mousemove', mouseMoveHandler);
+          document.removeEventListener('mouseup', mouseUpHandler);
+          resizer.classList.remove('resizing'); document.body.style.cursor = '';
+        };
+        resizer.addEventListener('mousedown', function(e) {
+          e.stopPropagation(); x = e.clientX;
+          w = parseInt(window.getComputedStyle(th).width, 10);
+          document.addEventListener('mousemove', mouseMoveHandler);
+          document.addEventListener('mouseup', mouseUpHandler);
+          resizer.classList.add('resizing'); document.body.style.cursor = 'col-resize';
+        });
+        resizer.addEventListener('dblclick', (e) => e.stopPropagation()); 
+      });
+    }
+
+    // 4. 행 숨기기 & 컬럼 토글
+    function hideRow(checkbox) { if (checkbox.checked) checkbox.closest('tr').style.display = 'none'; }
+    function uncheckAll() {
+      let restoredCount = 0;
+      document.querySelectorAll('.row-chk').forEach(cb => {
+        if (cb.checked) {
+          cb.checked = false;
+          const row = cb.closest('tr');
+          if (row && row.style.display === 'none') { row.style.display = ''; restoredCount++; }
+        }
+      });
+      if (restoredCount > 0) clearSelection();
+    }
+
+    function updateColumnToggles() {
+      const table = document.querySelector('table');
+      if (!table || table.rows.length === 0) { toggleContainer.style.display = 'none'; return; }
+      let html = '<div class="toggle-title"><i class="ph ph-eye"></i> 표시 컬럼</div>';
+      const headerRow = table.rows[0]; 
+      for (let c = 0; c < headerRow.cells.length; c++) {
+        if (headerRow.cells[c].classList.contains('chk-col')) continue; 
+        const clonedCell = headerRow.cells[c].cloneNode(true);
+        if (clonedCell.querySelector('.resizer')) clonedCell.querySelector('.resizer').remove();
+        let text = clonedCell.innerText.trim() || `Column ${c}`;
+        if (text.length > 15) text = text.substring(0, 15) + '...'; 
+        const isVisible = headerRow.cells[c].style.display !== 'none';
+        const icon = isVisible ? 'ph-check-circle' : 'ph-circle';
+        html += `<label class="col-toggle ${isVisible ? '' : 'hidden-col'}">
+                  <input type="checkbox" ${isVisible ? 'checked' : ''} onchange="toggleColumn(${c}, this)">
+                  <i class="ph ${icon}"></i> ${text}</label>`;
+      }
+      toggleContainer.innerHTML = html; toggleContainer.style.display = 'flex';
+    }
+
+    function toggleColumn(colIndex, checkbox) {
+      const isVisible = checkbox.checked;
+      document.querySelectorAll('table tr').forEach(row => { if (row.cells[colIndex]) row.cells[colIndex].style.display = isVisible ? '' : 'none'; });
+      const label = checkbox.parentElement, icon = label.querySelector('i');
+      if (isVisible) { label.classList.remove('hidden-col'); icon.className = 'ph ph-check-circle'; } 
+      else { label.classList.add('hidden-col'); icon.className = 'ph ph-circle'; }
+    }
+
+    // 5. 셀 선택 및 조용히 복사
+    function getCoords(cell) { return { r: cell.parentElement.rowIndex, c: cell.cellIndex }; }
+
+    wrapper.addEventListener('mousedown', (e) => {
+      if (e.target.classList.contains('resizer')) return;
+      const editingCell = document.querySelector('[contenteditable="true"]');
+      if (editingCell && editingCell !== e.target.closest('td, th')) editingCell.blur();
+
+      const cell = e.target.closest('td, th');
+      if (!cell || cell.hasAttribute('contenteditable') || cell.classList.contains('chk-col') || e.button !== 0) return; 
+
+      e.preventDefault(); isDragging = true;
+      startCell = getCoords(cell); endCell = startCell;
+      highlightSelection();
+    });
+
+    wrapper.addEventListener('mouseover', (e) => {
+      if (!isDragging) return;
+      const cell = e.target.closest('td, th');
+      if (!cell || cell.classList.contains('chk-col')) return; 
+      endCell = getCoords(cell); highlightSelection();
+    });
+
+    window.addEventListener('mouseup', (e) => {
+      if (!isDragging) return;
+      isDragging = false;
+      
+      if (startCell && endCell && startCell.r === endCell.r && startCell.c === endCell.c) {
+        const cell = e.target.closest('td, th');
+        if (cell && !cell.classList.contains('chk-col') && !e.target.classList.contains('resizer')) {
+          const clonedCell = cell.cloneNode(true);
+          if (clonedCell.querySelector('.resizer')) clonedCell.querySelector('.resizer').remove();
+          
+          const textToCopy = clonedCell.innerText.trim();
+          if (textToCopy && navigator.clipboard) {
+            navigator.clipboard.writeText(textToCopy).then(() => {
+              cell.classList.add('copied-cell');
+              setTimeout(() => cell.classList.remove('copied-cell'), 800); 
+            });
+          }
+        }
+        clearSelection(); 
+      }
+    });
+
+    function highlightSelection() {
+      document.querySelectorAll('.selected-cell').forEach(c => c.classList.remove('selected-cell'));
+      if (!startCell || !endCell) return;
+      const table = document.querySelector('table'); if (!table) return;
+      const minRow = Math.min(startCell.r, endCell.r), maxRow = Math.max(startCell.r, endCell.r);
+      const minCol = Math.min(startCell.c, endCell.c), maxCol = Math.max(startCell.c, endCell.c);
+
+      for (let r = minRow; r <= maxRow; r++) {
+        if (!table.rows[r] || table.rows[r].style.display === 'none') continue; 
+        for (let c = minCol; c <= maxCol; c++) if (table.rows[r].cells[c]) table.rows[r].cells[c].classList.add('selected-cell');
+      }
+    }
+
+    function clearSelection() {
+      document.querySelectorAll('.selected-cell').forEach(c => c.classList.remove('selected-cell'));
+      startCell = null; endCell = null;
+    }
+
+    // 6. 더블클릭 수정
+    wrapper.addEventListener('dblclick', (e) => {
+      if (e.target.classList.contains('resizer')) return;
+      const cell = e.target.closest('td, th');
+      if (!cell || cell.classList.contains('chk-col')) return;
+      
+      clearSelection();
+      cell.setAttribute('contenteditable', 'true'); cell.focus();
+      
+      const range = document.createRange();
+      if (cell.childNodes.length === 0) cell.appendChild(document.createTextNode('')); 
+      range.selectNodeContents(cell.firstChild || cell); 
+      const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+    });
+
+    wrapper.addEventListener('blur', (e) => {
+      if (e.target.tagName === 'TD' || e.target.tagName === 'TH') {
+        e.target.removeAttribute('contenteditable'); window.getSelection().removeAllRanges();
+      }
+    }, true); 
+
+    // 7. 키보드 단축키 (삭제, 복사, 잘라내기)
+    document.addEventListener('keydown', (e) => {
+      const editingCell = document.querySelector('[contenteditable="true"]');
+      if (editingCell) {
+        if (e.key === 'Enter') {
+          if (e.altKey) {
+            e.preventDefault(); 
+            const selection = window.getSelection();
+            if (selection.rangeCount > 0) {
+              const range = selection.getRangeAt(0); const textNode = document.createTextNode('\n');
+              range.deleteContents(); range.insertNode(textNode); range.setStartAfter(textNode);
+              range.collapse(true); selection.removeAllRanges(); selection.addRange(range);
+            }
+          } else { e.preventDefault(); editingCell.blur(); }
+        }
+        return;
+      }
+
+      const selectedCells = document.querySelectorAll('.selected-cell');
+      if (selectedCells.length > 0) {
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C' || e.key === 'x' || e.key === 'X')) {
+          e.preventDefault();
+          const table = document.querySelector('table');
+          const minRow = Math.min(startCell.r, endCell.r), maxRow = Math.max(startCell.r, endCell.r);
+          const minCol = Math.min(startCell.c, endCell.c), maxCol = Math.max(startCell.c, endCell.c);
+          
+          let clipText = [];
+          for (let r = minRow; r <= maxRow; r++) {
+            let rowData = [];
+            for (let c = minCol; c <= maxCol; c++) {
+              let cell = table.rows[r].cells[c];
+              if (cell && cell.classList.contains('selected-cell')) {
+                const clonedCell = cell.cloneNode(true);
+                if (clonedCell.querySelector('.resizer')) clonedCell.querySelector('.resizer').remove();
+                rowData.push(clonedCell.innerText.trim());
+              }
+            }
+            if (rowData.length > 0) clipText.push(rowData.join('\t'));
+          }
+          
+          navigator.clipboard.writeText(clipText.join('\n')).then(() => {
+            if (e.key === 'x' || e.key === 'X') selectedCells.forEach(td => td.innerText = '');
+          });
+        }
+        
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+          e.preventDefault();
+          selectedCells.forEach(td => td.innerText = '');
+        }
+      }
+    });
+
+    // 8. 영역 자르기 (Crop 기능)
+    function applySelectionToPreview() {
+      if (!startCell || !endCell) { alert('먼저 남기고 싶은 표 영역을 마우스 드래그로 선택해주세요.'); return; }
+      const table = document.querySelector('table'); if (!table) return;
+      const minRow = Math.min(startCell.r, endCell.r), maxRow = Math.max(startCell.r, endCell.r);
+      const minCol = Math.min(startCell.c, endCell.c), maxCol = Math.max(startCell.c, endCell.c);
+
+      for (let r = table.rows.length - 1; r >= 0; r--) {
+        if (r < minRow || r > maxRow) table.deleteRow(r);
+        else {
+          const row = table.rows[r];
+          for (let c = row.cells.length - 1; c >= 0; c--) {
+            if (row.cells[c] && row.cells[c].classList.contains('chk-col')) continue; 
+            if (c < minCol || c > maxCol) row.deleteCell(c);
+          }
+        }
+      }
+      clearSelection(); updateColumnToggles();
+    }
+
+    // 9. 엑셀 출력
+    function exportExcel() {
+      const table = document.querySelector('table');
+      if (!table) return alert('출력할 데이터가 없습니다.');
+      const wsData = [];
+      for (let r = 0; r < table.rows.length; r++) {
+        const row = table.rows[r];
+        if (row.style.display === 'none') continue; 
+        const rowData = [];
+        for (let c = 0; c < row.cells.length; c++) {
+          const cell = row.cells[c];
+          if (cell.classList.contains('chk-col') || cell.style.display === 'none') continue; 
+          const clonedCell = cell.cloneNode(true);
+          if (clonedCell.querySelector('.resizer')) clonedCell.querySelector('.resizer').remove();
+          rowData.push(clonedCell.innerText.trim());
+        }
+        wsData.push(rowData);
+      }
+      if (wsData.length === 0) return alert('출력할 유효한 데이터가 없습니다.');
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(wsData), "PDF_Export");
+      XLSX.writeFile(wb, "PDF_스마트추출결과.xlsx");
+    }
+  </script>
+</body>
+</html>

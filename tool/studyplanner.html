@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Study Planner</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+    <style>
+        :root {
+            --bg-color: #F4F5F7;
+            --card-bg: #FFFFFF;
+            --text-main: #2A2F35;
+            --text-sub: #848D98;
+            --accent-color: #4A6CFA;
+            --accent-light: #EFF2FF;
+            --border-color: #EAECEF;
+            --danger-color: #FF5A5A;
+            --success-color: #00C896;
+            --shadow-card: 0 16px 40px rgba(0, 0, 0, 0.04);
+            --shadow-hover: 0 8px 24px rgba(74, 108, 250, 0.12);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-main); padding: 40px 20px; }
+        
+        /* 탭 네비게이션 */
+        .tab-navigation { max-width: 1400px; margin: 0 auto 32px auto; display: flex; justify-content: center; gap: 16px; }
+        .tab-btn { padding: 14px 32px; border-radius: 16px; border: 1px solid var(--border-color); background-color: var(--card-bg); color: var(--text-sub); font-size: 16px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: var(--shadow-card); }
+        .tab-btn:hover { border-color: var(--accent-color); color: var(--accent-color); }
+        .tab-btn.active { background-color: var(--text-main); color: white; border-color: var(--text-main); }
+
+        .view-section { display: none; animation: fadeIn 0.3s ease; }
+        .view-section.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* 공통 레이아웃 & 일간 뷰 */
+        .app-container { display: flex; width: 100%; max-width: 1000px; margin: 0 auto; background: var(--card-bg); border-radius: 28px; box-shadow: var(--shadow-card); overflow: hidden; min-height: 650px; }
+        .calendar-section { width: 45%; background-color: #FAFBFC; border-right: 1px solid var(--border-color); padding: 40px; display: flex; flex-direction: column; }
+        .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; }
+        .calendar-header h2 { font-size: 24px; font-weight: 700; letter-spacing: -0.5px; }
+        .nav-btn { background: var(--card-bg); border: 1px solid var(--border-color); width: 36px; height: 36px; border-radius: 12px; cursor: pointer; color: var(--text-main); font-size: 16px; transition: all 0.2s; display: flex; justify-content: center; align-items: center; }
+        .nav-btn:hover { border-color: var(--accent-color); color: var(--accent-color); }
+        .weekdays { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 13px; font-weight: 600; color: var(--text-sub); margin-bottom: 16px; }
+        .days-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
+        .day-cell { aspect-ratio: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; font-size: 15px; font-weight: 500; border-radius: 14px; cursor: pointer; transition: all 0.2s; position: relative; color: var(--text-main); border: 1px solid transparent; }
+        .day-cell:hover:not(.empty) { background-color: var(--accent-light); color: var(--accent-color); }
+        .day-cell.selected { background-color: var(--accent-color); color: white; font-weight: 700; box-shadow: var(--shadow-hover); }
+        .day-cell.empty { cursor: default; }
+        .day-cell.today { border-color: var(--accent-color); }
+        .task-dot { width: 4px; height: 4px; background-color: var(--accent-color); border-radius: 50%; position: absolute; bottom: 6px; opacity: 0; transition: opacity 0.2s; }
+        .day-cell.has-tasks .task-dot { opacity: 1; }
+        .day-cell.selected.has-tasks .task-dot { background-color: white; }
+
+        .diary-section { width: 55%; padding: 40px; display: flex; flex-direction: column; background: var(--card-bg); }
+        .diary-header { margin-bottom: 32px; padding-bottom: 24px; border-bottom: 1px solid var(--border-color); }
+        .diary-date { font-size: 28px; font-weight: 800; margin-bottom: 12px; color: var(--text-main); letter-spacing: -0.5px; display: flex; align-items: center; }
+        
+        /* 일간 뷰 D-Day 텍스트 스타일 */
+        .d-day-text { font-size: 20px; font-weight: 700; color: var(--accent-color); margin-left: 10px; }
+        
+        .diary-progress { display: flex; align-items: center; gap: 16px; }
+        .progress-text { font-size: 14px; color: var(--text-sub); font-weight: 600; min-width: 100px; }
+        .progress-bar-bg { flex: 1; height: 8px; background-color: #F0F2F5; border-radius: 8px; overflow: hidden; }
+        .progress-bar-fill { height: 100%; background-color: var(--accent-color); border-radius: 8px; width: 0%; transition: width 0.5s ease-out; }
+
+        .input-wrapper { display: flex; gap: 12px; margin-bottom: 24px; }
+        .task-input { flex: 1; padding: 16px 20px; background-color: #FAFBFC; border: 1px solid var(--border-color); border-radius: 16px; font-size: 15px; outline: none; transition: all 0.2s; }
+        .task-input:focus { background-color: white; border-color: var(--accent-color); box-shadow: 0 0 0 3px var(--accent-light); }
+        .add-btn { padding: 0 24px; background-color: var(--text-main); color: white; border: none; border-radius: 16px; font-size: 15px; font-weight: 600; cursor: pointer; transition: background-color 0.2s; }
+        .add-btn:hover { background-color: black; }
+        .daily-task-list { display: flex; flex-direction: column; gap: 12px; flex: 1; overflow-y: auto; padding-right: 4px; }
+        .empty-state { text-align: center; padding: 60px 20px; color: var(--text-sub); font-size: 15px; }
+
+        /* 주간 뷰 & 대시보드 */
+        .weekly-dashboard { max-width: 1400px; margin: 0 auto; }
+        .header-section { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+        .week-navigator { display: flex; align-items: center; gap: 20px; }
+        .week-title { font-size: 28px; font-weight: 800; letter-spacing: -0.5px; }
+        
+        /* 헤더 우측 버튼 영역 (멘토링 + 스크럼) */
+        .header-actions { display: flex; gap: 12px; }
+        .btn-mentor { background-color: white; color: var(--text-main); border: 1px solid var(--border-color); padding: 12px 20px; border-radius: 12px; font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.2s; display: flex; gap: 8px; align-items: center; }
+        .btn-mentor:hover { border-color: var(--accent-color); color: var(--accent-color); box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .btn-scrum { background-color: var(--text-main); color: white; border: none; padding: 12px 24px; border-radius: 12px; font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.2s; display: flex; gap: 8px; align-items: center; }
+        .btn-scrum:hover { background-color: black; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .btn-scrum.success { background-color: var(--success-color); box-shadow: none; }
+
+        /* 모달 (팝업창) 스타일 */
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.4); backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center; z-index: 1000; opacity: 0; visibility: hidden; transition: all 0.2s; }
+        .modal-overlay.active { opacity: 1; visibility: visible; }
+        .modal-content { background: var(--card-bg); width: 100%; max-width: 500px; border-radius: 24px; padding: 32px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.1); transform: translateY(20px); transition: all 0.2s; }
+        .modal-overlay.active .modal-content { transform: translateY(0); }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .modal-title { font-size: 20px; font-weight: 800; color: var(--text-main); }
+        .modal-close { background: none; border: none; font-size: 28px; color: var(--text-sub); cursor: pointer; line-height: 1; transition: color 0.2s; }
+        .modal-close:hover { color: var(--danger-color); }
+        .modal-textarea { width: 100%; min-height: 160px; border: 1px solid var(--border-color); border-radius: 16px; padding: 16px; font-size: 15px; color: var(--text-main); line-height: 1.6; outline: none; resize: vertical; margin-bottom: 24px; background: #FAFBFC; transition: all 0.2s; }
+        .modal-textarea:focus { border-color: var(--accent-color); background: white; box-shadow: 0 0 0 3px var(--accent-light); }
+        .btn-save { width: 100%; background-color: var(--accent-color); color: white; border: none; padding: 16px; border-radius: 16px; font-size: 16px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
+        .btn-save:hover { background-color: #3858D6; box-shadow: 0 4px 12px rgba(74, 108, 250, 0.2); }
+
+        /* 주간 그리드 */
+        .weekly-container { display: grid; grid-template-columns: repeat(7, 1fr); gap: 16px; align-items: stretch; }
+        .day-column { background: var(--card-bg); border-radius: 20px; box-shadow: var(--shadow-card); display: flex; flex-direction: column; overflow: hidden; border: 2px solid transparent; transition: border-color 0.2s; min-height: 500px; }
+        .day-column.is-today { border-color: var(--accent-color); }
+        .day-header { padding: 16px; border-bottom: 1px solid var(--border-color); text-align: center; background-color: #FAFBFC; }
+        .day-name { font-size: 14px; font-weight: 700; color: var(--text-sub); margin-bottom: 4px; }
+        .day-date { font-size: 20px; font-weight: 800; }
+        
+        /* 주간 뷰 D-Day 텍스트 스타일 */
+        .day-dday { font-size: 13px; font-weight: 700; color: var(--accent-color); margin-top: 6px; }
+        
+        .day-column.is-today .day-name, .day-column.is-today .day-date { color: var(--accent-color); }
+        .weekly-task-list { flex: 1; padding: 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+        .add-task-wrapper { padding: 12px; border-top: 1px solid var(--border-color); background-color: #FAFBFC; }
+        .add-task-input { width: 100%; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 10px; font-size: 13px; outline: none; transition: all 0.2s; }
+        .add-task-input:focus { border-color: var(--accent-color); background: white; }
+
+        /* 공통 테스크 아이템 */
+        .task-item { display: flex; align-items: flex-start; padding: 12px; background-color: white; border: 1px solid var(--border-color); border-radius: 12px; transition: all 0.2s; gap: 10px; }
+        .task-item:hover { border-color: #D1D6DB; box-shadow: 0 4px 12px rgba(0,0,0,0.02); }
+        .task-checkbox { appearance: none; width: 20px; height: 20px; border: 2px solid #D1D6DB; border-radius: 6px; cursor: pointer; position: relative; flex-shrink: 0; margin-top: 1px; transition: all 0.2s; }
+        .task-checkbox:checked { background-color: var(--accent-color); border-color: var(--accent-color); }
+        .task-checkbox:checked::after { content: '✔'; position: absolute; color: white; font-size: 10px; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+        .task-text { flex: 1; font-size: 14px; color: var(--text-main); word-break: break-all; line-height: 1.4; padding-top: 2px; }
+        .task-item.completed .task-text { color: var(--text-sub); text-decoration: line-through; }
+        .action-btns { display: flex; gap: 2px; }
+        .icon-btn { background: none; border: none; color: #D1D6DB; cursor: pointer; font-size: 14px; padding: 4px; border-radius: 6px; transition: all 0.2s; }
+        .icon-btn:hover { color: var(--text-main); background-color: #F4F5F7; }
+        .icon-btn.delete:hover { color: var(--danger-color); background-color: #FFF0F0; }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: #EAECEF; border-radius: 4px; }
+
+        @media (max-width: 1200px) {
+            .weekly-container { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+            .app-container { flex-direction: column; }
+            .calendar-section, .diary-section { width: 100%; border-right: none; }
+            .calendar-section { border-bottom: 1px solid var(--border-color); }
+            .header-actions { flex-direction: column; gap: 8px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="tab-navigation">
+        <button class="tab-btn active" id="btnTabDaily" onclick="switchTab('daily')">📅 일간 입력</button>
+        <button class="tab-btn" id="btnTabWeekly" onclick="switchTab('weekly')">🗓️ 주간 대시보드</button>
+    </div>
+
+    <div id="viewDaily" class="view-section active">
+        <div class="app-container">
+            <aside class="calendar-section">
+                <div class="calendar-header">
+                    <button class="nav-btn" onclick="changeMonth(-1)">&#8249;</button>
+                    <h2 id="calendarMonthTitle"></h2>
+                    <button class="nav-btn" onclick="changeMonth(1)">&#8250;</button>
+                </div>
+                <div class="weekdays"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div>
+                <div class="days-grid" id="calendarDays"></div>
+            </aside>
+            <main class="diary-section">
+                <div class="diary-header">
+                    <div class="diary-date" id="selectedDateDisplay"></div>
+                    <div class="diary-progress">
+                        <span class="progress-text" id="progressText">0 / 0 달성 (0%)</span>
+                        <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressBar"></div></div>
+                    </div>
+                </div>
+                <div class="input-wrapper">
+                    <input type="text" class="task-input" id="taskInputDaily" placeholder="이 날의 목표를 기록하세요" onkeypress="handleKeyPress(event, 'daily')">
+                    <button class="add-btn" onclick="addTask('daily')">추가</button>
+                </div>
+                <div class="daily-task-list" id="dailyTaskList"></div>
+            </main>
+        </div>
+    </div>
+
+    <div id="viewWeekly" class="view-section">
+        <div class="weekly-dashboard">
+            <div class="header-section">
+                <div class="week-navigator">
+                    <button class="nav-btn" onclick="changeWeek(-1)">&#8249;</button>
+                    <div class="week-title" id="weekTitle"></div>
+                    <button class="nav-btn" onclick="changeWeek(1)">&#8250;</button>
+                    <button class="nav-btn" onclick="goToday()" style="font-size:14px; width:auto; padding: 0 16px;">오늘</button>
+                </div>
+                
+                <div class="header-actions">
+                    <button class="btn-mentor" onclick="openMentoringModal()">📝 멘토링 기록</button>
+                    <button class="btn-scrum" id="scrumBtn" onclick="generateScrum()">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                        일일 스크럼
+                    </button>
+                </div>
+            </div>
+
+            <div class="weekly-container" id="weeklyGrid"></div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="mentoringModal" onclick="closeMentoringModal(event)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <div class="modal-title">📝 이번 주 멘토링 가이드</div>
+                <button class="modal-close" onclick="closeMentoringModal()">&times;</button>
+            </div>
+            <textarea class="modal-textarea" id="mentoringText" spellcheck="false" placeholder="이번 주 멘토링 핵심 가이드를 입력하세요.&#13;&#10;(예: 학습은 해야하는것, 할수있는것에 집중 / 정독보다 빠르게 반복 회독)"></textarea>
+            <button class="btn-save" onclick="saveMentoringModal()">저장하기</button>
+        </div>
+    </div>
+
+    <script>
+        // =========================================
+        // ★ D-Day 설정 (이곳에서 목표 날짜를 수정하세요)
+        // =========================================
+        const TARGET_D_DAY = new Date('2026-08-22');
+
+        // =========================================
+        // 1. 상태 관리 & 유틸리티
+        // =========================================
+        let viewDate = new Date();
+        let selectedDate = new Date();
+        let currentWeekStart = new Date();
+        const daysOfWeek = ['일', '월', '화', '수', '목', '금', '토'];
+
+        const formatDBDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const formatDisplayDate = (d) => `${d.getMonth() + 1}월 ${d.getDate()}일 ${daysOfWeek[d.getDay()]}요일`;
+        const getWeekKey = () => `mentoring_${formatDBDate(currentWeekStart)}`;
+
+        // D-Day 계산 유틸리티
+        function getDDayString(targetDate, currentDate) {
+            const tDate = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
+            const cDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate());
+            const diffTime = tDate - cDate;
+            const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+            
+            if (diffDays > 0) return `(D-${diffDays})`;
+            else if (diffDays === 0) return `(D-Day)`;
+            else return `(D+${Math.abs(diffDays)})`;
+        }
+
+        // =========================================
+        // 2. IndexedDB 코어 (async/await 최적화)
+        // =========================================
+        let db;
+        const initDB = () => new Promise((resolve, reject) => {
+            const req = indexedDB.open('StudyPlannerDB', 1);
+            req.onupgradeneeded = (e) => {
+                const database = e.target.result;
+                if (!database.objectStoreNames.contains('tasks')) {
+                    database.createObjectStore('tasks', { keyPath: 'id' }).createIndex('date', 'date', { unique: false });
+                }
+                if (!database.objectStoreNames.contains('mentoring')) {
+                    database.createObjectStore('mentoring', { keyPath: 'weekKey' });
+                }
+            };
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+
+        const dbGetAllTasks = () => new Promise(res => {
+            db.transaction('tasks', 'readonly').objectStore('tasks').getAll().onsuccess = e => res(e.target.result);
+        });
+        const dbSaveTask = (task) => new Promise(res => {
+            const tx = db.transaction('tasks', 'readwrite');
+            tx.objectStore('tasks').put(task);
+            tx.oncomplete = res;
+        });
+        const dbDeleteTask = (id) => new Promise(res => {
+            const tx = db.transaction('tasks', 'readwrite');
+            tx.objectStore('tasks').delete(id);
+            tx.oncomplete = res;
+        });
+        const dbGetMentoring = (key) => new Promise(res => {
+            db.transaction('mentoring', 'readonly').objectStore('mentoring').get(key).onsuccess = e => res(e.target.result?.text || '');
+        });
+        const dbSaveMentoring = (key, text) => new Promise(res => {
+            const tx = db.transaction('mentoring', 'readwrite');
+            tx.objectStore('mentoring').put({ weekKey: key, text });
+            tx.oncomplete = res;
+        });
+
+        // =========================================
+        // 3. 렌더링 로직 (단일 Fetch 구조)
+        // =========================================
+        async function refreshAllViews() {
+            if (!db) return;
+            const allTasks = await dbGetAllTasks(); 
+            
+            renderMonthlyCalendar(allTasks);
+            renderDailyTasks(allTasks);
+            renderWeeklyGrid(allTasks);
+            await loadMentoring();
+        }
+
+        function renderMonthlyCalendar(allTasks) {
+            const year = viewDate.getFullYear();
+            const month = viewDate.getMonth();
+            document.getElementById('calendarMonthTitle').innerText = `${year}. ${String(month + 1).padStart(2, '0')}`;
+            
+            const firstDay = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const calendarDays = document.getElementById('calendarDays');
+            calendarDays.innerHTML = '';
+
+            const taskDates = new Set(allTasks.map(t => t.date));
+            const todayStr = formatDBDate(new Date());
+            const selDateStr = formatDBDate(selectedDate);
+
+            for (let i = 0; i < firstDay; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'day-cell empty';
+                calendarDays.appendChild(cell);
+            }
+
+            for (let i = 1; i <= daysInMonth; i++) {
+                const cellDate = new Date(year, month, i);
+                const cellDateStr = formatDBDate(cellDate);
+                
+                const cell = document.createElement('div');
+                cell.className = 'day-cell';
+                cell.innerText = i;
+                
+                const dot = document.createElement('div');
+                dot.className = 'task-dot';
+                cell.appendChild(dot);
+
+                if (cellDateStr === todayStr) cell.classList.add('today');
+                if (cellDateStr === selDateStr) cell.classList.add('selected');
+                if (taskDates.has(cellDateStr)) cell.classList.add('has-tasks');
+
+                cell.onclick = () => {
+                    selectedDate = cellDate;
+                    refreshAllViews();
+                };
+                calendarDays.appendChild(cell);
+            }
+        }
+
+        function renderDailyTasks(allTasks) {
+            // 일간 뷰: 날짜 옆에 D-Day 추가
+            const ddayStr = getDDayString(TARGET_D_DAY, selectedDate);
+            document.getElementById('selectedDateDisplay').innerHTML = `${formatDisplayDate(selectedDate)} <span class="d-day-text">${ddayStr}</span>`;
+            
+            const dateStr = formatDBDate(selectedDate);
+            const tasks = allTasks.filter(t => t.date === dateStr);
+            const listEl = document.getElementById('dailyTaskList');
+            listEl.innerHTML = '';
+
+            const total = tasks.length;
+            const completed = tasks.filter(t => t.completed).length;
+            const percent = total === 0 ? 0 : Math.round((completed / total) * 100);
+            document.getElementById('progressText').innerText = `${completed} / ${total} 달성 (${percent}%)`;
+            document.getElementById('progressBar').style.width = `${percent}%`;
+
+            if (total === 0) {
+                listEl.innerHTML = `<div class="empty-state">이 날의 학습 계획이 비어있습니다.</div>`;
+                return;
+            }
+
+            tasks.forEach(task => listEl.appendChild(createTaskElement(task)));
+        }
+
+        function renderWeeklyGrid(allTasks) {
+            const month = currentWeekStart.getMonth() + 1;
+            const weekNum = Math.ceil((currentWeekStart.getDate() + new Date(currentWeekStart.getFullYear(), currentWeekStart.getMonth(), 1).getDay()) / 7);
+            document.getElementById('weekTitle').innerText = `${currentWeekStart.getFullYear()}. ${month}월 ${weekNum}주차`;
+
+            const grid = document.getElementById('weeklyGrid');
+            grid.innerHTML = '';
+            const todayStr = formatDBDate(new Date());
+
+            for (let i = 0; i < 7; i++) {
+                const currentDate = new Date(currentWeekStart);
+                currentDate.setDate(currentWeekStart.getDate() + i);
+                const dateStr = formatDBDate(currentDate);
+                const dayTasks = allTasks.filter(t => t.date === dateStr);
+                
+                // 주간 뷰: 각 칸의 날짜 밑에 D-Day 계산 후 추가
+                const ddayStr = getDDayString(TARGET_D_DAY, currentDate);
+                
+                const col = document.createElement('div');
+                col.className = `day-column ${dateStr === todayStr ? 'is-today' : ''}`;
+                col.innerHTML = `
+                    <div class="day-header">
+                        <div class="day-name">${daysOfWeek[i]}요일</div>
+                        <div class="day-date">${currentDate.getDate()}</div>
+                        <div class="day-dday">${ddayStr}</div>
+                    </div>
+                    <div class="weekly-task-list" id="list-${dateStr}"></div>
+                    <div class="add-task-wrapper">
+                        <input type="text" class="add-task-input" id="input-${dateStr}" placeholder="계획 추가 후 Enter" onkeypress="handleKeyPress(event, '${dateStr}')">
+                    </div>
+                `;
+                grid.appendChild(col);
+                
+                const listEl = col.querySelector('.weekly-task-list');
+                dayTasks.forEach(task => listEl.appendChild(createTaskElement(task)));
+            }
+        }
+
+        function createTaskElement(task) {
+            const el = document.createElement('div');
+            el.className = `task-item ${task.completed ? 'completed' : ''}`;
+            el.innerHTML = `
+                <input type="checkbox" class="task-checkbox" ${task.completed ? 'checked' : ''} onclick="toggleTask(${task.id})">
+                <div class="task-text">${task.text}</div>
+                <div class="action-btns">
+                    <button class="icon-btn edit" onclick="editTask(${task.id}, '${task.text}')">✏️</button>
+                    <button class="icon-btn delete" onclick="deleteTask(${task.id})">&times;</button>
+                </div>
+            `;
+            return el;
+        }
+
+        // =========================================
+        // 4. 데이터 조작 (CRUD)
+        // =========================================
+        async function addTask(targetDateOrType) {
+            let inputEl, dateStr;
+            if (targetDateOrType === 'daily') {
+                inputEl = document.getElementById('taskInputDaily');
+                dateStr = formatDBDate(selectedDate);
+            } else {
+                inputEl = document.getElementById(`input-${targetDateOrType}`);
+                dateStr = targetDateOrType;
+            }
+            
+            const text = inputEl.value.trim();
+            if (!text) return;
+            
+            await dbSaveTask({ id: Date.now(), date: dateStr, text, completed: false });
+            inputEl.value = '';
+            refreshAllViews();
+        }
+
+        function handleKeyPress(e, targetDateOrType) {
+            if (e.key === 'Enter') addTask(targetDateOrType);
+        }
+
+        async function toggleTask(id) {
+            const allTasks = await dbGetAllTasks();
+            const task = allTasks.find(t => t.id === id);
+            if(task) {
+                task.completed = !task.completed;
+                await dbSaveTask(task);
+                refreshAllViews();
+            }
+        }
+
+        async function editTask(id, oldText) {
+            const newText = prompt("내용을 수정하세요:", oldText);
+            if (newText && newText.trim() !== "" && newText !== oldText) {
+                const allTasks = await dbGetAllTasks();
+                const task = allTasks.find(t => t.id === id);
+                if(task) {
+                    task.text = newText.trim();
+                    await dbSaveTask(task);
+                    refreshAllViews();
+                }
+            }
+        }
+
+        async function deleteTask(id) {
+            await dbDeleteTask(id);
+            refreshAllViews();
+        }
+
+        // =========================================
+        // 5. 모달 제어 및 멘토링/스크럼 로직
+        // =========================================
+        function openMentoringModal() {
+            document.getElementById('mentoringModal').classList.add('active');
+        }
+
+        function closeMentoringModal(e) {
+            // 외부 배경 또는 X 버튼 클릭 시 닫기
+            if (!e || e.target.classList.contains('modal-overlay') || e.target.classList.contains('modal-close')) {
+                document.getElementById('mentoringModal').classList.remove('active');
+            }
+        }
+
+        async function saveMentoringModal() {
+            const text = document.getElementById('mentoringText').value;
+            await dbSaveMentoring(getWeekKey(), text);
+            document.getElementById('mentoringModal').classList.remove('active');
+        }
+
+        async function loadMentoring() {
+            document.getElementById('mentoringText').value = await dbGetMentoring(getWeekKey());
+        }
+
+        async function generateScrum() {
+            const todayStr = formatDBDate(new Date());
+            const endOfWeek = new Date(currentWeekStart);
+            endOfWeek.setDate(currentWeekStart.getDate() + 6);
+            const endOfWeekStr = formatDBDate(endOfWeek);
+
+            const allTasks = await dbGetAllTasks();
+            const todayTasks = allTasks.filter(t => t.date === todayStr);
+            const futureTasks = allTasks.filter(t => t.date > todayStr && t.date <= endOfWeekStr);
+
+            // 항상 최신 DB 값을 가져오도록 보장
+            let mentoringText = await dbGetMentoring(getWeekKey());
+            let formattedMentoring = mentoringText.split('\n')
+                .filter(line => line.trim())
+                .map(line => line.startsWith('-') ? line : `- ${line}`).join('\n') || "- (기록된 내용 없음)";
+
+            let scrumText = `1) 멘토링 로그 :\n${formattedMentoring}\n\n`;
+            scrumText += `2) 한일 : ${todayTasks.map(t => t.text).join(', ') || '(없음)'}\n`;
+            scrumText += `3) 할일 : ${futureTasks.map(t => t.text).join(', ') || '(없음)'}`;
+
+            // 클립보드 복사
+            const fallbackCopy = (text) => {
+                const ta = document.createElement("textarea");
+                ta.value = text; ta.style.position = "fixed"; document.body.appendChild(ta);
+                ta.focus(); ta.select();
+                try { return document.execCommand('copy'); } catch(e) { return false; } finally { document.body.removeChild(ta); }
+            };
+
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(scrumText).then(showCopySuccess).catch(() => fallbackCopy(scrumText) ? showCopySuccess() : alert('복사 실패:\n\n' + scrumText));
+            } else {
+                fallbackCopy(scrumText) ? showCopySuccess() : alert('복사 실패:\n\n' + scrumText);
+            }
+        }
+
+        function showCopySuccess() {
+            const btn = document.getElementById('scrumBtn');
+            const originText = btn.innerHTML;
+            btn.classList.add('success');
+            btn.innerHTML = '✔ 복사 완료!';
+            setTimeout(() => { btn.classList.remove('success'); btn.innerHTML = originText; }, 2000);
+        }
+
+        // =========================================
+        // 6. 네비게이션 제어
+        // =========================================
+        function switchTab(tabName) {
+            document.querySelectorAll('.view-section, .tab-btn').forEach(el => el.classList.remove('active'));
+            if(tabName === 'daily') {
+                document.getElementById('viewDaily').classList.add('active');
+                document.getElementById('btnTabDaily').classList.add('active');
+            } else {
+                document.getElementById('viewWeekly').classList.add('active');
+                document.getElementById('btnTabWeekly').classList.add('active');
+            }
+            refreshAllViews();
+        }
+
+        function changeMonth(offset) { viewDate.setMonth(viewDate.getMonth() + offset); refreshAllViews(); }
+        function changeWeek(offset) { currentWeekStart.setDate(currentWeekStart.getDate() + (offset * 7)); refreshAllViews(); }
+        function goToday() { 
+            const d = new Date();
+            currentWeekStart = new Date(d.setDate(d.getDate() - d.getDay()));
+            refreshAllViews(); 
+        }
+
+        // 초기 실행 (DB 로드 완료 후 렌더링)
+        window.onload = async () => {
+            try {
+                db = await initDB();
+                goToday(); // 날짜 초기화 및 최초 렌더링
+            } catch (error) {
+                alert("데이터베이스 초기화 실패. 로컬 서버 환경인지 확인해주세요.");
+                console.error(error);
+            }
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>URL 다운로드</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root{
+      --bg:#f5f7fb; --card:#fff; --ink:#1f2937; --muted:#6b7280; --line:#e5e7eb;
+      --brand:#2563eb; --brand2:#1d4ed8; --radius:14px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:system-ui,-apple-system,"Segoe UI","Noto Sans KR","Nanum Gothic",sans-serif;
+      background:var(--bg);
+      color:var(--ink);
+    }
+    header{
+      background:var(--card);
+      border-bottom:1px solid var(--line);
+      position:sticky;
+      top:0;
+      z-index:10;
+    }
+    header .wrap{
+      max-width:1100px;
+      margin:0 auto;
+      padding:14px 16px;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+    }
+    header h1{font-size:17px;margin:0;font-weight:700}
+    header .sub{font-size:12px;color:var(--muted)}
+    main.layout{
+      max-width:1100px;
+      margin:18px auto 40px;
+      padding:0 16px;
+      display:grid;
+      grid-template-columns:360px 1fr;
+      gap:16px;
+    }
+    .card{
+      background:var(--card);
+      border:1px solid var(--line);
+      border-radius:var(--radius);
+      box-shadow:0 1px 2px rgba(15,23,42,.03);
+    }
+    .card .hd{
+      padding:13px 16px 10px;
+      border-bottom:1px solid #edf0f3;
+      font-weight:600;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:8px;
+    }
+    .card .bd{
+      padding:12px 16px 16px;
+      display:grid;
+      gap:12px;
+    }
+    label{font-size:12px;color:var(--muted);display:block;margin-bottom:4px}
+    input[type="text"]{
+      width:100%;
+      padding:9px 10px;
+      border:1px solid var(--line);
+      border-radius:10px;
+      font-size:13px;
+      background:#fff;
+    }
+    button{
+      background:var(--brand);
+      color:#fff;
+      border:0;
+      border-radius:10px;
+      padding:9px 12px;
+      font-weight:600;
+      font-size:13px;
+      cursor:pointer;
+    }
+    button:hover{background:var(--brand2)}
+    .btn-line{
+      background:#fff;
+      border:1px solid var(--line);
+      color:#1f2937;
+    }
+    .muted{font-size:12px;color:var(--muted)}
+    .logbox{
+      background:#0b1020;
+      color:#d1e6ff;
+      border-radius:10px;
+      padding:10px 12px;
+      font-size:12px;
+      line-height:1.5;
+      min-height:80px;
+      max-height:180px;
+      overflow:auto;
+      white-space:pre-wrap;
+    }
+    .url-row{
+      display:flex;
+      gap:8px;
+    }
+    .url-row button{flex:0 0 auto}
+    .url-row input{flex:1 1 auto}
+    @media(max-width:992px){
+      main.layout{grid-template-columns:1fr}
+    }
+  </style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div>
+      <h1>URL 다운로드</h1>
+      <div class="sub"></div>	  
+    </div>
+    <button class="btn-line" id="clearBtn" type="button">입력 지우기</button>
+  </div>
+</header>
+
+<main class="layout">
+  <!-- 좌측: 입력 영역 -->
+  <section class="card">
+    <div class="hd">
+      <span>1) URL 입력</span>
+    </div>
+    <div class="bd">
+      <div>
+        <label for="urlInput">다운로드할 파일 URL</label>
+        <div class="url-row">
+          <input type="text" id="urlInput" placeholder="https://example.com/file.pdf" />
+          <button id="downloadBtn" type="button">다운로드</button>
+        </div>
+      </div>
+      <div class="muted">
+        브라우저에서 직접 가져와서 저장합니다. CORS 정책이나 헤더에 따라 일부 URL은 내려받기가 제한될 수 있습니다.
+      </div>
+    </div>
+  </section>
+
+  <!-- 우측: 상태 / 로그 -->
+  <section class="card">
+    <div class="hd">
+      <span>2) 다운로드 상태</span>
+      <button id="clearLogBtn" class="btn-line" type="button">상태 지우기</button>
+    </div>
+    <div class="bd">
+      <div id="status" class="muted">아직 다운로드 요청이 없습니다.</div>
+      <div class="logbox" id="logBox">(로그가 없습니다)</div>
+    </div>
+  </section>
+</main>
+
+<script>
+  const urlInput   = document.getElementById('urlInput');
+  const statusBox  = document.getElementById('status');
+  const logBox     = document.getElementById('logBox');
+  const downloadBtn= document.getElementById('downloadBtn');
+  const clearBtn   = document.getElementById('clearBtn');
+  const clearLogBtn= document.getElementById('clearLogBtn');
+
+  function appendLog(msg){
+    const ts = new Date().toISOString();
+    const line = `[${ts}] ${msg}`;
+    if(logBox.textContent.trim()==='(로그가 없습니다)'){
+      logBox.textContent = line;
+    }else{
+      logBox.textContent = line + "\\n" + logBox.textContent;
+    }
+  }
+
+  async function downloadFile(){
+    const url = urlInput.value.trim();
+    statusBox.textContent = '';
+    if(!url){
+      alert('URL을 입력해주세요.');
+      return;
+    }
+    try{
+      statusBox.textContent = '파일 다운로드 중... 잠시만 기다려 주세요.';
+      appendLog('다운로드 요청: ' + url);
+
+      const response = await fetch(url);
+      if(!response.ok) throw new Error('HTTP 오류: ' + response.status);
+
+      const blob = await response.blob();
+
+      // 파일 이름 추출
+      let filename = url.split('/').pop().split('?')[0];
+      if(!filename) filename = 'downloaded_file';
+
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+
+      setTimeout(()=>{
+        URL.revokeObjectURL(blobUrl);
+        link.remove();
+      }, 200);
+
+      statusBox.textContent = '다운로드 완료: ' + filename;
+      appendLog('다운로드 완료: ' + filename);
+    }catch(err){
+      statusBox.textContent = '다운로드 실패: ' + err.message;
+      appendLog('다운로드 실패: ' + err.message);
+      alert('다운로드 실패: ' + err.message);
+    }
+  }
+
+  downloadBtn.addEventListener('click', downloadFile);
+  urlInput.addEventListener('keydown', e=>{
+    if(e.key==='Enter') downloadFile();
+  });
+  clearBtn.addEventListener('click', ()=>{
+    urlInput.value = '';
+    urlInput.focus();
+  });
+  clearLogBtn.addEventListener('click', ()=>{
+    statusBox.textContent = '아직 다운로드 요청이 없습니다.';
+    logBox.textContent = '(로그가 없습니다)';
+  });
+</script>
+</body>
+</html>

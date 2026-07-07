@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Smart Clipboard</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    
+    <style>
+        :root {
+            --bg-app: #f3f4f6;       --bg-panel: #ffffff;
+            --border: #e5e7eb;       --primary: #2563eb;
+            --primary-soft: #eff6ff; --text-main: #1f2937;
+            --text-sub: #6b7280;
+            --font-main: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+            --font-code: 'D2Coding', 'Consolas', 'Monaco', monospace;
+        }
+
+        * { box-sizing: border-box; outline: none; }
+        
+        body { 
+            margin: 0; background: var(--bg-app); 
+            font-family: var(--font-main); color: var(--text-main);
+            height: 100vh; display: flex; flex-direction: column; overflow: hidden; 
+            -webkit-font-smoothing: antialiased;
+        }
+        
+        /* === 헤더 === */
+        header { 
+            height: 56px; background: #fff; border-bottom: 1px solid var(--border); 
+            display: flex; align-items: center; padding: 0 20px; 
+            justify-content: space-between; flex-shrink: 0; 
+            box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+        }
+        .logo { font-weight: 800; font-size: 18px; color: var(--primary); letter-spacing: -0.5px; display: flex; align-items: center; gap: 8px; }
+
+        .workspace { display: flex; flex: 1; overflow: hidden; }
+        
+        /* === 사이드바 === */
+        .pane-list { width: 380px; background: #fff; border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; }
+        .search-area { padding: 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
+        
+        .list-scroll { 
+            flex: 1; overflow-y: auto; padding: 12px; 
+            display: grid; 
+            grid-template-columns: 1fr; 
+            align-content: start; gap: 8px; 
+            background: #f8fafc; 
+        }
+        
+        /* 카드 디자인 컴팩트화 */
+        .item-card { 
+            background: #fff; 
+            padding: 12px 14px; 
+            border-radius: 8px; 
+            border: 1px solid var(--border); 
+            cursor: pointer; transition: all 0.2s ease;
+            display: flex; flex-direction: column; 
+            gap: 4px; 
+            box-shadow: 0 1px 2px rgba(0,0,0,0.03); 
+            height: 88px; 
+        }
+        .item-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-color: #cbd5e1; }
+        .item-card.active { border: 2px solid var(--primary); background: #fff; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+        
+        .card-title { 
+            font-size: 14px; font-weight: 700; line-height: 1.35; 
+            color: var(--text-main); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; flex: 1; 
+        }
+        .card-meta { display: flex; justify-content: space-between; align-items: center; margin-top: auto; }
+        .card-tag { font-size: 11px; font-weight: 600; color: var(--primary); background: var(--primary-soft); padding: 2px 8px; border-radius: 4px; }
+        .card-time { font-size: 11px; color: #9ca3af; }
+
+        /* === 에디터 영역 === */
+        .pane-editor { flex: 1; background: #fff; display: flex; flex-direction: column; position: relative; }
+        .toolbar { height: 56px; padding: 0 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+        .editor-scroll { flex: 1; overflow-y: auto; padding: 32px 40px; max-width: 900px; margin: 0 auto; width: 100%; }
+        
+        .input-group { margin-bottom: 20px; }
+        .input-label { display: block; font-size: 13px; font-weight: 700; color: var(--text-sub); margin-bottom: 6px; }
+        .input-field { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-family: var(--font-main); transition: 0.2s; }
+        .input-field:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+
+        /* Textarea */
+        .wysiwyg { 
+            width: 100%; min-height: 400px; padding: 20px; border: 1px solid var(--border); border-radius: 8px; 
+            font-size: 15px; line-height: 1.7; outline: none; background: #fafafa; 
+            font-family: var(--font-main); resize: vertical; color: var(--text-main);
+        }
+        .wysiwyg:focus { background: #fff; border-color: var(--primary); }
+        .wysiwyg.code-mode { background-color: #1e1e1e; color: #d4d4d4; font-family: var(--font-code); border-color: #333; }
+        
+        /* 이미지 모드용 메모장 */
+        .memo-area {
+            width: 100%; min-height: 120px; padding: 16px; border: 1px solid var(--border); border-radius: 8px;
+            font-size: 14px; line-height: 1.6; outline: none; background: #fff;
+            font-family: var(--font-main); resize: vertical; color: var(--text-main);
+        }
+        .memo-area:focus { border-color: var(--primary); }
+
+        /* Markdown Preview 영역 */
+        #md-preview {
+            display: none; min-height: 400px; padding: 20px; border: 1px solid var(--border); 
+            border-radius: 8px; background: #fff; overflow-y: auto;
+        }
+        /* MD 스타일링 */
+        #md-preview h1, #md-preview h2, #md-preview h3 { border-bottom: 1px solid #eee; padding-bottom: 0.3em; margin-top: 24px; }
+        #md-preview p { margin-bottom: 16px; line-height: 1.7; }
+        #md-preview code { background: #f1f5f9; padding: 2px 4px; border-radius: 4px; font-family: var(--font-code); font-size: 90%; color: #e11d48; }
+        #md-preview pre { background: #1e293b; color: #f8fafc; padding: 16px; border-radius: 8px; overflow-x: auto; margin-bottom: 16px; }
+        #md-preview pre code { background: none; color: inherit; padding: 0; }
+        #md-preview blockquote { border-left: 4px solid var(--primary); padding-left: 16px; color: var(--text-sub); margin: 0 0 16px 0; background: #f8fafc; py: 8px; }
+        #md-preview ul, #md-preview ol { padding-left: 20px; margin-bottom: 16px; }
+
+        /* 버튼 */
+        .btn { padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; border: 1px solid transparent; transition: 0.2s; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-family: var(--font-main); }
+        .btn-primary { background: var(--primary); color: #fff; border: none; }
+        .btn-primary:hover { background: #1d4ed8; }
+        .btn-secondary { background: #fff; border-color: var(--border); color: var(--text-main); }
+        .btn-secondary:hover { background: #f3f4f6; }
+        .btn-danger { color: #dc2626; border-color: #fee2e2; background: #fff; }
+
+        /* 초기 가이드 */
+        #paste-guide { 
+            position: absolute; inset: 24px; background: #fff; z-index: 10; 
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            border: 2px dashed #cbd5e1; border-radius: 12px;
+        }
+        .guide-icon { font-size: 48px; color: #cbd5e1; margin-bottom: 16px; }
+
+        /* 이미지 리스트 */
+        .img-grid { display: flex; flex-direction: column; gap: 16px; margin-bottom: 16px; }
+        .img-slot { 
+            position: relative; width: 100%; border-radius: 8px; border: 1px solid var(--border); 
+            background: #fff; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .img-thumb { 
+            width: 100%; height: auto; display: block; 
+            max-height: 600px; object-fit: contain; background: #f9fafb; cursor: zoom-in;
+        }
+        .btn-img-del { 
+            position: absolute; top: 10px; right: 10px; 
+            background: rgba(0,0,0,0.7); color: #fff; border: none; 
+            width: 32px; height: 32px; border-radius: 50%; 
+            cursor: pointer; display: flex; align-items: center; justify-content: center; 
+            font-size: 16px; z-index: 2; transition: 0.2s;
+        }
+        .btn-img-del:hover { background: #ef4444; }
+        
+        #toast-container { position: fixed; bottom: 30px; right: 30px; z-index: 9999; }
+        .toast-chip { background: #1f2937; color: #fff; padding: 10px 20px; border-radius: 99px; font-size: 13px; margin-top: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+
+        .modal-overlay { position: fixed; inset: 0; z-index: 10000; background: rgba(0, 0, 0, 0.85); display: none; align-items: center; justify-content: center; backdrop-filter: blur(5px); animation: fadeIn 0.2s; }
+        .modal-content { max-width: 95%; max-height: 95vh; border-radius: 8px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); }
+        .modal-close { position: absolute; top: 20px; right: 30px; font-size: 40px; color: #fff; cursor: pointer; z-index: 10001; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="logo"><i class="fas fa-layer-group"></i> Smart Clipboard</div>
+    <div style="display: flex; gap: 8px;">
+        <button class="btn btn-secondary" onclick="exportData()"><i class="fas fa-download"></i> 백업</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('file-restore').click()"><i class="fas fa-upload"></i> 복구</button>
+        <input type="file" id="file-restore" hidden accept=".json" onchange="importData(this)">
+    </div>
+</header>
+
+<div class="workspace">
+    <aside class="pane-list">
+        <div class="search-area">
+            <input type="text" id="search" class="input-field" style="margin-bottom:0" placeholder="검색...">
+            <button class="btn btn-primary btn-icon" onclick="showNewForm()" title="신규 작성 (Ctrl+ALT+N)"><i class="fas fa-plus"></i></button>
+        </div>
+        <div class="list-scroll" id="item-list"></div>
+    </aside>
+
+    <main class="pane-editor">
+        <div id="paste-guide">
+            <i class="fas fa-paste guide-icon"></i>
+            <h2 style="margin:0; font-size:18px; color:var(--text-main)">Ctrl + V 로 붙여넣기</h2>
+            <p style="color:var(--text-sub); margin-top:6px; font-size:14px;">또는 상단의 [신규 작성] 버튼을 누르세요</p>
+        </div>
+
+        <div id="editor-content" style="display: none; flex-direction: column; flex: 1; overflow: hidden;">
+            <div class="toolbar">
+                <div style="font-weight:700; font-size:15px;">
+                    <i class="fas fa-pen-to-square" style="color:var(--primary); margin-right:6px;"></i> 에디터
+                </div>
+                <div style="display:flex; gap:8px;">
+                    <button class="btn btn-secondary" id="btn-md-preview" style="display:none;" onclick="toggleMdPreview()">
+                        <i class="fas fa-eye"></i> 미리보기
+                    </button>
+                    <button class="btn btn-secondary" id="btn-open-link" style="display:none; color:var(--primary);" onclick="openLink()">
+                        <i class="fas fa-external-link-alt"></i> 이동
+                    </button>
+                    
+                    <button class="btn btn-secondary" onclick="copyContent()" title="복사 (Ctrl+ALT+M)">
+                        <i class="fas fa-copy"></i> 복사
+                    </button>
+
+                    <button class="btn btn-danger" id="btn-delete" onclick="deleteCurrent()"><i class="fas fa-trash"></i> 삭제</button>
+                    <button class="btn btn-primary" id="btn-save" onclick="saveCurrent()" title="저장 (Ctrl+S)"><i class="fas fa-save"></i> 저장</button>
+                </div>
+            </div>
+            
+            <div class="editor-scroll">
+                <div style="display: grid; grid-template-columns: 3fr 1fr; gap: 16px;">
+                    <div class="input-group">
+                        <label class="input-label">제목</label>
+                        <input type="text" id="inp-summary" class="input-field" placeholder="제목을 입력하세요">
+                    </div>
+                    <div class="input-group">
+                        <label class="input-label">유형</label>
+                        <select id="inp-cat" class="input-field" onchange="checkCategory()"></select>
+                    </div>
+                </div>
+
+                <div class="input-group" id="group-text">
+                    <label class="input-label">내용</label>
+                    <textarea id="inp-desc" class="wysiwyg" placeholder="내용을 입력하세요..." spellcheck="false"></textarea>
+                    <div id="md-preview"></div>
+                </div>
+
+                <div class="input-group" id="group-image" style="display:none;">
+                    <label class="input-label">첨부된 이미지</label>
+                    <div id="img-grid" class="img-grid"></div>
+
+                    <label class="input-label" style="margin-top:20px;">메모</label>
+                    <textarea id="inp-memo" class="memo-area" placeholder="이미지에 대한 설명을 입력하세요..." spellcheck="false"></textarea>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<div id="img-modal" class="modal-overlay" onclick="closeModal()">
+    <div class="modal-close">&times;</div>
+    <img id="modal-img-tag" class="modal-content" src="" onclick="event.stopPropagation()">
+</div>
+<div id="toast-container"></div>
+
+<script>
+    let db;
+    let currentId = null;
+    let currentFiles = [];
+    let isSaving = false;
+    let isMdPreviewMode = false;
+    let searchTimer = null; // 검색 딜레이 타이머
+
+    // 유형 정의
+    const TYPES_TEXT = [
+        {val: '텍스트', label: '📝 텍스트'},
+        {val: 'MD', label: '📑 Markdown'},
+        {val: '코드', label: '💻 코드'},
+        {val: '링크', label: '🔗 링크'}
+    ];
+    const TYPES_IMG = [
+        {val: '이미지', label: '🖼️ 이미지'}
+    ];
+
+    const DB_NAME = 'ClipBoardDB';
+    const STORE_NAME = 'clips';
+
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = (e) => { e.target.result.createObjectStore(STORE_NAME, { keyPath: 'uid' }); };
+    req.onsuccess = (e) => { db = e.target.result; renderList(); };
+
+    function showToast(msg) {
+        const c = document.getElementById('toast-container');
+        const chip = document.createElement('div');
+        chip.className = 'toast-chip'; chip.innerHTML = `<i class="fas fa-check"></i> ${msg}`;
+        c.appendChild(chip); setTimeout(() => chip.remove(), 1000);
+    }
+
+    // === 키보드 단축키 핸들러 ===
+    document.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 's') {
+            e.preventDefault(); if (document.getElementById('editor-content').style.display !== 'none') saveCurrent();
+        }
+        if ((e.ctrlKey || e.metaKey) && e.altKey && e.key.toLowerCase() === 'n') {
+            e.preventDefault(); showNewForm();
+        }
+        if ((e.ctrlKey || e.metaKey) && e.altKey && e.key.toLowerCase() === 'm') {
+            e.preventDefault();
+            if (document.getElementById('editor-content').style.display !== 'none') {
+                copyContent();
+            }
+        }
+    });
+
+    async function copyContent() {
+        const cat = document.getElementById('inp-cat').value;
+        let textVal = '';
+        if (cat === '이미지') textVal = document.getElementById('inp-memo').value;
+        else textVal = document.getElementById('inp-desc').value;
+
+        try {
+            if (cat === '이미지' && currentFiles.length > 0) {
+                const base64Data = currentFiles[0].data; 
+                const res = await fetch(base64Data);
+                const blob = await res.blob();
+                await navigator.clipboard.write([ new ClipboardItem({ [blob.type]: blob }) ]);
+                showToast('이미지가 클립보드에 복사되었습니다.');
+            } else {
+                if (!textVal) return showToast('복사할 텍스트가 없습니다.');
+                await navigator.clipboard.writeText(textVal);
+                showToast('내용이 클립보드에 복사되었습니다.');
+            }
+        } catch (err) {
+            console.error(err);
+            showToast('복사 실패: ' + err.message);
+        }
+    }
+
+    // === 유형 SelectBox 업데이트 ===
+    function updateCategoryOptions(isImageMode) {
+        const sel = document.getElementById('inp-cat');
+        const currentVal = sel.value; 
+        sel.innerHTML = '';
+        
+        const list = isImageMode ? TYPES_IMG : TYPES_TEXT;
+        list.forEach(opt => {
+            const el = document.createElement('option');
+            el.value = opt.val; el.innerText = opt.label;
+            sel.appendChild(el);
+        });
+
+        if (!isImageMode && TYPES_TEXT.some(t => t.val === currentVal)) {
+            sel.value = currentVal;
+        } else {
+            sel.value = list[0].val;
+        }
+    }
+
+    // === UI 상태 업데이트 ===
+    function checkCategory() {
+        const cat = document.getElementById('inp-cat').value;
+        const groupText = document.getElementById('group-text');
+        const groupImg = document.getElementById('group-image');
+        
+        const desc = document.getElementById('inp-desc');
+        const btnLink = document.getElementById('btn-open-link');
+        const btnMd = document.getElementById('btn-md-preview');
+
+        if (cat === '이미지') {
+            groupText.style.display = 'none';
+            groupImg.style.display = 'block';
+            btnLink.style.display = 'none';
+            btnMd.style.display = 'none';
+        } else {
+            groupText.style.display = 'block';
+            groupImg.style.display = 'none';
+
+            if (cat === '코드') desc.classList.add('code-mode');
+            else desc.classList.remove('code-mode');
+
+            btnLink.style.display = (cat === '링크') ? 'inline-flex' : 'none';
+
+            if (cat === 'MD') {
+                btnMd.style.display = 'inline-flex';
+                if (isMdPreviewMode) toggleMdPreview(); 
+            } else {
+                btnMd.style.display = 'none';
+                if (isMdPreviewMode) toggleMdPreview(); 
+            }
+        }
+    }
+
+    function toggleMdPreview() {
+        const desc = document.getElementById('inp-desc');
+        const preview = document.getElementById('md-preview');
+        const btn = document.getElementById('btn-md-preview');
+
+        isMdPreviewMode = !isMdPreviewMode;
+
+        if (isMdPreviewMode) {
+            const rawText = desc.value; 
+            preview.innerHTML = marked.parse(rawText);
+            desc.style.display = 'none';
+            preview.style.display = 'block';
+            btn.innerHTML = '<i class="fas fa-edit"></i> 편집하기';
+            btn.classList.add('btn-primary'); btn.classList.remove('btn-secondary');
+        } else {
+            desc.style.display = 'block';
+            preview.style.display = 'none';
+            btn.innerHTML = '<i class="fas fa-eye"></i> 미리보기';
+            btn.classList.remove('btn-primary'); btn.classList.add('btn-secondary');
+        }
+    }
+
+    function openLink() {
+        let url = document.getElementById('inp-desc').value.trim();
+        if (!url) return alert('링크 주소가 없습니다.');
+        if (!/^https?:\/\//i.test(url)) url = 'http://' + url;
+        window.open(url, '_blank');
+    }
+
+    function openModal(src) {
+        document.getElementById('modal-img-tag').src = src;
+        document.getElementById('img-modal').style.display = 'flex';
+    }
+    function closeModal() { document.getElementById('img-modal').style.display = 'none'; }
+
+    // === 데이터 로직 ===
+    function showNewForm() {
+        currentId = null; currentFiles = [];
+        document.getElementById('paste-guide').style.display = 'flex';
+        document.getElementById('editor-content').style.display = 'none';
+        
+        document.getElementById('inp-summary').value = '';
+        document.getElementById('inp-desc').value = ''; 
+        document.getElementById('inp-memo').value = ''; 
+        
+        updateCategoryOptions(false); 
+        renderAttachGrid();
+        renderList();
+    }
+
+    function loadItem(i) {
+        document.getElementById('paste-guide').style.display = 'none';
+        document.getElementById('editor-content').style.display = 'flex';
+        
+        currentId = i.uid;
+        document.getElementById('inp-summary').value = i.summary;
+        
+        const isImgType = i.category === '이미지';
+        updateCategoryOptions(isImgType);
+        document.getElementById('inp-cat').value = i.category;
+
+        if (isImgType) {
+            document.getElementById('inp-memo').value = i.description;
+            document.getElementById('inp-desc').value = ''; 
+        } else {
+            document.getElementById('inp-desc').value = i.description;
+            document.getElementById('inp-memo').value = ''; 
+        }
+
+        currentFiles = i.attachments || [];
+        
+        checkCategory();
+        renderAttachGrid();
+        
+        // 리스트 새로고침은 생략 (클릭 시 굳이 다시 그릴 필요 없음)
+        // 강조 표시만 갱신
+        document.querySelectorAll('.item-card').forEach(c => c.classList.remove('active'));
+        // 클릭한 요소 찾아서 active 주는 로직은 renderList가 다시 불릴 때 처리됨.
+        // 여기서는 그냥 전체 다시 그리기 호출해서 active 상태 갱신
+        renderList();
+    }
+
+    function saveCurrent() {
+        if (isSaving) return;
+        const s = document.getElementById('inp-summary').value.trim();
+        const cat = document.getElementById('inp-cat').value;
+        
+        let d = '';
+        if (cat === '이미지') {
+            d = document.getElementById('inp-memo').value.trim();
+        } else {
+            d = document.getElementById('inp-desc').value.trim();
+        }
+        
+        if(!s && !d && currentFiles.length === 0) return showToast('내용이 없습니다.');
+
+        isSaving = true;
+        const btnSave = document.getElementById('btn-save');
+        btnSave.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 저장 중';
+
+        const item = {
+            uid: currentId || Date.now().toString(),
+            summary: s || (currentFiles.length > 0 ? '이미지 클립' : '제목 없음'),
+            category: cat,
+            description: d,
+            attachments: currentFiles,
+            ts: Date.now()
+        };
+
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        tx.objectStore(STORE_NAME).put(item);
+        tx.oncomplete = () => {
+            currentId = item.uid;
+            showToast('저장되었습니다.');
+            renderList();
+            isSaving = false;
+            btnSave.innerHTML = '<i class="fas fa-save"></i> 저장';
+        };
+    }
+
+    // [중요 수정] 리스트 렌더링 (중복 방지 및 디바운스 적용)
+    function renderList() {
+        const l = document.getElementById('item-list');
+        const kw = document.getElementById('search').value.toLowerCase();
+        
+        // 기존에는 여기서 l.innerHTML = '' 를 했으나, 비동기 응답 대기 중
+        // 또 다른 요청이 오면 리스트가 겹치는 문제가 있었음.
+
+        db.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).getAll().onsuccess = (e) => {
+            // [Fix] 데이터를 가져온 직후(비동기 완료 시점)에 리스트를 비움
+            l.innerHTML = ''; 
+            
+            const items = e.target.result.sort((a,b) => b.ts - a.ts);
+            items.forEach(i => {
+                if(kw && !(i.summary + i.description).toLowerCase().includes(kw)) return;
+                const card = document.createElement('div');
+                card.className = `item-card ${currentId === i.uid ? 'active' : ''}`;
+                card.onclick = () => loadItem(i);
+                card.innerHTML = `<div class="card-title">${i.summary}</div><div class="card-meta"><span class="card-tag">${i.category}</span><span class="card-time">${new Date(i.ts).toLocaleDateString()}</span></div>`;
+                l.appendChild(card);
+            });
+        };
+    }
+
+    document.addEventListener('paste', (e) => {
+        if (document.body.style.overflow === 'hidden' && document.getElementById('toast-container').children.length > 5) return;
+        
+        // 추가된 부분: 현재 포커스된 요소가 입력창인지 확인
+        const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+        const isInputFocused = activeTag === 'input' || activeTag === 'textarea';
+
+        if (document.getElementById('paste-guide').style.display !== 'none') {
+            document.getElementById('paste-guide').style.display = 'none';
+            document.getElementById('editor-content').style.display = 'flex';
+        }
+
+        const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+        let textData = e.clipboardData.getData('text');
+        
+        // 수정된 부분: 입력창에 포커스가 없을 때만(새로 붙여넣을 때만) 커스텀 텍스트 로직 실행
+        if (textData && !isInputFocused) {
+            const cat = document.getElementById('inp-cat').value;
+            if (cat === '이미지') {
+                const memo = document.getElementById('inp-memo');
+                memo.value = memo.value ? memo.value + "\n" + textData : textData;
+            } else {
+                if (isMdPreviewMode) toggleMdPreview();
+                const desc = document.getElementById('inp-desc');
+                const prev = desc.value; 
+                desc.value = prev ? prev + "\n\n" + textData : textData; 
+                
+                const subj = document.getElementById('inp-summary');
+                if(!subj.value) subj.value = textData.slice(0, 30).replace(/\n/g,' ') + (textData.length > 30 ? '...' : '');
+                
+                updateCategoryOptions(false);
+                if (/^(http|https|www)/i.test(textData.trim())) {
+                    document.getElementById('inp-cat').value = '링크';
+                } else if (/^# |```|---/m.test(textData)) {
+                    document.getElementById('inp-cat').value = 'MD';
+                } else {
+                    document.getElementById('inp-cat').value = '텍스트';
+                }
+            }
+            checkCategory();
+        }
+
+        for (let item of items) {
+            if (item.type.indexOf("image") !== -1) {
+                const blob = item.getAsFile();
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    currentFiles.push({ name: `img_${Date.now()}.png`, data: ev.target.result });
+                    updateCategoryOptions(true);
+                    document.getElementById('inp-cat').value = '이미지';
+                    renderAttachGrid();
+                    checkCategory();
+                };
+                reader.readAsDataURL(blob);
+            }
+        }
+    });
+
+    function renderAttachGrid() {
+        const grid = document.getElementById('img-grid');
+        grid.innerHTML = '';
+        currentFiles.forEach((f, idx) => {
+            const slot = document.createElement('div');
+            slot.className = 'img-slot';
+            slot.innerHTML = `<img src="${f.data}" class="img-thumb" onclick="openModal('${f.data}')"><button class="btn-img-del" onclick="event.stopPropagation(); removeFile(${idx})"><i class="fas fa-times"></i></button>`;
+            grid.appendChild(slot);
+        });
+    }
+
+    window.removeFile = (idx) => {
+        currentFiles.splice(idx, 1);
+        if(currentFiles.length === 0) {
+            updateCategoryOptions(false); 
+            const memoVal = document.getElementById('inp-memo').value;
+            document.getElementById('inp-cat').value = '텍스트';
+            document.getElementById('inp-desc').value = memoVal;
+        }
+        renderAttachGrid();
+        checkCategory();
+    };
+
+    function deleteCurrent() {
+        if(currentId && confirm('삭제하시겠습니까?')) {
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            tx.objectStore(STORE_NAME).delete(currentId);
+            tx.oncomplete = () => { showNewForm(); showToast('삭제되었습니다.'); };
+        }
+    }
+
+    window.exportData = () => {
+        db.transaction(STORE_NAME).objectStore(STORE_NAME).getAll().onsuccess = (e) => {
+            const blob = new Blob([JSON.stringify(e.target.result)], {type:'application/json'});
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+            a.download = `clipboard_backup_${new Date().toISOString().slice(0,10)}.json`; a.click();
+        };
+    };
+    window.importData = (inp) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const data = JSON.parse(e.target.result);
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            data.forEach(i => tx.objectStore(STORE_NAME).put(i));
+            tx.oncomplete = () => { renderList(); showToast('복구 완료'); };
+        };
+        reader.readAsText(inp.files[0]);
+    };
+
+    // [Fix] 검색 시 너무 잦은 렌더링 방지 (Debounce 적용)
+    document.getElementById('search').oninput = (e) => {
+        if(searchTimer) clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => {
+            renderList();
+        }, 100); // 0.1초 딜레이
+    };
+</script>
+</body>
+</html>

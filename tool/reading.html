@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>리딩 마스터</title>
+    
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <style>
+        /* === 웹 폰트 적용 (전자책 전용/본문 가독성 최적화 폰트) === */
+        @font-face {
+            font-family: 'KoPubWorldDotum';
+            font-weight: 400;
+            font-style: normal;
+            src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_2201-2@1.0/KoPubWorldDotumMedium.woff') format('woff');
+        }
+        @font-face {
+            font-family: 'KoPubWorldDotum';
+            font-weight: 800;
+            font-style: normal;
+            src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_2201-2@1.0/KoPubWorldDotumBold.woff') format('woff');
+        }
+
+        /* === 1. Design System Variables === */
+        :root {
+            --bg-body: #F9FAFB;
+            --bg-surface: #FFFFFF;
+            --bg-reading: #FDFBF7; /* 눈이 편안한 크림색 바탕 */
+            --border-light: #F3F4F6;
+            --border-base: #E5E7EB;
+            
+            --text-main: #111827;
+            --text-reading-muted: #374151; /* 본문 일반 글자 색상 */
+            --text-muted: #6B7280;
+            
+            --primary: #111827;       
+            --primary-hover: #374151;
+            --accent: #2563EB;
+            --accent-hover: #1D4ED8;
+            --secondary: #FFFFFF;
+            --secondary-hover: #F9FAFB;
+            --danger: #EF4444;
+            --success: #10b981;
+            
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+            --radius-sm: 6px;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+            
+            --font-ui: 'Pretendard', system-ui, -apple-system, sans-serif;
+            --font-reading: 'KoPubWorldDotum', 'Pretendard', sans-serif; /* 본문 전용 폰트 */
+        }
+
+        * { box-sizing: border-box; outline: none; margin: 0; padding: 0; transition: border-color 0.2s, background-color 0.2s, color 0.2s, box-shadow 0.2s; }
+        
+        body {
+            background: var(--bg-body); color: var(--text-main);
+            font-family: var(--font-ui); font-size: 14px;
+            height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* === 2. Header === */
+        header { 
+            background: var(--bg-surface); border-bottom: 1px solid var(--border-base); 
+            padding: 0 32px; z-index: 50; 
+            display: flex; justify-content: space-between; align-items: center; 
+            height: 72px; flex-shrink: 0; box-shadow: var(--shadow-sm);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); /* 애니메이션 부드럽게 */
+        }
+        .logo { 
+            font-weight: 800; font-size: 20px; color: var(--primary); 
+            display: flex; align-items: center; gap: 10px; letter-spacing: -0.02em; 
+        }
+        .logo i { color: var(--accent); font-size: 28px; }
+        
+        .header-actions { display: flex; gap: 8px; align-items: center; }
+        .divider { width: 1px; height: 24px; background: var(--border-base); margin: 0 12px; }
+
+        /* === 3. Buttons === */
+        .btn { 
+            padding: 10px 16px; border-radius: var(--radius-md); font-weight: 600; cursor: pointer; border: none; 
+            display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 14px; font-family: inherit;
+        }
+        .btn i { font-size: 18px; }
+        
+        .btn-primary { background: var(--primary); color: white; box-shadow: var(--shadow-sm); }
+        .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
+        
+        .btn-secondary { background: var(--secondary); border: 1px solid var(--border-base); color: var(--text-main); box-shadow: var(--shadow-sm); }
+        .btn-secondary:hover { background: var(--secondary-hover); border-color: #D1D5DB; }
+
+        /* === 4. Main Layout & Sidebar === */
+        .layout-container { display: flex; flex: 1; overflow: hidden; }
+        
+        aside {
+            width: 400px; background: var(--bg-surface); border-right: 1px solid var(--border-base);
+            display: flex; flex-direction: column; flex-shrink: 0;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .sidebar-section { padding: 24px; border-bottom: 1px solid var(--border-base); display: flex; flex-direction: column; gap: 16px; }
+        .sidebar-section.grow { flex: 1; border-bottom: none; overflow: hidden; }
+        
+        .sidebar-title { font-size: 14px; font-weight: 800; color: var(--text-main); display: flex; align-items: center; gap: 6px; }
+        .sidebar-title i { color: var(--accent); font-size: 18px; }
+
+        /* Textarea */
+        textarea {
+            width: 100%; height: 100%; padding: 16px; border: 1px solid var(--border-base); border-radius: var(--radius-md);
+            font-size: 15px; line-height: 1.6; resize: none; font-family: inherit; outline: none; color: var(--text-main);
+            background: var(--bg-body);
+        }
+        textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); background: #ffffff; }
+        textarea::placeholder { color: #9CA3AF; }
+
+        /* Sliders */
+        .range-group { display: flex; flex-direction: column; gap: 10px; }
+        .range-header { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 600; color: var(--text-muted); }
+        .range-val { color: var(--accent); font-weight: 700; background: #EFF6FF; padding: 2px 8px; border-radius: 999px; font-size: 12px; }
+        
+        input[type="range"] {
+            -webkit-appearance: none; width: 100%; height: 6px; background: var(--border-base); border-radius: 999px; outline: none; cursor: pointer;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; width: 18px; height: 18px; border-radius: 50%;
+            background: var(--accent); cursor: pointer; border: 2px solid white; box-shadow: var(--shadow-sm); transition: transform 0.1s;
+        }
+        input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.15); }
+
+        /* === 5. Workspace (Reading Area) === */
+        main { 
+            flex: 1; background: var(--bg-body); padding: 32px; overflow-y: auto; 
+            display: flex; justify-content: center; align-items: flex-start; 
+            transition: padding 0.3s ease; 
+        }
+        
+        .reading-card {
+            width: 100%; max-width: 900px; background: var(--bg-reading); border-radius: var(--radius-lg); 
+            border: 1px solid #E5E0D8; 
+            box-shadow: var(--shadow-md); padding: 48px; min-height: calc(100vh - 140px);
+            transition: min-height 0.3s ease;
+        }
+
+        #output {
+            font-family: var(--font-reading); /* 가독성 전용 폰트 적용 */
+            color: var(--text-reading-muted);
+            word-break: keep-all; 
+            white-space: pre-wrap; 
+            transition: font-size 0.2s, line-height 0.2s;
+            /* 속독 및 난독증 지원을 위한 자간/어간 최적화 */
+            letter-spacing: 0.02em; 
+            word-spacing: 0.08em; 
+        }
+
+        /* 바이오닉 리딩 강조 디자인 */
+        #output b {
+            font-family: var(--font-reading);
+            font-weight: 800; /* 확실한 대비를 위한 Bold */
+            color: #000000; 
+        }
+
+        .empty-state {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            height: 100%; min-height: 400px; color: var(--text-muted); gap: 16px; opacity: 0.6;
+            font-family: var(--font-ui); /* 빈 상태 안내문은 UI 폰트로 유지 */
+        }
+        .empty-state i { font-size: 64px; }
+        .empty-state p { font-size: 16px; font-weight: 600; }
+        .shortcut-hint { font-size: 13px; color: var(--text-muted); margin-top: 8px; background: var(--bg-body); padding: 4px 12px; border-radius: 999px; }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
+
+        /* === 6. Immersive Mode (몰입 모드) === */
+        body.immersive-mode header {
+            margin-top: -72px; /* 헤더 완벽 숨김 */
+            opacity: 0;
+            pointer-events: none;
+        }
+        body.immersive-mode aside {
+            margin-left: -400px; /* 사이드바 완벽 숨김 */
+            opacity: 0;
+            pointer-events: none;
+        }
+        body.immersive-mode main {
+            padding: 40px; /* 여백 확대 */
+        }
+        body.immersive-mode .reading-card {
+            min-height: calc(100vh - 80px); /* 헤더가 사라진 만큼 높이 확장 */
+        }
+
+        /* === Toast === */
+        #toast-container { position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%); z-index: 6000; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+        .toast {
+            background: #1F2937; color: white; padding: 12px 24px; border-radius: 999px; font-size: 14px; font-weight: 600;
+            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3); animation: slideUp 0.3s ease; display: flex; align-items: center; gap: 10px;
+            font-family: var(--font-ui);
+        }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="logo"><i class="ph ph-book-open-text"></i> 리딩 마스터</div>
+    <div class="header-actions">
+        <button class="btn btn-secondary" onclick="clearText()"><i class="ph ph-eraser"></i> 초기화</button>
+        <div class="divider"></div>
+        <button class="btn btn-primary" onclick="copyResult()"><i class="ph ph-copy"></i> 결과 복사</button>
+    </div>
+</header>
+
+<div class="layout-container">
+    <aside>
+        <div class="sidebar-section">
+            <div class="sidebar-title"><i class="ph ph-sliders-horizontal"></i> 뷰어 설정</div>
+            <div class="range-group">
+                <div class="range-header">
+                    <label>글자 크기 (Font Size)</label>
+                    <span class="range-val" id="fontSizeVal">18px</span>
+                </div>
+                <input type="range" id="fontSize" min="14" max="40" value="18">
+            </div>
+            <div class="range-group" style="margin-top: 8px;">
+                <div class="range-header">
+                    <label>줄 간격 (Line Height)</label>
+                    <span class="range-val" id="lineHeightVal">1.8</span>
+                </div>
+                <input type="range" id="lineHeight" min="1.2" max="3.0" step="0.1" value="1.8">
+            </div>
+        </div>
+
+        <div class="sidebar-section grow">
+            <div class="sidebar-title"><i class="ph ph-keyboard"></i> 텍스트 입력</div>
+            <textarea id="inputText" spellcheck="false" placeholder="여기에 읽고 싶은 텍스트를 붙여넣으세요. 입력하는 즉시 우측 화면에 변환됩니다..."></textarea>
+        </div>
+    </aside>
+
+    <main>
+        <div class="reading-card">
+            <div id="output">
+                <div class="empty-state">
+                    <i class="ph ph-book-open"></i>
+                    <p>좌측에 텍스트를 입력하면 이곳에 렌더링됩니다.</p>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<div id="toast-container"></div>
+
+<script>
+    const inputText = document.getElementById('inputText');
+    const outputDiv = document.getElementById('output');
+    const fontSizeSlider = document.getElementById('fontSize');
+    const lineHeightSlider = document.getElementById('lineHeight');
+    const fontSizeVal = document.getElementById('fontSizeVal');
+    const lineHeightVal = document.getElementById('lineHeightVal');
+
+    // UI State Initialization
+    outputDiv.style.fontSize = fontSizeSlider.value + 'px';
+    outputDiv.style.lineHeight = lineHeightSlider.value;
+
+    // Range Slider Events
+    fontSizeSlider.addEventListener('input', function() {
+        outputDiv.style.fontSize = this.value + 'px';
+        fontSizeVal.textContent = this.value + 'px';
+    });
+
+    lineHeightSlider.addEventListener('input', function() {
+        outputDiv.style.lineHeight = this.value;
+        lineHeightVal.textContent = this.value;
+    });
+
+    // Real-time Text Processing (Bionic Reading Logic)
+    function processText() {
+        const text = inputText.value;
+        
+        if (!text.trim()) {
+            outputDiv.innerHTML = `
+                <div class="empty-state">
+                    <i class="ph ph-book-open"></i>
+                    <p>좌측에 텍스트를 입력하면 이곳에 렌더링됩니다.</p>
+                    <span class="shortcut-hint"><i class="ph ph-keyboard"></i> 몰입 모드 켜기/끄기: <b>Ctrl + H</b></span>
+                </div>
+            `;
+            return;
+        }
+
+        // 줄바꿈 보존을 위해 먼저 분리
+        const lines = text.split('\n');
+        
+        const processedLines = lines.map(line => {
+            // 띄어쓰기 기준으로 단어 분리
+            const words = line.split(' ');
+            
+            const processedWords = words.map(word => {
+                if (word.length === 0) return '';
+                
+                // 단어의 앞 절반(올림)을 굵게 처리
+                const highlightLen = word.length === 1 ? 1 : Math.ceil(word.length / 2);
+                
+                const boldPart = word.substring(0, highlightLen);
+                const normalPart = word.substring(highlightLen);
+                
+                return `<b>${boldPart}</b>${normalPart}`;
+            });
+
+            return processedWords.join(' ');
+        });
+
+        // CSS의 white-space: pre-wrap 속성을 이용해 문자열 자체로 렌더링
+        outputDiv.innerHTML = processedLines.join('\n');
+    }
+
+    // Input Event Listener for Real-time updating
+    inputText.addEventListener('input', processText);
+
+    // Utilities
+    function clearText() {
+        inputText.value = '';
+        processText();
+        inputText.focus();
+    }
+
+    function copyResult() {
+        if (!inputText.value.trim()) {
+            showToast("<i class='ph ph-warning-circle' style='color:var(--danger)'></i> 복사할 내용이 없습니다.");
+            return;
+        }
+        
+        // HTML 형태 그대로 클립보드에 복사 (서식 유지)
+        const blobHTML = new Blob([outputDiv.innerHTML], { type: 'text/html' });
+        const blobText = new Blob([outputDiv.innerText], { type: 'text/plain' });
+        const clipboardItem = new ClipboardItem({
+            'text/html': blobHTML,
+            'text/plain': blobText
+        });
+
+        navigator.clipboard.write([clipboardItem]).then(() => {
+            showToast("<i class='ph ph-check-circle' style='color:var(--success)'></i> 변환된 텍스트가 복사되었습니다.");
+        }).catch(err => {
+            console.error('복사 실패:', err);
+            showToast("<i class='ph ph-warning-circle' style='color:var(--danger)'></i> 복사에 실패했습니다.");
+        });
+    }
+
+    function showToast(msg) {
+        const box = document.getElementById('toast-container');
+        const el = document.createElement('div');
+        el.className = 'toast'; el.innerHTML = msg;
+        box.appendChild(el);
+        setTimeout(() => {
+            el.style.opacity = '0';
+            el.style.transform = 'translateY(20px)';
+            el.style.transition = 'all 0.3s ease';
+            setTimeout(()=>el.remove(), 300);
+        }, 1000);
+    }
+
+    // === 몰입 모드 단축키 (Ctrl + H) ===
+    document.addEventListener('keydown', function(e) {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'h') {
+            e.preventDefault(); // 브라우저 기본 동작 방지 (ex: 방문 기록 창)
+            document.body.classList.toggle('immersive-mode');
+            
+            if (document.body.classList.contains('immersive-mode')) {
+                showToast("<i class='ph ph-corners-out'></i> 몰입 모드가 켜졌습니다. (종료: Ctrl + H)");
+            } else {
+                showToast("<i class='ph ph-corners-in'></i> 몰입 모드가 꺼졌습니다.");
+            }
+        }
+    });
+</script>
+
+</body>
+</html>

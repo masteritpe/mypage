@@ -1,0 +1,1485 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>엑셀 뷰어</title>
+    <style>
+        /* Modern Light Theme Variables */
+        :root {
+            --bg-color: #f8fafc;
+            --surface-color: #ffffff;
+            --text-primary: #0f172a;
+            --text-secondary: #64748b;
+            --border-color: #e2e8f0;
+            --primary-color: #3b82f6;
+            --primary-hover: #2563eb;
+            --danger-color: #ef4444;
+            --danger-hover: #dc2626;
+            --table-header-bg: #f1f5f9;
+            --table-hover-bg: #f8fafc;
+            --edit-bg: #eff6ff;
+            --success-bg: #dcfce7;
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --radius-md: 8px;
+            --radius-lg: 12px;
+            --radius-full: 9999px;
+            --transition-fast: 0.15s ease-in-out;
+            /* 폰트 사이즈 동적 변수 */
+            --table-font-size: 13px; 
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        /* --- 확장 모드 (UI 숨김) --- */
+        .hidden-ui {
+            display: none !important;
+        }
+
+        /* --- Header --- */
+        header {
+            background-color: var(--surface-color);
+            border-bottom: 1px solid var(--border-color);
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: var(--shadow-sm);
+            z-index: 10;
+        }
+        .header-left { display: flex; align-items: center; gap: 20px; }
+        header h1 { 
+            font-size: 20px; 
+            font-weight: 700; 
+            margin: 0; 
+            letter-spacing: -0.5px; 
+            display: flex; 
+            align-items: center; 
+            gap: 8px; 
+        }
+
+        /* --- Buttons & Toggles --- */
+        .btn {
+            appearance: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            border: 1px solid var(--border-color);
+            background-color: var(--surface-color);
+            color: var(--text-primary);
+            padding: 8px 16px;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 14px;
+            transition: all var(--transition-fast);
+            box-shadow: var(--shadow-sm);
+            white-space: nowrap;
+        }
+        .btn:hover { border-color: #cbd5e1; background-color: #f8fafc; }
+        .btn:focus { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+        
+        .btn.primary { background-color: var(--primary-color); color: white; border-color: var(--primary-color); }
+        .btn.primary:hover { background-color: var(--primary-hover); border-color: var(--primary-hover); }
+        .btn.danger { color: var(--danger-color); border-color: #fecaca; background-color: #fef2f2; }
+        .btn.danger:hover { background-color: #fee2e2; border-color: #fca5a5; }
+
+        .btns-right { display: flex; gap: 12px; align-items: center; }
+
+        /* 모드 토글 스위치 */
+        .mode-toggle {
+            display: flex;
+            background-color: #f1f5f9;
+            border-radius: var(--radius-md);
+            padding: 4px;
+            gap: 2px;
+            border: 1px solid var(--border-color);
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
+        }
+        .mode-btn {
+            appearance: none;
+            background: transparent;
+            border: none;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .mode-btn.active {
+            background-color: var(--surface-color);
+            color: var(--primary-color);
+            box-shadow: var(--shadow-sm);
+        }
+
+        /* --- Main Layout --- */
+        main {
+            padding: 24px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            overflow: hidden;
+        }
+
+        /* --- Panels --- */
+        .panel {
+            background-color: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 16px 20px;
+            box-shadow: var(--shadow-sm);
+            flex-shrink: 0;
+        }
+
+        .global-search-row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+        .input-text {
+            flex: 1; min-width: 200px; padding: 10px 14px;
+            border: 1px solid var(--border-color); border-radius: var(--radius-md);
+            font-size: 14px; transition: border-color var(--transition-fast);
+        }
+        .input-text:focus { outline: none; border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+        .badge { background-color: #e0f2fe; color: #0369a1; padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: 600; white-space: nowrap; }
+
+        .header-setting-row { display: flex; align-items: center; gap: 8px; border-right: 1px solid var(--border-color); padding-right: 16px; }
+        .header-setting-row label { font-size: 13px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
+        .header-setting-row input[type="number"] { width: 60px; padding: 6px; border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: 13px; text-align: center; }
+
+        /* --- Column Visibility Pills --- */
+        .visibility-panel {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            overflow-x: auto;
+            padding: 12px 20px;
+        }
+        .visibility-label {
+            display: flex; align-items: center; gap: 6px;
+            font-size: 14px; font-weight: 600; color: var(--text-secondary);
+            white-space: nowrap; flex-shrink: 0;
+        }
+        .pill-container { display: flex; gap: 8px; align-items: center; }
+        .pill {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 6px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-full);
+            background-color: var(--surface-color);
+            color: var(--text-secondary);
+            font-size: 13px; font-weight: 500;
+            cursor: pointer; user-select: none;
+            white-space: nowrap; transition: all 0.2s;
+        }
+        .pill:hover { background-color: #f1f5f9; }
+        .pill.active {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+            background-color: #eff6ff;
+        }
+        .pill svg { width: 14px; height: 14px; flex-shrink: 0; }
+        .pill:not(.active) .check-icon { display: none; }
+        .pill:not(.active) .uncheck-icon { display: block; }
+        .pill.active .check-icon { display: block; }
+        .pill.active .uncheck-icon { display: none; }
+
+        /* --- Table Area --- */
+        .table-container {
+            flex: 1;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            background-color: var(--surface-color);
+            box-shadow: var(--shadow-sm);
+            overflow: auto;
+            position: relative;
+        }
+
+        #data-table {
+            border-collapse: separate;
+            border-spacing: 0;
+            width: max-content; 
+            min-width: 100%;
+            table-layout: fixed;
+        }
+
+        #data-table thead th {
+            background-color: var(--table-header-bg);
+            color: var(--text-primary);
+            border-bottom: 1px solid var(--border-color);
+            border-right: 1px solid var(--border-color);
+            padding: 12px 16px;
+            text-align: left;
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            font-weight: 600;
+            font-size: 13px; /* 컬럼명 사이즈 고정 */
+            white-space: nowrap;
+            min-width: 30px; 
+            cursor: pointer; 
+            user-select: none;
+            transition: background-color 0.2s;
+        }
+        
+        #data-table thead th:hover {
+            background-color: #e2e8f0;
+        }
+
+        .th-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        .th-text {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .th-actions {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            flex-shrink: 0;
+        }
+
+        .action-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2px;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+        
+        .action-icon.filter-btn:hover {
+            background-color: #cbd5e1;
+            color: var(--primary-color);
+        }
+
+        #data-table tbody td {
+            border-bottom: 1px solid var(--border-color);
+            border-right: 1px solid var(--border-color);
+            padding: 12px 16px;
+            vertical-align: top;
+            line-height: 1.5;
+            color: var(--text-primary);
+            font-size: var(--table-font-size); /* 항목 내용 사이즈 변수 연동 */
+            overflow: hidden;
+            word-wrap: break-word;
+            transition: background-color 0.2s, outline 0.1s;
+            cursor: pointer; 
+        }
+
+        .copy-feedback { background-color: var(--success-bg) !important; }
+
+        #data-table tbody td[contenteditable="true"] { 
+            cursor: text; 
+            background-color: var(--edit-bg);
+            outline: 2px solid var(--primary-color); 
+            outline-offset: -2px; 
+        }
+
+        #data-table tbody tr:hover td:not(.copy-feedback):not([contenteditable="true"]) { 
+            background-color: var(--table-hover-bg); 
+        }
+        
+        #data-table th:last-child, #data-table td:last-child { border-right: none; }
+
+        .resizer {
+            position: absolute; top: 0; right: 0; width: 6px;
+            cursor: ew-resize; 
+            cursor: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%233b82f6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 15l-3-3 3-3M16 9l3 3-3 3M5 12h14'/%3E%3C/svg%3E") 12 12, ew-resize;
+            user-select: none; height: 100%; z-index: 3;
+        }
+        .resizer:hover, .resizing { border-right: 2px solid var(--primary-color); }
+
+        /* --- Filter Popup --- */
+        .filter-popup {
+            position: absolute;
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-md);
+            padding: 12px;
+            z-index: 1000;
+            min-width: 200px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            font-family: inherit;
+        }
+        .filter-popup-list {
+            overflow-y: auto;
+            max-height: 200px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .filter-popup-list label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            cursor: pointer;
+            color: var(--text-primary);
+            user-select: none;
+        }
+        .filter-popup-list input[type="checkbox"] {
+            margin: 0;
+            cursor: pointer;
+        }
+        .filter-popup-btns {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            border-top: 1px solid var(--border-color);
+            padding-top: 10px;
+            margin-top: 4px;
+        }
+
+        /* --- Toasts & Empty State --- */
+        #toast-area { 
+            position: fixed; 
+            bottom: 24px; 
+            left: 50%; 
+            transform: translateX(-50%); 
+            z-index: 9999; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 10px; 
+            align-items: center;
+        }
+        .toast { 
+            background-color: var(--surface-color); 
+            color: var(--text-primary); 
+            border: 1px solid var(--border-color); 
+            border-radius: var(--radius-md); 
+            padding: 12px 24px; 
+            min-width: 280px; 
+            box-shadow: var(--shadow-md); 
+            display: flex; 
+            align-items: center; 
+            gap: 12px; 
+            animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; 
+        }
+        .toast.ok { border-bottom: 4px solid #10b981; } 
+        .toast.bad { border-bottom: 4px solid #ef4444; } 
+        .toast.warn { border-bottom: 4px solid #f59e0b; }
+        .toast.info { border-bottom: 4px solid #3b82f6; }
+        
+        @keyframes slideUp { 
+            from { transform: translateY(100%); opacity: 0; } 
+            to { transform: translateY(0); opacity: 1; } 
+        }
+
+        .empty-state { padding: 60px 20px; text-align: center; color: var(--text-secondary); display: flex; flex-direction: column; align-items: center; gap: 12px; line-height: 1.6;}
+        .empty-state svg { width: 48px; height: 48px; color: #cbd5e1; }
+    </style>
+</head>
+<body>
+    <header id="main-header">
+        <div class="header-left">
+            <h1>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--primary-color)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <rect width="18" height="18" x="3" y="3" rx="2"></rect>
+                    <path d="M3 9h18"></path>
+                    <path d="M9 21V9"></path>
+                </svg>
+                엑셀 뷰어
+            </h1>
+        </div>
+        <div class="btns-right">
+            <span id="list-count" class="badge">데이터 없음</span>
+            
+            <div class="mode-toggle">
+                <button class="mode-btn active" id="mode-edit" title="편집 모드: 클릭 시 즉시 수정">편집</button>              
+                <button class="mode-btn" id="mode-read" title="읽기 모드: 클릭 시 복사, 더블 클릭 시 수정">읽기</button>
+            </div>
+
+            <button class="btn" id="btn-save" title="수정된 데이터를 브라우저에 저장합니다. (단축키: Ctrl + S)">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+                DB 저장
+            </button>
+            
+            <button class="btn danger" id="btn-clear-db" title="브라우저에 저장된 데이터를 삭제하고 초기화합니다.">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                DB 초기화
+            </button>
+
+            <button class="btn" id="btn-export" title="현재 표의 데이터를 엑셀로 내보냅니다.">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                내보내기
+            </button>
+            <label class="btn primary" for="excelFile">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"></path></svg>
+                파일 열기
+            </label>
+            <input type="file" id="excelFile" accept=".xlsx, .xls" style="display:none" />
+        </div>
+    </header>
+
+    <main>
+        <div class="panel" id="panel-search">
+            <div class="global-search-row">
+                <div class="header-setting-row">
+                    <label for="input-header-row">헤더 행</label>
+                    <input type="number" id="input-header-row" min="1" value="1" title="엑셀 기준 헤더 행 번호 입력" />
+                    <button class="btn" id="btn-apply-header" style="padding: 6px 10px; font-size: 13px;">적용</button>
+                </div>
+
+                <input id="filter-global-search" class="input-text" type="text" placeholder="검색어를 입력하세요 (모든 컬럼 대상)" title="전체 검색" />
+                
+                <button class="btn" id="btn-clear-all-filter" title="검색 및 전체 필터 초기화">초기화</button>
+            </div>
+        </div>
+
+        <div class="panel visibility-panel" id="panel-visibility">
+            <div class="visibility-label">
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                표시 컬럼
+            </div>
+            <div id="col-pill-container" class="pill-container">
+                <span style="font-size: 13px; color: var(--text-secondary);">파일을 불러오면 항목이 표시됩니다.</span>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table id="data-table">
+                <thead>
+                    <tr><th style="text-align: center; cursor: default;">대기중</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>
+                            <div class="empty-state">
+                                <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12l-3-3m0 0l-3 3m3-3v6m-1.5-15H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"></path></svg>
+                                <span>우측 상단의 <b>'파일 열기'</b> 버튼을 눌러주세요.<br>
+                                <b>[읽기 모드]</b> 클릭: 복사 / 더블클릭: 수정<br>
+                                <b>[편집 모드]</b> 클릭: 바로 수정<br>
+                                <b>Ctrl + (+, -)</b>: 내용 폰트 크기 조절<br>
+                                <b>Ctrl + S</b>: 현재 데이터 브라우저 저장<br>
+                                <b>Ctrl + H</b>: 확장 모드 (UI 숨기기/표시)</span>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <div id="toast-area" aria-live="polite"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <script>
+        (function() {
+            const state = {
+                rawJsonData: [],
+                data: [], 
+                headers: [],
+                filters: { globalSearch: "", columns: {} }, // [수정] 다중 필터 대신 컬럼별 필터 객체 관리
+                visibleColumns: {},
+                mode: 'edit', 
+                sort: { colName: null, direction: 'none' }, 
+                fontSize: 13, 
+                isExpandedMode: false,
+                showOnlyModified: false
+            };
+
+            const escMap = {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"};
+            const esc = s => String(s ?? "").replace(/[&<>"']/g, ch => escMap[ch]);
+            const uid = () => "S" + Math.random().toString(36).slice(2,8).toUpperCase();
+            
+            function stripHTML(html) {
+                const tmp = document.createElement('div');
+                tmp.innerHTML = html;
+                return tmp.textContent || tmp.innerText || '';
+            }
+
+            function htmlToExcelRichText(html) {
+                if (!html || typeof html !== 'string') return html;
+                if (!html.includes('<')) return html; 
+
+                const div = document.createElement('div');
+                div.innerHTML = html;
+                const result = [];
+                
+                function traverse(node, currentStyle) {
+                    if (node.nodeType === 3) {
+                        if (node.textContent) {
+                            result.push({ text: node.textContent, font: { ...currentStyle } });
+                        }
+                        return;
+                    }
+                    if (node.nodeType === 1) {
+                        const style = { ...currentStyle };
+                        const tag = node.tagName.toLowerCase();
+                        
+                        if (tag === 'b' || tag === 'strong' || node.style.fontWeight === 'bold' || parseInt(node.style.fontWeight) >= 600) {
+                            style.bold = true;
+                        }
+                        if (tag === 'u' || (node.style.textDecoration && node.style.textDecoration.includes('underline'))) {
+                            style.underline = true;
+                        }
+                        if (tag === 's' || tag === 'strike' || tag === 'del' || (node.style.textDecoration && node.style.textDecoration.includes('line-through'))) {
+                            style.strike = true;
+                        }
+                        if (node.style.color === 'red' || node.style.color === 'rgb(255, 0, 0)' || node.getAttribute('color') === 'red' || node.getAttribute('color')?.toLowerCase() === '#ff0000') {
+                            style.color = { argb: 'FFFF0000' };
+                        }
+                        
+                        for (let child of node.childNodes) {
+                            traverse(child, style);
+                        }
+                    }
+                }
+                traverse(div, {});
+                
+                if (result.length === 0) return '';
+                return { richText: result };
+            }
+
+            function filterAllowedStylesForClipboard(html) {
+                const div = document.createElement('div');
+                div.innerHTML = html;
+                
+                function cleanNode(node) {
+                    if (node.nodeType === 3) return; 
+                    if (node.nodeType === 1) {
+                        const tag = node.tagName.toLowerCase();
+                        const isBold = tag === 'b' || tag === 'strong' || node.style.fontWeight === 'bold' || parseInt(node.style.fontWeight) >= 600;
+                        const isUnderline = tag === 'u' || (node.style.textDecoration && node.style.textDecoration.includes('underline'));
+                        const isStrike = tag === 's' || tag === 'strike' || tag === 'del' || (node.style.textDecoration && node.style.textDecoration.includes('line-through'));
+                        const isRed = node.style.color === 'red' || node.style.color === 'rgb(255, 0, 0)' || node.getAttribute('color') === 'red' || node.getAttribute('color')?.toLowerCase() === '#ff0000';
+
+                        while (node.attributes.length > 0) {
+                            node.removeAttribute(node.attributes[0].name);
+                        }
+
+                        if (isRed) node.style.color = 'red';
+                        if (isBold && tag !== 'b' && tag !== 'strong') node.style.fontWeight = 'bold';
+                        
+                        let textDeco = [];
+                        if (isUnderline && tag !== 'u') textDeco.push('underline');
+                        if (isStrike && tag !== 'strike' && tag !== 's' && tag !== 'del') textDeco.push('line-through');
+                        if (textDeco.length > 0) node.style.textDecoration = textDeco.join(' ');
+
+                        Array.from(node.childNodes).forEach(cleanNode);
+                    }
+                }
+                cleanNode(div);
+                return div.innerHTML;
+            }
+
+            function changeSelectionFontSize(delta) {
+                let size = parseInt(document.queryCommandValue('fontSize')) || 3;
+                if (size > 7 || size < 1) size = 3;
+                size += delta;
+                if (size < 1) size = 1;
+                if (size > 7) size = 7;
+                document.execCommand('fontSize', false, size);
+            }
+            
+            let isResizingColumn = false; 
+            let activeFilterPopup = null; // 필터 팝업 관리 변수
+
+            // --- IndexedDB Setup ---
+            const DB_NAME = "ExcelViewerDB";
+            const STORE_NAME = "sessionStore";
+            let db;
+
+            function initDB() {
+                return new Promise((resolve, reject) => {
+                    const request = indexedDB.open(DB_NAME, 1);
+                    request.onupgradeneeded = (e) => {
+                        const database = e.target.result;
+                        if (!database.objectStoreNames.contains(STORE_NAME)) {
+                            database.createObjectStore(STORE_NAME);
+                        }
+                    };
+                    request.onsuccess = (e) => { db = e.target.result; resolve(); };
+                    request.onerror = (e) => reject(e.target.error);
+                });
+            }
+
+            async function saveToDB() {
+                if (!db) return;
+                const tx = db.transaction(STORE_NAME, "readwrite");
+                const store = tx.objectStore(STORE_NAME);
+                const dataToSave = {
+                    rawJsonData: state.rawJsonData,
+                    data: state.data,
+                    headers: state.headers,
+                    visibleColumns: state.visibleColumns,
+                    headerRowInput: document.getElementById('input-header-row').value,
+                    sort: state.sort,
+                    filters: state.filters, // [수정] 필터 상태 저장
+                    fontSize: state.fontSize,
+                    mode: state.mode,
+                    showOnlyModified: state.showOnlyModified
+                };
+                store.put(dataToSave, "currentSession");
+                return new Promise((resolve, reject) => {
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = () => reject(tx.error);
+                });
+            }
+
+            async function loadFromDB() {
+                if (!db) return;
+                const tx = db.transaction(STORE_NAME, "readonly");
+                const store = tx.objectStore(STORE_NAME);
+                const request = store.get("currentSession");
+                request.onsuccess = () => {
+                    const result = request.result;
+                    if (result && result.data && result.data.length > 0) {
+                        state.rawJsonData = result.rawJsonData || [];
+                        state.data = result.data || [];
+                        state.headers = result.headers || [];
+                        state.visibleColumns = result.visibleColumns || {};
+                        state.sort = result.sort || { colName: null, direction: 'none' };
+                        state.filters = result.filters || { globalSearch: "", columns: {} };
+                        state.fontSize = result.fontSize || 13;
+                        state.showOnlyModified = result.showOnlyModified || false;
+                        
+                        if(result.mode) {
+                            state.mode = result.mode;
+                            if(state.mode === 'read') {
+                                document.getElementById('mode-read').classList.add('active');
+                                document.getElementById('mode-edit').classList.remove('active');
+                            }
+                        }
+                        
+                        document.getElementById('input-header-row').value = result.headerRowInput || 1;
+                        if(state.filters.globalSearch) {
+                            document.getElementById('filter-global-search').value = state.filters.globalSearch;
+                        }
+
+                        document.documentElement.style.setProperty('--table-font-size', `${state.fontSize}px`);
+                        
+                        renderColumnPills();
+                        renderTable();
+                        toast("이전 작업 내역을 불러왔습니다.", "ok");
+                    }
+                };
+            }
+
+            async function clearDB() {
+                if (!db) return;
+                const tx = db.transaction(STORE_NAME, "readwrite");
+                const store = tx.objectStore(STORE_NAME);
+                store.delete("currentSession");
+                return new Promise((resolve, reject) => {
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = () => reject(tx.error);
+                });
+            }
+
+            // --- UI Helper Functions ---
+            let lastToastKey = "";
+            let lastToastTime = 0;
+            function toast(msg, type = "info") {
+                const area = document.getElementById("toast-area");
+                if (!area || !msg) return;
+                const key = type + "::" + msg;
+                const now = Date.now();
+                if (key === lastToastKey && now - lastToastTime < 200) return;
+                lastToastKey = key; lastToastTime = now;
+                
+                const icons = { 
+                    ok: `<svg width="20" height="20" fill="none" stroke="#10b981" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path></svg>`, 
+                    warn: `<svg width="20" height="20" fill="none" stroke="#f59e0b" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>`, 
+                    bad: `<svg width="20" height="20" fill="none" stroke="#ef4444" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path></svg>`,
+                    info: `<svg width="20" height="20" fill="none" stroke="#3b82f6" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path stroke-linecap="round" stroke-linejoin="round" d="M12 16v-4m0-4h.01"></path></svg>`
+                };
+                
+                const el = document.createElement("div"); el.className = "toast " + type;
+                el.innerHTML = `${icons[type] || icons.info || ''} <div style="font-size:14px; font-weight:500;">${esc(msg)}</div>`;
+                area.appendChild(el);
+                
+                setTimeout(() => { 
+                    if (el.parentNode === area) {
+                        el.style.opacity = '0'; el.style.transform = 'translateY(10px)'; el.style.transition = 'all 0.3s ease';
+                        setTimeout(() => el.remove(), 300);
+                    }
+                }, 1000);
+            }
+
+            // --- Data Parsing ---
+            async function importExcelFile(file) {
+                try {
+                    const data = await file.arrayBuffer();
+                    const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: null });
+                    if (!jsonData || jsonData.length === 0) throw new Error("데이터가 없는 파일입니다.");
+
+                    state.rawJsonData = jsonData;
+
+                    let autoHeaderRowIndex = 0;
+                    let maxColsCount = 0;
+                    for (let i = 0; i < Math.min(20, jsonData.length); i++) {
+                        if (!jsonData[i]) continue;
+                        const validCells = jsonData[i].filter(cell => cell != null && String(cell).trim() !== "").length;
+                        if (validCells > maxColsCount) { maxColsCount = validCells; autoHeaderRowIndex = i; }
+                    }
+
+                    document.getElementById('input-header-row').value = autoHeaderRowIndex + 1;
+                    parseDataByHeaderIndex(autoHeaderRowIndex);
+                    toast(`파일 로드 완료: ${state.data.length}건`, "ok");
+                } catch (e) {
+                    console.error(e); toast(`불러오기 실패: ${e.message}`, "bad");
+                }
+            }
+
+            function parseDataByHeaderIndex(headerRowIndex) {
+                const jsonData = state.rawJsonData;
+                if (!jsonData || jsonData.length <= headerRowIndex) return;
+
+                const rawHeaders = jsonData[headerRowIndex];
+                if (!rawHeaders || rawHeaders.length === 0) { toast("헤더를 찾을 수 없습니다.", "bad"); return; }
+                
+                const headers = [];
+                const headerCounts = {};
+                rawHeaders.forEach((h, idx) => {
+                    let cleanH = String(h || "").trim();
+                    if(cleanH === "") cleanH = `Column_${idx+1}`;
+                    if(headerCounts[cleanH]) {
+                        headerCounts[cleanH]++;
+                        cleanH = `${cleanH}_${headerCounts[cleanH]}`;
+                    } else {
+                        headerCounts[cleanH] = 1;
+                    }
+                    headers.push(cleanH);
+                });
+
+                const processedData = [];
+                const lastValues = new Array(headers.length).fill(null);
+
+                for (let i = headerRowIndex + 1; i < jsonData.length; i++) {
+                    const row = jsonData[i];
+                    if (!row) continue;
+                    
+                    const item = { id: uid(), _rowNumber: i + 1 };
+                    let rowHasValue = false;
+
+                    headers.forEach((headerName, colIndex) => {
+                        let val = row[colIndex];
+                        if (val instanceof Date) {
+                            val = `${val.getFullYear()}-${('0'+(val.getMonth()+1)).slice(-2)}-${('0'+val.getDate()).slice(-2)}`;
+                        } else if (val != null) { val = String(val).trim(); } else { val = ""; }
+
+                        if (val !== "") { 
+                            val = esc(val); 
+                            lastValues[colIndex] = val; 
+                            rowHasValue = true; 
+                        } 
+                        else if (lastValues[colIndex]) { val = lastValues[colIndex]; }
+                        
+                        item[headerName] = val;
+                        if (val) rowHasValue = true;
+                    });
+                    if (rowHasValue) processedData.push(item);
+                }
+
+                if (!headers.includes("수정여부")) {
+                    headers.unshift("수정여부");
+                }
+
+                state.data = processedData; 
+                state.headers = headers;
+                
+                const newVisible = {};
+                for (const h of headers) newVisible[h] = true;
+                state.visibleColumns = newVisible;
+                
+                state.sort = { colName: null, direction: 'none' };
+                state.showOnlyModified = false; 
+
+                state.filters = { globalSearch: "", columns: {} };
+                document.getElementById('filter-global-search').value = "";
+
+                renderColumnPills(); 
+                renderTable();
+            }
+
+            // --- Export Data ---
+            async function exportXlsx() {
+                if (!state.data.length) return toast("내보낼 데이터가 없습니다.", "warn");
+                const list = filteredData();
+                if (!list.length) return toast("필터링된 내용이 없습니다.", "warn");
+
+                const wb = new ExcelJS.Workbook();
+                const ws = wb.addWorksheet("Data");
+                const exportHeaders = state.headers.filter(h => state.visibleColumns[h] && h !== "수정여부");
+                
+                ws.columns = exportHeaders.map(h => ({ header: h, key: h, width: 20 }));
+                ws.getRow(1).font = { bold: true };
+                ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+
+                list.forEach(item => {
+                    const rowData = {};
+                    exportHeaders.forEach(h => {
+                        const htmlVal = item[h] || "";
+                        rowData[h] = htmlToExcelRichText(htmlVal);
+                    });
+                    ws.addRow(rowData);
+                });
+                
+                const buf = await wb.xlsx.writeBuffer();
+                const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a"); a.href = url;
+                a.download = "Export_" + new Date().toISOString().slice(0,10).replace(/-/g,"") + ".xlsx";
+                document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+                toast("엑셀 다운로드 완료", "ok");
+            }
+
+            // --- UI Renders & Interactions ---
+            function renderColumnPills() {
+                const container = document.getElementById("col-pill-container");
+                if (state.headers.length === 0) {
+                    container.innerHTML = '<span style="font-size: 13px; color: var(--text-secondary);">파일을 불러오면 항목이 표시됩니다.</span>';
+                    return;
+                }
+
+                container.innerHTML = "";
+                
+                const iconCheck = `<svg class="check-icon" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path></svg>`;
+                const iconUncheck = `<svg class="uncheck-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle></svg>`;
+
+                state.headers.forEach(h => {
+                    const isVisible = state.visibleColumns[h];
+                    const pill = document.createElement("div");
+                    pill.className = `pill ${isVisible ? 'active' : ''}`;
+                    pill.innerHTML = `${iconCheck}${iconUncheck} <span>${esc(h)}</span>`;
+                    
+                    pill.addEventListener("click", () => {
+                        state.visibleColumns[h] = !state.visibleColumns[h];
+                        pill.classList.toggle('active', state.visibleColumns[h]);
+                        renderTable();
+                    });
+                    container.appendChild(pill);
+                });
+            }
+
+            function filteredData() {
+                const q = (state.filters.globalSearch || "").trim().toLowerCase();
+                
+                if (state.data.length === 0) return [];
+                
+                let result = state.data.filter(item => {
+                    if (state.showOnlyModified && stripHTML((item["수정여부"] || "")).trim() !== "수정됨") return false;
+                    
+                    // [수정] 각 컬럼별 필터 체크
+                    for (const col of Object.keys(state.filters.columns)) {
+                        const allowedValues = state.filters.columns[col];
+                        if (allowedValues && allowedValues.length > 0) {
+                            const itemVal = stripHTML(item[col] || "").trim();
+                            if (!allowedValues.includes(itemVal)) return false;
+                        }
+                    }
+
+                    if (q) return state.headers.some(h => stripHTML((item[h] || "")).toLowerCase().includes(q));
+                    return true;
+                });
+                
+                if (state.sort.colName && state.sort.direction !== 'none') {
+                    const col = state.sort.colName;
+                    const dir = state.sort.direction === 'asc' ? 1 : -1;
+                    
+                    result.sort((a, b) => {
+                        const valA = stripHTML(a[col] || "");
+                        const valB = stripHTML(b[col] || "");
+                        return String(valA).localeCompare(String(valB), 'ko', { numeric: true }) * dir;
+                    });
+                } else {
+                    result.sort((a, b) => a._rowNumber - b._rowNumber);
+                }
+
+                return result;
+            }
+
+            function renderTable() {
+                const thead = document.querySelector("#data-table thead");
+                const tbody = document.querySelector("#data-table tbody");
+                const cntEl = document.getElementById("list-count");
+                
+                const cols = state.headers.filter(h => state.visibleColumns[h]);
+                const list = filteredData();
+
+                if (state.data.length === 0) {
+                    cntEl.textContent = "데이터 없음"; 
+                    if(state.rawJsonData.length === 0){
+                        thead.innerHTML = `<tr><th style="text-align: center; cursor: default;">대기중</th></tr>`;
+                        tbody.innerHTML = `<tr>
+                            <td>
+                                <div class="empty-state">
+                                    <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12l-3-3m0 0l-3 3m3-3v6m-1.5-15H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"></path></svg>
+                                    <span>우측 상단의 <b>'파일 열기'</b> 버튼을 눌러주세요.<br>
+                                    <b>[읽기 모드]</b> 클릭: 복사 / 더블클릭: 수정<br>
+                                    <b>[편집 모드]</b> 클릭: 바로 수정<br>
+                                    <b>Ctrl + (+, -)</b>: 내용 폰트 크기 조절<br>
+                                    <b>Ctrl + S</b>: 현재 데이터 브라우저 저장<br>
+                                    <b>Ctrl + H</b>: 확장 모드 (UI 숨기기/표시)</span>
+                                </div>
+                            </td>
+                        </tr>`;
+                    } else {
+                        thead.innerHTML = `<tr><th style="text-align: center; cursor: default;">알림</th></tr>`;
+                        tbody.innerHTML = `<tr><td style="text-align:center; padding: 40px;">검색 결과가 없습니다.</td></tr>`;
+                    }
+                    return;
+                }
+                
+                if (cols.length === 0) {
+                    thead.innerHTML = `<tr><th style="text-align: center; cursor: default;">알림</th></tr>`;
+                    tbody.innerHTML = `<tr><td style="text-align:center; padding: 40px;">'표시 컬럼'에서 항목을 하나 이상 선택해주세요.</td></tr>`;
+                    cntEl.textContent = `${list.length}건`; return;
+                }
+
+                let thHtml = '';
+                cols.forEach(h => {
+                    if (h === "수정여부") {
+                        let filterIcon = state.showOnlyModified 
+                            ? `<svg width="14" height="14" style="color: var(--primary-color);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>` 
+                            : `<svg width="14" height="14" style="color: #cbd5e1;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>`;
+                        
+                        thHtml += `<th data-col-name="${esc(h)}" style="width: 100px;" title="클릭하여 수정된 항목만 보기/전체 보기 토글">
+                                     <div class="th-content">
+                                         <span class="th-text">${esc(h)}</span>
+                                         <span class="sort-icon">${filterIcon}</span>
+                                     </div>
+                                     <div class="resizer" title="드래그하여 너비 조절"></div>
+                                   </th>`;
+                    } else {
+                        // 정렬 아이콘 
+                        let sortHtml = `<svg width="14" height="14" style="color: #cbd5e1;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 15l5 5 5-5M7 9l5-5 5 5"/></svg>`; 
+                        if (state.sort.colName === h) {
+                            if (state.sort.direction === 'asc') {
+                                sortHtml = `<svg width="14" height="14" style="color: var(--primary-color);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 19V5M5 12l7-7 7 7"/></svg>`;
+                            } else if (state.sort.direction === 'desc') {
+                                sortHtml = `<svg width="14" height="14" style="color: var(--primary-color);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 5v14M5 12l7 7 7-7"/></svg>`;
+                            }
+                        }
+
+                        // 필터 아이콘 (활성화 상태 확인)
+                        let isFiltered = state.filters.columns[h] && state.filters.columns[h].length > 0;
+                        let filterIconColor = isFiltered ? 'var(--primary-color)' : '#cbd5e1';
+                        let filterIconClass = isFiltered ? 'filtered' : '';
+
+                        let filterHtml = `
+                            <span class="action-icon filter-btn" data-col="${esc(h)}" title="이 항목으로 필터링">
+                                <svg width="14" height="14" style="color: ${filterIconColor};" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${isFiltered ? '3' : '2'}">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
+                                </svg>
+                            </span>`;
+
+                        thHtml += `<th data-col-name="${esc(h)}" style="width: 150px;" title="클릭하여 정렬">
+                                     <div class="th-content">
+                                         <span class="th-text">${esc(h)}</span>
+                                         <div class="th-actions">
+                                            <span class="action-icon sort-btn">${sortHtml}</span>
+                                            ${filterHtml}
+                                         </div>
+                                     </div>
+                                     <div class="resizer" title="드래그하여 너비 조절"></div>
+                                   </th>`;
+                    }
+                });
+                thead.innerHTML = `<tr>${thHtml}</tr>`;
+                
+                let tbHtml = '';
+                const tdTitle = state.mode === 'read' ? '클릭: 복사 / 더블클릭: 수정' : '클릭: 내용 수정';
+
+                list.forEach(item => {
+                    let trHtml = `<tr data-row-id="${item.id}">`;
+                    cols.forEach(h => {
+                        trHtml += `<td data-col-name="${esc(h)}" spellcheck="false" title="${tdTitle}">${item[h] !== undefined && item[h] !== null ? item[h] : ''}</td>`;
+                    });
+                    trHtml += `</tr>`;
+                    tbHtml += trHtml;
+                });
+                tbody.innerHTML = tbHtml;
+                
+                cntEl.textContent = `총 ${list.length.toLocaleString()}건`;
+                initResizers();
+            }
+
+            function initResizers() {
+                const table = document.getElementById('data-table');
+                const ths = table.querySelectorAll('th');
+                
+                ths.forEach(th => {
+                    const resizer = th.querySelector('.resizer');
+                    if (!resizer) return;
+                    
+                    let x = 0; let w = 0;
+                    const mouseDownHandler = function(e) {
+                        e.stopPropagation(); 
+                        isResizingColumn = true; 
+                        x = e.clientX;
+                        w = parseInt(window.getComputedStyle(th).width, 10);
+                        document.addEventListener('mousemove', mouseMoveHandler);
+                        document.addEventListener('mouseup', mouseUpHandler);
+                        resizer.classList.add('resizing');
+                    };
+                    const mouseMoveHandler = function(e) { 
+                        th.style.width = `${w + (e.clientX - x)}px`; 
+                    };
+                    const mouseUpHandler = function() {
+                        resizer.classList.remove('resizing');
+                        document.removeEventListener('mousemove', mouseMoveHandler);
+                        document.removeEventListener('mouseup', mouseUpHandler);
+                        
+                        setTimeout(() => { isResizingColumn = false; }, 50); 
+                    };
+                    resizer.addEventListener('mousedown', mouseDownHandler);
+                });
+            }
+
+            // --- Dropdown Filter Popup Logic ---
+            function closeFilterPopup() {
+                if (activeFilterPopup) {
+                    activeFilterPopup.remove();
+                    activeFilterPopup = null;
+                }
+            }
+
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.filter-popup') && !e.target.closest('.filter-btn')) {
+                    closeFilterPopup();
+                }
+            });
+
+            function showFilterPopup(colName, anchorEl) {
+                closeFilterPopup();
+                
+                const uniqueValues = [...new Set(state.data.map(item => stripHTML(item[colName] || '').trim()))]
+                    .filter(v => v !== '')
+                    .sort((a, b) => String(a).localeCompare(String(b), 'ko', { numeric: true }));
+
+                if (uniqueValues.length === 0) {
+                    toast("필터링할 데이터가 없습니다.", "warn");
+                    return;
+                }
+
+                const currentSelected = state.filters.columns[colName] || [];
+                const popup = document.createElement('div');
+                popup.className = 'filter-popup';
+                
+                const rect = anchorEl.getBoundingClientRect();
+                // 팝업이 화면 밖으로 넘어가지 않도록 좌표 조정 필요 시 로직 추가 가능
+                popup.style.top = (rect.bottom + window.scrollY + 8) + 'px';
+                popup.style.left = (rect.left + window.scrollX) + 'px';
+
+                const isAllChecked = currentSelected.length === 0 || currentSelected.length === uniqueValues.length;
+
+                let listHtml = uniqueValues.map(v => {
+                    const isChecked = currentSelected.length === 0 || currentSelected.includes(v) ? 'checked' : '';
+                    return `<label><input type="checkbox" value="${esc(v)}" class="filter-cb" ${isChecked}> ${esc(v)}</label>`;
+                }).join('');
+
+                popup.innerHTML = `
+                    <div style="padding-bottom: 8px; border-bottom: 1px solid var(--border-color); margin-bottom: 4px;">
+                        <label style="font-weight: 600;"><input type="checkbox" id="filter-all-cb" ${isAllChecked ? 'checked' : ''}> (모두 선택)</label>
+                    </div>
+                    <div class="filter-popup-list">
+                        ${listHtml}
+                    </div>
+                    <div class="filter-popup-btns">
+                        <button class="btn primary" id="filter-btn-ok" style="padding: 4px 10px; font-size: 13px;">적용</button>
+                        <button class="btn danger" id="filter-btn-clear" style="padding: 4px 10px; font-size: 13px;">해제</button>
+                    </div>
+                `;
+
+                document.body.appendChild(popup);
+                activeFilterPopup = popup;
+
+                const allCb = popup.querySelector('#filter-all-cb');
+                const itemCbs = popup.querySelectorAll('.filter-cb');
+
+                allCb.addEventListener('change', (e) => {
+                    itemCbs.forEach(cb => cb.checked = e.target.checked);
+                });
+
+                itemCbs.forEach(cb => {
+                    cb.addEventListener('change', () => {
+                        const allChecked = Array.from(itemCbs).every(c => c.checked);
+                        allCb.checked = allChecked;
+                    });
+                });
+
+                popup.querySelector('#filter-btn-ok').addEventListener('click', () => {
+                    const selected = Array.from(itemCbs).filter(c => c.checked).map(c => c.value);
+                    if (selected.length === uniqueValues.length || selected.length === 0) {
+                        delete state.filters.columns[colName];
+                    } else {
+                        state.filters.columns[colName] = selected;
+                    }
+                    closeFilterPopup();
+                    renderTable();
+                });
+
+                popup.querySelector('#filter-btn-clear').addEventListener('click', () => {
+                    delete state.filters.columns[colName];
+                    closeFilterPopup();
+                    renderTable();
+                });
+            }
+
+            // --- Table Interactions ---
+            const tableEl = document.getElementById('data-table');
+            
+            document.querySelector("#data-table thead").addEventListener('click', (e) => {
+                if (isResizingColumn || e.target.closest('.resizer')) return;
+
+                // 필터 버튼 클릭 시 필터 팝업 호출하고 정렬 안되게 막음
+                const filterBtn = e.target.closest('.filter-btn');
+                if (filterBtn) {
+                    e.stopPropagation();
+                    const colName = filterBtn.dataset.col;
+                    showFilterPopup(colName, filterBtn);
+                    return;
+                }
+
+                const th = e.target.closest('th');
+                if (!th) return;
+                
+                const colName = th.dataset.colName;
+                if (!colName) return;
+
+                if (colName === "수정여부") {
+                    state.showOnlyModified = !state.showOnlyModified;
+                    renderTable();
+                    return; 
+                }
+
+                if (state.sort.colName === colName) {
+                    if (state.sort.direction === 'asc') state.sort.direction = 'desc';
+                    else if (state.sort.direction === 'desc') state.sort.direction = 'none';
+                    else state.sort.direction = 'asc';
+                } else {
+                    state.sort.colName = colName;
+                    state.sort.direction = 'asc';
+                }
+                
+                renderTable();
+            });
+
+            function enterEditMode(td) {
+                td.setAttribute('contenteditable', 'true');
+                td.classList.remove('copy-feedback');
+                td.focus();
+
+                const range = document.createRange();
+                const sel = window.getSelection();
+                range.selectNodeContents(td);
+                range.collapse(false); 
+                sel.removeAllRanges();
+                sel.addRange(range);
+            }
+
+            tableEl.addEventListener('click', async (e) => {
+                const td = e.target.closest('td');
+                if (!td) return;
+                
+                if (state.mode === 'edit') {
+                    if (td.getAttribute('contenteditable') === 'true') return;
+                    enterEditMode(td);
+                    return;
+                }
+
+                if (td.getAttribute('contenteditable') === 'true') return;
+
+                const plainText = td.innerText;
+                const htmlContent = td.innerHTML;
+                if (!plainText) return;
+
+                try {
+                    const filteredHTML = filterAllowedStylesForClipboard(htmlContent);
+                    
+                    if (navigator.clipboard && navigator.clipboard.write) {
+                        const htmlBlob = new Blob([filteredHTML], { type: 'text/html' });
+                        const textBlob = new Blob([plainText], { type: 'text/plain' });
+                        const data = [new ClipboardItem({ 'text/html': htmlBlob, 'text/plain': textBlob })];
+                        await navigator.clipboard.write(data);
+                    } else {
+                        await navigator.clipboard.writeText(plainText);
+                    }
+                    
+                    td.classList.add('copy-feedback');
+                    setTimeout(() => {
+                        td.classList.remove('copy-feedback');
+                    }, 500);
+                } catch (err) {
+                    console.error('복사 실패:', err);
+                    navigator.clipboard.writeText(plainText).catch(e => console.error(e));
+                }
+            });
+
+            tableEl.addEventListener('dblclick', (e) => {
+                if (state.mode === 'edit') return; 
+                const td = e.target.closest('td');
+                if (!td) return;
+                enterEditMode(td);
+            });
+
+            tableEl.addEventListener('focusout', function(e) {
+                const td = e.target;
+                if (td.tagName === 'TD' && td.getAttribute('contenteditable') === 'true') {
+                    const rowId = td.parentElement.dataset.rowId;
+                    const colName = td.dataset.colName;
+                    const newValue = td.innerHTML; 
+                    
+                    const item = state.data.find(d => d.id === rowId);
+                    if (item && item[colName] !== newValue) { 
+                        item[colName] = newValue; 
+                        
+                        if (colName !== "수정여부") {
+                            item["수정여부"] = "수정됨";
+                            
+                            const tr = td.parentElement;
+                            if (tr) {
+                                const statusTd = tr.querySelector('td[data-col-name="수정여부"]');
+                                if (statusTd) {
+                                    statusTd.innerHTML = '<span style="color: var(--primary-color); font-weight: bold;">수정됨</span>';
+                                }
+                            }
+                        }
+                    }
+                    
+                    td.removeAttribute('contenteditable');
+                }
+            });
+
+            tableEl.addEventListener('keydown', function(e) {
+                const td = e.target;
+                if (td.tagName === 'TD' && td.getAttribute('contenteditable') === 'true') {
+                    
+                    if (e.ctrlKey || e.metaKey) {
+                        const key = e.key.toLowerCase();
+                        let handled = false;
+
+                        if (e.shiftKey) {
+                            if (key === 'x') { 
+                                document.execCommand('removeFormat');
+                                document.execCommand('hiliteColor', false, 'transparent');
+                                document.execCommand('backColor', false, 'transparent');
+                                handled = true;
+                            }
+                        } else if (e.altKey) {
+                            if (key === 'r') { document.execCommand('foreColor', false, 'red'); handled = true; } 
+                            else if (key === 'b') { document.execCommand('foreColor', false, 'blue'); handled = true; } 
+                            else if (key === 'g') { document.execCommand('foreColor', false, 'green'); handled = true; } 
+                            else if (key === 'm') { 
+                                document.execCommand('hiliteColor', false, '#0d3a9e');
+                                document.execCommand('backColor', false, '#0d3a9e');
+                                document.execCommand('foreColor', false, 'white');
+                                document.execCommand('bold');
+                                handled = true;
+                            }
+                        } else {
+                            if (key === 'b') { document.execCommand('bold'); handled = true; } 
+                            else if (key === 'i') { document.execCommand('italic'); handled = true; } 
+                            else if (key === 'u') { document.execCommand('underline'); handled = true; } 
+                            else if (key === '0') { document.execCommand('strikeThrough'); handled = true; } 
+                            else if (key >= '1' && key <= '7') { 
+                                const colors = ['#ffebd2', '#d2e6ff', '#fff4d2', '#d2ffd2', '#ffd2e6', '#e6d2c8', '#e6e6e6'];
+                                document.execCommand('hiliteColor', false, colors[parseInt(key) - 1]);
+                                document.execCommand('backColor', false, colors[parseInt(key) - 1]);
+                                handled = true;
+                            }
+                            else if (key === '+' || key === '=' || e.code === 'NumpadAdd') { 
+                                changeSelectionFontSize(1);
+                                handled = true;
+                            }
+                            else if (key === '-' || e.code === 'NumpadSubtract') { 
+                                changeSelectionFontSize(-1);
+                                handled = true;
+                            }
+                        }
+
+                        if (handled) {
+                            e.preventDefault();
+                            e.stopPropagation(); 
+                            return;
+                        }
+                    }
+
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault(); 
+                        e.target.blur(); 
+                    }
+                }
+            });
+
+            // --- Core Event Listeners & Initialization ---
+            document.addEventListener("DOMContentLoaded", () => {
+                initDB().then(loadFromDB).catch(err => console.error("DB Init Error:", err));
+
+                document.getElementById('mode-read').addEventListener('click', (e) => {
+                    state.mode = 'read';
+                    e.target.classList.add('active');
+                    document.getElementById('mode-edit').classList.remove('active');
+                    renderTable();
+                });
+                document.getElementById('mode-edit').addEventListener('click', (e) => {
+                    state.mode = 'edit';
+                    e.target.classList.add('active');
+                    document.getElementById('mode-read').classList.remove('active');
+                    renderTable();
+                });
+
+                const fileInput = document.getElementById("excelFile");
+                fileInput.addEventListener("change", (e) => {
+                    if (e.target.files[0]) importExcelFile(e.target.files[0]);
+                    e.target.value = "";
+                });
+
+                document.getElementById("btn-export").addEventListener("click", exportXlsx);
+                
+                document.getElementById("btn-save").addEventListener("click", async () => {
+                    if (state.data.length === 0) return toast("저장할 데이터가 없습니다.", "warn");
+                    try {
+                        if(document.activeElement && document.activeElement.tagName === 'TD') {
+                            document.activeElement.blur();
+                        }
+                        await saveToDB();
+                        toast("데이터가 브라우저에 저장되었습니다.", "ok");
+                    } catch (err) {
+                        toast("저장에 실패했습니다.", "bad");
+                    }
+                });
+
+                document.getElementById("btn-clear-db").addEventListener("click", async () => {
+                    if (!confirm("브라우저에 저장된 데이터와 현재 화면을 모두 초기화하시겠습니까?")) return;
+                    try {
+                        await clearDB();
+                        state.rawJsonData = [];
+                        state.data = [];
+                        state.headers = [];
+                        state.visibleColumns = {};
+                        state.filters = { globalSearch: "", columns: {} };
+                        state.sort = { colName: null, direction: 'none' };
+                        state.fontSize = 13; 
+                        state.showOnlyModified = false;
+                        
+                        document.getElementById('input-header-row').value = 1;
+                        document.getElementById('filter-global-search').value = "";
+                        document.documentElement.style.setProperty('--table-font-size', `13px`);
+                        
+                        renderColumnPills();
+                        renderTable();
+                        toast("데이터가 성공적으로 초기화되었습니다.", "ok");
+                    } catch (err) {
+                        toast("초기화에 실패했습니다.", "bad");
+                    }
+                });
+                
+                document.getElementById("btn-apply-header").addEventListener("click", () => {
+                    if (state.rawJsonData.length === 0) return toast("파일을 로드해주세요.", "warn");
+                    const inputVal = parseInt(document.getElementById('input-header-row').value, 10);
+                    if (isNaN(inputVal) || inputVal < 1 || inputVal > state.rawJsonData.length) return toast(`올바른 행 범위 입력 (1 ~ ${state.rawJsonData.length})`, "warn");
+                    parseDataByHeaderIndex(inputVal - 1);
+                    toast(`${inputVal}행 기준으로 표를 재구성했습니다.`, "ok");
+                });
+
+                document.getElementById("btn-clear-all-filter").addEventListener("click", () => {
+                    state.filters = { globalSearch: "", columns: {} };
+                    document.getElementById('filter-global-search').value = "";
+                    renderTable();
+                    toast("모든 검색 및 필터가 초기화되었습니다.", "ok");
+                });
+                
+                document.getElementById('filter-global-search').addEventListener('input', (e) => {
+                    state.filters.globalSearch = e.target.value;
+                    renderTable();
+                });
+
+                document.addEventListener('keydown', async (e) => {
+                    if (e.ctrlKey || e.metaKey) {
+                        const key = e.key.toLowerCase();
+                        
+                        if (key === 's') {
+                            e.preventDefault(); 
+                            if (state.data.length === 0) return toast("저장할 데이터가 없습니다.", "warn");
+                            try {
+                                if(document.activeElement && document.activeElement.tagName === 'TD') {
+                                    document.activeElement.blur(); 
+                                }
+                                await saveToDB();
+                                toast("데이터가 브라우저에 저장되었습니다.", "ok");
+                            } catch (err) {
+                                toast("저장에 실패했습니다.", "bad");
+                            }
+                        }
+                        
+                        if (key === '+' || key === '=' || e.code === 'NumpadAdd') {
+                            e.preventDefault();
+                            state.fontSize = Math.min(state.fontSize + 30); 
+                            document.documentElement.style.setProperty('--table-font-size', `${state.fontSize}px`);
+                            toast(`내용 폰트 크기: ${state.fontSize}px`, "info");
+                        }
+                        
+                        if (key === '-' || e.code === 'NumpadSubtract') {
+                            e.preventDefault();
+                            state.fontSize = Math.max(state.fontSize - 1, 10); 
+                            document.documentElement.style.setProperty('--table-font-size', `${state.fontSize}px`);
+                            toast(`내용 폰트 크기: ${state.fontSize}px`, "info");
+                        }
+
+                        if (key === 'h') {
+                            e.preventDefault();
+                            state.isExpandedMode = !state.isExpandedMode;
+                            
+                            const header = document.getElementById('main-header');
+                            const searchPanel = document.getElementById('panel-search');
+                            const visibilityPanel = document.getElementById('panel-visibility');
+                            
+                            if (state.isExpandedMode) {
+                                header.classList.add('hidden-ui');
+                                searchPanel.classList.add('hidden-ui');
+                                visibilityPanel.classList.add('hidden-ui');
+                                toast("확장 모드 켜짐 (헤더 및 설정 숨김)", "info");
+                            } else {
+                                header.classList.remove('hidden-ui');
+                                searchPanel.classList.remove('hidden-ui');
+                                visibilityPanel.classList.remove('hidden-ui');
+                                toast("확장 모드 꺼짐", "info");
+                            }
+                        }
+                    }
+                }, { passive: false });
+            });
+        })();
+    </script>
+</body>
+</html>

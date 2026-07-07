@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>5R 이미지</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#f6f7fb; --fg:#1f2937; --primary:#3b82f6; --muted:#64748b; --card:#ffffff; --radius:18px;
+    }
+    *{ box-sizing:border-box; }
+    body{
+      font-family:'Noto Sans KR',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+      background:var(--bg); color:var(--fg);
+      margin:0; padding:16px; min-height:100vh;
+      display:grid; gap:16px; grid-template-rows:auto 1fr auto;
+    }
+    header{ display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; }
+    .title{ font-weight:700; font-size:1.15rem; }
+    .toolbar{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+    button,select,input[type="text"]{
+      border:1px solid #dbe1ea; background:#fff; color:var(--fg);
+      padding:8px 12px; border-radius:10px; font-weight:600; cursor:pointer;
+    }
+    button.primary{ background:var(--primary); border-color:var(--primary); color:#fff; }
+    button.ghost{ background:#fff; color:var(--primary); border-color:var(--primary); }
+    button:disabled{ opacity:.5; cursor:not-allowed; }
+
+    main{ display:grid; gap:12px; grid-template-columns:1fr; }
+
+    .flashcard{
+      background:var(--card); border-radius:var(--radius); padding:14px;
+      box-shadow:0 8px 26px rgba(0,0,0,.06);
+      display:grid; gap:10px; justify-items:center; position:relative;
+    }
+
+    /* === 스크롤 가능한 캔버스 === */
+    .stage{
+      width:min(1024px, 92vw);
+      height:min(70vh, 720px);
+      background:#f3f4f6;
+      border-radius:14px;
+      display:flex;
+      justify-content:center;
+      align-items:flex-start;    /* 상단부터 보여주기 */
+      overflow:auto;             /* 스크롤 가능 */
+      scroll-behavior:smooth;
+    }
+    /* 이미지는 'transform'이 아니라 실제 크기(폭)를 변경하여 줌 ⇒ 스크롤 영역이 자연스럽게 변화 */
+    .stage img{
+      display:block;
+      height:auto;               /* 세로 자동 */
+      max-width:none;            /* 폭 제한 없음 */
+	  transform-origin: top left;  /* 확대 기준을 좌상단으로 */
+      image-rendering:auto;
+      margin:10px 0;
+    }
+
+    .controls{ display:flex; gap:8px; flex-wrap:wrap; justify-content:center; align-items:center; }
+    .counter{ color:var(--muted); font-size:.95rem; }
+
+    .thumbbar{ background:var(--card); border-radius:var(--radius); padding:10px; box-shadow:0 6px 18px rgba(0,0,0,.05); }
+    .thumbs{ display:grid; grid-template-columns:repeat(auto-fill, minmax(92px,1fr)); gap:8px; max-height:220px; overflow:auto; }
+    .thumbs button{ padding:0; aspect-ratio:1/1; overflow:hidden; border:2px solid transparent; }
+    .thumbs button.active{ border-color:var(--primary); }
+    .thumbs img{ width:100%; height:100%; object-fit:cover; display:block; }
+
+    .zoombar{ display:flex; gap:6px; align-items:center; }
+    .zoomval{ min-width:62px; text-align:right; color:var(--muted); font-size:.9rem; }
+
+    .toast{ position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+      background:rgba(0,0,0,.85); color:#fff; padding:10px 14px; border-radius:10px;
+      opacity:0; transition:opacity .25s; pointer-events:none; z-index:9; }
+    .toast.show{ opacity:1; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="title">5R 이미지</div>
+    <div class="toolbar">
+      <input type="file" id="xlsxFile" accept=".xlsx" style="display:none" />
+      <button class="ghost" id="btnImport">엑셀 불러오기</button>
+      <button id="btnChecklist">체크리스트</button>
+      <select id="domainSel"><option value="">전체 도메인</option></select>
+      <input type="text" id="search" placeholder="검색(도메인/텍스트)" />
+
+      <button id="btnReload">DB에서 새로고침</button>
+      <button id="btnClearSession" title="현재 세션에서 완료로 뺀 카드 되돌리기">세션 초기화</button>
+
+      <div class="zoombar">
+        <button id="zoomOut" title="축소">−</button>
+        <button id="zoomIn" title="확대">＋</button>
+        <button id="zoomReset" title="100%">100%</button>
+        <span class="zoomval" id="zoomVal">100%</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="flashcard">
+      <div class="stage" id="stage">
+        <img id="cardImage" alt="학습 이미지" />
+      </div>
+      <div class="controls">
+        <button id="prev">이전</button>
+        <button id="toggleZoom">확대/축소</button>
+        <button class="primary" id="next">다음</button>
+        <button class="ghost" id="done">완료(세션에서 제외)</button>
+        <span class="counter" id="counter"></span>
+      </div>
+    </section>
+
+    <section class="thumbbar">
+      <div class="thumbs" id="thumbs"></div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/exceljs@4.5.0/dist/exceljs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+
+  <script>
+  /***** 공통 유틸 *****/
+  function escapeHtml(s=''){ return String(s).replace(/[&<>"']/g,(ch)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[ch]); }
+  function nowISO(){ return new Date().toISOString(); }
+  function uid(){ return 'S'+Math.random().toString(36).slice(2,8).toUpperCase(); }
+
+  /***** IndexedDB 유틸 *****/
+  const DB_NAME='5R_check_db', DB_VER=1; let db=null;
+  function openDB(){
+    return new Promise((res,rej)=>{
+      const rq=indexedDB.open(DB_NAME, DB_VER);
+      rq.onupgradeneeded=(e)=>{
+        const d=e.target.result;
+        if(d.objectStoreNames.contains('items')) d.deleteObjectStore('items');
+        if(d.objectStoreNames.contains('images')) d.deleteObjectStore('images');
+        d.createObjectStore('items',{keyPath:'id'});
+        d.createObjectStore('images',{keyPath:'id'});
+      };
+      rq.onsuccess=()=>{ db=rq.result; res(db); };
+      rq.onerror=()=>rej(rq.error);
+    });
+  }
+  function tx(store,mode='readonly'){ return db.transaction(store,mode).objectStore(store); }
+  function putItem(item){ return new Promise((res,rej)=>{ const r=tx('items','readwrite').put(item); r.onsuccess=()=>res(true); r.onerror=()=>rej(r.error); }); }
+  function getAllItems(){ return new Promise((res,rej)=>{ const r=tx('items').getAll(); r.onsuccess=()=>res(r.result||[]); r.onerror=()=>rej(r.error); }); }
+  function putImageBlob(blob){ if(!blob) return Promise.resolve(''); const id='IMG_'+Math.random().toString(36).slice(2); return new Promise((res,rej)=>{ const r=tx('images','readwrite').add({id, blob}); r.onsuccess=()=>res(id); r.onerror=()=>rej(r.error); }); }
+  function putImageFromDataURL(dataURL){
+    if(!dataURL) return Promise.resolve('');
+    return fetch(dataURL).then(r=>r.blob()).then(b=>putImageBlob(b));
+  }
+  function blobURLById(id){ if(!id) return Promise.resolve(''); return new Promise((res,rej)=>{ const r=tx('images').get(id); r.onsuccess=()=>{ const rec=r.result; if(!rec){ res(''); return; } res(URL.createObjectURL(rec.blob)); }; r.onerror=()=>rej(r.error); }); }
+
+  /***** Excel Import *****/
+  function cellToString(v){
+    if(v==null) return '';
+    if(typeof v==='string') return v;
+    if(typeof v==='number') return String(v);
+    if(v.text) return String(v.text);
+    if(Array.isArray(v.richText)) return v.richText.map(rt=>rt.text||'').join('');
+    if(v.hyperlink && v.text) return String(v.text);
+    if(v.result!=null) return cellToString(v.result);
+    return '';
+  }
+  async function importXlsx(file){
+    const workbook=new ExcelJS.Workbook();
+    await workbook.xlsx.load(await file.arrayBuffer());
+
+    const imported=[];
+    for(const ws of workbook.worksheets){
+      // 1) 헤더 맵
+      const headers={};
+      ws.getRow(1).eachCell((cell,col)=>{ const name=String(cell.value||'').trim(); if(name) headers[name]=col; });
+
+      // 2) 워크시트 이미지 → 행 추정 매핑
+      const canReadImages=(typeof ws.getImages==='function') && (typeof workbook.getImage==='function');
+      const imageByRow={};
+      if(canReadImages){
+        const imgs=ws.getImages();
+        for(const img of imgs){
+          const meta=workbook.getImage(img.imageId);
+          if(!meta) continue;
+          const ext=(meta.extension||'png').toLowerCase().replace('jpg','jpeg');
+          let durl='';
+          if(meta.base64){
+            const b64=meta.base64.includes(',')?meta.base64.split(',').pop():meta.base64;
+            durl=`data:image/${ext};base64,${b64}`;
+          }else if(meta.buffer){
+            durl=`data:image/${ext};base64,${btoa(new Uint8Array(meta.buffer).reduce((s,b)=>s+String.fromCharCode(b),''))}`;
+          }else if(meta.media?.buffer){
+            durl=`data:image/${ext};base64,${btoa(new Uint8Array(meta.media.buffer).reduce((s,b)=>s+String.fromCharCode(b),''))}`;
+          }
+          if(!durl) continue;
+
+          const tl=img.range?.tl||{}, br=img.range?.br||{};
+          const n=(v)=> (typeof v==='number'? v : undefined);
+          const tlCol1 = Math.floor(n(tl.col) ?? n(tl.nativeCol) ?? 7);
+          const brCol1 = Math.floor(n(br.col) ?? n(br.nativeCol) ?? tlCol1);
+          const brRow1 = Math.floor(n(br.row) ?? n(br.nativeRow) ?? 2);
+          const tlCol0 = Math.max(0, tlCol1 - 1);
+          const brCol0 = Math.max(tlCol0, brCol1 - 1);
+          const brRow0 = Math.max(0, brRow1 - 1);
+          const centerCol0 = Math.round((tlCol0 + brCol0) / 2);
+          const guessRow = Math.max(2, brRow0 + 1);
+
+          const slots=[
+            {slot:'img1Id', col0:6},
+            {slot:'img2Id', col0:7},
+            {slot:'img3Id', col0:8},
+            {slot:'img4Id', col0:9},
+            {slot:'img5Id', col0:10},
+          ];
+          let best=slots[0], bestDist=Infinity;
+          for(const s of slots){ const d=Math.abs(centerCol0 - s.col0); if(d<bestDist){ bestDist=d; best=s; } }
+          const id=await putImageFromDataURL(durl);
+          imageByRow[guessRow]=imageByRow[guessRow]||{};
+          if(!imageByRow[guessRow][best.slot]) imageByRow[guessRow][best.slot]=id;
+          else{
+            for(const s of slots){ if(!imageByRow[guessRow][s.slot]){ imageByRow[guessRow][s.slot]=id; break; } }
+          }
+        }
+      }
+
+      // 3) 데이터 행 적재 (텍스트 필드 포함)
+      const cDomain = headers['도메인'] || 1;
+      const cSeq    = headers['연번']   || 2;
+      const cTopic  = headers['토픽']   || headers['주제'] || 0;
+      const cDef    = headers['정의']   || headers['설명'] || 0;
+      const cMemo   = headers['두음']   || headers['암기팁'] || 0;
+      const cNotes  = headers['추가설명']   || headers['비고'] || 0;
+
+      const seqCounter={}; const nextSeqFor=(d)=>{ const k=(d||'').trim(); seqCounter[k]=(seqCounter[k]||0)+1; return seqCounter[k]; };
+
+      ws.eachRow((row, rn)=>{
+        if(rn===1) return;
+        const isEmpty = (row.values || []).every((v) => v == null || v === '');
+        if (isEmpty) return;
+
+        const domain=cellToString(row.getCell(cDomain).value);
+        const seqVal=parseInt(cellToString(row.getCell(cSeq).value),10);
+
+        const topic      = cTopic ? cellToString(row.getCell(cTopic).value) : '';
+        const definition = cDef   ? cellToString(row.getCell(cDef).value)   : '';
+        const mnemonic   = cMemo  ? cellToString(row.getCell(cMemo).value)  : '';
+        const notes      = cNotes ? cellToString(row.getCell(cNotes).value) : '';
+
+        const ids=imageByRow[rn]||{};
+        const domainSeq=(Number.isFinite(seqVal)&&seqVal>0)?seqVal:nextSeqFor(domain);
+
+        imported.push({
+          id:uid(), ts:nowISO(), checked:false,
+          domain, domainSeq, topic, definition, mnemonic, notes,
+          img1Id: ids.img1Id||'', img2Id: ids.img2Id||'', img3Id: ids.img3Id||'', img4Id: ids.img4Id||'', img5Id: ids.img5Id||''
+        });
+      });
+    }
+    for(const it of imported){ await putItem(it); }
+    return imported.length;
+  }
+
+  /***** 상태 및 카드 구성 *****/
+  const state={ items:[], cards:[], cur:0, removed:new Set(), domain:'', search:'' };
+
+  function renderDomainSel(){
+    const sel=document.getElementById('domainSel');
+    const uniq=[...new Set(state.items.map(x=>(x.domain||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko'));
+    const cur=state.domain;
+    sel.innerHTML='<option value=\"\">전체 도메인</option>'+uniq.map(d=>`<option value=\"${escapeHtml(d)}\">${escapeHtml(d)}</option>`).join('');
+    sel.value = uniq.includes(cur)? cur : '';
+  }
+
+  function buildCards(){
+    const out=[];
+    const q=(state.search||'').trim().toLowerCase();
+    for(const it of state.items){
+      // 도메인 필터
+      if(state.domain && (it.domain||'')!==state.domain) continue;
+      // 텍스트 검색 (도메인/토픽/정의/두음/추가설명)
+      const text=((it.domain||'')+' '+(it.topic||'')+' '+(it.definition||'')+' '+(it.mnemonic||'')+' '+(it.notes||'')).toLowerCase();
+      if(q && !text.includes(q)) continue;
+
+      const seq = Number.isFinite(it.domainSeq)? it.domainSeq : 1;
+      // 💡 토픽명(topic)을 카드 객체에 추가
+      const topic = (it.topic || '').trim();
+      [it.img1Id,it.img2Id,it.img3Id,it.img4Id,it.img5Id].forEach((id,idx)=>{
+        if(id) out.push({key:`${it.id}#${idx+1}`, id, domain:(it.domain||''), seq, topic});
+      });
+    }
+    out.sort((a,b)=>{
+      const d=(a.domain||'').localeCompare(b.domain||'','ko'); if(d!==0) return d;
+      const s=(a.seq||0)-(b.seq||0); if(s!==0) return s;
+      return String(a.key).localeCompare(String(b.key));
+    });
+    state.cards=out.filter(c=>!state.removed.has(c.key));
+  }
+
+  /***** 표시/네비게이션 *****/
+  const stage=document.getElementById('stage');
+  const imgEl=document.getElementById('cardImage');
+
+  const MIN_ZOOM=0.25, MAX_ZOOM=3.0, STEP=0.25; let zoomLevel=1.0;
+  function applyZoomLabel(){ document.getElementById('zoomVal').textContent=Math.round(zoomLevel*100)+'%'; }
+  function layoutImageForZoom(){
+    const nw = imgEl.naturalWidth || 0;
+    if(nw>0){ imgEl.style.width = (nw * zoomLevel) + 'px'; }
+  }
+  function zoomTo(newZoom, focal){
+    newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, +newZoom.toFixed(2)));
+    if(newZoom===zoomLevel) return;
+    const prevZoom = zoomLevel; zoomLevel=newZoom;
+
+    const viewLeft=stage.scrollLeft, viewTop=stage.scrollTop, viewW=stage.clientWidth, viewH=stage.clientHeight;
+    let cx=(viewLeft+viewW/2)/prevZoom, cy=(viewTop+viewH/2)/prevZoom;
+    if(focal && Number.isFinite(focal.x) && Number.isFinite(focal.y)){ cx=focal.x; cy=focal.y; }
+
+    layoutImageForZoom();
+
+    const newLeft = cx*newZoom - (focal ? focal.vx : viewW/2);
+    const newTop  = cy*newZoom - (focal ? focal.vy : viewH/2);
+    stage.scrollLeft=Math.max(0,newLeft);
+    stage.scrollTop =Math.max(0,newTop);
+    applyZoomLabel();
+  }
+  function zoomIn(){ zoomTo(zoomLevel+STEP); }
+  function zoomOut(){ zoomTo(zoomLevel-STEP); }
+  function zoomReset(){ zoomTo(1.0); }
+
+  imgEl.addEventListener('load', ()=>{ layoutImageForZoom(); stage.scrollTop=0; stage.scrollLeft=0; });
+
+  // Ctrl+휠로만 확대/축소 (그 외는 기본 스크롤)
+  stage.addEventListener('wheel',(e)=>{
+    if(e.ctrlKey){
+      e.preventDefault();
+      const rect=stage.getBoundingClientRect();
+      const vx=e.clientX-rect.left, vy=e.clientY-rect.top;
+      const cx=(stage.scrollLeft+vx)/zoomLevel, cy=(stage.scrollTop+vy)/zoomLevel;
+      const next = zoomLevel + (e.deltaY>0 ? -STEP : STEP);
+      zoomTo(next, {x:cx,y:cy,vx,vy});
+    }
+  },{passive:false});
+
+  document.addEventListener('keydown',(e)=>{
+    if(e.key==='+') zoomIn();
+    else if(e.key==='-') zoomOut();
+    else if(e.key==='0') zoomReset();
+  });
+
+  async function showCard(){
+    const counter=document.getElementById('counter');
+    if(state.cards.length===0){ imgEl.removeAttribute('src'); counter.textContent='이미지가 없습니다.'; return; }
+    if(state.cur<0) state.cur=0;
+    if(state.cur>=state.cards.length) state.cur=state.cards.length-1;
+    const cur=state.cards[state.cur];
+    imgEl.src = await blobURLById(cur.id);
+    
+    // 💡 카운터 텍스트에 토픽명(topic)을 추가
+    const topicDisplay = cur.topic ? ` (${cur.topic})` : '';
+    counter.textContent=`${state.cur+1} / ${state.cards.length} · ${cur.domain||'무도메인'} · ${cur.seq}${topicDisplay}`;
+    
+    highlightActiveThumb();
+  }
+  function nextCard(){ state.cur=(state.cur+1)%Math.max(1,state.cards.length||1); showCard(); }
+  function prevCard(){ state.cur=(state.cur-1+state.cards.length)%Math.max(1,state.cards.length||1); showCard(); }
+  function doneCard(){ if(state.cards.length===0) return; const cur=state.cards[state.cur]; state.removed.add(cur.key); buildCards(); if(state.cur>=state.cards.length) state.cur=Math.max(0,state.cards.length-1); showCard(); renderThumbs(); toast('현재 카드를 세션에서 제외했습니다.'); }
+  function resetSession(){ state.removed.clear(); buildCards(); state.cur=0; showCard(); renderThumbs(); toast('세션을 초기화했습니다.'); }
+
+  function renderThumbs(){
+    const box=document.getElementById('thumbs'); box.innerHTML='';
+    state.cards.forEach((c,i)=>{
+      const btn=document.createElement('button'); const img=document.createElement('img');
+      blobURLById(c.id).then(url=>img.src=url);
+      btn.appendChild(img);
+      btn.addEventListener('click',()=>{ state.cur=i; showCard(); });
+      box.appendChild(btn);
+    });
+    highlightActiveThumb();
+  }
+  function highlightActiveThumb(){
+    const box=document.getElementById('thumbs'); const btns=[...box.children];
+    btns.forEach(b=>b.classList.remove('active'));
+    if(state.cards.length && btns[state.cur]) btns[state.cur].classList.add('active');
+  }
+  function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1600); }
+
+  /***** 이벤트 바인딩 *****/
+  document.getElementById('btnImport').addEventListener('click',()=>document.getElementById('xlsxFile').click());
+  document.getElementById('xlsxFile').addEventListener('change', async (e)=>{
+    const f=e.target.files?.[0]; if(!f) return;
+    try{
+      const n=await importXlsx(f);
+      await loadDB();
+      toast(`엑셀에서 ${n}개 행을 불러왔습니다.`);
+    }catch(err){ console.error(err); toast('엑셀 불러오기 실패'); }
+    finally{ e.target.value=''; }
+  });
+
+  document.getElementById('btnReload').addEventListener('click', loadDB);
+  document.getElementById('domainSel').addEventListener('change', (e)=>{ state.domain=e.target.value||''; buildCards(); state.cur=0; showCard(); renderThumbs(); });
+  document.getElementById('search').addEventListener('input', (e)=>{ state.search=e.target.value||''; buildCards(); state.cur=0; showCard(); renderThumbs(); });
+
+  document.getElementById('next').addEventListener('click', nextCard);
+  document.getElementById('prev').addEventListener('click', prevCard);
+
+const cycle = [0.8, 1.0, 1.5]; // 확대/축소 단계 정의
+
+document.getElementById('toggleZoom')?.addEventListener('click', () => {
+  const idx = cycle.indexOf(+zoomLevel.toFixed(2));
+  const next = (idx === -1 || idx === cycle.length - 1) ? cycle[0] : cycle[idx + 1];
+  zoomTo(next);
+});
+
+  document.getElementById('done').addEventListener('click', doneCard);
+  document.getElementById('btnClearSession').addEventListener('click', resetSession);
+  document.getElementById('zoomIn').addEventListener('click', ()=>zoomTo(zoomLevel+STEP));
+  document.getElementById('zoomOut').addEventListener('click', ()=>zoomTo(zoomLevel-STEP));
+  document.getElementById('zoomReset').addEventListener('click', ()=>zoomTo(1.0));
+  
+  // 체크리스트 창 이름 (기존 창이 있으면 그대로 사용)
+  const CHECKLIST_WIN_NAME = 'checklist_main';
+
+  document.getElementById('btnChecklist')?.addEventListener('click', () => {
+    // 1) 먼저 같은 이름의 창이 떠 있는지 찾아보고, 있으면 그대로 포커스만 함
+    let win = null;
+    try {
+      win = window.open('', CHECKLIST_WIN_NAME);
+    } catch (e) {
+      win = null;
+    }
+
+    if (win && !win.closed && win.location && win.location.href !== 'about:blank') {
+      win.focus();
+      return;
+    }
+
+    // 2) 없으면 새로 체크리스트 창을 전체 화면으로 띄움
+    const screenW = window.screen.availWidth || window.innerWidth;
+    const screenH = window.screen.availHeight || window.innerHeight;
+
+    const features = `left=0,top=0,width=${screenW},height=${screenH},` +
+                     `scrollbars=yes,resizable=yes`;
+
+    win = window.open('5Rchecklist.html', CHECKLIST_WIN_NAME, features);
+    win?.focus();
+  });
+
+  // 🆕 화살표 키로 이전/다음 카드 이동 단축키 추가
+  document.addEventListener('keydown', (e) => {
+    // 입력 필드(input, textarea)에서 이벤트 발생 시 무시
+    const activeElement = document.activeElement;
+    if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA')) {
+      return;
+    }
+
+    if (e.key === 'ArrowRight') {
+      e.preventDefault(); // 기본 스크롤 동작 방지
+      document.getElementById('next')?.click();
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault(); // 기본 스크롤 동작 방지
+      document.getElementById('prev')?.click();
+    }
+  });
+
+
+  /***** 시작 *****/
+  async function loadDB(){
+    state.items = await getAllItems();
+    buildCards();
+    renderDomainSel();
+    state.cur=0; state.removed.clear();
+    await showCard();
+    renderThumbs();
+    applyZoomLabel();
+  }
+  openDB().then(loadDB).catch(err=>{ console.error(err); toast('IndexedDB 초기화 실패'); });
+  </script>
+</body>
+</html>

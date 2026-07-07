@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Notepad</title>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/theme/dracula.min.css"> 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/xml/xml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/javascript/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/css/css.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/htmlmixed/htmlmixed.min.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            background: #282a36;
+            font-family: sans-serif;
+        }
+
+        /* 상단 툴바 */
+        .toolbar {
+            background: #44475a;
+            padding: 10px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            border-bottom: 1px solid #6272a4;
+        }
+
+        .toolbar h1 {
+            color: #f8f8f2;
+            font-size: 16px;
+            margin: 0 15px 0 0;
+        }
+
+        /* 버튼 스타일 (통일됨) */
+        .btn {
+            background: #6272a4;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 13px;
+            transition: background 0.2s;
+        }
+        
+        .btn:hover {
+            background: #50fa7b; 
+            color: #282a36;
+        }
+
+        /* 에디터 영역 */
+        .editor-area {
+            flex: 1;
+            font-size: 14px;
+        }
+
+        /* CodeMirror 커스텀 높이 설정 */
+        .CodeMirror {
+            height: 100%;
+            font-family: 'Consolas', 'Monaco', monospace;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="toolbar">
+        <h1>📝 Web Notepad</h1>
+        <button class="btn" onclick="openFile()">📂 파일 열기 (Open)</button>
+        <button class="btn btn-save" onclick="saveFile()">💾 저장하기 (Save)</button>
+        
+        <span id="fileName" style="color: #bbb; font-size: 12px; margin-left: 10px;">새 파일.html</span>
+        <span id="lineCount" style="color: #8be9fd; font-size: 12px; margin-left: 10px;">(총 0줄)</span>
+    </div>
+
+    <div class="editor-area">
+        <textarea id="code-editor"></textarea>
+    </div>
+
+    <script>
+        // 현재 열려있는 파일의 핸들(권한 및 경로 정보)을 저장할 변수
+        let currentFileHandle = null;
+
+        // 1. CodeMirror 에디터 초기화
+        const editor = CodeMirror.fromTextArea(document.getElementById("code-editor"), {
+            mode: "htmlmixed",
+            theme: "dracula",
+            lineNumbers: true,
+            lineWrapping: true,
+            matchBrackets: true,
+            indentUnit: 4
+        });
+
+        editor.setValue("\n<html>\n  <body>\n    <h1>Hello</h1>\n  </body>\n</html>");
+
+        function updateLineCount() {
+            const count = editor.lineCount();
+            document.getElementById('lineCount').innerText = `(총 ${count}줄)`;
+        }
+
+        editor.on("change", updateLineCount);
+        updateLineCount();
+
+        // 2. 파일 열기 기능 (File System Access API)
+        async function openFile() {
+            try {
+                // 파일 선택창 띄우기
+                [currentFileHandle] = await window.showOpenFilePicker({
+                    types: [{
+                        description: 'Web Files',
+                        accept: { 'text/plain': ['.html', '.css', '.js', '.txt'] }
+                    }],
+                    multiple: false
+                });
+                
+                const file = await currentFileHandle.getFile();
+                const contents = await file.text();
+                
+                editor.setValue(contents);
+                document.getElementById('fileName').innerText = file.name;
+            } catch (err) {
+                // 사용자가 창을 그냥 닫은 경우 무시
+                if (err.name !== 'AbortError') {
+                    console.error("파일 열기 에러:", err);
+                }
+            }
+        }
+
+        // 3. 파일 저장(덮어쓰기) 기능
+        async function saveFile() {
+            const content = editor.getValue();
+            
+            try {
+                if (currentFileHandle) {
+                    // 열려있는 파일이 있다면 해당 파일에 직접 덮어쓰기
+                    const writable = await currentFileHandle.createWritable();
+                    await writable.write(content);
+                    await writable.close();
+                    alert("✅ 현재 파일에 덮어쓰기 완료!");
+                } else {
+                    // 열려있는 파일이 없다면 '다른 이름으로 저장' 창 띄우기
+                    currentFileHandle = await window.showSaveFilePicker({
+                        suggestedName: "index.html",
+                        types: [{
+                            description: 'Web Files',
+                            accept: { 'text/plain': ['.html', '.css', '.js', '.txt'] }
+                        }]
+                    });
+                    const writable = await currentFileHandle.createWritable();
+                    await writable.write(content);
+                    await writable.close();
+                    
+                    const file = await currentFileHandle.getFile();
+                    document.getElementById('fileName').innerText = file.name;
+                    alert("✅ 새 파일로 저장 완료!");
+                }
+            } catch (err) {
+                if (err.name !== 'AbortError') {
+                    console.error("파일 저장 에러:", err);
+                    alert("저장 중 오류가 발생했습니다.");
+                }
+            }
+        }
+    </script>
+</body>
+</html>

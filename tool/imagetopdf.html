@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Image to PDF</title>
+  
+  <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  
+  <style>
+    :root {
+      --bg-body: #F9FAFB; --bg-surface: #FFFFFF;
+      --border-light: #F3F4F6; --border-base: #E5E7EB;
+      --text-main: #111827; --text-muted: #6B7280;
+      --primary: #10B981; --primary-hover: #059669;
+      --secondary: #FFFFFF; --secondary-hover: #F9FAFB;
+      --danger: #EF4444;
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+      --radius-md: 8px; --radius-lg: 12px;
+    }
+
+    * { box-sizing: border-box; }
+    body { font-family: 'Pretendard', sans-serif; background: var(--bg-body); color: var(--text-main); margin: 0; padding: 40px; }
+    .dashboard-header { max-width: 100%; margin: 0 auto 24px auto; }
+    .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .title-area { display: flex; align-items: center; gap: 12px; }
+    .title-area i { font-size: 28px; color: var(--primary); }
+    h2 { margin: 0; font-size: 22px; font-weight: 700; }
+    
+    .actions { display: flex; gap: 10px; }
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: var(--radius-md); font-size: 14px; font-weight: 600; cursor: pointer; border: 1px solid transparent; }
+    .btn-primary { background: var(--primary); color: white; box-shadow: var(--shadow-sm); }
+    .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
+    .btn-outline { background: var(--secondary); color: var(--text-main); border-color: var(--border-base); box-shadow: var(--shadow-sm); }
+    .btn-outline:hover { background: var(--secondary-hover); }
+    .btn-sm { padding: 6px 10px; font-size: 13px; }
+    .btn-icon { padding: 6px; color: var(--text-muted); background: transparent; border: 1px solid transparent; border-radius: 4px; cursor: pointer; }
+    .btn-icon:hover { background: var(--border-base); color: var(--text-main); }
+    .btn-icon:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    .instructions { display: flex; gap: 20px; align-items: center; font-size: 13px; color: var(--text-muted); background: var(--bg-surface); padding: 12px 20px; border-radius: var(--radius-md); border: 1px solid var(--border-base); }
+
+    #workspace { max-width: 100%; margin: 0 auto; display: grid; grid-template-columns: 1fr 400px; gap: 24px; align-items: start; }
+    .panel { background: var(--bg-surface); border: 1px solid var(--border-base); border-radius: var(--radius-lg); padding: 20px; box-shadow: var(--shadow-md); }
+    .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .panel-title { font-weight: 700; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+    
+    .file-list-container { border: 1px solid var(--border-base); border-radius: var(--radius-md); max-height: 600px; overflow-y: auto; background: var(--bg-body); }
+    table.file-table { width: 100%; border-collapse: collapse; }
+    table.file-table th, table.file-table td { border-bottom: 1px solid var(--border-base); padding: 12px; text-align: left; font-size: 14px; vertical-align: middle; }
+    table.file-table th { font-weight: 600; color: var(--text-muted); background: var(--bg-surface); position: sticky; top: 0; z-index: 10; }
+    table.file-table tr { background: var(--bg-surface); }
+    table.file-table tr:hover { background: #f3f4f6; }
+    table.file-table tr.unselected { opacity: 0.6; background: var(--bg-body); }
+    .check-cell { width: 40px; text-align: center !important; }
+    .thumb-cell { width: 80px; text-align: center !important; }
+    .order-cell { width: 80px; text-align: center !important; }
+    input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--primary); cursor: pointer; }
+    .img-thumb { width: 60px; height: 60px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border-base); background: #fff; }
+
+    .form-group { margin-bottom: 20px; }
+    .form-group label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 8px; color: var(--text-muted); }
+    .form-group input { width: 100%; padding: 10px 12px; border: 1px solid var(--border-base); border-radius: var(--radius-md); font-family: inherit; font-size: 14px; }
+    .form-group input:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1); }
+    
+    .summary-box { background: var(--bg-body); border-radius: var(--radius-md); padding: 16px; margin-bottom: 20px; border: 1px dashed var(--border-base); }
+    .summary-text { font-size: 14px; display: flex; justify-content: space-between; margin-bottom: 8px; }
+    .summary-text strong { color: var(--primary); }
+
+    .empty-msg { padding: 60px 20px; text-align: center; color: var(--text-muted); display: flex; flex-direction: column; align-items: center; gap: 12px; }
+    .empty-msg i { font-size: 40px; color: #D1D5DB; }
+
+    #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #111827; color: white; padding: 10px 20px; border-radius: 99px; font-size: 14px; box-shadow: var(--shadow-md); opacity: 0; visibility: hidden; transition: 0.3s; z-index: 3000; }
+    #toast.show { opacity: 1; visibility: visible; }
+  </style>
+</head>
+<body>
+
+  <div class="dashboard-header">
+    <div class="header-top">
+      <div class="title-area">
+        <i class="ph ph-images"></i>
+        <h2>Image to PDF</h2>
+      </div>
+      <div class="actions">
+        <button class="btn btn-outline" onclick="openFolder()"><i class="ph ph-folder-open"></i> 이미지 폴더 선택</button>
+      </div>
+    </div>
+    <div class="instructions">
+      <span><i class="ph ph-image"></i> 폴더 내의 JPG, PNG 이미지를 자동으로 불러옵니다.</span>
+      <span style="color: #D1D5DB;">|</span>
+      <span><i class="ph ph-arrows-down-up"></i> 위/아래 화살표로 PDF에 들어갈 페이지 순서를 조정하세요.</span>
+    </div>
+  </div>
+
+  <div id="workspace">
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title" id="folder-title"><i class="ph ph-folder-dashed"></i> 선택된 폴더 없음</div>
+        <div style="display:flex; gap:8px;">
+            <button class="btn btn-outline btn-sm" onclick="toggleAllFiles(true)" id="btn-check-all" disabled>전체 선택</button>
+            <button class="btn btn-outline btn-sm" onclick="toggleAllFiles(false)" id="btn-uncheck-all" disabled>선택 해제</button>
+        </div>
+      </div>
+      
+      <div class="file-list-container">
+        <table class="file-table" id="file-table" style="display:none;">
+          <thead>
+            <tr>
+              <th class="check-cell"><i class="ph ph-check-square"></i></th>
+              <th class="thumb-cell">미리보기</th>
+              <th>이미지 파일명</th>
+              <th class="order-cell">순서 이동</th>
+            </tr>
+          </thead>
+          <tbody id="file-list-body"></tbody>
+        </table>
+        
+        <div class="empty-msg" id="empty-state">
+          <i class="ph ph-images"></i>
+          우측 상단의 [이미지 폴더 선택] 버튼을 눌러<br>JPG/PNG 파일이 있는 폴더를 열어주세요.
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" style="background: var(--bg-surface); display: flex; flex-direction: column; justify-content: space-between;">
+      <div>
+        <div class="panel-header" style="border-bottom: 1px solid var(--border-base); padding-bottom: 16px;">
+          <div class="panel-title">PDF 생성 설정</div>
+        </div>
+        <div class="summary-box">
+          <div class="summary-text"><span>불러온 이미지:</span><strong id="total-count">0개</strong></div>
+          <div class="summary-text" style="margin-bottom: 0;"><span>PDF 포함 대상:</span><strong id="selected-count">0장 (0 페이지)</strong></div>
+        </div>
+        <div class="form-group">
+          <label for="output-filename">생성될 PDF 파일명</label>
+          <input type="text" id="output-filename" placeholder="예: 스크랩_모음집.pdf" disabled>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" style="width: 100%; height: 48px; font-size: 15px;" onclick="convertAndSave()" id="btn-convert" disabled>
+        <i class="ph ph-file-pdf"></i> 이 폴더에 PDF 파일 생성
+      </button>
+    </div>
+  </div>
+
+  <div id="toast">PDF 생성 완료!</div>
+
+  <script>
+    let dirHandle = null;
+    let imageFiles = [];
+
+    async function openFolder() {
+      try {
+        dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+        document.getElementById('folder-title').innerHTML = `<i class="ph ph-folder-open" style="color:var(--primary)"></i> ${dirHandle.name}`;
+        
+        imageFiles.forEach(img => { if(img.url) URL.revokeObjectURL(img.url); });
+        imageFiles = [];
+        
+        for await (const entry of dirHandle.values()) {
+          if (entry.kind === 'file') {
+            const nameLower = entry.name.toLowerCase();
+            if (nameLower.endsWith('.jpg') || nameLower.endsWith('.jpeg') || nameLower.endsWith('.png')) {
+              const file = await entry.getFile();
+              const url = URL.createObjectURL(file);
+              imageFiles.push({ handle: entry, name: entry.name, type: nameLower.endsWith('.png') ? 'png' : 'jpg', url: url, selected: true });
+            }
+          }
+        }
+
+        if (imageFiles.length === 0) return alert('선택한 폴더에 이미지 파일(JPG, PNG)이 없습니다.');
+
+        imageFiles.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+        
+        document.getElementById('empty-state').style.display = 'none';
+        document.getElementById('file-table').style.display = 'table';
+        document.getElementById('btn-check-all').disabled = false;
+        document.getElementById('btn-uncheck-all').disabled = false;
+        document.getElementById('output-filename').disabled = false;
+        document.getElementById('btn-convert').disabled = false;
+        
+        document.getElementById('output-filename').value = `${dirHandle.name}_이미지모음.pdf`;
+        renderFileList();
+
+      } catch (err) {
+        if (err.name !== 'AbortError') { alert('폴더를 여는 중 오류가 발생했습니다.'); }
+      }
+    }
+
+    function renderFileList() {
+      const tbody = document.getElementById('file-list-body');
+      tbody.innerHTML = '';
+      let selectedCount = 0;
+
+      imageFiles.forEach((file, index) => {
+        if (file.selected) selectedCount++;
+        const tr = document.createElement('tr');
+        if (!file.selected) tr.className = 'unselected';
+        
+        tr.innerHTML = `
+          <td class="check-cell"><input type="checkbox" onchange="toggleFileSelection(${index})" ${file.selected ? 'checked' : ''}></td>
+          <td class="thumb-cell"><img src="${file.url}" class="img-thumb" alt="thumb"></td>
+          <td><div style="word-break: break-all; font-weight: 500;">${file.name}</div><div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">${file.type.toUpperCase()}</div></td>
+          <td class="order-cell">
+            <button class="btn-icon" onclick="moveRow(${index}, -1)" ${index === 0 ? 'disabled' : ''}><i class="ph ph-caret-up"></i></button>
+            <button class="btn-icon" onclick="moveRow(${index}, 1)" ${index === imageFiles.length - 1 ? 'disabled' : ''}><i class="ph ph-caret-down"></i></button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById('total-count').textContent = `${imageFiles.length}개`;
+      document.getElementById('selected-count').textContent = `${selectedCount}장 (${selectedCount} 페이지)`;
+      
+      const convertBtn = document.getElementById('btn-convert');
+      if (selectedCount >= 1) {
+        convertBtn.disabled = false; convertBtn.innerHTML = `<i class="ph ph-file-pdf"></i> 이 폴더에 PDF 파일 생성`;
+      } else {
+        convertBtn.disabled = true; convertBtn.innerHTML = `<i class="ph ph-warning"></i> 1장 이상의 이미지를 선택하세요`;
+      }
+    }
+
+    function toggleFileSelection(index) { imageFiles[index].selected = !imageFiles[index].selected; renderFileList(); }
+    function toggleAllFiles(state) { imageFiles.forEach(file => file.selected = state); renderFileList(); }
+
+    function moveRow(index, direction) {
+      if (direction === -1 && index > 0) {
+        const temp = imageFiles[index - 1]; imageFiles[index - 1] = imageFiles[index]; imageFiles[index] = temp;
+      } else if (direction === 1 && index < imageFiles.length - 1) {
+        const temp = imageFiles[index + 1]; imageFiles[index + 1] = imageFiles[index]; imageFiles[index] = temp;
+      }
+      renderFileList();
+    }
+
+    async function convertAndSave() {
+      if (!dirHandle) return alert("작업 폴더가 선택되지 않았습니다.");
+      const selectedFiles = imageFiles.filter(f => f.selected);
+      if (selectedFiles.length < 1) return alert("PDF로 변환할 이미지를 선택해주세요.");
+
+      let outName = document.getElementById('output-filename').value.trim() || 'ImageToPDF_Output.pdf';
+      if (!outName.toLowerCase().endsWith('.pdf')) outName += '.pdf';
+
+      const convertBtn = document.getElementById('btn-convert');
+      convertBtn.disabled = true;
+      convertBtn.innerHTML = `<i class="ph ph-spinner ph-spin"></i> PDF 생성 중...`;
+
+      try {
+        const pdfDoc = await PDFLib.PDFDocument.create();
+
+        for (const fileItem of selectedFiles) {
+          const fileData = await fileItem.handle.getFile();
+          const arrayBuffer = await fileData.arrayBuffer();
+          
+          let pdfImage;
+          try {
+              if (fileItem.type === 'png') pdfImage = await pdfDoc.embedPng(arrayBuffer);
+              else pdfImage = await pdfDoc.embedJpg(arrayBuffer);
+              
+              // [수정된 부분] A4 용지 너비(595.28 포인트)를 최대 기준으로 삼아 스마트 스케일링
+              const imgWidth = pdfImage.width;
+              const imgHeight = pdfImage.height;
+              const MAX_WIDTH = 595.28; 
+              let scaleRatio = 1;
+
+              if (imgWidth > MAX_WIDTH) {
+                  scaleRatio = MAX_WIDTH / imgWidth;
+              }
+
+              const pageWidth = imgWidth * scaleRatio;
+              const pageHeight = imgHeight * scaleRatio;
+              
+              const page = pdfDoc.addPage([pageWidth, pageHeight]);
+              
+              page.drawImage(pdfImage, {
+                  x: 0,
+                  y: 0,
+                  width: pageWidth,
+                  height: pageHeight,
+              });
+              
+          } catch(err) {
+              console.error(`${fileItem.name} 처리 오류:`, err);
+              continue; 
+          }
+        }
+
+        const pdfBytes = await pdfDoc.save();
+        const newFileHandle = await dirHandle.getFileHandle(outName, { create: true });
+        const writable = await newFileHandle.createWritable();
+        await writable.write(pdfBytes);
+        await writable.close();
+
+        showToast(`'${outName}' 파일이 성공적으로 생성되었습니다!`);
+
+      } catch (err) {
+        alert('PDF 생성 또는 저장 중 오류가 발생했습니다.');
+      } finally {
+        convertBtn.disabled = false;
+        convertBtn.innerHTML = `<i class="ph ph-file-pdf"></i> 이 폴더에 PDF 파일 생성`;
+      }
+    }
+
+    let toastTimeout;
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      toast.innerText = message; toast.classList.add('show');
+      clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => { toast.classList.remove('show'); }, 3500);
+    }
+  </script>
+</body>
+</html>

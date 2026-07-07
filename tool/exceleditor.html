@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Table Editor</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css" />
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+<style>
+/* === Executive Theme === */
+:root {
+    --bg-body: #f1f5f9; --bg-sidebar: #ffffff;
+    --primary: #334155; --primary-hover: #1e293b;
+    --accent: #6366f1; --accent-light: #e0e7ff;
+    --text-main: #0f172a; --text-sub: #64748b; --text-muted: #94a3b8;
+    --border: #e2e8f0; --radius-md: 10px;
+    --shadow-float: 0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
+    --font-ui: 'Pretendard', 'Inter', sans-serif;
+    --font-code: 'JetBrains Mono', monospace;
+}
+
+* { box-sizing: border-box; outline: none; }
+body { margin: 0; background: var(--bg-body); color: var(--text-main); font-family: var(--font-ui); font-size: 14px; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+
+header { height: 64px; background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 28px; flex-shrink: 0; justify-content: space-between; z-index: 50; }
+header .brand { font-weight: 800; font-size: 20px; color: var(--primary); display: flex; align-items: center; gap: 12px; }
+header .brand i { font-size: 22px; color: var(--accent); }
+
+.workspace { display: flex; flex: 1; overflow: hidden; height: calc(100vh - 64px); position: relative; }
+
+.pane-list { width: 260px; background: var(--bg-sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; z-index: 20; }
+.upload-area { padding: 30px 20px; display: flex; flex-direction: column; gap: 16px; border-bottom: 1px solid var(--border); background: var(--bg-sidebar); flex-shrink: 0; }
+.section-label { font-size: 12px; font-weight: 700; color: var(--text-sub); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; text-transform: uppercase; }
+
+.upload-box { border: 2px dashed #cbd5e1; border-radius: var(--radius-md); padding: 30px 15px; text-align: center; cursor: pointer; transition: all 0.2s ease; background: #f8fafc; }
+.upload-box:hover, .upload-box.dragover { border-color: var(--accent); background: var(--accent-light); }
+.upload-box i { font-size: 28px; color: var(--text-muted); margin-bottom: 10px; transition: 0.2s; }
+.upload-box:hover i, .upload-box.dragover i { color: var(--accent); }
+.upload-box .title { font-weight: 600; color: var(--primary); margin-bottom: 4px; font-size: 14px; }
+.upload-box .desc { font-size: 11px; color: var(--text-muted); }
+
+.file-info { padding: 20px; flex: 1; overflow-y: auto; display: none; flex-direction: column; gap: 12px; }
+.info-card { background: var(--bg-body); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px; }
+.info-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12px; }
+.info-row:last-child { margin-bottom: 0; }
+.info-label { color: var(--text-sub); font-weight: 500; }
+.info-val { color: var(--primary); font-weight: 600; font-family: var(--font-code); max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.pane-editor { flex: 1; background: var(--bg-body); display: flex; flex-direction: column; position: relative; min-width: 0; overflow: hidden; }
+
+.toolbar { height: 60px; display: flex; align-items: center; padding: 0 40px; justify-content: space-between; flex-shrink: 0; z-index: 30; background: var(--bg-body); border-bottom: 1px solid transparent; }
+.toolbar-title { font-size: 18px; font-weight: 700; color: var(--primary); display: flex; align-items: center; gap: 8px; }
+.edit-hint { font-size: 13px; color: var(--text-sub); display: flex; align-items: center; gap: 6px; background: #e0e7ff; padding: 6px 12px; border-radius: 6px; color: #4338ca; font-weight: 500; }
+
+.editor-wrapper { flex: 1; overflow-y: auto; overflow-x: auto; padding: 20px 40px 60px 40px; display: block; position: relative; z-index: 10; }
+.paper-sheet { width: 100%; max-width: 1200px; background: #fff; border-radius: 16px; box-shadow: var(--shadow-float); padding: 40px; margin: 0 auto; min-height: 100%; border: 1px solid #f1f5f9; display: flex; flex-direction: column; }
+
+.empty-state { position: absolute; top: 60px; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--bg-body); z-index: 100; }
+.empty-content { text-align: center; max-width: 400px; }
+
+.table-container { width: 100%; overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
+.viewer-table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
+.viewer-table th, .viewer-table td { border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); padding: 12px 16px; word-break: keep-all; line-height: 1.6; transition: background 0.2s; }
+.viewer-table th:last-child, .viewer-table td:last-child { border-right: none; }
+.viewer-table th { background: #f8fafc; font-weight: 600; color: var(--primary); position: sticky; top: 0; z-index: 2; border-bottom: 2px solid #cbd5e1; }
+
+.viewer-table td[contenteditable="true"], .viewer-table th[contenteditable="true"] { cursor: text; outline: none; }
+.viewer-table td[contenteditable="true"]:hover { background: #f8fafc; }
+.viewer-table td[contenteditable="true"]:focus, .viewer-table th[contenteditable="true"]:focus { background: #fff; box-shadow: inset 0 0 0 2px var(--accent); border-radius: 2px; }
+
+/* 액션(삭제, 행추가) 버튼 영역 CSS */
+.action-col { width: 100px; text-align: center !important; vertical-align: middle; background: #f8fafc; user-select: none; }
+.action-flex { display: flex; gap: 4px; justify-content: center; }
+.btn-action-sm { width: 26px; height: 26px; border-radius: 6px; border: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: 0.2s; background: #e2e8f0; color: #475569; }
+.btn-action-sm:hover { background: #cbd5e1; color: #0f172a; transform: scale(1.1); }
+.btn-delete-row { width: 26px; height: 26px; border-radius: 6px; border: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: 0.2s; background: transparent; color: #ef4444; }
+.btn-delete-row:hover { background: #fee2e2; transform: scale(1.1); }
+
+.viewer-table ul { padding-left: 20px; margin: 4px 0; }
+.viewer-table li { margin-bottom: 4px; }
+
+.btn { height: 36px; padding: 0 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid transparent; display: inline-flex; align-items: center; gap: 8px; transition: 0.2s; font-family: var(--font-ui); }
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: var(--primary-hover); }
+.btn-accent { background: var(--accent); color: #fff; }
+.btn-accent:hover { background: #4f46e5; }
+.btn-secondary { background: #fff; border-color: var(--border); color: var(--text-main); }
+.btn-secondary:hover { background: #f8fafc; }
+
+#toast { position: fixed; bottom: 30px; right: 30px; background: #1e293b; color: #fff; padding: 12px 24px; border-radius: 8px; opacity: 0; transition: 0.3s; z-index: 2000; pointer-events: none; display: flex; align-items: center; gap: 8px; font-weight: 500; }
+
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+.fa-spinner { animation: spin 1s linear infinite; }
+
+/* === Modal Settings === */
+.modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.5); backdrop-filter: blur(4px); z-index: 3000; display: none; align-items: center; justify-content: center; }
+.modal-content { background: #fff; border-radius: 12px; width: 420px; max-width: 90%; box-shadow: var(--shadow-float); display: flex; flex-direction: column; overflow: hidden; }
+.modal-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: #f8fafc; }
+.modal-header h3 { margin: 0; font-size: 15px; color: var(--primary); display: flex; align-items: center; gap: 8px; font-weight: 700; }
+.modal-body { padding: 20px; max-height: 400px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+.modal-footer { padding: 16px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; background: #f8fafc; }
+.col-input-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.col-input-row label { width: 100px; flex-shrink: 0; font-size: 13px; font-weight: 600; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.col-input-row input { flex: 1; height: 36px; padding: 0 12px; border: 1px solid var(--border); border-radius: 6px; font-family: var(--font-ui); font-size: 13px; outline: none; transition: border-color 0.2s; }
+.col-input-row input:focus { border-color: var(--accent); }
+.btn-icon { background: none; border: none; font-size: 16px; color: var(--text-muted); cursor: pointer; padding: 4px; transition: 0.2s; display: flex; align-items: center; justify-content: center;}
+.btn-icon:hover { color: #ef4444; }
+.modal-hint { font-size: 12px; color: var(--text-sub); margin-bottom: 8px; background: #f1f5f9; padding: 10px; border-radius: 6px; line-height: 1.5; }
+
+/* === Print Settings === */
+@media print {
+    /* 인쇄 시 불필요한 UI 숨김 */
+    header, .pane-list, .toolbar, .action-col, #toast, .modal-overlay, #btn-fallback-upload {
+        display: none !important;
+    }
+    /* 인쇄 레이아웃 초기화 (스크롤바 없애고 전체 펼침) */
+    body, .workspace, .pane-editor, .editor-wrapper, .paper-sheet, .table-container {
+        height: auto !important;
+        overflow: visible !important;
+        display: block !important;
+        box-shadow: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: none !important;
+        background: #fff !important;
+    }
+    /* 표 스타일 인쇄 최적화 */
+    .viewer-table {
+        width: 100% !important;
+    }
+    .viewer-table th, .viewer-table td {
+        border: 1px solid #cbd5e1 !important;
+        color: #000 !important;
+        page-break-inside: avoid;
+    }
+}
+</style>
+<style id="dynamic-col-widths"></style>
+</head>
+<body>
+
+<header>
+    <div class="brand"><i class="fas fa-folder-tree"></i> Table Editor</div>
+    <div style="display:flex; gap:10px;">
+        <button class="btn btn-secondary" id="btn-print" style="display:none;"><i class="fas fa-print" style="color:#475569;"></i> 출력</button>
+        <button class="btn btn-secondary" id="btn-settings" style="display:none;"><i class="fas fa-arrows-alt-h" style="color:#64748b;"></i> 열 너비 설정</button>
+        <button class="btn btn-secondary" id="btn-copy-md" style="display:none;"><i class="fab fa-markdown" style="color:#6366f1; font-size:16px;"></i> Copy Markdown</button>
+    </div>
+</header>
+
+<div class="workspace">
+    <aside class="pane-list">
+        <div class="upload-area">
+            <div class="section-label"><i class="fas fa-file-import"></i> Data Source</div>
+            <label class="upload-box" id="drop-zone" for="inp-file">
+                <i class="fas fa-cloud-arrow-up"></i>
+                <div class="title">Click or Drag file to upload</div>
+                <div class="desc">Supports .xlsx, .xls, .csv</div>
+                <input type="file" id="inp-file" accept=".xlsx, .xls, .csv" style="display:none;">
+            </label>
+            <button class="btn btn-accent" onclick="document.getElementById('inp-file').click()" style="width:100%; justify-content:center; display:none;" id="btn-fallback-upload">
+                <i class="fas fa-folder-open"></i> 찾아보기
+            </button>
+        </div>
+        
+        <div class="file-info" id="file-info-panel">
+            <div class="section-label"><i class="fas fa-circle-info"></i> Document Info</div>
+            <div class="info-card">
+                <div class="info-row">
+                    <span class="info-label">File Name</span>
+                    <span class="info-val" id="info-name">-</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Sheet Name</span>
+                    <span class="info-val" id="info-sheet">-</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Total Rows</span>
+                    <span class="info-val" id="info-rows">-</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Columns</span>
+                    <span class="info-val" id="info-cols">-</span>
+                </div>
+            </div>
+            
+            <button class="btn btn-secondary" id="btn-extract-local" style="width:100%; margin-top:8px; display:none; border-color:#10b981; color:#047857; background:#ecfdf5; justify-content:center;">
+                <i class="fas fa-folder-plus"></i> 폴더로 이미지 추출 (주차>제목)
+            </button>
+            <div id="extract-hint" style="font-size:11px; color:var(--text-muted); margin-top:6px; line-height:1.4; display:none;">
+                * Chrome, Edge 브라우저 권장<br>
+                * 표의 1열(주차), 2열(제목)을 폴더명으로 사용합니다.
+            </div>
+        </div>
+    </aside>
+
+    <main class="pane-editor">
+        <div class="toolbar" id="main-toolbar" style="display:none;">
+            <div class="toolbar-title" id="view-title">Sheet1</div>
+            <div class="edit-hint" title="편집 단축키 지원">
+                <i class="fas fa-keyboard"></i> 편집 (Ctrl+B,I,U 등) / 행 조작 (우측 버튼)
+            </div>
+        </div>
+
+        <div class="editor-wrapper">
+            <div class="paper-sheet" id="paper-view" style="display:none;">
+                <div class="table-container" id="table-container">
+                    </div>
+            </div>
+
+            <div id="empty-state" class="empty-state">
+                <div class="empty-content">
+                    <i class="fas fa-file-excel" style="font-size:56px; color:#cbd5e1; margin-bottom:24px;"></i>
+                    <h2 style="font-size:24px; color:var(--primary); margin-bottom:10px;">No File Selected</h2>
+                    <p style="color:var(--text-sub); line-height:1.6; margin-bottom:30px;">왼쪽 패널에 파일을 업로드하면<br>수정 가능한 표가 생성됩니다.</p>
+                    <button class="btn btn-accent" onclick="document.getElementById('inp-file').click()" style="height:44px; padding:0 32px; justify-content:center;">
+                        <i class="fas fa-folder-open"></i> Browse Files
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<div id="settings-modal" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3><i class="fas fa-arrows-alt-h" style="color:var(--text-sub);"></i> 각 열 너비 설정</h3>
+            <button id="btn-close-modal" class="btn-icon"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+            <div class="modal-hint">
+                <strong>입력 예시:</strong> 80px, 150px, 20%, auto<br>
+                빈칸으로 두면 내용에 맞게 자동(auto)으로 조절됩니다.
+            </div>
+            <div id="col-width-inputs">
+                </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" id="btn-cancel-modal">취소</button>
+            <button class="btn btn-primary" id="btn-apply-widths">적용</button>
+        </div>
+    </div>
+</div>
+
+<div id="toast"><i class="fas fa-check-circle"></i> <span id="toast-msg"></span></div>
+
+<script>
+    const fileInput = document.getElementById('inp-file');
+    const dropZone = document.getElementById('drop-zone');
+    const emptyState = document.getElementById('empty-state');
+    const paperView = document.getElementById('paper-view');
+    const mainToolbar = document.getElementById('main-toolbar');
+    const tableContainer = document.getElementById('table-container');
+    const fileInfoPanel = document.getElementById('file-info-panel');
+    const btnCopyMd = document.getElementById('btn-copy-md');
+    const btnSettings = document.getElementById('btn-settings');
+    const btnPrint = document.getElementById('btn-print'); // 출력 버튼 연결
+    
+    // 모달 관련 요소
+    const settingsModal = document.getElementById('settings-modal');
+    const btnCloseModal = document.getElementById('btn-close-modal');
+    const btnCancelModal = document.getElementById('btn-cancel-modal');
+    const btnApplyWidths = document.getElementById('btn-apply-widths');
+    const colWidthInputs = document.getElementById('col-width-inputs');
+    let columnWidths = []; 
+
+    // 추출 버튼
+    const btnExtractLocal = document.getElementById('btn-extract-local');
+    const extractHint = document.getElementById('extract-hint');
+    let currentFile = null;
+
+    // 치명적 오류 확인을 위한 방어 로직 (동적 스타일 태그 보장)
+    function ensureStyleTag() {
+        let styleTag = document.getElementById('dynamic-col-widths');
+        if (!styleTag) {
+            styleTag = document.createElement('style');
+            styleTag.id = 'dynamic-col-widths';
+            document.head.appendChild(styleTag);
+        }
+        return styleTag;
+    }
+
+    // 파일 로드 에러 캐치
+    window.addEventListener('error', function(e) {
+        console.error("Script Error:", e.message);
+    });
+
+    // ==========================================
+    // 1. 단축키 (Keyboard Shortcuts)
+    // ==========================================
+    document.addEventListener('keydown', function(e) {
+        const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+        const isCmd = isMac ? e.metaKey : e.ctrlKey;
+        
+        if (isCmd && (e.key === '+' || e.key === '=' || e.key === '-' || e.code === 'NumpadAdd' || e.code === 'NumpadSubtract')) {
+            e.preventDefault();
+            const activeEl = document.activeElement;
+            if (activeEl && activeEl.getAttribute('contenteditable') === 'true') {
+                const delta = (e.key === '-' || e.code === 'NumpadSubtract') ? -2 : 2;
+                changeFontSize(delta);
+            }
+            return;
+        }
+
+        const activeEl = document.activeElement;
+        if (!activeEl || activeEl.getAttribute('contenteditable') !== 'true') return;
+
+        if (isCmd) {
+            const code = e.code; 
+            if (e.shiftKey && (code === 'Backspace' || code === 'Delete')) {
+                e.preventDefault();
+                const row = activeEl.closest('tr');
+                if (row) {
+                    row.remove();
+                    updateRowCount();
+                    showToast('해당 행이 삭제되었습니다.');
+                }
+                return;
+            }
+            if (code === 'KeyB' && !e.altKey && !e.shiftKey) { e.preventDefault(); document.execCommand('bold'); }
+            if (code === 'KeyI' && !e.altKey && !e.shiftKey) { e.preventDefault(); document.execCommand('italic'); }
+            if (code === 'KeyU' && !e.altKey && !e.shiftKey) { e.preventDefault(); document.execCommand('underline'); }
+            if (code === 'KeyL' && !e.altKey && !e.shiftKey) { e.preventDefault(); document.execCommand('insertUnorderedList'); }
+            if (e.altKey && (code === 'Digit5' || code === 'Numpad5')) { e.preventDefault(); document.execCommand('strikeThrough'); }
+            if (e.altKey && code === 'KeyR') { e.preventDefault(); document.execCommand('foreColor', false, '#ef4444'); }
+            if (e.altKey && code === 'KeyB' && !e.shiftKey) { e.preventDefault(); document.execCommand('foreColor', false, '#3b82f6'); }
+            if (e.altKey && code === 'KeyM') { 
+                e.preventDefault(); document.execCommand('hiliteColor', false, '#ffedd5'); document.execCommand('backColor', false, '#ffedd5'); 
+            }
+        }
+    }, { passive: false });
+
+    function changeFontSize(delta) {
+        const selection = window.getSelection();
+        if (!selection.rangeCount || selection.isCollapsed) return;
+
+        let parentEl = selection.anchorNode.nodeType === 3 ? selection.anchorNode.parentElement : selection.anchorNode;
+        let currentSize = parseInt(window.getComputedStyle(parentEl).fontSize) || 13;
+        let newSize = Math.max(10, currentSize + delta); 
+
+        document.execCommand("fontSize", false, "7");
+        let tempFonts = document.activeElement.querySelectorAll('font[size="7"]');
+        tempFonts.forEach(f => {
+            let span = document.createElement('span');
+            span.style.fontSize = newSize + "px";
+            span.innerHTML = f.innerHTML;
+            f.parentNode.replaceChild(span, f);
+        });
+    }
+
+    // ==========================================
+    // 2. Drag & Drop 및 파일 처리
+    // ==========================================
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+        if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+    });
+
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length) handleFile(e.target.files[0]);
+        e.target.value = ''; 
+    });
+
+    btnCopyMd.addEventListener('click', () => {
+        const mdText = generateMarkdownFromDOM();
+        if (!mdText) return;
+        navigator.clipboard.writeText(mdText).then(() => showToast('수정된 마크다운 코드가 복사되었습니다.')).catch(() => showToast('복사에 실패했습니다.'));
+    });
+
+    // 출력 버튼 기능 추가
+    btnPrint.addEventListener('click', () => {
+        window.print();
+    });
+
+    function handleFile(file) {
+        if (!file.name.match(/\.(xlsx|xls|csv)$/i)) {
+            alert('지원하지 않는 파일 형식입니다.');
+            return;
+        }
+
+        currentFile = file;
+        if (file.name.match(/\.(xlsx)$/i)) {
+            btnExtractLocal.style.display = 'inline-flex';
+            extractHint.style.display = 'block';
+        } else {
+            btnExtractLocal.style.display = 'none';
+            extractHint.style.display = 'none';
+        }
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, {type: 'array'});
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                const jsonData = XLSX.utils.sheet_to_json(worksheet, {header: 1});
+                
+                if (jsonData.length > 0) {
+                    renderEditableTable(jsonData, file.name, firstSheetName);
+                } else {
+                    alert("파일에 데이터가 없습니다.");
+                }
+            } catch (err) {
+                alert("엑셀 변환 중 오류가 발생했습니다: " + err.message);
+                console.error(err);
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    // ==========================================
+    // 3. 테이블 렌더링 및 행 추가/삭제 로직
+    // ==========================================
+    const getActionColHTML = () => `
+        <td class="action-col" contenteditable="false">
+            <div class="action-flex">
+                <button class="btn-action-sm" onclick="insertRow(this, 'above')" title="위로 행 추가"><i class="fas fa-arrow-up"></i></button>
+                <button class="btn-action-sm" onclick="insertRow(this, 'below')" title="아래로 행 추가"><i class="fas fa-arrow-down"></i></button>
+                <button class="btn-delete-row" onclick="deleteRowElement(this)" title="행 삭제"><i class="fas fa-trash-alt"></i></button>
+            </div>
+        </td>
+    `;
+
+    function renderEditableTable(data, fileName, sheetName) {
+        if (!data || data.length === 0) return;
+
+        // 방어 로직: 스타일 초기화
+        columnWidths = [];
+        ensureStyleTag().innerHTML = '';
+
+        const headers = data[0];
+        const colCount = headers.length;
+        
+        let html = '<table class="viewer-table" id="edit-table"><thead><tr>';
+        headers.forEach(h => { html += `<th contenteditable="true" spellcheck="false">${formatHTMLCell(h)}</th>`; });
+        html += `<th class="action-col" contenteditable="false"><button class="btn-action-sm" style="background:#6366f1; color:#fff;" onclick="insertRowAtTop()" title="첫 줄에 행 추가"><i class="fas fa-plus"></i></button></th></tr></thead><tbody>`;
+
+        let validRowCount = 0;
+        for (let i = 1; i < data.length; i++) {
+            const row = data[i];
+            if (!row || row.length === 0 || row.every(cell => cell === undefined || cell === null || cell === "")) continue;
+
+            html += '<tr>';
+            for (let j = 0; j < colCount; j++) {
+                html += `<td contenteditable="true" spellcheck="false">${formatHTMLCell(row[j])}</td>`;
+            }
+            html += getActionColHTML() + '</tr>';
+            validRowCount++;
+        }
+        html += '</tbody></table>';
+
+        tableContainer.innerHTML = html;
+
+        document.getElementById('view-title').innerHTML = `<i class="fas fa-file-excel" style="color:#10b981;"></i> ${sheetName}`;
+        document.getElementById('info-name').textContent = fileName;
+        document.getElementById('info-sheet').textContent = sheetName;
+        document.getElementById('info-rows').textContent = validRowCount;
+        document.getElementById('info-cols').textContent = colCount;
+
+        emptyState.style.display = 'none';
+        paperView.style.display = 'flex';
+        mainToolbar.style.display = 'flex';
+        fileInfoPanel.style.display = 'flex';
+        
+        btnPrint.style.display = 'inline-flex'; // 출력 버튼 표시
+        btnSettings.style.display = 'inline-flex';
+        btnCopyMd.style.display = 'inline-flex';
+    }
+
+    function formatHTMLCell(cell) {
+        if (cell === undefined || cell === null) return "";
+        let str = String(cell);
+        return str.replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\r\n/g, "<br>").replace(/\n/g, "<br>");
+    }
+
+    // ==========================================
+    // 4. 모달 제어 및 열 너비 설정 로직
+    // ==========================================
+    btnSettings.addEventListener('click', () => {
+        const headers = document.querySelectorAll('#edit-table th:not(.action-col)');
+        colWidthInputs.innerHTML = '';
+        
+        headers.forEach((th, index) => {
+            const headerText = th.innerText.trim() || `열 ${index + 1}`;
+            const currentWidth = columnWidths[index] || '';
+            
+            const row = document.createElement('div');
+            row.className = 'col-input-row';
+            row.innerHTML = `
+                <label title="${headerText}">${index + 1}. ${headerText}</label>
+                <input type="text" placeholder="예: 80px 또는 20%" data-index="${index}" value="${currentWidth}">
+            `;
+            colWidthInputs.appendChild(row);
+        });
+        settingsModal.style.display = 'flex';
+    });
+
+    const closeSettingsModal = () => { settingsModal.style.display = 'none'; };
+    btnCloseModal.addEventListener('click', closeSettingsModal);
+    btnCancelModal.addEventListener('click', closeSettingsModal);
+
+    btnApplyWidths.addEventListener('click', () => {
+        const inputs = colWidthInputs.querySelectorAll('input');
+        let styleStr = '.viewer-table { table-layout: fixed; }';
+        
+        inputs.forEach((input, index) => {
+            const val = input.value.trim();
+            columnWidths[index] = val;
+
+            if (val) {
+                styleStr += `
+                    .viewer-table th:nth-child(${index + 1}),
+                    .viewer-table td:nth-child(${index + 1}) {
+                        width: ${val} !important;
+                        min-width: ${val} !important;
+                        max-width: ${val} !important;
+                        word-break: break-word !important;
+                    }
+                `;
+            }
+        });
+        
+        ensureStyleTag().innerHTML = styleStr;
+        showToast('열 너비 설정이 적용되었습니다.');
+        closeSettingsModal();
+    });
+
+    // ==========================================
+    // 5. 유틸 및 추출 기능
+    // ==========================================
+    function generateMarkdownFromDOM() {
+        const table = document.getElementById('edit-table');
+        if (!table) return "";
+        let md = "";
+        const rows = table.querySelectorAll('tr');
+
+        rows.forEach((row, rowIndex) => {
+            const cells = row.querySelectorAll('th:not(.action-col), td:not(.action-col)');
+            if (cells.length === 0) return; 
+
+            let rowData = [];
+            cells.forEach(cell => {
+                let clone = cell.cloneNode(true);
+                clone.querySelectorAll('ul, ol').forEach(list => {
+                    let listStr = "";
+                    list.querySelectorAll('li').forEach(item => { listStr += "<br>- " + item.innerHTML; });
+                    list.outerHTML = listStr; 
+                });
+                clone.querySelectorAll('div, p').forEach(block => {
+                    block.outerHTML = (block.innerHTML === '<br>') ? "<br>" : "<br>" + block.innerHTML;
+                });
+                let text = clone.innerHTML.replace(/\n/g, "").replace(/^(<br>)+/, '').replace(/\|/g, "\\|");
+                rowData.push(text);
+            });
+            md += "| " + rowData.join(" | ") + " |\n";
+            if (rowIndex === 0) md += "| " + Array(cells.length).fill("---").join(" | ") + " |\n";
+        });
+        return md;
+    }
+
+    function showToast(msg) {
+        const toast = document.getElementById('toast');
+        document.getElementById('toast-msg').textContent = msg;
+        toast.style.opacity = '1'; toast.style.bottom = '30px';
+        setTimeout(() => { toast.style.opacity = '0'; toast.style.bottom = '-50px'; }, 2500);
+    }
+    
+    // 행 추가, 삭제 함수들
+    function insertRow(btn, dir) { 
+        const currentRow = btn.closest('tr');
+        if (!currentRow) return;
+        const colCount = currentRow.querySelectorAll('td:not(.action-col)').length;
+        const newRow = document.createElement('tr');
+        let html = '';
+        for (let i = 0; i < colCount; i++) html += `<td contenteditable="true" spellcheck="false"></td>`;
+        html += getActionColHTML();
+        newRow.innerHTML = html;
+        if (dir === 'above') currentRow.parentNode.insertBefore(newRow, currentRow);
+        else currentRow.nextSibling ? currentRow.parentNode.insertBefore(newRow, currentRow.nextSibling) : currentRow.parentNode.appendChild(newRow);
+        updateRowCount();
+    }
+    function insertRowAtTop() {
+        const tbody = document.querySelector('#edit-table tbody');
+        const colCount = document.querySelectorAll('#edit-table th:not(.action-col)').length;
+        const newRow = document.createElement('tr');
+        let html = '';
+        for (let i = 0; i < colCount; i++) html += `<td contenteditable="true" spellcheck="false"></td>`;
+        html += getActionColHTML();
+        newRow.innerHTML = html;
+        if(tbody) tbody.insertBefore(newRow, tbody.firstChild);
+        updateRowCount();
+    }
+    function deleteRowElement(btn) { const row = btn.closest('tr'); if(row) { row.remove(); updateRowCount(); } }
+    function updateRowCount() { const tbody = document.querySelector('#edit-table tbody'); if(tbody) document.getElementById('info-rows').textContent = tbody.querySelectorAll('tr').length; }
+</script>
+</body>
+</html>

@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PDF 텍스트 추출</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  
+  <style>
+    :root{
+      --bg:#f7fafc;
+      --card:#ffffff;
+      --ink:#1a202c;
+      --muted:#718096;
+      --accent:#2b6cb0;
+      --border:#e2e8f0;
+    }
+    *{box-sizing:border-box;}
+    body{
+      margin:0; background:var(--bg); color:var(--ink);
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Noto Sans KR,Arial,sans-serif;
+    }
+    header{position:sticky; top:0; background:#fff; border-bottom:1px solid #e2e8f0; z-index:10;}
+    header .wrap{
+      display:flex; gap:12px; align-items:center;
+      padding:12px 16px;
+      flex-wrap: wrap; 
+    }
+    header h1{font-size:18px; margin:0; margin-right: 10px;}
+    .btn{
+      appearance:none; border:1px solid #cbd5e0; background:#fff; color:var(--ink);
+      padding:7px 11px; border-radius:10px; font-size:13px; cursor:pointer; font-weight:500;
+      transition: all 0.2s;
+    }
+    .btn:hover{background:#f8fafc; border-color:#b3c3d6;}
+    
+    .btn.primary{background:var(--accent); border-color:var(--accent); color:#fff;}
+    .btn.primary:hover{background:#2c5282;}
+
+    .btn.danger{color:#e53e3e; border-color:#fed7d7;}
+    .btn.danger:hover{background:#fff5f5; border-color:#fc8181;}
+
+    .divider { width:1px; height:24px; background:#e2e8f0; margin:0 4px; }
+
+    main{
+      display:grid; grid-template-columns:minmax(350px, 4fr) minmax(400px, 6fr);
+      gap:16px; padding:16px; height:calc(100vh - 66px);
+    }
+    @media (max-width:980px){
+      main{grid-template-columns:1fr; height:auto;}
+    }
+    .card{
+      background:var(--card); border:1px solid var(--border); border-radius:14px;
+      display:flex; flex-direction:column; max-height:100%; overflow:hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .card h2{margin:0; padding:10px 12px; border-bottom:1px solid #edf2f7; font-size:15px; font-weight:600;}
+    .card .body{padding:10px 12px; gap:8px; display:flex; flex-direction:column; height:100%; overflow:hidden;}
+    
+    .table-wrap { flex:1; overflow:auto; border:1px solid #edf2f7; border-radius:8px; }
+    table{width:100%; border-collapse:separate; border-spacing:0;}
+    th,td{padding:8px 8px; border-bottom:1px solid #edf2f7; font-size:13px; vertical-align:top;}
+    th{background:#f7fafc; text-align:left; position:sticky; top:0; z-index:1; font-weight:600; color:#4a5568;}
+    tbody tr{cursor:pointer; transition: background 0.1s;}
+    tbody tr:hover{background:#f9fbff;}
+    tbody tr.is-active{background:#e9d8fd;}
+    
+    .row{display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
+    .pill{background:#edf2f7; border:1px solid #e2e8f0; border-radius:999px; padding:3px 9px; font-size:12px; color:#4a5568;}
+    
+    #preview-area{flex:1; display:flex; flex-direction:column; gap:12px; overflow:auto;}
+    .pv-box{background:#fff; display:flex; flex-direction:column; gap:4px; height:100%;}
+    .pv-label{font-size:12px; color:#0b3d91; font-weight:700;}
+    
+    #pv-content{
+      flex:1; padding:16px; border:1px solid #edf2f7; border-radius:8px; 
+      background:#fdfdfd; font-size:14px; line-height:1.6; 
+      white-space: pre-wrap; 
+      overflow:auto; color:#2d3748;
+    }
+
+    #toast-area{position:fixed; right:16px; top:16px; display:flex; flex-direction:column; gap:8px; z-index:999;}
+    .toast{background:#fff; border:1px solid #e2e8f0; border-left:5px solid #3182ce; border-radius:12px;
+      padding:9px 11px; min-width:240px; max-width:360px; display:flex; gap:8px; font-size:13px;
+      box-shadow:0 8px 28px rgba(0,0,0,.06); animation: slideIn 0.3s ease;
+    }
+    @keyframes slideIn { from{transform:translateX(100%);opacity:0;} to{transform:translateX(0);opacity:1;} }
+    .toast .t-close{margin-left:auto; cursor:pointer; opacity:.6;}
+
+    /* 설정 모달 스타일 추가 */
+    #modal-overlay {
+      display: none; position: fixed; top:0; left:0; width:100%; height:100%; 
+      background: rgba(0,0,0,0.4); z-index: 9999; align-items: center; justify-content: center;
+    }
+    .modal-box {
+      background: #fff; padding: 24px; border-radius: 12px; width: 400px; max-width: 90%;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    }
+    .modal-box h3 { margin: 0 0 16px 0; font-size: 16px; }
+    .inp-group { margin-bottom: 12px; }
+    .inp-group label { display: block; font-size: 12px; color: #4a5568; margin-bottom: 4px; font-weight: 600; }
+    .inp-group input { width: 100%; padding: 8px; border: 1px solid #cbd5e0; border-radius: 6px; font-size: 13px; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>PDF 텍스트 추출</h1>
+      
+      <input type="file" id="pdfFile" accept=".pdf" style="display:none" />
+      <input type="file" id="jsonFile" accept=".json" style="display:none" />
+
+      <button class="btn primary" id="btn-upload">📄 PDF 열기</button>
+      <button class="btn" id="btn-settings">⚙️ 제외 설정</button>
+
+      <div class="divider"></div>
+      <button class="btn" id="btn-export-xlsx">📊 엑셀 저장</button>
+      <button class="btn" id="btn-export-json">💾 JSON 저장</button>
+      <button class="btn" id="btn-import-json">📂 JSON 복구</button>
+      <div class="divider"></div>
+      <button class="btn danger" id="btn-clear">🗑️ 초기화</button>
+      
+      <span id="stat" class="pill" style="margin-left:auto;">대기중</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>페이지 목록</h2>
+      <div class="body">
+        <div class="row">
+          <input id="search" placeholder="검색 (내용)" style="flex:1; padding:7px 10px; border:1px solid #cbd5e0; border-radius:8px; font-size:13px;" />
+          <span id="count" class="pill">0건</span>
+        </div>
+        <div class="table-wrap">
+          <table id="tbl">
+            <thead>
+              <tr>
+                <th style="width:70px;">페이지</th>
+                <th>텍스트 미리보기</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>상세 보기</h2>
+      <div class="body" id="preview-area">
+        <div class="row" style="border-bottom:1px solid #eee; padding-bottom:8px;">
+            <span class="pv-label">파일명:</span> <span id="pv-filename" style="font-size:13px;">-</span>
+            <span style="width:12px; border-right:1px solid #ddd; height:12px;"></span>
+            <span class="pv-label">페이지:</span> <span id="pv-page" style="font-weight:bold; color:#2b6cb0;">-</span>
+            <button class="btn" style="margin-left:auto; padding:4px 8px; font-size:12px;" onclick="copyContent()">전체 복사</button>
+        </div>
+        <div class="pv-box">
+          <div id="pv-content">좌측 목록에서 페이지를 선택하세요.</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="modal-overlay">
+    <div class="modal-box">
+      <h3>제외할 텍스트 설정</h3>
+      <div style="font-size:12px; color:#718096; margin-bottom:12px;">
+        반복되는 헤더/풋터 문구를 입력하면 추출 시 삭제합니다.
+      </div>
+      <div class="inp-group">
+        <label>헤더 (상단 문구)</label>
+        <input id="inp-header" placeholder="예: 2025년 사업계획서" />
+      </div>
+      <div class="inp-group">
+        <label>풋터 (하단 문구)</label>
+        <input id="inp-footer" placeholder="예: - 1 -" />
+      </div>
+      <div class="modal-actions">
+        <button class="btn" id="btn-close-modal">취소</button>
+        <button class="btn primary" id="btn-save-settings">저장 적용</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast-area"></div>
+
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    (function () {
+      const DB_NAME = "TextBookTextDB"; 
+      const DB_VER = 1;
+      let db = null;
+
+      // 설정값 (로컬스토리지 저장)
+      const settings = {
+        header: localStorage.getItem("pdf_header_text") || "",
+        footer: localStorage.getItem("pdf_footer_text") || ""
+      };
+
+      const state = {
+        items: [],
+        search: "",
+        selectedId: null,
+      };
+
+      const $ = (sel) => document.querySelector(sel);
+
+      // --- Utils ---
+      function toast(msg, type = "info") {
+        const area = $("#toast-area");
+        if (!area) return;
+        const el = document.createElement("div");
+        el.className = "toast " + (type || "info");
+        el.innerHTML = `<div>${msg}</div><div class="t-close">×</div>`;
+        el.querySelector(".t-close").onclick = () => area.removeChild(el);
+        area.appendChild(el);
+        setTimeout(() => { if (el.parentNode === area) area.removeChild(el); }, 3000);
+      }
+      
+      function setStat(txt) {
+        const s = $("#stat");
+        if (s) s.textContent = txt;
+      }
+
+      function uid() {
+        return "P" + Math.random().toString(36).slice(2, 8).toUpperCase();
+      }
+
+      function escapeRegExp(string) {
+        return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      }
+
+      // --- IndexedDB ---
+      function openDB() {
+        return new Promise((res, rej) => {
+          const rq = indexedDB.open(DB_NAME, DB_VER);
+          rq.onupgradeneeded = (e) => {
+            const d = e.target.result;
+            if (d.objectStoreNames.contains("items")) d.deleteObjectStore("items");
+            d.createObjectStore("items", { keyPath: "id" });
+          };
+          rq.onsuccess = () => { db = rq.result; res(db); };
+          rq.onerror = () => rej(rq.error);
+        });
+      }
+
+      function tx(store, mode = "readonly") {
+        return db.transaction(store, mode).objectStore(store);
+      }
+
+      function putItem(item) {
+        return new Promise((res, rej) => {
+          const r = tx("items", "readwrite").put(item);
+          r.onsuccess = () => res(true);
+          r.onerror = () => rej(r.error);
+        });
+      }
+
+      function getAllItems() {
+        return new Promise((res, rej) => {
+          const r = tx("items").getAll();
+          r.onsuccess = () => res(r.result || []);
+          r.onerror = () => rej(r.error);
+        });
+      }
+
+      function clearAll() {
+        return new Promise((res, rej) => {
+          const t1 = tx("items", "readwrite").clear();
+          t1.onsuccess = () => res(true);
+          t1.onerror = () => rej(t1.error);
+        });
+      }
+
+      // --- Logic ---
+      async function importPdf(file) {
+        const arrayBuffer = await file.arrayBuffer();
+        const loadingTask = pdfjsLib.getDocument(arrayBuffer);
+        const pdf = await loadingTask.promise;
+        
+        const fileName = file.name;
+        const totalPages = pdf.numPages;
+        const importBatch = Date.now();
+        let importedCount = 0;
+
+        for (let i = 1; i <= totalPages; i++) {
+          try {
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+            
+            let fullText = "";
+            let lastY = -1;
+            
+            for (const item of textContent.items) {
+                const str = item.str;
+                const currentY = item.transform ? item.transform[5] : 0;
+                
+                if (lastY !== -1) {
+                    if (Math.abs(currentY - lastY) > 8) {
+                        fullText += "\n" + str; 
+                    } else {
+                        if (fullText.length > 0 && !fullText.endsWith(" ") && !str.startsWith(" ") && str.trim().length > 0) {
+                             fullText += " " + str;
+                        } else {
+                             fullText += str;
+                        }
+                    }
+                } else {
+                    fullText += str;
+                }
+                lastY = currentY;
+            }
+
+            // [추가] 헤더/풋터 제거 로직
+            if (settings.header) {
+                const re = new RegExp(escapeRegExp(settings.header), 'gi');
+                fullText = fullText.replace(re, '');
+            }
+            if (settings.footer) {
+                const re = new RegExp(escapeRegExp(settings.footer), 'gi');
+                fullText = fullText.replace(re, '');
+            }
+            fullText = fullText.replace(/\n\s*\n/g, '\n').trim();
+
+            const item = {
+              id: uid(),
+              fileName: fileName,
+              page: i,
+              content: fullText,
+              ts: new Date().toISOString(),
+              batch: importBatch
+            };
+
+            await putItem(item);
+            importedCount++;
+            
+            if (i % 10 === 0) setStat(`${i} / ${totalPages} 페이지 처리 중...`);
+          } catch (e) {
+            console.error(`Page ${i} error:`, e);
+          }
+        }
+        return importedCount;
+      }
+
+      async function importJSON(file) {
+        try {
+            const text = await file.text();
+            let data;
+            try { data = JSON.parse(text); } catch (e) { throw new Error("JSON 파싱 실패"); }
+            if (!Array.isArray(data)) throw new Error("JSON 형식이 목록(Array)이 아닙니다.");
+
+            let count = 0;
+            for (const item of data) {
+                if (item.id && item.content !== undefined) {
+                    await putItem(item);
+                    count++;
+                }
+            }
+            return count;
+        } catch (err) { throw err; }
+      }
+
+      // --- Export ---
+      async function exportXLSX() {
+        if (state.items.length === 0) return toast("데이터가 없습니다.", "bad");
+        setStat("엑셀 생성 중...");
+        
+        const wb = new ExcelJS.Workbook();
+        const ws = wb.addWorksheet("PDF_Extract");
+        
+        const topAlignStyle = { alignment: { vertical: "top", wrapText: true } };
+        
+        ws.columns = [
+          { header: "파일명", key: "fileName", width: 25, style: topAlignStyle },
+          { header: "페이지", key: "page", width: 10, style: topAlignStyle },
+          { header: "텍스트 내용", key: "content", width: 80, style: topAlignStyle }
+        ];
+
+        const exportData = [...state.items].sort((a,b) => {
+            const fa = a.fileName.localeCompare(b.fileName);
+            if(fa !== 0) return fa;
+            return a.page - b.page;
+        });
+
+        exportData.forEach(it => ws.addRow({ fileName: it.fileName, page: it.page, content: it.content }));
+
+        const buf = await wb.xlsx.writeBuffer();
+        const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `pdf_export_${new Date().toISOString().slice(0,10)}.xlsx`;
+        a.click();
+        URL.revokeObjectURL(url);
+        
+        setStat("완료");
+        toast("엑셀 저장 완료", "ok");
+      }
+
+      function exportJSON() {
+        if (state.items.length === 0) return toast("데이터가 없습니다.", "bad");
+        const jsonStr = JSON.stringify(state.items, null, 2);
+        const blob = new Blob([jsonStr], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "backup_textbook_pdf(text).json"; a.click();
+        URL.revokeObjectURL(url);
+        toast("JSON 저장 완료", "ok");
+      }
+
+      // --- Rendering ---
+      async function refreshItems() {
+        const arr = await getAllItems();
+        state.items = arr.sort((a, b) => {
+            if (a.batch !== b.batch) return b.batch - a.batch; 
+            return a.page - b.page;
+        });
+        renderList();
+      }
+
+      function renderList() {
+        const tb = $("#tbl tbody");
+        tb.innerHTML = "";
+        const q = (state.search || "").trim().toLowerCase();
+        
+        const filtered = state.items.filter(it => {
+          if (!q) return true;
+          return (it.content || "").toLowerCase().includes(q);
+        });
+
+        filtered.forEach(it => {
+          const tr = document.createElement("tr");
+          if (state.selectedId === it.id) tr.classList.add("is-active");
+          let previewText = (it.content || "").replace(/\n/g, " ");
+          if (previewText.length > 50) previewText = previewText.slice(0, 50) + "...";
+          tr.innerHTML = `
+            <td style="font-weight:bold; color:#2b6cb0;">P.${it.page}</td>
+            <td style="color:#4a5568;">${previewText || "<span style='color:#ccc'>-</span>"}</td>
+          `;
+          tr.onclick = () => {
+            state.selectedId = it.id;
+            renderList();
+            showPreview(it);
+          };
+          tb.appendChild(tr);
+        });
+        $("#count").textContent = filtered.length + "건";
+      }
+
+      function showPreview(it) {
+        $("#pv-filename").textContent = it.fileName || "-";
+        $("#pv-page").textContent = it.page ? (it.page + " 페이지") : "-";
+        $("#pv-content").textContent = it.content || ""; 
+      }
+
+      window.copyContent = function() {
+        const txt = $("#pv-content").textContent;
+        if (!txt) return;
+        navigator.clipboard.writeText(txt).then(() => toast("복사 완료", "ok")).catch(() => toast("복사 실패", "bad"));
+      };
+
+      // --- Init ---
+      document.addEventListener("DOMContentLoaded", async () => {
+        await openDB();
+        await refreshItems();
+
+        $("#btn-upload").onclick = () => $("#pdfFile").click();
+        $("#pdfFile").addEventListener("change", async (e) => {
+          const f = e.target.files[0];
+          if (!f) return;
+          setStat("PDF 분석 중...");
+          try {
+            const cnt = await importPdf(f);
+            setStat(cnt + "페이지 저장됨");
+            toast(`${cnt} 페이지 완료`, "ok");
+          } catch (err) {
+            console.error(err);
+            setStat("오류");
+            toast("PDF 오류: " + err.message, "bad");
+          }
+          await refreshItems();
+          e.target.value = "";
+        });
+
+        $("#btn-export-json").onclick = exportJSON;
+        $("#btn-import-json").onclick = () => $("#jsonFile").click();
+        $("#jsonFile").addEventListener("change", async (e) => {
+            const f = e.target.files[0];
+            if (!f) return;
+            setStat("JSON 복구 중...");
+            try {
+                const cnt = await importJSON(f);
+                setStat(cnt + "건 복구됨");
+                toast(`${cnt}건 복구 완료`, "ok");
+            } catch (err) {
+                setStat("오류");
+                toast("JSON 오류: " + err.message, "bad");
+            }
+            await refreshItems();
+            e.target.value = "";
+        });
+
+        $("#btn-export-xlsx").onclick = exportXLSX;
+        
+        $("#btn-clear").onclick = async () => {
+          if (confirm("모든 데이터를 삭제하시겠습니까?")) {
+            await clearAll();
+            state.items = [];
+            state.selectedId = null;
+            $("#pv-content").textContent = "좌측 목록에서 페이지를 선택하세요.";
+            refreshItems();
+            toast("초기화 완료");
+          }
+        };
+        $("#search").oninput = (e) => { state.search = e.target.value; renderList(); };
+
+        // [추가] 모달 이벤트
+        $("#btn-settings").onclick = () => {
+          $("#inp-header").value = settings.header;
+          $("#inp-footer").value = settings.footer;
+          $("#modal-overlay").style.display = "flex";
+        };
+        $("#btn-close-modal").onclick = () => $("#modal-overlay").style.display = "none";
+        $("#btn-save-settings").onclick = () => {
+          settings.header = $("#inp-header").value;
+          settings.footer = $("#inp-footer").value;
+          
+          localStorage.setItem("pdf_header_text", settings.header);
+          localStorage.setItem("pdf_footer_text", settings.footer);
+          
+          $("#modal-overlay").style.display = "none";
+          toast("설정 저장됨 (새로 불러올 때 적용)");
+        };
+      });
+    })();
+  </script>
+</body>
+</html>

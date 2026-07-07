@@ -1,0 +1,1296 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Web Logger</title>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css" />
+
+<link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+<script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+<script src="https://unpkg.com/quill-image-resize@3.0.9/image-resize.min.js"></script>
+<script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+<style>
+/* === 1. Variables & Reset === */
+:root {
+    --bg-base: #f1f5f9;      /* 부드러운 앱 배경 */
+    --bg-surface: #ffffff;   /* 패널 배경 */
+    --primary: #4f46e5;      /* Indigo 600 */
+    --primary-hover: #4338ca;
+    --primary-light: #e0e7ff;/* 포커스 링, 액티브 배경 */
+    --text-main: #0f172a;    /* Slate 900 */
+    --text-muted: #64748b;   /* Slate 500 */
+    --border: #e2e8f0;       /* Slate 200 */
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+    
+    --font-main: "Pretendard", -apple-system, sans-serif;
+    --font-code: 'D2Coding', 'Consolas', monospace;
+    --editor-font-size: 15.5px;
+}
+
+* { box-sizing: border-box; outline: none; }
+body {
+    margin: 0; background: var(--bg-base); 
+    font-family: var(--font-main); color: var(--text-main);
+    height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* === 2. Header (Top Bar) === */
+header {
+    height: 60px; background: var(--bg-surface); 
+    border-bottom: 1px solid var(--border); box-shadow: var(--shadow-sm);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; flex-shrink: 0; z-index: 10;
+}
+.brand { 
+    font-weight: 800; font-size: 18px; color: var(--primary); 
+    display: flex; align-items: center; gap: 8px; letter-spacing: -0.5px;
+}
+.header-actions { display: flex; align-items: center; gap: 8px; height: 100%; }
+
+/* Buttons */
+.btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    height: 36px; padding: 0 14px; border-radius: var(--radius-md); 
+    font-size: 13.5px; font-weight: 600; font-family: var(--font-main);
+    cursor: pointer; border: 1px solid var(--border); background: #fff; color: var(--text-main);
+    transition: all 0.2s ease; box-shadow: var(--shadow-sm);
+}
+.btn:hover { background: #f8fafc; border-color: #cbd5e1; transform: translateY(-1px); }
+.btn:active { transform: translateY(0); }
+.btn-primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+.btn-primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+.btn-danger { color: #ef4444; background: #fff; border-color: #fee2e2; }
+.btn-danger:hover { background: #fef2f2; border-color: #fca5a5; }
+.btn-icon { 
+    width: 36px; padding: 0; border: none; background: transparent; box-shadow: none;
+    color: var(--text-muted); font-size: 16px; 
+}
+.btn-icon:hover { background: #f1f5f9; color: var(--primary); transform: none; }
+
+.v-sep { width: 1px; height: 18px; background: var(--border); margin: 0 6px; }
+
+/* === 3. Layout === */
+.workspace { display: flex; flex: 1; overflow: hidden; }
+
+/* Sidebar */
+.pane-list {
+    width: 340px; background: #f8fafc; border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; flex-shrink: 0; z-index: 5;
+}
+.sidebar-controls {
+    padding: 16px; border-bottom: 1px solid var(--border); background: var(--bg-surface);
+    display: flex; flex-direction: column; gap: 10px; flex-shrink: 0;
+}
+.sidebar-controls select, .sidebar-controls input {
+    width: 100%; height: 38px; font-size: 13.5px; padding: 0 12px;    
+    border: 1px solid var(--border); border-radius: var(--radius-md);
+    background: #f1f5f9; transition: 0.2s; font-family: var(--font-main);
+}
+.sidebar-controls select:focus, .sidebar-controls input:focus {
+    background: #fff; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light);
+}
+
+.list-scroll { flex: 1; overflow-y: auto; padding: 8px; }
+
+.list-item {
+    padding: 14px 16px; margin-bottom: 4px; border-radius: var(--radius-md); 
+    cursor: pointer; transition: all 0.2s; background: transparent;
+    border: 1px solid transparent;
+}
+.list-item:hover { background: #e2e8f0; }
+.list-item.active { 
+    background: #fff; border-color: var(--border); box-shadow: var(--shadow-sm);
+    position: relative; overflow: hidden;
+}
+.list-item.active::before {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--primary);
+}
+.list-item .meta { font-size: 11px; color: var(--text-muted); display: flex; justify-content: space-between; margin-bottom: 6px; align-items: center;}
+.list-item .title { font-size: 14px; font-weight: 600; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.badge-cat { background: var(--primary-light); color: var(--primary); padding: 3px 8px; border-radius: 4px; font-weight: 700; font-size: 10px; letter-spacing: 0.3px;}
+
+/* Editor Area */
+.pane-editor { flex: 1; background: var(--bg-surface); display: flex; flex-direction: column; position: relative; min-width: 0; }
+#empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-muted); background: var(--bg-base); }
+#empty-state i { font-size: 56px; margin-bottom: 20px; color: #cbd5e1; }
+#empty-state p { font-size: 15px; font-weight: 500; }
+
+#editor-container { display: none; flex-direction: column; height: 100%; }
+
+/* 간소화된 툴바 */
+.editor-toolbar {
+    height: 56px; border-bottom: 1px solid var(--border); background: var(--bg-surface);
+    display: flex; align-items: center; justify-content: flex-end; padding: 0 32px; flex-shrink: 0;
+}
+
+/* 문서 에디터 스크롤 영역 */
+.editor-scroll { flex: 1; overflow-y: auto; padding: 40px 60px 80px 60px; scroll-behavior: smooth; }
+.doc-wrapper { max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 32px; }
+
+/* 헤더/메타데이터 영역 (문서형 레이아웃) */
+.doc-header { display: flex; flex-direction: column; gap: 16px; border-bottom: 2px solid var(--border); padding-bottom: 24px; }
+#in-title {
+    width: 100%; font-size: 28px; font-weight: 800; color: var(--text-main);
+    background: transparent; border: none; padding: 0; letter-spacing: -0.5px;
+    font-family: var(--font-main);
+}
+#in-title::placeholder { color: #cbd5e1; }
+
+.doc-meta { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+.meta-item { display: flex; align-items: center; gap: 8px; }
+.meta-item i { color: var(--text-muted); font-size: 14px; width: 16px; text-align: center; }
+
+select, input[type="text"], input[type="number"] {
+    height: 36px; padding: 0 12px; border: 1px solid var(--border); border-radius: 6px;
+    font-family: var(--font-main); font-size: 13.5px; background: #f8fafc; color: var(--text-main);
+    transition: all 0.2s;
+}
+select:focus, input[type="text"]:focus, input[type="number"]:focus {
+    background: #fff; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light);
+}
+
+/* URL 복합 입력창 */
+.input-with-btn {
+    display: flex; align-items: center; background: #f8fafc; 
+    border: 1px solid var(--border); border-radius: 6px; overflow: hidden; transition: 0.2s; width: 100%;
+}
+.input-with-btn:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); background: #fff;}
+.input-with-btn input { border: none; background: transparent; box-shadow: none !important; padding: 0 12px; flex: 1; height: 34px; }
+.input-with-btn .btn-open { 
+    height: 36px; padding: 0 14px; border: none; border-left: 1px solid var(--border); 
+    background: #f1f5f9; cursor: pointer; color: var(--text-muted); transition: 0.2s; 
+}
+.input-with-btn .btn-open:hover { color: var(--primary); background: #e2e8f0; }
+
+/* 라벨 스타일 */
+label { font-size: 12px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+/* === Quill Editor UI Overrides === */
+.ql-container.ql-snow { 
+    border: 1px solid var(--border) !important; border-radius: var(--radius-md) !important; 
+    font-family: var(--font-main) !important; background: #f8fafc; transition: all 0.2s; 
+}
+.ql-container.ql-snow:focus-within { 
+    background: #fff; border-color: var(--primary) !important; box-shadow: 0 0 0 3px var(--primary-light); 
+}
+.ql-editor { 
+    font-size: var(--editor-font-size) !important; line-height: 1.7; color: var(--text-main); 
+    min-height: 300px; padding: 20px !important; 
+}
+.ql-editor p { margin-bottom: 10px; }
+.ql-editor ul, .ql-editor ol { padding-left: 24px; margin: 12px 0; }
+.ql-editor li { margin-bottom: 8px; }
+.ql-editor strong, .ql-editor b { font-weight: 700; color: #0f172a; }
+.ql-editor blockquote { background: #f1f5f9; border-left: 4px solid var(--primary); padding: 12px 16px; margin: 16px 0; color: #334155; border-radius: 0 4px 4px 0; }
+
+/* Quill 이미지 제어 */
+.ql-editor img { cursor: pointer; transition: opacity 0.2s, outline 0.1s; border-radius: 4px; }
+.ql-editor img:hover { opacity: 0.85; outline: 2px solid var(--primary); outline-offset: 2px; }
+.ql-editor img.img-highlight { outline: 4px solid #f59e0b !important; outline-offset: 2px !important; }
+
+/* ✅ 붙여넣기 한 표(Table) 원본 유지용 래퍼 스타일 */
+.quill-raw-table {
+    margin: 1.5rem 0;
+    width: 100%;
+    overflow-x: auto;
+    border-radius: var(--radius-md);
+    box-shadow: 0 0 0 1px var(--border);
+    background: #fff;
+}
+.quill-raw-table table {
+    border-collapse: collapse !important;
+    width: 100%;
+    margin: 0;
+    font-size: 14px;
+    color: var(--text-main);
+    text-align: left;
+}
+.quill-raw-table th, .quill-raw-table td {
+    border: 1px solid var(--border);
+    padding: 10px 14px;
+}
+.quill-raw-table thead th, .quill-raw-table th {
+    background-color: #f8fafc;
+    font-weight: 700;
+}
+
+/* Code Editor */
+.code-editor {
+    font-family: var(--font-code); background: #0f172a; color: #f8fafc; font-size: 14px;
+    border-radius: var(--radius-md); padding: 16px; line-height: 1.6; border: none; resize: vertical; width: 100%;
+}
+.code-editor:focus { box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.3); }
+
+/* Custom Image Toolbar (플로팅) */
+.custom-img-toolbar { position: absolute; display: flex; align-items: center; gap: 4px; background: #fff; border: 1px solid var(--border); padding: 4px; border-radius: 6px; box-shadow: var(--shadow-md); z-index: 100; transition: opacity 0.2s; }
+
+/* Attachments */
+.attach-area { padding-top: 24px; border-top: 1px dashed var(--border); }
+.img-grid { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
+.img-slot {
+    width: 100px; height: 100px; border: 2px dashed #cbd5e1; border-radius: var(--radius-md);
+    position: relative; display: flex; align-items: center; justify-content: center;
+    background: #f8fafc; overflow: hidden; cursor: pointer; transition: 0.2s; flex-direction: column;
+}
+.img-slot:hover { border-color: var(--primary); background: var(--primary-light); }
+.img-slot img { width: 100%; height: 100%; object-fit: cover; border-radius: 6px; }
+.img-slot .file-icon { font-size: 28px; color: #94a3b8; margin-bottom: 6px; }
+.img-slot .file-name { font-size: 11px; font-weight: 600; color: var(--text-muted); text-align: center; width: 90%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.img-slot i.fa-folder-open { font-size: 24px; color: #94a3b8; }
+
+.btn-del-img {
+    position: absolute; top: 6px; right: 6px; width: 22px; height: 22px;
+    background: rgba(15, 23, 42, 0.7); color: #fff; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+    font-size: 12px; z-index: 2; transition: 0.2s;
+}
+.btn-del-img:hover { background: #ef4444; transform: scale(1.1); }
+
+/* Modals */
+.modal-overlay {
+    position: fixed; inset: 0; background: rgba(15, 23, 42, 0.7); z-index: 1000;
+    display: none; align-items: center; justify-content: center; backdrop-filter: blur(3px);
+}
+.modal-content {
+    background: #fff; padding: 28px; border-radius: var(--radius-lg); width: 420px; max-width: 95%;
+    box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); display: flex; flex-direction: column; gap: 20px;
+}
+
+/* 이미지 뷰어 전용 모달 */
+.img-viewer-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 2000; display: none; align-items: center; justify-content: center; backdrop-filter: blur(5px);}
+.img-viewer-content { position: relative; max-width: 90%; max-height: 90%; display: flex; flex-direction: column; align-items: center; }
+.full-img-content { max-width: 100%; max-height: 85vh; border-radius: 8px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); object-fit: contain; background: #fff; }
+.img-viewer-close { position: absolute; top: -45px; right: 0; background: rgba(255,255,255,0.1); border: none; color: white; font-size: 24px; cursor: pointer; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
+.img-viewer-close:hover { background: #ef4444; }
+
+/* 카테고리 관리 리스트 스타일 */
+.cat-manage-list { max-height: 300px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-md); background: #f8fafc; }
+.cat-manage-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); background:#fff; }
+.cat-manage-item:last-child { border-bottom: none; }
+
+/* Toast */
+#toast-container { position: fixed; bottom: 32px; right: 32px; z-index: 9999; display: flex; flex-direction: column; gap: 12px; }
+.toast { background: #1e293b; color: #fff; padding: 14px 24px; border-radius: 50px; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 12px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+@keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+@media (max-width: 768px) {
+    .pane-list { display: none; position: absolute; height: 100%; z-index: 50; box-shadow: 0 0 20px rgba(0,0,0,0.1); }
+    .pane-list.show { display: flex; }
+    .doc-meta { flex-direction: column; align-items: stretch; }
+    .editor-scroll { padding: 24px 20px; }
+}
+</style>
+</head>
+<body>
+
+<header>
+    <div class="brand">
+        <button class="btn-icon" id="btn-toggle-menu" style="margin-right:8px; display:none;"><i class="fas fa-bars"></i></button>
+        <i class="fas fa-book-open"></i> Web Logger
+    </div>
+    <div class="header-actions">
+        <button class="btn" onclick="document.getElementById('shortcut-modal').style.display='flex'"><i class="fas fa-keyboard"></i> 단축키</button>
+        
+        <div class="v-sep"></div>
+        
+        <button class="btn" onclick="exportData()"><i class="fas fa-download"></i> 백업</button>
+        <button class="btn" onclick="document.getElementById('file-restore').click()"><i class="fas fa-upload"></i> 복구</button>
+        <input type="file" id="file-restore" hidden accept=".json" onchange="importData(this)">
+        
+        <div class="v-sep"></div>
+        
+        <button class="btn btn-primary" id="btn-new-log"><i class="fas fa-plus"></i><span class="desktop-only"> New</span></button>
+        <button class="btn btn-icon" id="btn-settings" title="카테고리 관리"><i class="fas fa-cog"></i></button>
+        <button class="btn btn-icon" id="btn-export-excel" title="Excel 저장"><i class="fas fa-file-excel" style="color:#059669;"></i></button>
+        <button class="btn btn-icon" id="btn-export-pdf" title="PDF 저장"><i class="fas fa-file-pdf" style="color:#ef4444;"></i></button>
+    </div>
+</header>
+
+<div class="workspace">
+    <aside class="pane-list" id="sidebar">
+        <div class="sidebar-controls">
+            <select id="filter-category">
+                <option value="">모든 카테고리</option>
+            </select>
+            <input type="text" id="search-input" placeholder="검색어 입력...">
+        </div>
+        <div class="list-scroll" id="list-container"></div>
+    </aside>
+
+    <main class="pane-editor">
+        <div id="empty-state">
+            <i class="fas fa-seedling"></i>
+            <p>목록에서 기록을 선택하거나 'New' 버튼을 눌러 작성하세요.</p>
+        </div>
+
+        <div id="editor-container">
+            <div class="editor-toolbar">
+                <div style="display:flex; gap: 8px;">
+                    <button class="btn btn-danger" id="btn-delete">삭제</button>
+                    <button class="btn btn-primary" id="btn-save"><i class="fas fa-save"></i> 저장</button>
+                </div>
+            </div>
+
+            <div class="editor-scroll">
+                <div class="doc-wrapper">
+                    <div class="doc-header">
+                        <input id="in-title" type="text" spellcheck="false" placeholder="제목을 입력하세요">
+                        
+                        <div class="doc-meta">
+                            <div class="meta-item">
+                                <i class="fas fa-folder"></i>
+                                <select id="in-category" style="width: 140px;"></select>
+                            </div>
+                            <div class="meta-item">
+                                <i class="fas fa-hashtag"></i>
+                                <input id="in-seq" type="number" placeholder="Seq" style="width: 80px;">
+                            </div>
+                            <div class="meta-item" style="flex:1; min-width: 250px;">
+                                <i class="fas fa-link"></i>
+                                <div class="input-with-btn">
+                                    <input id="in-url" type="text" placeholder="https:// (Reference URL)">
+                                    <button class="btn-open" id="btn-open-url" title="새 창 열기"><i class="fas fa-external-link-alt"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label><i class="fas fa-align-left" style="margin-right:6px;"></i>Content</label>
+                        <div id="in-content"></div>
+                    </div>
+
+                    <div>
+                        <label><i class="fas fa-code" style="margin-right:6px;"></i>Code Snippet</label>
+                        <textarea id="in-code" class="code-editor" rows="8" placeholder=">_ 코드를 입력하세요..."></textarea>
+                    </div>
+
+                    <div class="attach-area">
+                        <label>
+                            <i class="fas fa-paperclip" style="margin-right:6px;"></i>Attachments 
+                            <span id="img-count" style="margin-left:8px; padding:2px 8px; background:var(--border); border-radius:4px; font-size:10px; font-weight:700; color:var(--text-main);">0/10</span>
+                            <span style="text-transform:none; font-weight:500; font-size:11px; color:#94a3b8; margin-left:6px;">(파일 열기 전용)</span>
+                        </label>
+                        <div class="img-grid" id="img-grid-container"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<div id="img-toolbar" class="custom-img-toolbar" style="display:none;">
+    <div id="btn-hl-img" style="display:flex; align-items:center; justify-content:center; width:28px; height:28px; cursor:pointer; border-radius:4px;"><i class="ph-bold ph-highlighter"></i></div>
+    <div id="btn-clr-img" style="display:flex; align-items:center; justify-content:center; width:28px; height:28px; cursor:pointer; border-radius:4px;"><i class="ph-bold ph-eraser"></i></div>
+</div>
+
+<div class="modal-overlay" id="modal-settings">
+    <div class="modal-content">
+        <h3 style="margin:0; font-size: 18px; color: var(--text-main);"><i class="fas fa-cog" style="color:var(--primary); margin-right:8px;"></i>카테고리 관리</h3>
+        <div style="display:flex; gap:8px;">
+            <input type="text" id="new-cat-input" placeholder="새 카테고리 이름" style="flex:1;">
+            <button class="btn btn-primary" id="btn-add-cat">추가</button>
+        </div>
+        <div class="cat-manage-list" id="cat-manage-list"></div>
+        <div style="text-align:right;">
+            <button class="btn" onclick="closeSettings()">닫기</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="shortcut-modal" onclick="this.style.display='none'">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+            <h3 style="margin:0; font-size:18px; color: var(--text-main);"><i class="fas fa-keyboard" style="color:var(--primary); margin-right:8px;"></i>유용한 단축키 & 팁</h3>
+            <button class="btn-icon" onclick="document.getElementById('shortcut-modal').style.display='none'"><i class="fas fa-times"></i></button>
+        </div>
+        <ul style="font-size: 14px; color: var(--text-main); padding-left: 20px; line-height: 2.2; margin: 0;">
+            <li><b>새 문서:</b> Ctrl + Alt + N</li>
+            <li><b>저장하기:</b> Ctrl + S</li>
+            <li><b>글자 확대/축소:</b> Ctrl + ➕ / ➖</li>
+            <li><b>이미지 크게 보기:</b> 에디터 내 이미지 <b>더블클릭</b></li>
+            <li><b>표(Table) 지우기:</b> 표의 맨 앞이나 뒤 클릭 후 <b>백스페이스(지우기)</b></li>
+            <li><b>에디터 서식:</b> 취소선(Ctrl+0) | 빨강(Ctrl+Alt+R) | 파랑(Ctrl+Alt+B)</li>
+            <li><b>컬러 형광펜:</b> 주황(1) 파랑(2) 노랑(3) 녹색(4) 분홍(5) 갈색(6) 회색(7) <span style="font-size:11px;color:gray;">*Ctrl과 함께</span></li>
+        </ul>
+    </div>
+</div>
+
+<div class="img-viewer-modal" id="img-modal" onclick="closeImageViewer()">
+    <div class="img-viewer-content" onclick="event.stopPropagation()">
+        <button class="img-viewer-close" onclick="closeImageViewer()"><i class="fas fa-times"></i></button>
+        <img class="full-img-content" id="full-img-target">
+    </div>
+</div>
+
+<div id="hidden-inputs" style="display:none;"></div>
+<div id="toast-container"></div>
+
+<script>
+/* ===========================================================================
+ * Web Logger Pro (Features: JSON Backup/Restore, Quill Engine, Dynamic Slots)
+ * =========================================================================== */
+
+const $ = (sel) => document.querySelector(sel);
+const DB_NAME = 'WebLoggerDB';
+const DB_VER = 1; 
+const SLOT_COUNT = 10;
+let db = null;
+
+let quillBody;
+let activeTargetImage = null;
+let currentEditorFontSize = 15;
+
+// === Quill.js Format & Custom Bindings Setup ===
+const BaseImageFormat = Quill.import('formats/image');
+class ImageFormat extends BaseImageFormat {
+    static formats(domNode) {
+        return {
+            width: domNode.getAttribute('width') || domNode.style.width,
+            height: domNode.getAttribute('height') || domNode.style.height,
+            imghighlight: domNode.classList.contains('img-highlight')
+        };
+    }
+    format(name, value) {
+        if (name === 'width' || name === 'height') {
+            if (value) {
+                this.domNode.setAttribute(name, value);
+                this.domNode.style[name] = value.includes('px') || value.includes('%') ? value : value + 'px';
+            } else {
+                this.domNode.removeAttribute(name);
+                this.domNode.style[name] = '';
+            }
+        } else if (name === 'imghighlight') {
+            if (value) this.domNode.classList.add('img-highlight');
+            else this.domNode.classList.remove('img-highlight');
+        } else {
+            super.format(name, value);
+        }
+    }
+}
+Quill.register(ImageFormat, true);
+
+// ✅ 표(Table) 붙여넣기 원본 보호를 위한 커스텀 모듈 등록
+const BlockEmbed = Quill.import('blots/block/embed');
+class RawTableBlot extends BlockEmbed {
+    static create(value) {
+        const node = super.create();
+        node.innerHTML = value;
+        node.setAttribute('contenteditable', 'false'); // 에디터 내부에서 표 구조가 깨지는 것을 방지
+        return node;
+    }
+    static value(node) {
+        return node.innerHTML;
+    }
+}
+RawTableBlot.blotName = 'rawTable';
+RawTableBlot.tagName = 'div';
+RawTableBlot.className = 'quill-raw-table';
+Quill.register(RawTableBlot, true);
+
+
+const customBindings = {
+    customStrike: { key: '0', shortKey: true, handler: function(r, c) { this.quill.format('strike', !c.format.strike); } },
+    customRed: { key: 'R', shortKey: true, altKey: true, handler: function(r, c) { this.quill.format('color', c.format.color === 'red' ? false : 'red'); } },
+    customBlue: { key: 'B', shortKey: true, altKey: true, handler: function(r, c) { this.quill.format('color', c.format.color === 'blue' ? false : 'blue'); } },
+    customClear: { key: 'X', shortKey: true, shiftKey: true, handler: function(r, c) { 
+        if (r.length > 0) this.quill.removeFormat(r.index, r.length); 
+        else { const f = this.quill.getFormat(r); for (let k in f) this.quill.format(k, false); }
+    }},
+    customHighlight1: { key: '1', shortKey: true, handler: function(r, c) { this.quill.format('background', c.format.background === '#ffedd5' ? false : '#ffedd5'); } },
+    customHighlight2: { key: '2', shortKey: true, handler: function(r, c) { this.quill.format('background', c.format.background === '#e0f2fe' ? false : '#e0f2fe'); } },
+    customHighlight3: { key: '3', shortKey: true, handler: function(r, c) { this.quill.format('background', c.format.background === '#fef08a' ? false : '#fef08a'); } },
+    customHighlight4: { key: '4', shortKey: true, handler: function(r, c) { this.quill.format('background', c.format.background === '#dcfce7' ? false : '#dcfce7'); } },
+    customHighlight5: { key: '5', shortKey: true, handler: function(r, c) { this.quill.format('background', c.format.background === '#fce7f3' ? false : '#fce7f3'); } },
+    customHighlight6: { key: '6', shortKey: true, handler: function(r, c) { this.quill.format('background', c.format.background === '#e6d5c3' ? false : '#e6d5c3'); } },
+    customHighlight7: { key: '7', shortKey: true, handler: function(r, c) { this.quill.format('background', c.format.background === '#e5e7eb' ? false : '#e5e7eb'); } }
+};
+
+
+// === Helper Functions ===
+function isImage(type, name) {
+    if (type && type.startsWith('image/')) return true;
+    if (name && /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(name)) return true;
+    return false;
+}
+
+function blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+}
+function base64ToBlob(base64, type) {
+    const arr = base64.split(',');
+    const mime = arr[0].match(/:(.*?);/)[1] || type;
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) u8arr[n] = bstr.charCodeAt(n);
+    return new Blob([u8arr], { type: mime });
+}
+
+// === 1. IndexedDB Utils ===
+function openDB() {
+    return new Promise((resolve, reject) => {
+        const rq = indexedDB.open(DB_NAME, DB_VER);
+        rq.onupgradeneeded = (e) => {
+            const d = e.target.result;
+            if (!d.objectStoreNames.contains('logs')) d.createObjectStore('logs', { keyPath: 'id' });
+            if (!d.objectStoreNames.contains('images')) d.createObjectStore('images', { keyPath: 'id' });
+            if (!d.objectStoreNames.contains('settings')) d.createObjectStore('settings', { keyPath: 'id' });
+        };
+        rq.onsuccess = () => { db = rq.result; resolve(db); };
+        rq.onerror = () => reject(rq.error);
+    });
+}
+function tx(storeName, mode = 'readonly') { return db.transaction(storeName, mode).objectStore(storeName); }
+
+function putLog(item) {
+    return new Promise((res, rej) => {
+        const req = tx('logs', 'readwrite').put(item);
+        req.onsuccess = () => res(true);
+        req.onerror = () => rej(req.error);
+    });
+}
+
+function getAllLogs() {
+    return new Promise((res, rej) => {
+        const req = tx('logs').getAll();
+        req.onsuccess = () => res(req.result || []);
+        req.onerror = () => rej(req.error);
+    });
+}
+
+function deleteLog(id) {
+    return new Promise((res, rej) => {
+        const req = tx('logs', 'readwrite').delete(id);
+        req.onsuccess = () => res(true);
+        req.onerror = () => rej(req.error);
+    });
+}
+
+// === 2. Settings Utils ===
+async function getCategories() {
+    return new Promise((res) => {
+        const req = tx('settings').get('categories');
+        req.onsuccess = () => res(req.result ? req.result.list : ['General', 'Work', 'Study']);
+    });
+}
+
+async function saveCategories(list) {
+    return new Promise((res) => {
+        const req = tx('settings', 'readwrite').put({ id: 'categories', list });
+        req.onsuccess = () => res(true);
+    });
+}
+
+// === 3. File Utils ===
+function putFile(file) {
+    if (!file) return Promise.resolve('');
+    const id = 'ATT_' + Math.random().toString(36).slice(2) + Date.now();
+    return new Promise((res, rej) => { 
+        const req = tx('images', 'readwrite').add({ 
+            id, blob: file, name: file.name, type: file.type 
+        }); 
+        req.onsuccess = () => res(id); 
+        req.onerror = () => rej(req.error); 
+    }); 
+}
+
+function putImageDirectly(imgRecord) {
+    return new Promise((res, rej) => {
+        const req = tx('images', 'readwrite').put(imgRecord);
+        req.onsuccess = () => res(true);
+        req.onerror = () => rej(req.error);
+    });
+}
+
+function getFile(id) {
+    if (!id) return Promise.resolve(null);
+    return new Promise((res, rej) => {
+        const req = tx('images').get(id);
+        req.onsuccess = () => { 
+            const rec = req.result; 
+            if (!rec) { res(null); return; } 
+            res({ 
+                id: rec.id, 
+                url: URL.createObjectURL(rec.blob), 
+                blob: rec.blob, 
+                name: rec.name || 'Unknown', 
+                type: rec.type 
+            });
+        };
+        req.onerror = () => rej(req.error);
+    });
+}
+
+// === 4. Application Logic ===
+const state = { logs: [], categories: [], editingId: null };
+const uid = () => 'L' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+const nowISO = () => new Date().toISOString().split('T')[0];
+
+function showToast(msg, type = 'success') {
+    const container = $('#toast-container');
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.innerHTML = `<i class="fas ${type === 'error' ? 'fa-exclamation-circle' : 'fa-check-circle'}" style="font-size:16px;"></i> <span>${msg}</span>`;
+    container.appendChild(toast);
+    setTimeout(() => { 
+        toast.style.opacity = '0'; 
+        setTimeout(() => toast.remove(), 300); 
+    }, 2000); 
+}
+
+// === 5. UI Initialization & Attachment Grid Management ===
+function updateAttachGridVisibility() {
+    let fileCount = 0;
+
+    for (let i = 1; i <= SLOT_COUNT; i++) {
+        const slot = $(`#ui-slot-${i}`);
+        if (slot.dataset.hasFile === 'true') {
+            slot.style.display = 'flex';
+            slot.style.order = 1; 
+            fileCount++;
+        } else {
+            slot.style.display = 'none';
+            slot.style.order = 2; 
+        }
+    }
+
+    if (fileCount < SLOT_COUNT) {
+        for (let i = 1; i <= SLOT_COUNT; i++) {
+            const slot = $(`#ui-slot-${i}`);
+            if (slot.dataset.hasFile !== 'true') {
+                slot.style.display = 'flex';
+                break; 
+            }
+        }
+    }
+
+    const countEl = $('#img-count');
+    if (countEl) countEl.textContent = `${fileCount}/${SLOT_COUNT}`;
+}
+
+function initInputs() {
+    const box = $('#hidden-inputs'); 
+    const grid = $('#img-grid-container');
+    box.innerHTML = ''; 
+    grid.innerHTML = '';
+
+    for (let i = 1; i <= SLOT_COUNT; i++) {
+        const input = document.createElement('input'); 
+        input.type = 'file'; 
+        input.id = `file-slot-${i}`; 
+        input.style.display = 'none';
+        
+        const chk = document.createElement('input'); 
+        chk.type = 'checkbox'; 
+        chk.id = `chk-remove-${i}`; 
+        chk.style.display = 'none';
+        
+        box.append(input, chk);
+
+        const slot = document.createElement('div'); 
+        slot.className = 'img-slot'; 
+        slot.id = `ui-slot-${i}`;
+        slot.innerHTML = `<i class="fas fa-folder-open"></i>`;
+        
+        slot.onclick = (e) => {
+            if(e.target.closest('.btn-del-img')) return;
+            if(slot.dataset.hasFile === 'true') {
+                 if(isImage(slot.dataset.type, slot.dataset.name)) {
+                     showFullImage(slot.dataset.url);
+                 } else { 
+                     const a = document.createElement('a'); 
+                     a.href = slot.dataset.url; 
+                     a.download = slot.dataset.name || 'download'; 
+                     document.body.appendChild(a); 
+                     a.click(); 
+                     document.body.removeChild(a);
+                 }
+            } else {
+                input.click();
+            }
+        };
+
+        input.onchange = () => { 
+            if(input.files[0]) {
+                const f = input.files[0];
+                renderAttachSlot(i, { 
+                    url: URL.createObjectURL(f), 
+                    type: f.type, 
+                    name: f.name 
+                });
+            }
+        };
+        grid.appendChild(slot);
+    }
+    updateAttachGridVisibility();
+}
+
+function renderAttachSlot(idx, info) {
+    const slot = $(`#ui-slot-${idx}`);
+    slot.dataset.hasFile = 'true'; 
+    Object.assign(slot.dataset, info);
+    slot.style.borderStyle = 'solid';
+    slot.style.borderColor = 'var(--border)';
+    
+    const delBtn = `<div class="btn-del-img" onclick="removeAttach(${idx})"><i class="fas fa-times"></i></div>`;
+    
+    if(isImage(info.type, info.name)) {
+        slot.innerHTML = `<img src="${info.url}">${delBtn}`;
+    } else {
+        const displayName = info.name || 'File';
+        slot.innerHTML = `<i class="fas fa-file-alt file-icon"></i><div class="file-name">${displayName}</div>${delBtn}`;
+    }
+    $(`#chk-remove-${idx}`).checked = false;
+    updateAttachGridVisibility();
+}
+
+window.removeAttach = (idx) => {
+    $(`#file-slot-${idx}`).value = ''; 
+    $(`#chk-remove-${idx}`).checked = true;
+    const slot = $(`#ui-slot-${idx}`);
+    slot.dataset.hasFile = 'false'; 
+    delete slot.dataset.url; 
+    delete slot.dataset.type; 
+    delete slot.dataset.name;
+    slot.innerHTML = `<i class="fas fa-folder-open"></i>`; 
+    slot.style.borderStyle = 'dashed';
+    slot.style.borderColor = '#cbd5e1';
+    updateAttachGridVisibility();
+};
+
+// === Image Toolbar & Viewer (Quill Editor) ===
+const imgToolbar = document.getElementById('img-toolbar');
+const btnHl = document.getElementById('btn-hl-img');
+const btnClr = document.getElementById('btn-clr-img');
+
+function showImgToolbar(imgElement) {
+    activeTargetImage = imgElement;
+    const rect = imgElement.getBoundingClientRect();
+    
+    imgToolbar.style.display = 'flex';
+    imgToolbar.style.top = `${rect.top + window.scrollY - 40}px`;
+    imgToolbar.style.left = `${rect.left + window.scrollX}px`;
+
+    const isHighlighted = activeTargetImage.classList.contains('img-highlight');
+    btnHl.style.color = isHighlighted ? '#f97316' : '#64748b';
+    btnHl.style.background = isHighlighted ? '#ffedd5' : 'transparent';
+    btnClr.style.color = '#64748b';
+}
+
+document.addEventListener('mousedown', function(e) {
+    if (e.target.tagName === 'IMG' && e.target.closest('.ql-editor')) {
+        showImgToolbar(e.target);
+    } else if (!e.target.closest('#img-toolbar')) {
+        imgToolbar.style.display = 'none';
+        activeTargetImage = null;
+    }
+}, true);
+
+btnHl.onclick = (e) => {
+    e.preventDefault(); e.stopPropagation();
+    if (activeTargetImage) {
+        const q = Quill.find(activeTargetImage.closest('.ql-container'));
+        const blot = Quill.find(activeTargetImage);
+        if (q && blot) { q.formatText(q.getIndex(blot), 1, 'imghighlight', true); showImgToolbar(activeTargetImage); }
+    }
+};
+
+btnClr.onclick = (e) => {
+    e.preventDefault(); e.stopPropagation();
+    if (activeTargetImage) {
+        const q = Quill.find(activeTargetImage.closest('.ql-container'));
+        const blot = Quill.find(activeTargetImage);
+        if (q && blot) { q.formatText(q.getIndex(blot), 1, 'imghighlight', false); showImgToolbar(activeTargetImage); }
+    }
+};
+
+document.addEventListener('dblclick', function(e) {
+    if (e.target.tagName === 'IMG' && e.target.closest('.ql-editor')) {
+        showFullImage(e.target.src);
+        window.getSelection().removeAllRanges();
+    }
+}, true);
+
+function showFullImage(src) { 
+    $('#full-img-target').src = src; 
+    $('#img-modal').style.display = 'flex'; 
+}
+
+window.closeImageViewer = () => {
+    $('#img-modal').style.display = 'none';
+    setTimeout(() => { $('#full-img-target').src = ''; }, 200); 
+}
+
+// 스크롤 튐 방지
+['paste', 'drop'].forEach(evt => {
+    document.addEventListener(evt, (e) => {
+        const activeElement = document.activeElement;
+        if (!activeElement || !activeElement.closest('.ql-editor')) return;
+        const wrapper = document.querySelector('.editor-scroll');
+        const currentScroll = wrapper.scrollTop;
+        const lockScroll = () => { wrapper.scrollTop = currentScroll; };
+        requestAnimationFrame(lockScroll);
+        setTimeout(lockScroll, 10); setTimeout(lockScroll, 50); setTimeout(lockScroll, 150);
+    }, true);
+});
+
+// === 6. Category Management ===
+async function initCategories() { 
+    state.categories = await getCategories(); 
+    updateCategoryUI(); 
+}
+
+function updateCategoryUI() {
+    const filterEl = $('#filter-category'); 
+    const editorEl = $('#in-category'); 
+    const manageListEl = $('#cat-manage-list');
+    
+    const prevFilter = filterEl.value; 
+    const prevEditor = editorEl.value;
+
+    const opts = state.categories.map(c => `<option value="${c}">${c}</option>`).join('');
+    
+    filterEl.innerHTML = '<option value="">모든 카테고리</option>' + opts; 
+    filterEl.value = prevFilter;
+    
+    editorEl.innerHTML = opts; 
+    if(state.categories.includes(prevEditor)) editorEl.value = prevEditor;
+
+    manageListEl.innerHTML = state.categories.map(c => `
+        <div class="cat-manage-item">
+            <span style="font-weight:500;">${c}</span>
+            <button class="btn-icon" onclick="removeCategory('${c}')" style="color:#ef4444; width:auto; height:auto; padding:4px;">
+                <i class="fas fa-trash"></i>
+            </button>
+        </div>
+    `).join('');
+}
+
+window.removeCategory = async (cat) => { 
+    if(confirm(`'${cat}' 카테고리를 삭제하시겠습니까?`)) { 
+        state.categories = state.categories.filter(x => x !== cat); 
+        await saveCategories(state.categories); 
+        updateCategoryUI(); 
+    } 
+};
+
+$('#btn-add-cat').onclick = async () => { 
+    const val = $('#new-cat-input').value.trim(); 
+    if(val && !state.categories.includes(val)) { 
+        state.categories.push(val); 
+        await saveCategories(state.categories); 
+        $('#new-cat-input').value = ''; 
+        updateCategoryUI(); 
+    }
+};
+
+$('#btn-settings').onclick = () => $('#modal-settings').style.display = 'flex';
+window.closeSettings = () => $('#modal-settings').style.display = 'none';
+
+// === 7. CRUD Operations ===
+async function refreshData() { 
+    state.logs = await getAllLogs(); 
+    renderList(); 
+}
+
+function renderList() {
+    const container = $('#list-container'); 
+    container.innerHTML = '';
+    
+    const catFilter = $('#filter-category').value; 
+    const searchText = $('#search-input').value.toLowerCase();
+    
+    let items = state.logs.sort((a, b) => {
+        if (a.date !== b.date) return b.date.localeCompare(a.date);
+        return b.seq - a.seq;
+    });
+
+    items = items.filter(l => {
+        if (catFilter && l.category !== catFilter) return false;
+        if (searchText && !(l.title + l.content).toLowerCase().includes(searchText)) return false;
+        return true;
+    });
+
+    items.forEach(l => {
+        const itemDiv = document.createElement('div');
+        itemDiv.className = `list-item ${state.editingId === l.id ? 'active' : ''}`;
+        itemDiv.onclick = () => loadLog(l.id);
+        itemDiv.innerHTML = `
+            <div class="meta">
+                <span class="badge-cat">${l.category}</span>
+                <span>${l.date}</span>
+            </div>
+            <div class="title">${l.title || '(No Title)'}</div>
+        `;
+        container.appendChild(itemDiv);
+    });
+}
+
+function clearInputs() {
+    state.editingId = null; 
+    $('#empty-state').style.display = 'none'; 
+    $('#editor-container').style.display = 'flex';
+    
+    $('#in-title').value = ''; 
+    $('#in-url').value = ''; 
+    quillBody.setContents([]); 
+    $('#in-code').value = ''; 
+    
+    const targetCat = $('#filter-category').value || state.categories[0];
+    $('#in-category').value = targetCat;
+    
+    const maxSeq = Math.max(0, ...state.logs.filter(x => x.category === targetCat).map(x => x.seq || 0)) + 1;
+    $('#in-seq').value = maxSeq;
+
+    for(let i=1; i<=SLOT_COUNT; i++) { 
+        $(`#file-slot-${i}`).value = ''; 
+        $(`#chk-remove-${i}`).checked = false; 
+        removeAttach(i); 
+    }
+    renderList();
+    $('#in-title').focus();
+}
+
+async function loadLog(id) {
+    const log = state.logs.find(x => x.id === id); 
+    if(!log) return;
+    
+    state.editingId = id;
+    $('#empty-state').style.display = 'none'; 
+    $('#editor-container').style.display = 'flex';
+    
+    if(!state.categories.includes(log.category)) { 
+        const opt = document.createElement('option'); 
+        opt.value = log.category; 
+        opt.text = log.category + " (삭제됨)"; 
+        $('#in-category').add(opt); 
+    }
+
+    $('#in-category').value = log.category; 
+    $('#in-seq').value = log.seq; 
+    $('#in-title').value = log.title;
+    $('#in-url').value = log.url || ''; 
+    
+    let contentToLoad = log.content || '';
+    if (contentToLoad && !contentToLoad.includes('<p>') && !contentToLoad.includes('<br>')) {
+        contentToLoad = contentToLoad.replace(/\n/g, '<br>');
+    }
+    quillBody.clipboard.dangerouslyPasteHTML(contentToLoad);
+    
+    $('#in-code').value = log.code || ''; 
+
+    for(let i=1; i<=SLOT_COUNT; i++) {
+        removeAttach(i);
+        if(log[`img${i}`]) { 
+            const f = await getFile(log[`img${i}`]); 
+            if(f) renderAttachSlot(i, f); 
+        }
+    }
+    renderList();
+}
+
+async function saveCurrent() {
+    const btn = $('#btn-save'); 
+    btn.disabled = true;
+    try {
+        const currentLog = state.logs.find(x => x.id === state.editingId);
+        const attachments = {};
+        
+        for(let i=1; i<=SLOT_COUNT; i++) {
+            const input = $(`#file-slot-${i}`);
+            let fileId = currentLog ? (currentLog[`img${i}`] || '') : '';
+            
+            if($(`#chk-remove-${i}`).checked) fileId = '';
+            if(input.files[0]) fileId = await putFile(input.files[0]);
+            
+            attachments[`img${i}`] = fileId;
+        }
+
+        const newLog = {
+            id: state.editingId || uid(),
+            date: currentLog ? currentLog.date : nowISO(),
+            category: $('#in-category').value, 
+            seq: parseFloat($('#in-seq').value) || 1,
+            title: $('#in-title').value.trim(), 
+            url: $('#in-url').value, 
+            content: quillBody.root.innerHTML,
+            code: $('#in-code').value, 
+            ...attachments
+        };
+
+        if(!newLog.title) throw new Error('제목을 입력하세요');
+        
+        await putLog(newLog); 
+        await refreshData(); 
+        state.editingId = newLog.id; 
+        loadLog(newLog.id); 
+        showToast('저장 완료');
+    } catch(e) { 
+        console.error(e); 
+        showToast(e.message, 'error'); 
+    } finally { 
+        btn.disabled = false; 
+    }
+}
+
+async function deleteCurrent() { 
+    if(state.editingId && confirm('정말 삭제하시겠습니까?')) { 
+        await deleteLog(state.editingId); 
+        await refreshData(); 
+        clearInputs(); 
+        showToast('삭제됨'); 
+    } 
+}
+
+// === 8. Backup & Restore ===
+async function exportData() {
+    try {
+        const logs = await getAllLogs();
+        const reqSet = tx('settings').getAll();
+        const settings = await new Promise(r => reqSet.onsuccess = e => r(e.target.result));
+        const reqImg = tx('images').getAll();
+        const rawImages = await new Promise(r => reqImg.onsuccess = e => r(e.target.result));
+        
+        const images = await Promise.all(rawImages.map(async img => ({
+            ...img,
+            blob: await blobToBase64(img.blob)
+        })));
+
+        const data = { logs, settings, images };
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `WebLogger_Backup_${nowISO()}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('백업 완료');
+    } catch(e) {
+        showToast('백업 오류: ' + e.message, 'error');
+        console.error(e);
+    }
+}
+
+async function importData(input) {
+    if(!input.files[0]) return;
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        try {
+            const json = JSON.parse(e.target.result);
+            if(!confirm(`로그 ${json.logs?.length || 0}개, 이미지 ${json.images?.length || 0}개를 복구하시겠습니까?\n(기존 ID 중복 시 덮어씁니다)`)) return;
+
+            if(json.images && Array.isArray(json.images)) {
+                for(const img of json.images) {
+                    const blob = base64ToBlob(img.blob, img.type);
+                    await putImageDirectly({ id: img.id, blob: blob, name: img.name, type: img.type });
+                }
+            }
+
+            if(json.logs && Array.isArray(json.logs)) {
+                const store = tx('logs', 'readwrite');
+                json.logs.forEach(log => store.put(log));
+            }
+
+            if(json.settings && Array.isArray(json.settings)) {
+                const store = tx('settings', 'readwrite');
+                json.settings.forEach(set => store.put(set));
+            }
+
+            await initCategories();
+            await refreshData();
+            input.value = '';
+            showToast('복구 완료');
+
+        } catch(err) {
+            alert('파일 형식 오류: ' + err.message);
+        }
+    };
+    reader.readAsText(input.files[0]);
+}
+
+// === 9. Export Functions ===
+function toRichText(html) {
+    const div = document.createElement('div'); 
+    div.innerHTML = html.replace(/<br\/?>/gi, '\n').replace(/<p>/gi, '').replace(/<\/p>/gi, '\n');
+    const runs = []; 
+    function traverse(node, currentStyle) {
+        if(node.nodeType === 3 && node.textContent) {
+            runs.push({ text: node.textContent, font: { ...currentStyle } });
+        } else if(node.nodeType === 1) {
+            const newStyle = { ...currentStyle };
+            const style = node.style;
+            if(node.tagName==='B'||style.fontWeight=='bold') newStyle.bold = true;
+            if(node.tagName==='I'||style.fontStyle=='italic') newStyle.italic = true;
+            if(node.tagName==='U'||style.textDecoration.includes('underline')) newStyle.underline = true;
+            if(style.color) newStyle.color = { argb: 'FF' + style.color.replace('#', '').toUpperCase() };
+            node.childNodes.forEach(child => traverse(child, newStyle));
+        }
+    }
+    traverse(div, { name: 'Malgun Gothic', size: 11, color: { argb: 'FF334155' } }); 
+    return runs;
+}
+
+async function exportToExcel() {
+    const workbook = new ExcelJS.Workbook(); 
+    const sheet = workbook.addWorksheet('Logs');
+    
+    sheet.columns = [
+        { header: 'Category', key: 'c', width: 15 }, 
+        { header: 'Title', key: 't', width: 30 }, 
+        { header: 'Content', key: 'ct', width: 50 },
+        ...Array.from({ length: SLOT_COUNT }, (_, i) => ({ header: `Att${i+1}`, key: `img${i+1}`, width: 15 }))
+    ];
+    
+    const logsToExport = state.logs.sort((a, b) => a.category.localeCompare(b.category) || a.seq - b.seq);
+    
+    for(const log of logsToExport) {
+        const row = sheet.addRow({ c: log.category, t: log.title, ct: { richText: toRichText(log.content) } });
+        row.alignment = { vertical: 'top', wrapText: true };
+        let hasImage = false;
+        for(let i=1; i<=SLOT_COUNT; i++) {
+            if(log[`img${i}`]) {
+                const file = await getFile(log[`img${i}`]);
+                if(file && isImage(file.type, file.name)) {
+                    hasImage = true;
+                    const ext = file.name.split('.').pop() || 'png';
+                    const imageId = workbook.addImage({ buffer: await file.blob.arrayBuffer(), extension: ext });
+                    sheet.addImage(imageId, { tl: { col: 2 + i, row: row.number - 1 }, ext: { width: 90, height: 90 } });
+                    row.getCell(`img${i}`).value = ''; 
+                } else if(file) {
+                    row.getCell(`img${i}`).value = file.name; 
+                }
+            }
+        }
+        if(hasImage) row.height = 80;
+    }
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `Log_${nowISO()}.xlsx`; a.click();
+}
+
+async function exportToPDF() {
+    const title = $('#in-title').value; if(!title) return showToast('제목 없음', 'error');
+    
+    const wrapper = document.createElement('div'); 
+    wrapper.style.padding = '30px'; 
+    wrapper.style.width = '100%';
+    
+    // Header & Content
+    wrapper.innerHTML = `
+        <div style="border-bottom: 2px solid #4f46e5; margin-bottom: 20px;">
+            <h1 style="margin:0; font-size: 24px;">${title}</h1>
+        </div>
+        <div style="font-size: 14px; margin-bottom: 20px;">${quillBody.root.innerHTML}</div>
+    `;
+    if($('#in-code').value) wrapper.innerHTML += `<pre style="background:#f1f5f9; padding:10px; white-space:pre-wrap;">${$('#in-code').value}</pre>`;
+    
+    // Images Container - Vertical Stack
+    const imagesDiv = document.createElement('div');
+    imagesDiv.style.marginTop = '30px';
+    imagesDiv.style.display = 'flex';
+    imagesDiv.style.flexDirection = 'column'; 
+    imagesDiv.style.gap = '20px';
+    imagesDiv.style.alignItems = 'center';
+
+    for(let i=1; i<=SLOT_COUNT; i++) {
+        const slot = $(`#ui-slot-${i}`);
+        if(slot.dataset.hasFile === 'true' && isImage(slot.dataset.type, slot.dataset.name)) {
+            const img = document.createElement('img');
+            img.src = slot.dataset.url;
+            img.style.maxWidth = '100%';
+            img.style.maxHeight = '800px'; 
+            img.style.objectFit = 'contain';
+            img.style.border = '1px solid #e2e8f0';
+            img.style.display = 'block'; 
+            imagesDiv.appendChild(img);
+        }
+    }
+    wrapper.appendChild(imagesDiv);
+    
+    const btn = $('#btn-export-pdf'); const originalText = btn.innerHTML; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    try { 
+        await html2pdf().set({
+            margin: 15, 
+            filename: `${title}.pdf`, 
+            image: { type: 'jpeg', quality: 0.98 }, 
+            html2canvas: { scale: 2, useCORS: true }, 
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        }).from(wrapper).save(); 
+    } catch(e) { console.error(e); } finally { btn.innerHTML = originalText; }
+}
+
+// 글로벌 단축키
+document.addEventListener('keydown', (e) => {
+    const ctrl = e.ctrlKey || e.metaKey;
+    const alt = e.altKey;
+
+    if (ctrl && !alt && e.key.toLowerCase() === 's') { e.preventDefault(); $('#btn-save').click(); return; }
+    if (ctrl && alt && e.key.toLowerCase() === 'n') { e.preventDefault(); clearInputs(); return; }
+
+    if (ctrl && !alt && (e.key === '+' || e.key === '=' || e.key === '-')) {
+        e.preventDefault(); 
+        if (e.key === '+' || e.key === '=') currentEditorFontSize = Math.min(currentEditorFontSize + 1, 30); 
+        else if (e.key === '-') currentEditorFontSize = Math.max(currentEditorFontSize - 1, 10); 
+        document.documentElement.style.setProperty('--editor-font-size', currentEditorFontSize + 'px');
+    }
+    if (ctrl && e.type === 'wheel') e.preventDefault();
+}, { passive: false });
+
+window.addEventListener('wheel', e => {
+    const ctrl = e.ctrlKey || e.metaKey;
+    if (ctrl) e.preventDefault();
+}, { passive: false });
+
+
+document.addEventListener('DOMContentLoaded', async () => {
+    // Quill 초기화
+    quillBody = new Quill('#in-content', {
+        theme: 'snow',
+        placeholder: '내용을 입력하세요...',
+        scrollingContainer: '.editor-scroll',
+        modules: {
+            toolbar: false,
+            keyboard: { bindings: customBindings },
+            imageResize: { displaySize: true }
+        }
+    });
+    quillBody.root.setAttribute('spellcheck', false);
+
+    // ✅ 표(Table) 붙여넣기 가로채기 설정 (Quill 1.x의 표 파괴 방지)
+    const Delta = Quill.import('delta');
+    quillBody.clipboard.addMatcher('TABLE', function(node, delta) {
+        return new Delta().insert({ rawTable: node.outerHTML });
+    });
+
+    await openDB(); await initCategories(); initInputs(); await refreshData();
+    $('#btn-new-log').onclick = clearInputs; $('#btn-save').onclick = saveCurrent; $('#btn-delete').onclick = deleteCurrent;
+    $('#filter-category').onchange = renderList; $('#search-input').oninput = renderList;
+    $('#btn-export-excel').onclick = exportToExcel; $('#btn-export-pdf').onclick = exportToPDF;
+    $('#btn-open-url').onclick = () => { const u = $('#in-url').value; if(u) window.open(u.startsWith('http') ? u : 'https://' + u, '_blank'); };
+    if($('#btn-toggle-menu')) $('#btn-toggle-menu').onclick = () => $('#sidebar').classList.toggle('show');
+});
+</script>
+</body>
+</html>

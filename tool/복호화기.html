@@ -1,0 +1,715 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title>문서 복호화기 (IV 복구 + 강제 복호화)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;600;700&display=swap');
+    *{box-sizing:border-box;}
+    body{
+      margin:0;
+      padding:16px;
+      font-family:'Noto Sans KR',system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      background:#f3f4f6;
+      color:#111827;
+    }
+    .wrap{max-width:960px;margin:0 auto;}
+    h1{margin:0 0 6px;font-size:20px;font-weight:700;}
+    .muted{color:#6b7280;font-size:12px;}
+    .card{
+      background:#fff;
+      border-radius:12px;
+      box-shadow:0 8px 22px rgba(15,23,42,.08);
+      padding:14px 16px 16px;
+      margin-top:10px;
+    }
+    h2{margin:0 0 4px;font-size:15px;font-weight:600;}
+    label{font-size:12px;display:block;margin-top:8px;}
+    input,button{font-family:inherit;font-size:12px;}
+    input[type="text"],input[type="password"],input[type="number"]{
+      width:100%;
+      border-radius:8px;
+      border:1px solid #e5e7eb;
+      padding:6px 8px;
+      margin-top:3px;
+    }
+    input:focus{
+      outline:none;
+      border-color:#2563eb;
+      box-shadow:0 0 0 1px rgba(37,99,235,.25);
+    }
+    button{
+      border-radius:8px;
+      border:none;
+      padding:6px 10px;
+      cursor:pointer;
+      font-weight:500;
+    }
+    button.primary{background:#2563eb;color:#fff;}
+    button.sub{background:#e5e7eb;color:#111827;}
+    button.small{font-size:11px;padding:4px 8px;}
+    button:disabled{opacity:.6;cursor:default;}
+    .row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+    .mono{font-family:ui-monospace,Menlo,Consolas,monospace;}
+    #logBox{
+      margin-top:6px;
+      border-radius:8px;
+      border:1px solid #e5e7eb;
+      background:#020617;
+      color:#e5e7eb;
+      font-size:11px;
+      padding:8px 10px;
+      min-height:220px;
+      max-height:400px;
+      overflow:auto;
+      white-space:pre-wrap;
+    }
+    .badge{
+      display:inline-block;
+      padding:2px 6px;
+      border-radius:999px;
+      font-size:11px;
+      background:#eff6ff;
+      color:#1d4ed8;
+      margin-left:4px;
+    }
+    #fileList{
+      font-size:12px;
+      margin-top:6px;
+      border-radius:8px;
+      border:1px solid #e5e7eb;
+      padding:6px 8px;
+      max-height:140px;
+      overflow:auto;
+      background:#f9fafb;
+    }
+    #fileList div{padding:2px 0;}
+    #toastContainer{
+      position:fixed;
+      right:12px;
+      bottom:12px;
+      z-index:9999;
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+    }
+    .toast{
+      padding:6px 10px;
+      border-radius:8px;
+      font-size:11px;
+      color:#fff;
+      background:#111827;
+      opacity:0;
+      transform:translateY(6px);
+      transition:.24s ease;
+    }
+    .toast.show{opacity:1;transform:translateY(0);}
+    .toast.success{background:#16a34a;}
+    .toast.warn{background:#f97316;}
+    .toast.error{background:#dc2626;}
+    @media (max-width:720px){
+      .row.wrap-sm{flex-direction:column;align-items:flex-start;}
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>문서 복호화기 (IV 복구 + 강제 복호화)</h1>
+  <div class="muted">
+    기존 UI변경 버전 암호화 도구로 생성된 <span class="mono">LOCALENCv1</span> 파일과<br>
+    (옵션) <span class="mono">salt(16)+iv(12)+ciphertext</span> 바이너리 컨테이너를 복호화합니다.<br>
+    정상 GCM 복호가 모두 실패하면, <strong>GCM 태그 검증을 일부 포기한 강제 복호화</strong>까지 시도합니다.
+  </div>
+
+  <!-- 1. 파일 & 비밀번호 -->
+  <section class="card">
+    <h2>1) 파일 선택 & 비밀번호</h2>
+
+    <label>
+      암호화된 파일 선택 (여러 개 가능)
+      <input id="fileInput" type="file" multiple />
+    </label>
+    <div id="fileSummary" class="muted" style="margin-top:4px;">선택된 파일 0개</div>
+    <div id="fileList" class="mono muted">(파일을 선택하면 목록이 표시됩니다)</div>
+
+    <label style="margin-top:10px;">
+      복호화 비밀번호
+      <input id="password" type="password" autocomplete="off" placeholder="암호화할 때 사용한 비밀번호" />
+    </label>
+
+    <div class="row" style="margin-top:6px;">
+      <label class="row" style="font-size:12px;">
+        <input id="showPw" type="checkbox" />
+        <span>비밀번호 표시</span>
+      </label>
+    </div>
+  </section>
+
+  <!-- 2. 옵션 & 실행 -->
+  <section class="card">
+    <h2>2) 복구 옵션 & 복호화 실행</h2>
+
+    <div class="row wrap-sm">
+      <div style="flex:1;min-width:220px;">
+        <label class="row" style="font-size:12px;margin-top:0;">
+          <input id="enableIvRecovery" type="checkbox" checked />
+          <span><strong>IV 자동 복구 모드 사용</strong></span>
+        </label>
+        <div class="muted" style="margin-top:3px;">
+          AES-GCM 복호화 실패 시, 잘못 저장된 IV/ciphertext 조합을 여러 방식으로 재조합해 시도합니다.
+        </div>
+
+        <label style="margin-top:8px;">
+          슬라이딩 IV 스캔 범위 (ciphertext 앞부분 N바이트)
+          <input id="scanBytes" type="number" value="2048" class="mono" />
+        </label>
+        <div class="muted" style="margin-top:2px;">
+          값이 클수록 더 많은 IV 후보를 시도하지만 느려질 수 있습니다. (분석용: 2000~4000)
+        </div>
+
+        <label class="row" style="font-size:12px;margin-top:8px;">
+          <input id="enableBinaryContainer" type="checkbox" checked />
+          <span>JSON이 아닐 경우 <span class="mono">salt(16)+iv(12)+ciphertext</span> 바이너리 컨테이너도 시도</span>
+        </label>
+
+        <label class="row" style="font-size:12px;margin-top:8px;">
+          <input id="enableTagIgnore" type="checkbox" checked />
+          <span><strong>GCM 태그 무시 / 강제 복호화 사용 (실험적)</strong></span>
+        </label>
+        <div class="muted" style="margin-top:2px;">
+          모든 GCM 시도가 실패하면, 무결성 검증(태그)을 건너뛰고 AES-CTR로 강제 복호화합니다.<br>
+          복구된 파일은 일부 데이터가 깨져 있을 수 있고, 주로 <span class="mono">.xlsx/.docx/.pptx/.zip</span>에서 의미가 있습니다.
+        </div>
+      </div>
+
+      <div style="flex:0 0 220px;display:flex;flex-direction:column;gap:6px;margin-top:8px;">
+        <button id="btnDecrypt" class="primary">선택 파일 복호화 (다운로드)</button>
+        <button id="btnClearLog" class="sub small">로그 비우기</button>
+        <button id="btnTestSingle" class="sub small">첫 번째 파일만 테스트 (로그만)</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. 로그 -->
+  <section class="card">
+    <h2>3) 복호화 로그<span class="badge" id="logBadge">0줄</span></h2>
+    <div class="muted">
+      어떤 포맷/IV/모드로 시도했는지, 에러 원인은 무엇인지 모두 기록됩니다.
+    </div>
+    <pre id="logBox">(여기에 진행 상황과 오류가 표시됩니다)</pre>
+  </section>
+
+  <div id="toastContainer"></div>
+</div>
+
+<script>
+'use strict';
+
+// ===== DOM / LOG =====
+const $  = sel => document.querySelector(sel);
+const logBox   = $('#logBox');
+const logBadge = $('#logBadge');
+let logLineCount = 0;
+
+function appendLog(line){
+  logLineCount++;
+  logBadge.textContent = logLineCount + '줄';
+  const prefix = '[' + new Date().toISOString().slice(11,19) + '] ';
+  if(logBox.textContent.trim() === '(여기에 진행 상황과 오류가 표시됩니다)'){
+    logBox.textContent = '';
+  }
+  logBox.textContent += prefix + line + '\n';
+  logBox.scrollTop = logBox.scrollHeight;
+}
+function clearLog(){
+  logLineCount = 0;
+  logBadge.textContent = '0줄';
+  logBox.textContent = '(여기에 진행 상황과 오류가 표시됩니다)';
+}
+function showToast(msg, type='success', ttl=2500){
+  const cont = $('#toastContainer');
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.textContent = msg;
+  cont.appendChild(el);
+  requestAnimationFrame(()=>el.classList.add('show'));
+  setTimeout(()=>{
+    el.classList.remove('show');
+    setTimeout(()=>cont.removeChild(el), 260);
+  }, ttl);
+}
+
+// ===== 파일 선택 UI =====
+const fileInput   = $('#fileInput');
+const fileSummary = $('#fileSummary');
+const fileList    = $('#fileList');
+
+fileInput.addEventListener('change', ()=>{
+  const files = Array.from(fileInput.files || []);
+  fileSummary.textContent = '선택된 파일 ' + files.length + '개';
+  if(!files.length){
+    fileList.textContent = '(파일을 선택하면 목록이 표시됩니다)';
+    return;
+  }
+  fileList.innerHTML = '';
+  files.forEach((f, i)=>{
+    const div = document.createElement('div');
+    div.textContent = `${i+1}. ${f.name} (${fmtBytes(f.size)})`;
+    fileList.appendChild(div);
+  });
+});
+
+$('#showPw').addEventListener('change', e=>{
+  $('#password').type = e.target.checked ? 'text' : 'password';
+});
+
+// ===== 유틸 =====
+function fmtBytes(bytes){
+  if(bytes == null) return '-';
+  const units = ['B','KB','MB','GB'];
+  let i=0, n=bytes;
+  while(n>=1024 && i<units.length-1){n/=1024; i++;}
+  return n.toFixed(1)+' '+units[i];
+}
+function base64ToUtf8(b64){
+  return decodeURIComponent(escape(atob(b64)));
+}
+function toBase64(buf){
+  const bytes = new Uint8Array(buf);
+  let bin = '';
+  for(let i=0;i<bytes.length;i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+function decodeFlexibleField(str){
+  if(!str) return new ArrayBuffer(0);
+  let s = String(str).trim();
+
+  // hex
+  if(/^[0-9a-fA-F]+$/.test(s) && s.length%2===0){
+    const out = new Uint8Array(s.length/2);
+    for(let i=0;i<out.length;i++){
+      out[i] = parseInt(s.substr(i*2,2),16);
+    }
+    return out.buffer;
+  }
+
+  // base64
+  try{
+    s = s.replace(/[\r\n\s]/g,'');
+    const bin = atob(s);
+    const out = new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++) out[i] = bin.charCodeAt(i);
+    return out.buffer;
+  }catch(_){}
+
+  // base64url
+  try{
+    let t = s.replace(/-/g,'+').replace(/_/g,'/');
+    t = t + '==='.slice((t.length+3)%4);
+    const bin = atob(t);
+    const out = new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++) out[i] = bin.charCodeAt(i);
+    return out.buffer;
+  }catch(_){}
+
+  // fallback: utf-8
+  return new TextEncoder().encode(s).buffer;
+}
+
+// ===== Crypto: PBKDF2 + AES-GCM / AES-CTR =====
+async function deriveKey(password, salt, iter=150000){
+  const pw = new TextEncoder().encode(password);
+  const baseKey = await crypto.subtle.importKey('raw', pw, 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    {name:'PBKDF2', salt, iterations:iter, hash:'SHA-256'},
+    baseKey,
+    {name:'AES-GCM', length:256},
+    false,
+    ['encrypt','decrypt']
+  );
+}
+
+async function deriveBits(password, salt, iter=150000){
+  const pw = new TextEncoder().encode(password);
+  const baseKey = await crypto.subtle.importKey('raw', pw, 'PBKDF2', false, ['deriveBits']);
+  return crypto.subtle.deriveBits(
+    {name:'PBKDF2', salt, iterations:iter, hash:'SHA-256'},
+    baseKey,
+    256
+  );
+}
+
+function parseEncryptedText(txt){
+  const t = txt.trim();
+  if(t.startsWith('{')) return JSON.parse(t);
+  return JSON.parse(base64ToUtf8(t));
+}
+
+// ===== 태그 무시 강제 복호화 (AES-CTR) =====
+async function bestEffortGcmIgnoreTag(password, saltBuf, ivCtCandidates, expectZip){
+  const salt = new Uint8Array(saltBuf);
+  const keyBits = await deriveBits(password, salt);
+  const ctrKey  = await crypto.subtle.importKey('raw', keyBits, 'AES-CTR', false, ['encrypt','decrypt']);
+
+  function makeCounter(ivBytes, suffix){
+    const ctr = new Uint8Array(16);
+    ctr.set(ivBytes, 0); // 상위 96비트는 IV
+    ctr[12] = (suffix>>>24)&0xff;
+    ctr[13] = (suffix>>>16)&0xff;
+    ctr[14] = (suffix>>>8)&0xff;
+    ctr[15] = suffix&0xff;
+    return ctr;
+  }
+
+  let best = null;
+
+  for(const cand of ivCtCandidates){
+    const iv = new Uint8Array(cand.iv);
+    const full = new Uint8Array(cand.ct);
+    if(full.length <= 16){
+      appendLog(`    · [태그 무시] ${cand.label}: ciphertext 길이 부족 (len=${full.length})`);
+      continue;
+    }
+    const body = full.slice(0, full.length-16); // 마지막 16바이트를 태그로 보고 제거
+
+    for(const suf of [1,2]){ // J0, J0+1 후보
+      try{
+        const ctr = makeCounter(iv, suf);
+        const plain = new Uint8Array(await crypto.subtle.decrypt(
+          {name:'AES-CTR', counter:ctr, length:32},
+          ctrKey,
+          body
+        ));
+
+        let score = 0;
+        if(expectZip){
+          if(plain[0]===0x50 && plain[1]===0x4b) score += 10;
+          if(plain[0]===0x50 && plain[1]===0x4b && plain[2]===0x03 && plain[3]===0x04)
+            score += 20;
+        }
+        let ascii=0;
+        const chkLen = Math.min(64, plain.length);
+        for(let i=0;i<chkLen;i++){
+          const b=plain[i];
+          if((b>=0x09 && b<=0x0d) || (b>=0x20 && b<=0x7e)) ascii++;
+        }
+        score += ascii/chkLen;
+
+        appendLog(`    · [태그 무시] ${cand.label}, suffix=${suf}, score=${score.toFixed(2)}, header=${plain[0].toString(16)} ${plain[1].toString(16)} ${plain[2].toString(16)} ${plain[3].toString(16)}`);
+
+        if(!best || score>best.score){
+          best = {score, plain:plain.buffer, label:cand.label, suffix:suf};
+        }
+      }catch(e){
+        appendLog(`    · [태그 무시 실패] ${cand.label}, suffix=${suf}: ${e && e.message ? e.message : e}`);
+      }
+    }
+  }
+
+  if(!best){
+    throw new Error('태그 무시 강제 복호화에 성공한 후보가 없습니다.');
+  }
+  appendLog(`  → [태그 무시] 최선 후보 선택: ${best.label}, suffix=${best.suffix}, score=${best.score.toFixed(2)}`);
+  return best.plain;
+}
+
+// ===== LOCALENCv1(JSON) 복호화 + IV 복구 + 태그 무시 =====
+async function decrypt_LOCALENCv1(encText, password, opts, fileNameForGuess){
+  const obj = parseEncryptedText(encText);
+  if(!obj || obj.magic !== 'LOCALENCv1'){
+    throw new Error('LOCALENCv1 포맷이 아닙니다 (magic mismatch)');
+  }
+
+  const saltBuf = decodeFlexibleField(obj.salt);
+  const ivBuf   = decodeFlexibleField(obj.iv);
+  const ctBuf   = decodeFlexibleField(obj.ciphertext);
+
+  const salt = new Uint8Array(saltBuf);
+  let iv     = new Uint8Array(ivBuf);
+  let ct     = new Uint8Array(ctBuf);
+
+  appendLog(`  · LOCALENCv1: saltLen=${salt.length}, ivLen=${iv.length}, ctLen=${ct.length}`);
+
+  if(ct.length < 1){
+    throw new Error('ciphertext 길이가 0입니다 (손상된 파일 가능성)');
+  }
+
+  const gcmKey = await deriveKey(password, salt, 150000);
+  const enableRecovery   = !!opts.enableIvRecovery;
+  const scanBytes        = opts.scanBytes || 0;
+  const enableTagIgnore  = !!opts.enableTagIgnore;
+
+  async function tryGcm(ivCand, ctCand){
+    return crypto.subtle.decrypt(
+      {name:'AES-GCM', iv:ivCand},
+      gcmKey,
+      ctCand
+    );
+  }
+
+  const triedIvCt = [];
+
+  // 1) 정상 GCM 경로
+  if(iv.length === 12){
+    appendLog('  · GCM 정상 경로 시도 (ivLen=12)');
+    triedIvCt.push({label:'정상 IV', iv:iv.slice(), ct:ct.slice()});
+    try{
+      const plain = await tryGcm(iv, ct);
+      appendLog('  · GCM 정상 경로 성공');
+      return {plain, meta:obj};
+    }catch(e){
+      appendLog('  × GCM 정상 경로 실패: ' + (e && e.message ? e.message : e));
+      if(!enableRecovery && !enableTagIgnore){
+        throw new Error('GCM 실패 (IV=12, 복구/강제 모드 모두 OFF)');
+      }
+    }
+  }else{
+    appendLog(`  × GCM: 예상 IV 길이(12)와 다름 (ivLen=${iv.length})`);
+    if(!enableRecovery && !enableTagIgnore){
+      throw new Error(`IV 길이 오류 (${iv.length} bytes, GCM 표준은 12 bytes)`);
+    }
+  }
+
+  // 2) IV 복구 모드
+  const candidates = [];
+  if(enableRecovery){
+    appendLog('  · IV 복구 모드 진입');
+
+    if(iv.length>12){
+      candidates.push({label:'IV 앞 12바이트 사용', iv:iv.slice(0,12), ct});
+    }
+    if(iv.length>0 && iv.length<12 && ct.length > (12-iv.length)){
+      const need = 12 - iv.length;
+      const iv2  = new Uint8Array(12);
+      iv2.set(iv,0);
+      iv2.set(ct.slice(0,need), iv.length);
+      const ct2 = ct.slice(need);
+      candidates.push({label:'IV 부족분을 ciphertext 앞부분에서 보충', iv:iv2, ct:ct2});
+    }
+    if(ct.length>12){
+      candidates.push({label:'ciphertext 선두 12바이트를 IV로 가정', iv:ct.slice(0,12), ct:ct.slice(12)});
+    }
+
+    const maxScan = Math.min(ct.length-12-16, scanBytes);
+    for(let off=0; off>=0 && off<maxScan; off+=4){
+      const ivCand = ct.slice(off, off+12);
+      const body   = ct.slice(off+12);
+      if(body.length <= 16) break;
+      candidates.push({label:`슬라이딩 후보 (offset=${off})`, iv:ivCand, ct:body});
+    }
+
+    for(const cand of candidates){
+      if(cand.iv.length!==12) continue;
+      appendLog('    · 후보 시도: '+cand.label+` (ivLen=${cand.iv.length}, ctLen=${cand.ct.length})`);
+      triedIvCt.push({label:cand.label, iv:cand.iv.slice(), ct:cand.ct.slice()});
+      try{
+        const plain = await tryGcm(cand.iv, cand.ct);
+        appendLog('      → 성공: '+cand.label);
+        obj.iv = toBase64(cand.iv.buffer);
+        return {plain, meta:obj};
+      }catch(e){
+        appendLog('      → 실패: '+(e && e.message ? e.message : e));
+      }
+    }
+  }else{
+    appendLog('  · IV 복구 모드는 비활성화됨');
+  }
+
+  appendLog('  × LOCALENCv1: 모든 GCM/IV 후보 시도 실패');
+
+  // 3) 태그 무시 강제 복호화
+  if(enableTagIgnore){
+    appendLog('  · GCM 태그 무시 / 강제 복호화 모드 진입');
+    if(triedIvCt.length===0 && iv.length===12){
+      triedIvCt.push({label:'정상 IV (태그 무시)', iv:iv.slice(), ct:ct.slice()});
+    }
+
+    const name = obj && obj.name ? obj.name : (fileNameForGuess || '');
+    const lower = name.toLowerCase();
+    const expectZip =
+      lower.endsWith('.xlsx') ||
+      lower.endsWith('.xlsm') ||
+      lower.endsWith('.docx') ||
+      lower.endsWith('.pptx') ||
+      lower.endsWith('.zip');
+
+    const plainBuf = await bestEffortGcmIgnoreTag(password, saltBuf, triedIvCt, expectZip);
+    appendLog('  → [태그 무시] 강제 복호화 완료 (무결성은 보장되지 않음)');
+    return {plain:plainBuf, meta:obj, tagIgnored:true};
+  }
+
+  throw new Error('LOCALENCv1: GCM/IV복구/강제 복호화 모두 실패');
+}
+
+// ===== 바이너리 컨테이너: salt(16)+iv(12)+ciphertext =====
+async function decrypt_binaryContainer(ab, password){
+  const buf = new Uint8Array(ab);
+  if(buf.length < 16+12+1){
+    throw new Error('바이너리 컨테이너: 길이가 너무 짧습니다 (salt+iv+ciphertext 불충분)');
+  }
+  const salt = buf.slice(0,16);
+  const iv   = buf.slice(16,28);
+  const ct   = buf.slice(28);
+
+  appendLog(`  · 바이너리 컨테이너: saltLen=16, ivLen=${iv.length}, ctLen=${ct.length}`);
+
+  const key = await deriveKey(password, salt, 150000);
+  try{
+    const plain = await crypto.subtle.decrypt(
+      {name:'AES-GCM', iv},
+      key,
+      ct
+    );
+    appendLog('  · 바이너리 GCM 복호화 성공');
+    return {plain, meta:{magic:'BINARYv1',name:''}};
+  }catch(e){
+    throw new Error('바이너리 GCM 복호화 실패: '+(e && e.message ? e.message : e));
+  }
+}
+
+// ===== 파일명 복구 =====
+function deriveOriginalName(encName){
+  const m = encName.match(/(.*)_(ENC)(\.[^.]*)?$/i);
+  if(m) return (m[1]) + (m[3] || '');
+  const m2 = encName.match(/(.*)\(ENC\)(\.[^.]*)?$/i);
+  if(m2) return (m2[1]) + (m2[2] || '');
+  return 'decrypted_' + encName;
+}
+
+// ===== 개별 파일 복호화 =====
+async function decryptOneFile(file, password, opts){
+  appendLog(`===== 파일: ${file.name} (${fmtBytes(file.size)}) =====`);
+  if(file.size === 0){
+    appendLog('  × 파일 크기가 0입니다.');
+    throw new Error('빈 파일');
+  }
+
+  const text = await file.text().catch(()=> '');
+  const ab   = await file.arrayBuffer();
+  let lastErr = null;
+
+  // 1) LOCALENCv1(JSON)
+  if(text.trim()){
+    appendLog('  · LOCALENCv1(JSON) 시도...');
+    try{
+      const {plain, meta, tagIgnored} = await decrypt_LOCALENCv1(text, password, opts, file.name);
+      const outName = meta && meta.name ? meta.name : deriveOriginalName(file.name);
+      return {plain, name:outName, mode: tagIgnored ? 'LOCALENCv1_TAG_IGNORED' : 'LOCALENCv1'};
+    }catch(e){
+      lastErr = e;
+      appendLog('  × LOCALENCv1 실패: '+(e && e.message ? e.message : e));
+    }
+  }else{
+    appendLog('  · 텍스트로 해석 불가 → LOCALENCv1 건너뜀');
+  }
+
+  // 2) 바이너리 컨테이너
+  if(opts.enableBinaryContainer){
+    appendLog('  · 바이너리 컨테이너(salt(16)+iv(12)+ct) 시도...');
+    try{
+      const {plain, meta} = await decrypt_binaryContainer(ab, password);
+      const outName = meta && meta.name ? meta.name : deriveOriginalName(file.name);
+      return {plain, name:outName, mode:'BINARYv1'};
+    }catch(e){
+      lastErr = e;
+      appendLog('  × 바이너리 컨테이너 실패: '+(e && e.message ? e.message : e));
+    }
+  }else{
+    appendLog('  · 바이너리 컨테이너 모드 OFF');
+  }
+
+  appendLog('  × 모든 경로 실패 (비밀번호 오류 또는 심각한 손상 가능)');
+  if(lastErr) throw lastErr;
+  throw new Error('복호화 실패 (알 수 없는 오류)');
+}
+
+// ===== 다운로드 헬퍼 =====
+function downloadBufferAsFile(buf, fileName){
+  const blob = new Blob([buf], {type:'application/octet-stream'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = fileName || 'decrypted.bin';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 5000);
+}
+
+// ===== 버튼 동작 =====
+$('#btnClearLog').addEventListener('click', clearLog);
+
+$('#btnTestSingle').addEventListener('click', async ()=>{
+  const files = Array.from(fileInput.files || []);
+  if(!files.length){
+    alert('먼저 암호화된 파일을 선택하세요.');
+    return;
+  }
+  const pw = $('#password').value || '';
+  if(!pw){
+    alert('비밀번호를 입력하세요.');
+    $('#password').focus();
+    return;
+  }
+  clearLog();
+  const opts = {
+    enableIvRecovery:      $('#enableIvRecovery').checked,
+    scanBytes:            parseInt($('#scanBytes').value || '0',10) || 0,
+    enableBinaryContainer: $('#enableBinaryContainer').checked,
+    enableTagIgnore:       $('#enableTagIgnore').checked,
+  };
+
+  try{
+    await decryptOneFile(files[0], pw, opts);
+    appendLog('※ 테스트 모드: 실제 다운로드는 하지 않았습니다.');
+    showToast('테스트 복호화 완료 (로그 확인)', 'success');
+  }catch(e){
+    appendLog('※ 테스트 실패: '+(e && e.message ? e.message : e));
+    showToast('테스트 복호화 실패 (로그 참고)', 'error');
+  }
+});
+
+$('#btnDecrypt').addEventListener('click', async ()=>{
+  const files = Array.from(fileInput.files || []);
+  if(!files.length){
+    alert('먼저 암호화된 파일을 선택하세요.');
+    return;
+  }
+  const pw = $('#password').value || '';
+  if(!pw){
+    alert('비밀번호를 입력하세요.');
+    $('#password').focus();
+    return;
+  }
+
+  clearLog();
+  appendLog(`### 복호화 시작: 파일 ${files.length}개 ###`);
+
+  const opts = {
+    enableIvRecovery:      $('#enableIvRecovery').checked,
+    scanBytes:            parseInt($('#scanBytes').value || '0',10) || 0,
+    enableBinaryContainer: $('#enableBinaryContainer').checked,
+    enableTagIgnore:       $('#enableTagIgnore').checked,
+  };
+
+  let ok=0, fail=0;
+  for(const f of files){
+    try{
+      const {plain, name, mode} = await decryptOneFile(f, pw, opts);
+      downloadBufferAsFile(plain, name);
+      appendLog(`  → 다운로드 완료: ${name} (mode=${mode})`);
+      ok++;
+    }catch(e){
+      appendLog('  !! 복호화 실패: '+(e && e.message ? e.message : e));
+      fail++;
+    }
+  }
+  appendLog(`### 복호화 종료: 성공 ${ok}개, 실패 ${fail}개 ###`);
+  if(fail===0)      showToast(`복호화 완료 (성공 ${ok}개)`, 'success');
+  else if(ok>0)     showToast(`일부 성공 (성공 ${ok}, 실패 ${fail})`, 'warn');
+  else              showToast('모든 파일 복호화 실패 (로그 확인 필요)', 'error');
+});
+</script>
+</body>
+</html>

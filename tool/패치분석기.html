@@ -1,0 +1,502 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title>ZIP/XLSX 손상 분석 & 수동 패치 도구</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;600;700&display=swap');
+    *{box-sizing:border-box;}
+    body{
+      margin:0;
+      padding:16px;
+      font-family:'Noto Sans KR',system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      background:#f3f4f6;
+      color:#111827;
+    }
+    .wrap{max-width:980px;margin:0 auto;}
+    h1{margin:0 0 6px;font-size:20px;font-weight:700;}
+    .muted{color:#6b7280;font-size:12px;}
+    .card{
+      background:#fff;
+      border-radius:12px;
+      box-shadow:0 8px 22px rgba(15,23,42,.08);
+      padding:14px 16px 16px;
+      margin-top:10px;
+    }
+    h2{margin:0 0 4px;font-size:15px;font-weight:600;}
+    label{font-size:12px;display:block;margin-top:8px;}
+    input,button,select{font-family:inherit;font-size:12px;}
+    input[type="text"],input[type="number"]{
+      width:100%;
+      border-radius:8px;
+      border:1px solid #e5e7eb;
+      padding:6px 8px;
+      margin-top:3px;
+    }
+    input:focus{
+      outline:none;
+      border-color:#2563eb;
+      box-shadow:0 0 0 1px rgba(37,99,235,.25);
+    }
+    button{
+      border-radius:8px;
+      border:none;
+      padding:6px 10px;
+      cursor:pointer;
+      font-weight:500;
+    }
+    button.primary{background:#2563eb;color:#fff;}
+    button.sub{background:#e5e7eb;color:#111827;}
+    button.small{font-size:11px;padding:4px 8px;}
+    button:disabled{opacity:.6;cursor:default;}
+    .row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+    .mono{font-family:ui-monospace,Menlo,Consolas,monospace;}
+    #logBox{
+      margin-top:6px;
+      border-radius:8px;
+      border:1px solid #e5e7eb;
+      background:#020617;
+      color:#e5e7eb;
+      font-size:11px;
+      padding:8px 10px;
+      min-height:200px;
+      max-height:400px;
+      overflow:auto;
+      white-space:pre-wrap;
+    }
+    #hexPreview{
+      border-radius:8px;
+      border:1px solid #e5e7eb;
+      background:#f9fafb;
+      padding:6px 8px;
+      font-size:11px;
+      max-height:200px;
+      overflow:auto;
+      white-space:pre;
+      font-family:ui-monospace,Menlo,Consolas,monospace;
+    }
+    table{
+      border-collapse:collapse;
+      width:100%;
+      font-size:11px;
+      margin-top:6px;
+    }
+    th,td{
+      border:1px solid #e5e7eb;
+      padding:3px 4px;
+      text-align:left;
+      white-space:nowrap;
+    }
+    th{background:#f3f4f6;}
+    .badge{
+      display:inline-block;
+      padding:2px 6px;
+      border-radius:999px;
+      font-size:11px;
+      background:#eff6ff;
+      color:#1d4ed8;
+      margin-left:4px;
+    }
+    #toastContainer{
+      position:fixed;
+      right:12px;
+      bottom:12px;
+      z-index:9999;
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+    }
+    .toast{
+      padding:6px 10px;
+      border-radius:8px;
+      font-size:11px;
+      color:#fff;
+      background:#111827;
+      opacity:0;
+      transform:translateY(6px);
+      transition:.24s ease;
+    }
+    .toast.show{opacity:1;transform:translateY(0);}
+    .toast.success{background:#16a34a;}
+    .toast.warn{background:#f97316;}
+    .toast.error{background:#dc2626;}
+    @media (max-width:720px){
+      .row.wrap-sm{flex-direction:column;align-items:flex-start;}
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>ZIP/XLSX 손상 분석 & 수동 패치 도구</h1>
+  <div class="muted">
+    손상된 <span class="mono">.xlsx/.docx/.pptx/.zip</span> 파일 등에서 <span class="mono">PK 03 04</span> 시그니처를 찾아
+    앞·뒤의 쓰레기 데이터를 잘라낼 수 있는 도구입니다.<br>
+    ※ 현재 파일에 ZIP 시그니처가 전혀 없으면, 구조 자체가 없어져 복구가 사실상 불가능합니다.
+  </div>
+
+  <!-- 1. 파일 선택 -->
+  <section class="card">
+    <h2>1) 손상된 파일 선택</h2>
+
+    <label>
+      분석할 파일 선택
+      <input id="fileInput" type="file" />
+    </label>
+
+    <div class="row wrap-sm" style="margin-top:6px;">
+      <div style="flex:1;min-width:200px;">
+        <div class="muted" id="fileInfo">선택된 파일 없음</div>
+        <div id="hexPreview">(처음 256바이트가 16진수로 표시됩니다)</div>
+      </div>
+      <div style="flex:0 0 220px;margin-top:6px;">
+        <button id="btnAnalyze" class="primary" disabled>시그니처 스캔 / 구조 분석</button>
+        <button id="btnClearLog" class="sub small" style="margin-top:6px;">로그 비우기</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. 시그니처 / 영역 -->
+  <section class="card">
+    <h2>2) ZIP 시그니처 / 추정 영역<span class="badge" id="sigCountBadge">0개</span></h2>
+    <div class="muted">
+      <span class="mono">PK 03 04</span> (로컬 헤더), <span class="mono">PK 01 02</span> (중앙 디렉터리),
+      <span class="mono">PK 05 06</span> (End of Central Directory) 위치를 모두 표시합니다.
+    </div>
+
+    <div id="sigTableWrap" class="muted" style="margin-top:6px;">
+      (아직 분석 전입니다)
+    </div>
+
+    <div style="margin-top:10px;">
+      <div class="row wrap-sm">
+        <div style="flex:1;min-width:220px;">
+          <label>
+            출력 시작 offset (바이트, 10진수)
+            <input id="startOffset" type="number" class="mono" value="0" />
+          </label>
+          <label>
+            출력 종료 offset (바이트, 10진수, 비우면 파일 끝까지)
+            <input id="endOffset" type="number" class="mono" />
+          </label>
+        </div>
+        <div style="flex:0 0 240px;margin-top:6px;">
+          <button id="btnAutoRange" class="sub small">자동 범위 추정 (첫 PK~마지막 PK)</button>
+          <button id="btnExport" class="primary" style="margin-top:6px;" disabled>선택 범위만 잘라서 새 파일 다운로드</button>
+        </div>
+      </div>
+      <div class="muted" style="margin-top:4px;">
+        예: 앞부분에 쓰레기 데이터가 붙은 경우<br>
+        → 첫 번째 <span class="mono">PK 03 04</span> offset 값을 시작 offset에 넣고, 종료 offset은 비워둔 뒤 새 파일 생성.<br>
+        새 파일을 <span class="mono">.xlsx</span> 또는 <span class="mono">.zip</span> 확장자로 바꿔서 다시 열어 보세요.
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. 로그 -->
+  <section class="card">
+    <h2>3) 분석 / 패치 로그<span class="badge" id="logBadge">0줄</span></h2>
+    <pre id="logBox">(여기에 진행 상황과 오류가 표시됩니다)</pre>
+  </section>
+
+  <div id="toastContainer"></div>
+</div>
+
+<script>
+'use strict';
+
+const $ = sel => document.querySelector(sel);
+
+// ===== 상태 =====
+let loadedFile = null;
+let loadedBytes = null;
+let lastSigs = null;
+
+// ===== 로그 / 토스트 =====
+const logBox   = $('#logBox');
+const logBadge = $('#logBadge');
+let logLineCount = 0;
+
+function appendLog(line){
+  logLineCount++;
+  logBadge.textContent = logLineCount + '줄';
+  const ts = new Date().toISOString().slice(11,19);
+  if(logBox.textContent.trim() === '(여기에 진행 상황과 오류가 표시됩니다)'){
+    logBox.textContent = '';
+  }
+  logBox.textContent += '['+ts+'] '+line+'\n';
+  logBox.scrollTop = logBox.scrollHeight;
+}
+function clearLog(){
+  logLineCount = 0;
+  logBadge.textContent = '0줄';
+  logBox.textContent = '(여기에 진행 상황과 오류가 표시됩니다)';
+}
+$('#btnClearLog').addEventListener('click', clearLog);
+
+function showToast(msg,type='success',ttl=2500){
+  const cont = $('#toastContainer');
+  const el = document.createElement('div');
+  el.className = 'toast '+type;
+  el.textContent = msg;
+  cont.appendChild(el);
+  requestAnimationFrame(()=>el.classList.add('show'));
+  setTimeout(()=>{
+    el.classList.remove('show');
+    setTimeout(()=>cont.removeChild(el),260);
+  }, ttl);
+}
+
+function fmtBytes(n){
+  if(n==null) return '-';
+  const units=['B','KB','MB','GB'];
+  let i=0, v=n;
+  while(v>=1024 && i<units.length-1){v/=1024;i++;}
+  return v.toFixed(1)+' '+units[i];
+}
+
+// ===== 헥스 프리뷰 =====
+function makeHexPreview(bytes, maxLen=256){
+  const len = Math.min(bytes.length, maxLen);
+  let out = '';
+  for(let offset=0; offset<len; offset+=16){
+    const slice = bytes.slice(offset, offset+16);
+    let hex = '';
+    let ascii = '';
+    for(let i=0;i<16;i++){
+      if(offset+i < len){
+        const b = slice[i];
+        hex += b.toString(16).padStart(2,'0') + ' ';
+        if(b>=0x20 && b<=0x7e) ascii += String.fromCharCode(b);
+        else ascii += '.';
+      }else{
+        hex += '   ';
+        ascii += ' ';
+      }
+    }
+    out += offset.toString(16).padStart(8,'0') + '  ' + hex + ' ' + ascii + '\n';
+  }
+  return out || '(데이터 없음)';
+}
+
+// ===== 시그니처 스캔 =====
+function scanSignatures(bytes){
+  const sigs = {
+    local: [],   // PK 03 04
+    central: [], // PK 01 02
+    eocd: []     // PK 05 06
+  };
+  const n = bytes.length;
+  for(let i=0;i<n-4;i++){
+    if(bytes[i]===0x50 && bytes[i+1]===0x4b){
+      const s2 = bytes[i+2], s3 = bytes[i+3];
+      if(s2===0x03 && s3===0x04) sigs.local.push(i);
+      else if(s2===0x01 && s3===0x02) sigs.central.push(i);
+      else if(s2===0x05 && s3===0x06) sigs.eocd.push(i);
+    }
+  }
+  return sigs;
+}
+
+function renderSigTable(sigs, totalLen){
+  const wrap = $('#sigTableWrap');
+  const allCount = sigs.local.length + sigs.central.length + sigs.eocd.length;
+  $('#sigCountBadge').textContent = allCount + '개';
+
+  if(allCount === 0){
+    wrap.innerHTML = '<div class="muted">ZIP 시그니처(<span class="mono">PK 03 04</span> 등)를 전혀 찾지 못했습니다.<br>' +
+      '이 경우, 엑셀/ZIP 구조 자체가 사라져 복구가 사실상 불가능한 상태일 가능성이 매우 높습니다.</div>';
+    return;
+  }
+
+  let html = '<table><thead><tr>' +
+    '<th>종류</th><th>offset (10진수)</th><th>offset (16진수)</th>' +
+    '<th>파일 전체 대비 위치(%)</th>' +
+    '</tr></thead><tbody>';
+
+  function addRows(list, label){
+    list.forEach(off=>{
+      const pct = (off/totalLen*100).toFixed(2);
+      html += `<tr>
+        <td>${label}</td>
+        <td class="mono">${off}</td>
+        <td class="mono">0x${off.toString(16)}</td>
+        <td>${pct}%</td>
+      </tr>`;
+    });
+  }
+  addRows(sigs.local,   'PK 03 04 (Local)');
+  addRows(sigs.central, 'PK 01 02 (Central)');
+  addRows(sigs.eocd,    'PK 05 06 (EOCD)');
+
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+}
+
+// EOCD 파싱 (가능하면)
+function tryParseEocd(bytes, offset){
+  // 최소 길이 22바이트
+  if(offset+22 > bytes.length) return null;
+  const view = new DataView(bytes.buffer, bytes.byteOffset+offset, bytes.length-offset);
+  // signature 0x06054b50 (리틀엔디언)
+  const sig = view.getUint32(0,true);
+  if(sig !== 0x06054b50) return null;
+  const commentLen = view.getUint16(20,true);
+  const endPos = offset + 22 + commentLen;
+  return {offset, endPos, commentLen};
+}
+
+// ===== 파일 입출 =====
+const fileInput   = $('#fileInput');
+const fileInfo    = $('#fileInfo');
+const hexPreview  = $('#hexPreview');
+const btnAnalyze  = $('#btnAnalyze');
+const btnExport   = $('#btnExport');
+const btnAutoRange= $('#btnAutoRange');
+
+fileInput.addEventListener('change', async ()=>{
+  loadedFile = fileInput.files[0] || null;
+  loadedBytes = null;
+  lastSigs = null;
+  $('#sigTableWrap').innerHTML = '(아직 분석 전입니다)';
+  $('#sigCountBadge').textContent = '0개';
+  $('#startOffset').value = '0';
+  $('#endOffset').value   = '';
+  btnAnalyze.disabled = !loadedFile;
+  btnExport.disabled  = true;
+
+  if(!loadedFile){
+    fileInfo.textContent = '선택된 파일 없음';
+    hexPreview.textContent = '(처음 256바이트가 16진수로 표시됩니다)';
+    return;
+  }
+
+  fileInfo.textContent = `${loadedFile.name}  (${fmtBytes(loadedFile.size)})`;
+  appendLog(`파일 선택: ${loadedFile.name} (${fmtBytes(loadedFile.size)})`);
+
+  const ab = await loadedFile.arrayBuffer();
+  loadedBytes = new Uint8Array(ab);
+  hexPreview.textContent = makeHexPreview(loadedBytes, 256);
+});
+
+btnAnalyze.addEventListener('click', ()=>{
+  if(!loadedBytes){
+    alert('먼저 파일을 선택하세요.');
+    return;
+  }
+  clearLog();
+  appendLog(`### 시그니처 분석 시작: ${loadedFile.name} ###`);
+  appendLog(`파일 크기: ${loadedBytes.length} 바이트 (${fmtBytes(loadedBytes.length)})`);
+
+  const sigs = scanSignatures(loadedBytes);
+  lastSigs = sigs;
+  const totalLen = loadedBytes.length;
+  const allCount = sigs.local.length + sigs.central.length + sigs.eocd.length;
+  appendLog(`PK 03 04 (Local)  : ${sigs.local.length}개`);
+  appendLog(`PK 01 02 (Central): ${sigs.central.length}개`);
+  appendLog(`PK 05 06 (EOCD)   : ${sigs.eocd.length}개`);
+
+  if(allCount === 0){
+    appendLog('※ ZIP 시그니처를 하나도 발견하지 못했습니다.');
+    appendLog('   → 이 경우, 엑셀/ZIP 구조가 완전히 사라져 복구가 거의 불가능한 상태일 가능성이 큽니다.');
+    showToast('시그니처 없음: 복구 가능성이 매우 낮습니다.', 'error', 4000);
+    renderSigTable(sigs, totalLen);
+    btnExport.disabled = false; // 그래도 범위 자르기는 가능
+    return;
+  }
+
+  // EOCD가 있으면 대략적인 끝 위치 추정
+  let guessedEnd = null;
+  if(sigs.eocd.length){
+    const lastEocdOff = sigs.eocd[sigs.eocd.length-1];
+    const info = tryParseEocd(loadedBytes, lastEocdOff);
+    if(info && info.endPos <= loadedBytes.length){
+      guessedEnd = info.endPos;
+      appendLog(`EOCD 레코드 발견: offset=${info.offset}, commentLen=${info.commentLen}, 추정 끝 위치=${info.endPos}`);
+    }else{
+      appendLog(`EOCD 레코드 파싱 실패 또는 범위 초과 (offset=${lastEocdOff})`);
+    }
+  }
+
+  // 자동 범위: 첫 local ~ guessedEnd(있으면) 또는 파일 끝
+  if(sigs.local.length){
+    const firstLocal = sigs.local[0];
+    $('#startOffset').value = String(firstLocal);
+    if(guessedEnd != null){
+      $('#endOffset').value = String(guessedEnd);
+    }else{
+      $('#endOffset').value = '';
+    }
+    appendLog(`자동 범위(임시): 시작=${firstLocal}, 종료=${guessedEnd!=null?guessedEnd:'파일 끝'}`);
+  }
+
+  renderSigTable(sigs, totalLen);
+  btnExport.disabled = false;
+  showToast('시그니처 분석 완료', 'success');
+});
+
+btnAutoRange.addEventListener('click', ()=>{
+  if(!loadedBytes || !lastSigs){
+    alert('먼저 분석을 실행하세요.');
+    return;
+  }
+  const sigs = lastSigs;
+  if(!sigs.local.length){
+    alert('PK 03 04(Local) 시그니처가 없어 자동 범위를 추정할 수 없습니다.');
+    return;
+  }
+  const firstLocal = sigs.local[0];
+  let guessedEnd = null;
+  if(sigs.eocd.length){
+    const lastEocdOff = sigs.eocd[sigs.eocd.length-1];
+    const info = tryParseEocd(loadedBytes, lastEocdOff);
+    if(info && info.endPos <= loadedBytes.length){
+      guessedEnd = info.endPos;
+    }
+  }
+  $('#startOffset').value = String(firstLocal);
+  $('#endOffset').value   = guessedEnd!=null ? String(guessedEnd) : '';
+  appendLog(`자동 범위 재설정: 시작=${firstLocal}, 종료=${guessedEnd!=null?guessedEnd:'파일 끝'}`);
+  showToast('자동 범위를 채웠습니다.', 'success');
+});
+
+btnExport.addEventListener('click', ()=>{
+  if(!loadedBytes){
+    alert('먼저 파일을 선택하세요.');
+    return;
+  }
+  let start = parseInt($('#startOffset').value || '0',10);
+  let end   = $('#endOffset').value ? parseInt($('#endOffset').value,10) : loadedBytes.length;
+  if(!Number.isFinite(start) || start<0) start = 0;
+  if(!Number.isFinite(end)   || end<=0)  end   = loadedBytes.length;
+  if(start >= loadedBytes.length){
+    alert('시작 offset이 파일 크기 이상입니다.');
+    return;
+  }
+  if(end > loadedBytes.length) end = loadedBytes.length;
+  if(end <= start){
+    alert('종료 offset은 시작 offset보다 커야 합니다.');
+    return;
+  }
+
+  const slice = loadedBytes.slice(start, end);
+  appendLog(`패치 범위: start=${start}, end=${end} (len=${slice.length})`);
+
+  const blob = new Blob([slice], {type:'application/octet-stream'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  const base = (loadedFile && loadedFile.name) ? loadedFile.name : 'patched.bin';
+  const patchedName = 'patched_' + base;
+  a.href = url;
+  a.download = patchedName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 5000);
+
+  appendLog(`→ 패치 파일 다운로드: ${patchedName} (len=${slice.length})`);
+  showToast('패치 파일을 다운로드했습니다.', 'success');
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>기플래시</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#f4f6f9;
+      --card:#ffffff;
+      --ink:#212529;
+      --muted:#6b7280;
+      --line:#e9edf2;
+      --accent:#0b57d0;
+      --accent2:#357abd;
+      --shadow:0 1px 2px rgba(0,0,0,.05), 0 8px 24px rgba(0,0,0,.06);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      font-family:'Noto Sans KR',sans-serif;
+      background:var(--bg);
+      color:var(--ink);
+      margin:0;
+      user-select:none;
+    }
+
+    /* Header */
+    header{
+      position:sticky; top:0; z-index:10;
+      background:var(--card);
+      border-bottom:1px solid var(--line);
+      backdrop-filter:saturate(180%) blur(6px);
+    }
+    .wrap{
+      max-width:980px; margin:0 auto;
+      display:flex; align-items:center; gap:12px;
+      padding:12px 16px;
+    }
+    h1{margin:0; font-size:18px; white-space:nowrap; letter-spacing:.2px}
+    .spacer{flex:1}
+
+    /* Buttons */
+    .btn{
+      appearance:none; border:1px solid #cbd5e0; background:#fff; color:var(--ink);
+      padding:8px 12px; border-radius:10px; cursor:pointer; font-weight:700; font-size:14px;
+      box-shadow:0 1px 2px rgba(0,0,0,.04);
+      transition:background .15s ease, border-color .15s ease, box-shadow .15s ease, transform .05s ease;
+    }
+    .btn:hover{background:#f7fafc; border-color:#bfcde0}
+    .btn:active{transform:translateY(1px)}
+    .btn.primary{background:var(--accent); border-color:var(--accent); color:#fff}
+    .btn.primary:hover{background:var(--accent2); border-color:var(--accent2)}
+    .btn.ghost{background:#eef5fd; color:var(--accent); border-color:#d6e6ff}
+
+    /* Main container */
+    main{max-width:980px; margin:20px auto; padding:0 12px}
+
+    /* Inputs card */
+    .card{
+      background:var(--card); border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow);
+      padding:16px; margin-bottom:16px;
+    }
+    .input-grid{display:grid; grid-template-columns:1fr; gap:12px}
+    .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+    input, textarea{
+      width:100%; padding:12px; border-radius:10px; border:1.5px solid #ced4da;
+      font-size:14px; background:#fff; color:var(--ink);
+      transition:border-color .15s ease, box-shadow .15s ease;
+      font-family:'Noto Sans KR',sans-serif;
+    }
+    input:focus, textarea:focus{outline:2px solid transparent; border-color:#b6c7e6; box-shadow:0 0 0 3px rgba(95,146,222,.22)}
+    textarea{resize:vertical; min-height:110px}
+
+    /* Flashcard */
+    .flashcard{
+      background:var(--card);
+      border:1px solid var(--line);
+      border-radius:20px;
+      box-shadow:var(--shadow);
+      padding:44px 26px 112px;
+      text-align:center;
+      position:relative;
+      margin-top:16px;
+    }
+    .flashcard h2{font-size:28px; margin:0 0 16px 0; font-weight:700}
+    .flashcard p{font-size:20px; color:#374151; margin:0}
+    .flashcard .hint{font-size:12px; color:var(--muted); margin-top:6px}
+
+    .flashcard-footer{
+      position:absolute; left:0; right:0; bottom:14px; text-align:center;
+    }
+    .flashcard-buttons{display:flex; justify-content:center; gap:8px; margin-bottom:8px}
+    .counter{font-size:12px; color:var(--muted)}
+
+    .hidden{display:none}
+
+    /* Toast */
+    .toast{
+      position:fixed; bottom:18px; left:50%; transform:translateX(-50%);
+      background:rgba(17,24,39,.92); color:#fff; padding:10px 14px; border-radius:10px;
+      opacity:0; pointer-events:none; transition:opacity .25s ease; font-size:13px; z-index:9999;
+      box-shadow:0 8px 24px rgba(0,0,0,.25);
+    }
+    .toast.show{opacity:1; pointer-events:auto}
+
+    /* Helper */
+    .pill{background:#eef5fd; color:#0b57d0; border:1px solid #d9e7fb; border-radius:999px; padding:4px 8px; font-size:12px}
+    .toolbar{display:flex; flex-wrap:wrap; gap:8px}
+
+    @media (max-width:600px){
+      .flashcard h2{font-size:22px}
+      .flashcard p{font-size:18px}
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>기플래시</h1>
+      <span id="dbState" class="pill">Ctrl+ O : 열기 · Ctrl+ S : 저장</span>
+      <div class="spacer"></div>
+      <div class="toolbar">
+        <button class="btn" id="btn-save-xlsx" title="엑셀 저장 (Ctrl+S)">엑셀 저장</button>
+        <button class="btn" id="btn-open-xlsx" title="엑셀 열기 (Ctrl+O)">엑셀 열기</button>
+        <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none">
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- 입력 카드 -->
+    <section class="card">
+      <div class="input-grid">
+        <input type="text" id="topic" placeholder="토픽명 입력 (예: 네트워크 기본)">
+        <textarea id="keywords" placeholder="쉼표로 구분된 키워드 입력 (예: OSI 7계층, TCP/UDP, IP주소)"></textarea>
+        <div class="row">
+          <div class="toolbar">
+            <button class="btn primary" id="btn-add">추가</button>
+            <button class="btn" id="btn-start">학습 시작</button>
+            <button class="btn ghost" id="btn-reset">초기화</button>
+          </div>
+          <span class="pill" id="stat">카드: 0</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 플래시카드 -->
+    <section class="flashcard hidden" id="flashcard" tabindex="0" title="클릭 또는 스페이스로 토글 / 좌·우: 이동">
+      <h2 id="cardTopic">토픽</h2>
+      <p id="cardKeyword"></p>
+      <div class="hint">3초 후 키워드가 자동으로 나타납니다 • 클릭/스페이스로 토글</div>
+
+      <div class="flashcard-footer">
+        <div class="flashcard-buttons">
+          <button class="btn" id="btn-prev">이전</button>
+          <button class="btn" id="btn-next">다음</button>
+          <button class="btn ghost" id="btn-done">완료</button>
+        </div>
+        <div class="counter" id="cardCounter">0 / 0</div>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast">알림</div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script>
+    /* ================== 상태 ================== */
+    let cards = JSON.parse(localStorage.getItem('flashcards') || '[]');
+    let studyList = [];
+    let currentIndex = 0;
+    let keywordVisible = false;
+    let keywordTimer = null;
+    let totalStudyCount = 0;
+
+    /* ================== 유틸 ================== */
+    const $ = sel => document.querySelector(sel);
+    function showToast(msg){
+      const t = $('#toast'); t.textContent = msg;
+      t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 1600);
+    }
+    function refreshStat(){
+      $('#stat').textContent = '카드: ' + cards.length;
+    }
+    refreshStat();
+
+    /* ================== 입력/저장 ================== */
+    $('#btn-add').addEventListener('click', addCard);
+    $('#btn-save-xlsx').addEventListener('click', saveExcel);
+    $('#btn-open-xlsx').addEventListener('click', () => $('#fileInput').click());
+    $('#fileInput').addEventListener('change', onExcelChosen);
+    $('#btn-start').addEventListener('click', startStudy);
+    $('#btn-reset').addEventListener('click', resetStorage);
+
+    // 단축키: Ctrl/⌘ + S (저장), Ctrl/⌘ + O (열기)
+    window.addEventListener('keydown', (e) => {
+      const isCmd = e.metaKey || e.ctrlKey;
+      if (!isCmd) return;
+
+      const key = (e.key || '').toLowerCase();
+      if (key === 's') {
+        e.preventDefault();
+        $('#btn-save-xlsx').click();
+      }
+      if (key === 'o') {
+        e.preventDefault();
+        $('#btn-open-xlsx').click();
+      }
+    });
+
+    function addCard(){
+      const topic = $('#topic').value.trim();
+      const keywords = $('#keywords').value.trim();
+      if(!topic || !keywords) return showToast('토픽과 키워드를 입력하세요.');
+      cards.push({ topic, keywords, done:false, seen:false });
+      localStorage.setItem('flashcards', JSON.stringify(cards));
+      $('#topic').value=''; $('#keywords').value='';
+      refreshStat();
+      showToast('추가되었습니다.');
+    }
+
+    function saveExcel(){
+      if(!cards.length) return showToast('저장할 카드가 없습니다.');
+      const wb = XLSX.utils.book_new();
+      const wsData = [['토픽','키워드']];
+      cards.forEach(c => wsData.push([c.topic, c.keywords]));
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      XLSX.utils.book_append_sheet(wb, ws, 'Flashcards');
+      XLSX.writeFile(wb, '플래시카드.xlsx');
+      showToast('엑셀로 저장했습니다.');
+    }
+
+    function onExcelChosen(e){
+      const file = e.target.files[0]; if(!file) return;
+      const reader = new FileReader();
+      reader.onload = evt => {
+        const wb = XLSX.read(evt.target.result, { type:'binary' });
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header:1 });
+        cards = rows.slice(1).filter(r=>r && (r[0]||r[1])).map(r => ({
+          topic:String(r[0]||'').trim(),
+          keywords:String(r[1]||'').trim(),
+          done:false, seen:false
+        }));
+        localStorage.setItem('flashcards', JSON.stringify(cards));
+        refreshStat();
+        showToast('불러오기 완료');
+      };
+      reader.readAsBinaryString(file);
+      e.target.value = '';
+    }
+
+    /* ================== 학습 ================== */
+    $('#flashcard').addEventListener('click', toggleCard);
+    $('#btn-next').addEventListener('click', e => { e.stopPropagation(); nextCard(); });
+    $('#btn-prev').addEventListener('click', e => { e.stopPropagation(); prevCard(); });
+    $('#btn-done').addEventListener('click', e => { e.stopPropagation(); completeCard(); });
+
+    // 키보드 단축키: 좌/우 이동, Space 토글
+    document.addEventListener('keydown', (e)=>{
+      if($('#flashcard').classList.contains('hidden')) return;
+      if(e.key === 'ArrowRight'){ e.preventDefault(); nextCard(); }
+      else if(e.key === 'ArrowLeft'){ e.preventDefault(); prevCard(); }
+      else if(e.code === 'Space'){ e.preventDefault(); toggleCard(); }
+    });
+
+    function startStudy(){
+      studyList = cards.filter(c => !c.done);
+      if(!studyList.length) return showToast('학습할 카드가 없습니다.');
+      totalStudyCount = studyList.length;
+      currentIndex = 0;
+      $('#flashcard').classList.remove('hidden');
+      $('#flashcard').focus();
+      showCard();
+    }
+
+    function showCard(){
+      clearTimeout(keywordTimer);
+      keywordVisible = false;
+
+      const card = studyList[currentIndex];
+      $('#cardTopic').textContent = card.topic;
+      $('#cardKeyword').textContent = '';
+      $('#cardCounter').textContent = `${currentIndex+1} / ${totalStudyCount}`;
+
+      if(!card.seen){
+        keywordTimer = setTimeout(()=>{ keywordVisible = true; $('#cardKeyword').textContent = card.keywords; card.seen = true; }, 3000);
+      }
+    }
+
+    function toggleCard(){
+      const card = studyList[currentIndex];
+      keywordVisible = !keywordVisible;
+      $('#cardKeyword').textContent = keywordVisible ? card.keywords : '';
+    }
+
+    function nextCard(){
+      currentIndex = (currentIndex + 1) % studyList.length;
+      showCard();
+    }
+    function prevCard(){
+      currentIndex = (currentIndex - 1 + studyList.length) % studyList.length;
+      showCard();
+    }
+
+    function completeCard(){
+      const card = studyList[currentIndex];
+      const idx = cards.findIndex(c => c.topic === card.topic && c.keywords === card.keywords);
+      if(idx !== -1){
+        cards[idx].done = true;
+        localStorage.setItem('flashcards', JSON.stringify(cards));
+      }
+      studyList = cards.filter(c => !c.done);
+      if(studyList.length === 0) return endStudy();
+      currentIndex = currentIndex % studyList.length;
+      totalStudyCount = studyList.length;
+      showCard();
+    }
+
+    function endStudy(){
+      $('#flashcard').classList.add('hidden');
+      showToast('학습 완료!');
+    }
+
+    function resetStorage(){
+      if(confirm('정말 초기화하시겠습니까? 저장된 카드가 모두 삭제됩니다.')){
+        cards = [];
+        localStorage.removeItem('flashcards');
+        refreshStat();
+        showToast('초기화 완료');
+      }
+    }
+  </script>
+</body>
+</html>

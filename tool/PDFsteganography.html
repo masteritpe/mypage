@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDF 확언</title>
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  </script>
+
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  
+  <style>
+    :root {
+      --bg-body: #F9FAFB;
+      --bg-surface: #FFFFFF;
+      --border-light: #F3F4F6;
+      --border-base: #E5E7EB;
+      --text-main: #111827;
+      --text-muted: #6B7280;
+      --primary: #EF4444; 
+      --primary-hover: #DC2626;
+      --secondary: #FFFFFF;
+      --secondary-hover: #F9FAFB;
+      --success: #10B981;
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+      --radius-md: 8px;
+      --radius-lg: 12px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background: var(--bg-body);
+      color: var(--text-main);
+      margin: 0;
+      padding: 40px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* 헤더 영역 */
+    .dashboard-header { max-width: 1000px; margin: 0 auto 24px auto; }
+    .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .title-area { display: flex; align-items: center; gap: 12px; }
+    .title-area i { font-size: 28px; color: var(--primary); }
+    h2 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+    
+    /* 버튼 공통 스타일 */
+    .actions { display: flex; gap: 10px; }
+    input[type="file"] { display: none; }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 10px 18px; border-radius: var(--radius-md);
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      border: 1px solid transparent;
+    }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary { background: var(--primary); color: white; box-shadow: var(--shadow-sm); }
+    .btn-primary:hover:not(:disabled) { background: var(--primary-hover); transform: translateY(-1px); }
+    .btn-outline { background: var(--secondary); color: var(--text-main); border-color: var(--border-base); box-shadow: var(--shadow-sm); }
+    .btn-outline:hover:not(:disabled) { background: var(--secondary-hover); border-color: #D1D5DB; }
+    .btn-success { background: var(--success); color: white; box-shadow: var(--shadow-sm); }
+    .btn-success:hover:not(:disabled) { background: #059669; transform: translateY(-1px); }
+
+    /* 안내 메시지바 */
+    .instructions {
+      display: flex; gap: 20px; align-items: center; flex-wrap: wrap;
+      font-size: 13px; color: var(--text-muted);
+      background: var(--bg-surface); padding: 12px 20px;
+      border-radius: var(--radius-md); border: 1px solid var(--border-base);
+    }
+    .instructions span { display: inline-flex; align-items: center; gap: 6px; }
+    .instructions i { font-size: 16px; }
+
+    /* 메인 컨텐츠 영역 */
+    #content-wrapper {
+      max-width: 1000px; margin: 0 auto;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-base);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-md);
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      overflow: hidden;
+      min-height: 500px;
+    }
+
+    /* 좌측: PDF 프리뷰 뷰어 */
+    .preview-panel {
+      background: var(--bg-body);
+      border-right: 1px solid var(--border-base);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 24px; position: relative;
+    }
+    .empty-msg {
+      text-align: center; color: var(--text-muted);
+      display: flex; flex-direction: column; align-items: center; gap: 12px;
+    }
+    .empty-msg i { font-size: 40px; color: #D1D5DB; }
+    
+    .loading-msg { display: none; text-align: center; color: var(--primary); font-weight: bold; }
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+    .ph-spinner { animation: spin 1s linear infinite; font-size: 32px; }
+
+    canvas {
+      max-width: 100%; max-height: 450px;
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-md);
+      display: none;
+    }
+    .file-name { margin-top: 16px; font-size: 13px; color: var(--text-muted); font-weight: 500; }
+
+    /* 우측: 컨트롤 패널 */
+    .control-panel { padding: 32px; display: flex; flex-direction: column; gap: 20px; }
+    .form-group { display: flex; flex-direction: column; gap: 8px; }
+    .form-group label { font-size: 14px; font-weight: 600; color: var(--text-main); display: flex; align-items: center; gap: 6px; }
+    .form-group label i { color: var(--primary); font-size: 18px; }
+    
+    select, input[type="range"] { padding: 10px; border: 1px solid var(--border-base); border-radius: var(--radius-md); font-family: inherit; }
+    
+    textarea {
+      width: 100%; padding: 12px; border: 1px solid var(--border-base);
+      border-radius: var(--radius-md); font-family: inherit; font-size: 14px;
+      resize: vertical; min-height: 80px; outline: none; transition: border-color 0.2s;
+    }
+    textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1); }
+    
+    .divider { height: 1px; background: var(--border-base); margin: 8px 0; }
+    
+    .result-box {
+      background: #F3F4F6; border: 1px solid var(--border-base);
+      border-radius: var(--radius-md); padding: 16px;
+      font-size: 14px; color: var(--text-main); min-height: 60px;
+      word-break: break-all;
+    }
+
+    .value-label { font-size: 12px; color: var(--text-muted); font-weight: normal; margin-left: auto; }
+
+    /* 토스트 알림 */
+    #toast {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      background: #111827; color: white;
+      padding: 10px 20px; border-radius: 99px; font-size: 14px;
+      box-shadow: var(--shadow-md); opacity: 0; visibility: hidden;
+      transition: opacity 0.3s, visibility 0.3s;
+      z-index: 3000;
+    }
+    #toast.show { opacity: 1; visibility: visible; }
+  </style>
+</head>
+<body>
+
+  <div class="dashboard-header">
+    <div class="header-top">
+      <div class="title-area">
+        <i class="ph ph-brain"></i>
+        <h2>PDF 확언</h2>
+      </div>
+      
+      <div class="actions">
+        <label for="upload-pdf" class="btn btn-outline">
+          <i class="ph ph-upload-simple"></i> PDF 불러오기
+        </label>
+        <input type="file" id="upload-pdf" accept=".pdf" />
+        <button class="btn btn-outline" id="btn-clear" onclick="clearData()" style="display:none;">초기화</button>
+      </div>
+    </div>
+
+    <div class="instructions">
+      <span><i class="ph ph-eye-slash"></i> <b>메타데이터 스텔스:</b> 시각적 변화 없이 파일 속성에만 문구를 숨깁니다.</span>
+      <span style="color: #D1D5DB;">|</span>
+      <span><i class="ph ph-eye"></i> <b>서브리미널 워터마크:</b> 눈에 띌 듯 말 듯 아주 희미한 투명도로 배경에 확언을 도배합니다.</span>
+    </div>
+  </div>
+
+  <div id="content-wrapper">
+    <div class="preview-panel">
+      <div class="empty-msg" id="empty-state">
+        <i class="ph ph-file-pdf"></i>
+        <strong>PDF 문서를 업로드해주세요</strong>
+      </div>
+      
+      <div class="loading-msg" id="loading-state">
+        <i class="ph ph-spinner"></i>
+        <div style="margin-top: 8px;">PDF 렌더링 중...</div>
+      </div>
+
+      <canvas id="pdfCanvas"></canvas>
+      <div id="pdf-filename" class="file-name" style="display:none;"></div>
+    </div>
+
+    <div class="control-panel">
+      
+      <div class="form-group">
+        <label><i class="ph ph-sliders-horizontal"></i> 적용 방식 선택</label>
+        <select id="stealth-mode" onchange="toggleControls()">
+          <option value="meta">1. 메타데이터 스텔스</option>
+          <option value="watermark">2. 서브리미널 워터마크</option>
+        </select>
+      </div>
+
+      <div class="form-group" id="opacity-control" style="display: none;">
+        <label>
+          <i class="ph ph-drop-half-bottom"></i> 워터마크 투명도 
+          <span id="opacity-label" class="value-label">2% (권장: 1~3%)</span>
+        </label>
+        <input type="range" id="opacity-slider" min="1" max="10" value="2" oninput="updateOpacityLabel(this.value)">
+      </div>
+
+      <div class="form-group" id="fontsize-control" style="display: none;">
+        <label>
+          <i class="ph ph-text-t"></i> 폰트 크기 
+          <span id="fontsize-label" class="value-label">60px</span>
+        </label>
+        <input type="range" id="fontsize-slider" min="20" max="150" value="60" oninput="updateFontsizeLabel(this.value)">
+      </div>
+
+      <div class="form-group">
+        <label><i class="ph ph-pencil-simple"></i> 자기확언 문구 입력</label>
+        <textarea id="affirmationText" placeholder="예: 나는 매일 모든 면에서 점점 더 좋아지고 있다."></textarea>
+      </div>
+      
+      <div class="actions">
+        <button class="btn btn-primary" id="btn-encode" onclick="encodeMessage()" style="flex: 1;" disabled>
+          <i class="ph ph-magic-wand"></i> PDF에 적용하기
+        </button>
+        <button class="btn btn-success" id="btn-download" onclick="downloadPdf()" style="flex: 1; display: none;">
+          <i class="ph ph-download-simple"></i> 파일 저장
+        </button>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="form-group">
+        <label><i class="ph ph-magnifying-glass"></i> 추출된 문구 (메타데이터)</label>
+        <div id="decodeResult" class="result-box">
+          <span style="color: var(--text-muted);">PDF를 불러온 후 아래 버튼을 누르면 숨겨진 데이터를 추출합니다.</span>
+        </div>
+      </div>
+      <button class="btn btn-outline" id="btn-decode" onclick="decodeMessage()" disabled>
+        <i class="ph ph-lock-open"></i> 숨겨진 문구 추출
+      </button>
+
+    </div>
+  </div>
+
+  <div id="toast">알림 메시지</div>
+
+  <script>
+    // --- UI 요소 참조 ---
+    const uploadInput = document.getElementById('upload-pdf');
+    const emptyState = document.getElementById('empty-state');
+    const loadingState = document.getElementById('loading-state');
+    const canvas = document.getElementById('pdfCanvas');
+    const fileNameDisplay = document.getElementById('pdf-filename');
+    const ctx = canvas.getContext('2d');
+    
+    const btnClear = document.getElementById('btn-clear');
+    const btnEncode = document.getElementById('btn-encode');
+    const btnDecode = document.getElementById('btn-decode');
+    const btnDownload = document.getElementById('btn-download');
+    
+    // --- 전역 변수 ---
+    let originalFileBytes = null; 
+    let processedFileBytes = null; 
+    let currentFileName = "document.pdf";
+
+    // --- 헬퍼 함수 ---
+    const Base64Helper = {
+      encode: (str) => btoa(unescape(encodeURIComponent(str))),
+      decode: (str) => decodeURIComponent(escape(atob(str)))
+    };
+
+    // --- 상태 복구 로직: 설정값이 변경되면 '적용하기' 버튼 노출 ---
+    function resetToEncodeState() {
+      // 파일 저장 버튼이 보이고 있는 상태라면 (즉, 이미 1회 이상 적용했다면)
+      if (btnDownload.style.display !== 'none') {
+        btnEncode.style.display = 'inline-flex'; // 적용 버튼 보이기
+        btnDownload.style.display = 'none';      // 저장 버튼 숨기기
+      }
+    }
+
+    // 입력/설정값이 바뀔 때마다 상태 복구 함수 실행
+    document.getElementById('affirmationText').addEventListener('input', resetToEncodeState);
+    document.getElementById('opacity-slider').addEventListener('input', resetToEncodeState);
+    document.getElementById('fontsize-slider').addEventListener('input', resetToEncodeState);
+    document.getElementById('stealth-mode').addEventListener('change', resetToEncodeState);
+
+    function toggleControls() {
+      const mode = document.getElementById('stealth-mode').value;
+      const displayStyle = (mode === 'watermark') ? 'flex' : 'none';
+      document.getElementById('opacity-control').style.display = displayStyle;
+      document.getElementById('fontsize-control').style.display = displayStyle;
+    }
+
+    function updateOpacityLabel(val) {
+      document.getElementById('opacity-label').innerText = `${val}%`;
+    }
+
+    function updateFontsizeLabel(val) {
+      document.getElementById('fontsize-label').innerText = `${val}px`;
+    }
+
+    // --- 1. 파일 업로드 및 프리뷰 처리 ---
+    uploadInput.addEventListener('change', async function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      currentFileName = file.name;
+      canvas.style.display = 'none';
+      fileNameDisplay.style.display = 'none';
+      emptyState.style.display = 'none';
+      loadingState.style.display = 'flex';
+      
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        originalFileBytes = new Uint8Array(arrayBuffer);
+        
+        const pdf = await pdfjsLib.getDocument({ data: originalFileBytes.slice() }).promise;
+        const page = await pdf.getPage(1);
+        
+        const viewport = page.getViewport({ scale: 1.5 });
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        
+        ctx.fillStyle = "white";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+        
+        loadingState.style.display = 'none';
+        canvas.style.display = 'block';
+        fileNameDisplay.textContent = currentFileName;
+        fileNameDisplay.style.display = 'block';
+        
+        btnClear.style.display = 'inline-flex';
+        
+        // PDF 로드 시 버튼 초기화
+        btnEncode.style.display = 'inline-flex';
+        btnEncode.disabled = false;
+        btnDownload.style.display = 'none';
+        btnDecode.disabled = false;
+        
+        document.getElementById('decodeResult').innerHTML = '<span style="color: var(--text-muted);">파일이 준비되었습니다.</span>';
+        showToast('PDF 파일을 불러왔습니다.');
+      } catch (err) {
+        showToast('PDF 로드 오류가 발생했습니다.');
+        clearData();
+      } finally {
+        uploadInput.value = ''; 
+      }
+    });
+
+    // --- 워터마크 이미지 생성기 (캔버스 활용) ---
+    async function createWatermarkImage(text, fontSize) {
+      const wCanvas = document.createElement('canvas');
+      const wCtx = wCanvas.getContext('2d');
+      
+      const CANVAS_SIZE = 3000;
+      wCanvas.width = CANVAS_SIZE;
+      wCanvas.height = CANVAS_SIZE;
+
+      wCtx.fillStyle = "#000000"; 
+      wCtx.font = `bold ${fontSize}px 'Pretendard', 'Malgun Gothic', sans-serif`;
+      wCtx.textAlign = "center";
+      wCtx.textBaseline = "middle";
+
+      wCtx.translate(CANVAS_SIZE / 2, CANVAS_SIZE / 2);
+      wCtx.rotate(-45 * Math.PI / 180);
+
+      const stepX = wCtx.measureText(text).width + (fontSize * 2);
+      const stepY = fontSize * 2.5;
+
+      const LIMIT = CANVAS_SIZE;
+      for (let x = -LIMIT; x <= LIMIT; x += stepX) {
+        for (let y = -LIMIT; y <= LIMIT; y += stepY) {
+          wCtx.fillText(text, x, y);
+        }
+      }
+
+      return wCanvas.toDataURL('image/png');
+    }
+
+    // --- 2. 인코딩 (문구 적용하기) ---
+    async function encodeMessage() {
+      if (!originalFileBytes) return showToast("먼저 PDF 파일을 업로드하세요.");
+      
+      const text = document.getElementById('affirmationText').value.trim();
+      const mode = document.getElementById('stealth-mode').value;
+      const opacityVal = parseFloat(document.getElementById('opacity-slider').value) / 100;
+      const fontSizeVal = parseInt(document.getElementById('fontsize-slider').value, 10);
+
+      if (!text) return showToast('자기확언 문구를 입력해주세요.'); 
+
+      btnEncode.disabled = true;
+      showToast("적용 중입니다...");
+
+      try {
+        const pdfDoc = await PDFLib.PDFDocument.load(originalFileBytes.slice());
+        
+        // 메타데이터 스텔스 은닉
+        const b64Text = Base64Helper.encode(text);
+        const payload = `||STEALTH||${b64Text}||`;
+        pdfDoc.setSubject(payload);
+
+        // 워터마크 렌더링
+        if (mode === 'watermark') {
+          const pngDataUrl = await createWatermarkImage(text, fontSizeVal);
+          const embeddedPng = await pdfDoc.embedPng(pngDataUrl);
+          const pages = pdfDoc.getPages();
+          
+          for (const page of pages) {
+            const { width, height } = page.getSize();
+            page.drawImage(embeddedPng, {
+              x: width / 2 - 1500,
+              y: height / 2 - 1500,
+              width: 3000,
+              height: 3000,
+              opacity: opacityVal 
+            });
+          }
+        }
+
+        processedFileBytes = await pdfDoc.save();
+        
+        // 핵심!! 작업이 완료되면 '적용하기'를 완벽히 숨기고 '저장' 버튼만 띄움
+        btnEncode.style.display = 'none';
+        btnDownload.style.display = 'inline-flex';
+        btnEncode.disabled = false;
+        
+        const successMsg = mode === 'watermark' ? '워터마크 패턴이 적용되었습니다!' : '메타데이터에 은닉되었습니다!';
+        showToast(successMsg);
+
+      } catch (err) {
+        console.error(err);
+        showToast("오류가 발생했습니다.");
+        btnEncode.disabled = false;
+      }
+    }
+
+    // --- 3. 디코딩 (문구 추출하기) ---
+    async function decodeMessage() {
+      if (!originalFileBytes) return showToast("먼저 PDF 파일을 업로드하세요.");
+      
+      const resultBox = document.getElementById('decodeResult');
+      
+      try {
+        const pdfDoc = await PDFLib.PDFDocument.load(originalFileBytes.slice());
+        const subject = pdfDoc.getSubject();
+        let extractedText = null;
+
+        if (subject && subject.includes('||STEALTH||')) {
+          const match = subject.match(/\|\|STEALTH\|\|(.*?)\|\|/);
+          if (match && match[1]) extractedText = Base64Helper.decode(match[1]);
+        }
+
+        if (extractedText) {
+          resultBox.innerHTML = `<strong style="color: var(--primary); font-size: 16px;">${extractedText}</strong>`;
+          showToast('성공적으로 문구를 추출했습니다!');
+        } else {
+          resultBox.innerHTML = `<span style="color: #EF4444;">숨겨진 데이터를 찾을 수 없습니다.</span>`;
+        }
+      } catch (err) {
+        showToast("분석 중 오류가 발생했습니다.");
+      }
+    }
+
+    // --- 4. 다운로드 ---
+    function downloadPdf() {
+      if (!processedFileBytes) return showToast("저장할 데이터가 없습니다.");
+      
+      const blob = new Blob([processedFileBytes], { type: 'application/pdf' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `subliminal_${currentFileName}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast('수정된 PDF가 저장되었습니다.');
+    }
+
+    // --- 5. 초기화 ---
+    function clearData() {
+      originalFileBytes = null; processedFileBytes = null;
+      currentFileName = "document.pdf";
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      emptyState.style.display = 'flex';
+      canvas.style.display = 'none';
+      fileNameDisplay.style.display = 'none';
+      btnClear.style.display = 'none';
+      
+      btnEncode.style.display = 'inline-flex';
+      btnEncode.disabled = true; 
+      btnDecode.disabled = true;
+      btnDownload.style.display = 'none';
+      
+      document.getElementById('affirmationText').value = '';
+      document.getElementById('decodeResult').innerHTML = '<span style="color: var(--text-muted);">PDF를 불러온 후 아래 버튼을 누르면 숨겨진 데이터를 추출합니다.</span>';
+    }
+
+    // --- 6. 토스트 알림 ---
+    let toastTimeout;
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      toast.innerText = message;
+      toast.classList.add('show');
+      clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => toast.classList.remove('show'), 2500);
+    }
+  </script>
+</body>
+</html>

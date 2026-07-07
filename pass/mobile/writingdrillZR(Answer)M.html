@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Drill Zap(Mobile)</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" rel="stylesheet">
+    <style>
+        /* === 🎨 Eye-Comfort Color Palette === */
+        :root {
+            --bg-app: #F5F7FA;
+            --bg-card: #FFFFFF;
+            --text-main: #374151; 
+            --text-sub: #718096;
+            --border: #E2E8F0;
+            --primary: #607D8B;      
+            --primary-soft: #CFD8DC; 
+            --accent: #90A4AE;       
+            --success: #81C784;      
+            --danger: #E57373;       
+            --nav-height: 70px;
+            --font-main: "Pretendard", -apple-system, sans-serif;
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        
+        body { 
+            margin: 0; padding: 0; 
+            font-family: var(--font-main);
+            background: var(--bg-app); 
+            color: var(--text-main); 
+            height: 100vh; 
+            display: flex; flex-direction: column; overflow: hidden;
+        }
+
+        /* --- Layout --- */
+        main { flex: 1; position: relative; overflow: hidden; width: 100%; }
+        
+        /* 뷰 영역: 스크롤의 주체 */
+        .view-section { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            overflow-y: auto; /* 세로 스크롤 필수 */
+            overflow-x: hidden;
+            padding: 0; /* 패딩 제거 (내부 wrapper에서 처리) */
+            display: none; flex-direction: column; 
+            opacity: 0; transition: opacity 0.3s ease;
+            -webkit-overflow-scrolling: touch; 
+            z-index: 1;
+        }
+        .view-section.active { display: flex; opacity: 1; z-index: 10; }
+
+        /* --- 1. Focus View (Zap Mode) --- */
+        .zap-wrapper {
+            width: 100%; 
+            max-width: 600px; 
+            margin: 0 auto;
+            display: block; 
+            padding: 30px 20px 120px 20px; 
+            box-sizing: border-box;
+        }
+
+        .zap-card {
+            width: 100%; 
+            background: var(--bg-card); 
+            border-radius: 20px; 
+            padding: 30px 24px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.03); 
+            border: 1px solid var(--border);
+            min-height: 250px; 
+            display: flex; flex-direction: column; justify-content: flex-start;
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        .zap-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .zap-badge { 
+            font-size: 11px; font-weight: 700; 
+            color: var(--text-sub); background: var(--bg-app);
+            padding: 6px 12px; border-radius: 20px;
+            letter-spacing: 0.5px; text-transform: uppercase;
+        }
+        
+        .progress-text { font-size: 12px; color: var(--primary); font-weight: 600; }
+
+        .zap-topic { 
+            font-size: 22px; font-weight: 800; line-height: 1.4; 
+            color: var(--text-main); margin-bottom: 30px; 
+            word-break: keep-all; text-align: center;
+            margin-top: 10px;
+        }
+        
+        /* 상세 내용 스타일 */
+        .zap-detail { 
+            font-size: 16px; 
+            line-height: 1.7; 
+            color: var(--text-main); 
+            display: none; 
+            animation: fadeIn 0.4s ease; 
+            text-align: left;
+            background: var(--bg-app); 
+            padding: 20px; 
+            border-radius: 12px;
+            word-break: keep-all;
+        }
+        .zap-detail.show { display: block; }
+        
+        .detail-block { margin-bottom: 20px; }
+        .detail-block:last-child { margin-bottom: 0; }
+        
+        .detail-label {
+            display: block; font-size: 11px; font-weight: 800; 
+            color: var(--primary); margin-bottom: 6px; 
+            text-transform: uppercase; letter-spacing: 1px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 4px; width: fit-content;
+        }
+
+        /* Controls */
+        .zap-controls { 
+            display: flex; gap: 12px; width: 100%;
+        }
+        .btn {
+            flex: 1; height: 52px; border-radius: 14px; border: none; 
+            font-weight: 700; font-size: 14px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; gap: 6px; 
+            transition: all 0.2s; font-family: var(--font-main);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+        }
+        .btn:active { transform: scale(0.96); }
+        .btn-play { background: var(--primary); color: #fff; }
+        .btn-play.playing { background: var(--text-sub); color: #fff; }
+        .btn-nav { background: #fff; color: var(--text-sub); border: 1px solid var(--border); }
+        
+        /* --- 2. List View --- */
+        .list-header { font-size: 20px; font-weight: 800; margin: 30px 20px 20px 20px; color: var(--text-main); }
+        #list-container { padding: 0 20px 100px 20px; }
+        
+        .list-item {
+            background: var(--bg-card); border-radius: 16px; padding: 20px; margin-bottom: 12px;
+            border: 1px solid transparent; 
+            display: flex; justify-content: space-between; align-items: center;
+            transition: all 0.2s; cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+        }
+        .list-item:active { background: var(--bg-app); transform: scale(0.98); }
+        .list-info { flex: 1; padding-right: 10px; }
+        .list-title { font-weight: 700; font-size: 15px; margin-bottom: 4px; color: var(--text-main); }
+        .list-sub { font-size: 12px; color: var(--text-sub); font-weight: 500; }
+        .list-icon { color: var(--border); font-size: 14px; }
+        
+        /* --- 3. Settings View --- */
+        .setting-wrapper { padding: 30px 20px 100px 20px; }
+        .setting-header { font-size: 20px; font-weight: 800; margin-bottom: 20px; color: var(--text-main); }
+        
+        .setting-section { margin-bottom: 24px; }
+        .setting-title { 
+            font-size: 12px; font-weight: 700; color: var(--text-sub); 
+            margin-bottom: 8px; padding-left: 4px; text-transform: uppercase;
+        }
+        .setting-card { 
+            background: #fff; border-radius: 16px; 
+            border: 1px solid var(--border); overflow: hidden; 
+        }
+        .setting-row { 
+            padding: 16px; display: flex; justify-content: space-between; align-items: center; 
+            border-bottom: 1px solid var(--border); background: #fff;
+            cursor: pointer; transition: background 0.2s;
+        }
+        .setting-row:last-child { border-bottom: none; }
+        .setting-row:active { background: var(--bg-app); }
+        
+        .setting-label { font-size: 14px; font-weight: 600; color: var(--text-main); display: block; }
+        .setting-desc { font-size: 11px; color: var(--text-sub); margin-top: 4px; display: block; }
+        .setting-input {
+            width: 60px; padding: 8px; border-radius: 8px; border: 1px solid var(--border);
+            text-align: center; font-family: var(--font-main); font-size: 14px; color: var(--text-main);
+            background: var(--bg-app); outline: none;
+        }
+        .setting-checkbox {
+            width: 22px; height: 22px; cursor: pointer; accent-color: var(--primary);
+        }
+
+        /* --- Navigation Bar --- */
+        nav {
+            height: var(--nav-height); 
+            background: rgba(255, 255, 255, 0.95); 
+            backdrop-filter: blur(10px);
+            border-top: 1px solid var(--border);
+            display: flex; justify-content: space-around; align-items: center;
+            position: fixed; bottom: 0; width: 100%; z-index: 100;
+            padding-bottom: env(safe-area-inset-bottom);
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.02);
+            /* 트랜지션 효과 추가: 부드럽게 사라지기 위함 */
+            transition: transform 0.3s ease-in-out;
+        }
+        /* Auto Zap 시 메뉴바 숨김 처리를 위한 클래스 */
+        nav.hidden {
+            transform: translateY(100%);
+        }
+
+        .nav-btn {
+            flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            background: none; border: none; 
+            color: #B0BEC5; 
+            gap: 4px; font-size: 10px; font-weight: 600; cursor: pointer; height: 100%;
+        }
+        .nav-btn i { font-size: 20px; margin-bottom: 2px; transition: transform 0.2s; }
+        .nav-btn.active { color: var(--primary); }
+        .nav-btn.active i { transform: translateY(-2px); }
+
+        @keyframes fadeIn { 
+            from { opacity: 0; transform: translateY(5px); } 
+            to { opacity: 1; transform: translateY(0); } 
+        }
+        .empty-state {
+            text-align: center; color: var(--text-sub); margin-top: 40vh; font-size: 13px; line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+
+<main>
+    <div id="view-focus" class="view-section active">
+        <div class="zap-wrapper">
+            <div class="zap-card" onclick="toggleDetailManual()">
+                <div class="zap-header">
+                    <span class="zap-badge" id="zap-round">READY</span>
+                    <span class="progress-text" id="zap-counter">0 / 0</span>
+                </div>
+
+                <div id="zap-topic" class="zap-topic">
+                    <i class="fas fa-spinner fa-spin" style="color:var(--primary-soft)"></i><br>
+                    <span style="font-size:14px; font-weight:400; color:var(--text-sub); display:block; margin-top:15px;">
+                        데이터 로딩 중...
+                    </span>
+                </div>
+
+                <div id="zap-def" class="zap-detail">
+                    </div>
+            </div>
+
+            <div class="zap-controls">
+                <button class="btn btn-nav" onclick="prevZap()">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <button id="btn-auto" class="btn btn-play" onclick="toggleAutoZap()">
+                    <i class="fas fa-bolt"></i> Auto Zap
+                </button>
+                <button class="btn btn-nav" onclick="nextZap()">
+                    <i class="fas fa-arrow-right"></i>
+                </button>
+            </div>
+            
+            <div style="text-align:center; margin-top:20px; font-size:12px; color:var(--text-sub); opacity:0.6;">
+                터치하여 정답 확인 / 스크롤 가능
+            </div>
+        </div>
+    </div>
+
+    <div id="view-list" class="view-section">
+        <div class="list-header">학습 리스트</div>
+        <div id="list-container">
+            <div class="empty-state">데이터가 없습니다.<br>설정 탭에서<br>JSON 파일을 불러오세요.</div>
+        </div>
+    </div>
+
+    <div id="view-settings" class="view-section">
+        <div class="setting-wrapper">
+            <div class="setting-header">설정</div>
+
+            <div class="setting-section">
+                <div class="setting-title">학습 설정</div>
+                <div class="setting-card">
+                    <div class="setting-row">
+                        <div>
+                            <span class="setting-label">정답 가리기</span>
+                            <span class="setting-desc">새 카드로 넘어가면 정답 숨김</span>
+                        </div>
+                        <input type="checkbox" id="setting-hide-answer" class="setting-checkbox" onchange="toggleHideAnswerOption(this)">
+                    </div>
+
+                    <div class="setting-row">
+                        <div>
+                            <span class="setting-label">자동 재생 간격</span>
+                            <span class="setting-desc">토픽 노출 시간(기본 20초)</span>
+                        </div>
+                        <input type="number" id="zap-speed" value="20" class="setting-input">
+                    </div>
+                </div>
+            </div>
+
+            <div class="setting-section">
+                <div class="setting-title">데이터 관리</div>
+                <div class="setting-card">
+                    <div class="setting-row" onclick="exportData()">
+                        <div>
+                            <span class="setting-label">백업(JSON 내보내기)</span>
+                            <span class="setting-desc">현재 데이터를 파일로 저장</span>
+                        </div>
+                        <i class="fas fa-download" style="color:var(--primary)"></i>
+                    </div>
+                    
+                    <label class="setting-row">
+                        <div>
+                            <span class="setting-label">복구(JSON 불러오기)</span>
+                            <span class="setting-desc">백업 파일에서 데이터 로드</span>
+                        </div>
+                        <i class="fas fa-upload" style="color:var(--success)"></i>
+                        <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(this)">
+                    </label>
+                </div>
+            </div>
+
+            <div class="setting-section">
+                <div class="setting-card" style="border-color: #FED7D7;">
+                    <div class="setting-row" onclick="resetDB()">
+                        <div style="color:var(--danger)">
+                            <span class="setting-label">데이터 초기화</span>
+                            <span class="setting-desc" style="color:#E57373">모든 데이터를 삭제합니다.</span>
+                        </div>
+                        <i class="fas fa-trash-alt" style="color:var(--danger)"></i>
+                    </div>
+                </div>
+            </div>            
+        </div>
+    </div>
+</main>
+
+<nav id="main-nav">
+    <button class="nav-btn active" onclick="switchTab('view-focus', this)">
+        <i class="fas fa-bolt"></i><span>Zap</span>
+    </button>
+    <button class="nav-btn" onclick="switchTab('view-list', this)">
+        <i class="fas fa-list-ul"></i><span>List</span>
+    </button>
+    <button class="nav-btn" onclick="switchTab('view-settings', this)">
+        <i class="fas fa-sliders-h"></i><span>Setup</span>
+    </button>
+</nav>
+
+<script>
+    /* ========================================================
+       DB & Logic Engine
+       ======================================================== */
+    const DB_NAME = 'WritingDrillReviewDB'; 
+    const STORE_NAME = 'questions';
+    let db;
+    let questions = [];
+    let currentIndex = 0;
+    let autoTimer = null;
+    let isPlaying = false;
+    
+    // [추가] 정답 가리기 기본 설정 상태 (기본값: false)
+    let hideAnswerMode = false; 
+
+    // 1. DB 초기화
+    async function initDB() {
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(DB_NAME, 1);
+            req.onerror = e => reject(e);
+            req.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains(STORE_NAME)) {
+                    db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
+                }
+            };
+            req.onsuccess = (e) => { db = e.target.result; resolve(); };
+        });
+    }
+
+    // 2. 데이터 로드
+    async function loadQuestions() {
+        if(!db) await initDB();
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        questions = await new Promise(r => {
+            tx.objectStore(STORE_NAME).getAll().onsuccess = (e) => r(e.target.result);
+        });
+        
+        questions.sort((a, b) => {
+            const rA = parseInt(a.round) || 0;
+            const rB = parseInt(b.round) || 0;
+            if(rA !== rB) return rA - rB;
+            return (a.number || 0) - (b.number || 0);
+        });
+
+        // 설정 불러오기
+        loadSettings();
+
+        updateZapUI();
+        if(document.getElementById('view-list').classList.contains('active')) renderList();
+    }
+
+    /* --- Settings Logic --- */
+    function loadSettings() {
+        // LocalStorage에서 설정값 불러오기
+        const savedHide = localStorage.getItem('hideAnswerMode');
+        if (savedHide !== null) {
+            hideAnswerMode = (savedHide === 'true');
+        } else {
+            hideAnswerMode = false; // 최초 실행 시 기본값
+        }
+        document.getElementById('setting-hide-answer').checked = hideAnswerMode;
+    }
+
+    function toggleHideAnswerOption(checkbox) {
+        hideAnswerMode = checkbox.checked;
+        localStorage.setItem('hideAnswerMode', hideAnswerMode);
+    }
+
+    /* --- Navigation --- */
+    function switchTab(viewId, btn) {
+        document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        
+        document.getElementById(viewId).classList.add('active');
+        btn.classList.add('active');
+        
+        if(viewId === 'view-list') renderList();
+        
+        // 탭 이동 시 Auto Zap이 실행 중이면 중지 (네비게이션 바 복구를 위해)
+        if(viewId !== 'view-focus' && isPlaying) {
+            toggleAutoZap();
+        }
+    }
+
+    /* --- Focus (Zap) Logic --- */
+    function updateZapUI() {
+        const topicEl = document.getElementById('zap-topic');
+        const defEl = document.getElementById('zap-def');
+        const roundEl = document.getElementById('zap-round');
+        const counterEl = document.getElementById('zap-counter');
+
+        if (questions.length === 0) {
+            topicEl.innerHTML = "데이터가 없습니다.<br><span style='font-size:14px; color:var(--text-sub)'>설정 탭에서 JSON 파일을 불러오세요.</span>";
+            defEl.classList.remove('show');
+            roundEl.innerText = "EMPTY";
+            counterEl.innerText = "0 / 0";
+            return;
+        }
+
+        const item = questions[currentIndex];
+        const formatText = (text) => (text || '').replace(/\n/g, '<br>');
+
+        roundEl.innerText = `ROUND ${item.round}`;
+        counterEl.innerText = `${currentIndex + 1} / ${questions.length}`;
+        topicEl.innerHTML = formatText(item.topic);
+        
+        let detailHtml = "";
+        if(item.def) {
+            detailHtml += `<div class="detail-block"><span class="detail-label">Definition</span><div>${formatText(item.def)}</div></div>`;
+        }
+        if(item.keys) {
+            detailHtml += `<div class="detail-block"><span class="detail-label">Keywords</span><div style="color:var(--text-sub)">${formatText(item.keys)}</div></div>`;
+        }
+        
+        defEl.innerHTML = detailHtml;
+
+        // [수정] 정답 가리기 옵션 적용
+        if (hideAnswerMode) {
+            defEl.classList.remove('show'); 
+        } else {
+            defEl.classList.add('show');
+        }
+        
+        // 카드 내용 변경 시 스크롤 맨 위로 (즉시)
+        document.getElementById('view-focus').scrollTop = 0;
+    }
+
+    function toggleDetailManual() {
+        if (questions.length === 0) return;
+        // 옵션과 관계없이 터치하면 토글
+        document.getElementById('zap-def').classList.toggle('show');
+    }
+
+    function nextZap() {
+        if (questions.length === 0) return;
+        currentIndex = (currentIndex + 1) % questions.length;
+        updateZapUI();
+    }
+
+    function prevZap() {
+        if (questions.length === 0) return;
+        currentIndex = (currentIndex - 1 + questions.length) % questions.length;
+        updateZapUI();
+    }
+
+    /* --- Auto Play Logic --- */
+    function toggleAutoZap() {
+        const btn = document.getElementById('btn-auto');
+        const nav = document.getElementById('main-nav'); // Nav 요소 선택
+        const speedSec = parseInt(document.getElementById('zap-speed').value) || 20;
+        const intervalMs = (speedSec * 1000) / 2; 
+
+        if (isPlaying) {
+            // Stop logic
+            clearInterval(autoTimer);
+            isPlaying = false;
+            btn.innerHTML = '<i class="fas fa-bolt"></i> Auto Zap';
+            btn.className = 'btn btn-play';
+            
+            // [추가] Auto Zap 중지 시 네비게이션 바 다시 보이기
+            nav.classList.remove('hidden');
+        } else {
+            // Play logic
+            if(questions.length === 0) return alert("데이터가 없습니다.");
+            isPlaying = true;
+            btn.innerHTML = '<i class="fas fa-pause"></i> Stop';
+            btn.className = 'btn btn-play playing'; 
+            
+            // [추가] Auto Zap 실행 시 네비게이션 바 숨기기
+            nav.classList.add('hidden');
+            
+            autoLoop(intervalMs);
+            autoTimer = setInterval(() => autoLoop(intervalMs), intervalMs);
+        }
+    }
+
+    function autoLoop(intervalMs) {
+        const defEl = document.getElementById('zap-def');
+        // 정답이 숨겨져 있으면 보여주고, 이미 보여져있으면 다음으로 넘어감
+        if (!defEl.classList.contains('show')) {
+            defEl.classList.add('show');
+        } else {
+            nextZap();
+        }
+    }
+
+    /* --- List Logic --- */
+    function renderList() {
+        const container = document.getElementById('list-container');
+        if (questions.length === 0) {
+            container.innerHTML = `<div class="empty-state">데이터가 없습니다.<br>설정 탭에서 데이터를 복구하세요.</div>`;
+            return;
+        }
+
+        container.innerHTML = questions.map((q, idx) => `
+            <div class="list-item" onclick="jumpTo(${idx})">
+                <div class="list-info">
+                    <div class="list-title">${q.topic || 'No Topic'}</div>
+                    <div class="list-sub">Round ${q.round} ${q.domain ? '| ' + q.domain : ''}</div>
+                </div>
+                <i class="fas fa-chevron-right list-icon"></i>
+            </div>
+        `).join('');
+    }
+
+    function jumpTo(idx) {
+        currentIndex = idx;
+        updateZapUI();
+        switchTab('view-focus', document.querySelector('.nav-btn'));
+    }
+
+    /* --- Data Management --- */
+    function exportData() {
+        if(questions.length === 0) return alert("내보낼 데이터가 없습니다.");
+        const dataStr = JSON.stringify(questions, null, 2);
+        const blob = new Blob([dataStr], {type: "application/json"});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `DrillZap_Backup_${new Date().toISOString().slice(0,10)}.json`;
+        a.click();
+    }
+
+    function importData(input) {
+        const file = input.files[0];
+        if(!file) return;
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const data = JSON.parse(e.target.result);
+                if(!Array.isArray(data)) throw new Error("잘못된 JSON 형식입니다.");
+                if(confirm(`총 ${data.length}개의 데이터를 불러옵니다. 기존 데이터에 덮어씌우시겠습니까?`)) {
+                    const tx = db.transaction(STORE_NAME, 'readwrite');
+                    data.forEach(item => tx.objectStore(STORE_NAME).put(item));
+                    tx.oncomplete = () => {
+                        alert("복구 완료!");
+                        loadQuestions();
+                        input.value = '';
+                    };
+                }
+            } catch (err) { alert("오류 발생: " + err.message); }
+        };
+        reader.readAsText(file);
+    }
+
+    async function resetDB() {
+        if(confirm("정말로 모든 데이터를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.")) {
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            tx.objectStore(STORE_NAME).clear();
+            tx.oncomplete = () => {
+                questions = [];
+                updateZapUI();
+                alert("초기화되었습니다.");
+            };
+        }
+    }
+
+    window.onload = async () => { await loadQuestions(); };
+</script>
+</body>
+</html>

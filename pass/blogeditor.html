@@ -1,0 +1,1408 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>블로그 에디터</title>
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css" />
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+<script>
+window.MathJax = {
+    tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']],
+        processEscapes: true
+    },
+    startup: {
+        typeset: false
+    }
+};
+</script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+<style>
+    :root {
+        --primary: #334155;
+        --primary-hover: #0f172a;
+        --bg: #f8fafc;
+        --surface: #ffffff;
+        --border: #e2e8f0;
+        --border-focus: #94a3b8;
+        --text-main: #1e293b;
+        --text-muted: #64748b;
+        --danger: #ef4444;
+        --danger-bg: #fee2e2;
+        --radius-lg: 16px;
+        --radius-md: 8px;
+        --sidebar-w: 280px;
+        --shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.04);
+        --shadow-md: 0 8px 24px rgba(15, 23, 42, 0.06);
+    }
+    
+    body { 
+        font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+        background: var(--bg); color: var(--text-main); margin: 0; padding: 0; display: flex; height: 100vh; overflow: hidden; -webkit-font-smoothing: antialiased;
+    }
+
+    /* 사이드바 */
+    .sidebar { width: var(--sidebar-w); background: var(--bg); border-right: 1px solid var(--border); display: flex; flex-direction: column; z-index: 10; }
+    .sidebar-header { padding: 28px 24px 20px; }
+    .sidebar-header h2 { margin: 0 0 16px 0; font-size: 16px; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px; letter-spacing: -0.3px; }
+    .search-box { position: relative; }
+    .search-box input { width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius-md); font-family: inherit; font-size: 14px; background: var(--surface); box-sizing: border-box; transition: all 0.2s ease; box-shadow: inset 0 1px 2px rgba(0,0,0,0.01); }
+    .search-box input:focus { outline: none; border-color: var(--border-focus); box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.15); }
+    .timeline-list { flex: 1; overflow-y: auto; padding: 0 16px 16px; }
+    .timeline-item { padding: 14px 16px; border-radius: var(--radius-md); cursor: pointer; transition: all 0.2s ease; border: 1px solid transparent; margin-bottom: 8px; background: transparent; }
+    .timeline-item:hover { background: var(--surface); border-color: var(--border); box-shadow: var(--shadow-sm); }
+    .timeline-item.active { background: var(--surface); border-color: var(--border-focus); box-shadow: var(--shadow-sm); }
+    
+    .tl-item-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+    .tl-delete-btn { background: transparent; border: none; font-size: 13px; cursor: pointer; opacity: 0; transition: all 0.2s ease; padding: 2px 4px; border-radius: 4px; color: var(--danger); line-height: 1; }
+    .timeline-item:hover .tl-delete-btn { opacity: 0.5; }
+    .tl-delete-btn:hover { opacity: 1 !important; background: var(--danger-bg); }
+    
+    .tl-date { flex: 1; font-weight: 600; font-size: 14px; color: var(--text-main); margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
+    .tl-meta { font-size: 12px; color: var(--text-muted); display: flex; justify-content: space-between; font-weight: 500; }
+    .empty-list { text-align: center; color: var(--text-muted); font-size: 14px; padding: 40px 20px; }
+
+    /* 메인 에디터 */
+    .main-content { flex: 1; overflow-y: auto; padding: 0 48px 40px; position: relative; background: var(--surface); }
+    .top-bar { position: sticky; top: 0; background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(12px); padding: 24px 0; display: flex; justify-content: space-between; align-items: center; z-index: 50; border-bottom: 1px solid rgba(226, 232, 240, 0.6); margin-bottom: 32px; }
+    .top-bar h1 { margin: 0; font-size: 20px; font-weight: 700; color: var(--text-main); letter-spacing: -0.5px; }
+    .top-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; align-items: center;}
+    
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: #ffffff; color: var(--text-main); border: 1px solid #cbd5e1; padding: 9px 16px; font-size: 13.5px; font-weight: 600; border-radius: var(--radius-md); cursor: pointer; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 1px 2px rgba(15, 23, 42, 0.02); height: 38px; box-sizing: border-box; }
+    .btn:hover { background: #f8fafc; border-color: #94a3b8; }
+    .btn:active { transform: translateY(1px); }
+    .btn-primary { background: var(--primary); color: #ffffff; border-color: var(--primary); box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1); }
+    .btn-primary:hover { background: var(--primary-hover); color: #ffffff; border-color: var(--primary-hover); box-shadow: 0 4px 6px rgba(15, 23, 42, 0.12); }
+    .btn-success { background: #10b981; color: white; border-color: #10b981; }
+    .btn-success:hover { background: #059669; border-color: #059669; color: white; }
+    
+    .btn-danger { color: var(--danger); border-color: #fca5a5; }
+    .btn-danger:hover { background: var(--danger-bg); border-color: var(--danger); color: var(--danger); }
+
+    /* 상단 드롭다운 커스텀 스타일 */
+    .top-select { width: auto; padding: 8px 32px 8px 12px; font-size: 13.5px; font-weight: 600; color: var(--text-main); border-radius: var(--radius-md); border: 1px solid #cbd5e1; height: 38px; box-sizing: border-box; cursor: pointer; background: #fff url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23475569" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>') no-repeat right 8px center; appearance: none; -webkit-appearance: none; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.02); transition: all 0.2s ease;}
+    .top-select:hover { background-color: #f8fafc; border-color: #94a3b8; }
+    .top-select:focus { border-color: var(--border-focus); outline: none; box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.15); }
+
+    .editor-container { max-width: 820px; margin: 0 auto; padding-bottom: 40px; }
+    .card { background: var(--surface); padding: 32px; border-radius: var(--radius-lg); margin-bottom: 32px; border: 1px solid var(--border); box-shadow: var(--shadow-sm); }
+    .card-title { font-size: 16px; font-weight: 700; margin: 0 0 24px 0; display: flex; align-items: center; gap: 8px; padding-bottom: 16px; border-bottom: 1px solid #f1f5f9; color: var(--text-main); }
+
+    .form-group { margin-bottom: 24px; }
+    label { display: block; font-weight: 600; margin-bottom: 8px; font-size: 13.5px; color: #475569; }
+    input[type="text"], input[type="date"], textarea, select { width: 100%; padding: 12px 16px; border: 1px solid #cbd5e1; border-radius: var(--radius-md); box-sizing: border-box; font-family: inherit; font-size: 14.5px; background: #ffffff; transition: all 0.2s ease; box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.01); color: var(--text-main); }
+    input::placeholder, textarea::placeholder { color: #94a3b8; font-weight: 400; }
+    input:focus, textarea:focus, select:focus { outline: none; border-color: var(--border-focus); box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.15); }
+    textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
+    
+    .article-block { background: #fbfbfc; border: 1px solid var(--border); padding: 32px; border-radius: var(--radius-lg); margin-bottom: 24px; position: relative; transition: 0.2s; }
+    .article-block:hover { border-color: #cbd5e1; box-shadow: var(--shadow-sm); }
+    .remove-btn { position: absolute; top: 24px; right: 24px; background: transparent; color: var(--text-muted); border: 1px solid var(--border); padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; transition: 0.2s; }
+    .remove-btn:hover { background: var(--danger-bg); color: var(--danger); border-color: #fca5a5; }
+    .btn-outline { width: 100%; padding: 16px; border-style: dashed; border-width: 1.5px; border-color: #cbd5e1; justify-content: center; margin-top: 10px; background: transparent; box-shadow: none;}
+    .btn-outline:hover { background: #f8fafc; border-color: #94a3b8; }
+    
+    .visual-selector { background: #ffffff; padding: 24px; border-radius: 12px; border: 1px dashed #cbd5e1; margin-top: 24px; }
+    .visual-options { display: none; margin-top: 24px; padding-top: 24px; border-top: 1px dashed var(--border); }
+    .visual-common-fields { background: #f8fafc; padding: 20px; border-radius: var(--radius-md); border: 1px solid var(--border); margin-bottom: 20px; }
+
+    .flex-row { display: flex; gap: 12px; margin-bottom: 16px; }
+    .flex-row > div { flex: 1; }
+    .divider { height: 1px; background: var(--border); margin: 32px 0; }
+    .section-tag { display: inline-block; background: #f1f5f9; color: #475569; font-size: 12px; padding: 4px 10px; border-radius: 6px; margin-bottom: 24px; font-weight: 700; letter-spacing: 0.5px;}
+
+    #toast { visibility: hidden; min-width: 250px; background-color: #1e293b; color: #fff; text-align: center; border-radius: 8px; padding: 14px 20px; position: fixed; z-index: 1000; left: 50%; bottom: 30px; transform: translateX(-50%); font-size: 14px; font-weight: 500; box-shadow: var(--shadow-md); opacity: 0; transition: opacity 0.3s, bottom 0.3s; }
+    #toast.show { visibility: visible; opacity: 1; bottom: 50px; }
+    
+    .guide-text { font-size: 12.5px; color: var(--text-muted); margin-top: 6px; display: block; font-weight: 400; line-height: 1.4; }
+
+    /* 모달 공통 */
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.4); z-index: 1000; justify-content: center; align-items: center; backdrop-filter: blur(6px); }
+    .modal-content { background: #f8fafc; width: 900px; max-width: 95%; height: 85vh; border-radius: var(--radius-lg); display: flex; flex-direction: column; box-shadow: 0 20px 40px rgba(0,0,0,0.15); overflow: hidden; border: 1px solid rgba(255,255,255,0.2); }
+    .modal-header { padding: 20px 32px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: #ffffff; }
+    .modal-header h2 { margin: 0; font-size: 16px; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px;}
+    .close-btn { background: none; border: none; font-size: 24px; line-height: 1; cursor: pointer; color: var(--text-muted); transition: 0.2s; padding: 4px;}
+    .close-btn:hover { color: var(--danger); }
+    .modal-body { padding: 40px 0; overflow-y: auto; flex: 1; }
+    .modal-footer { padding: 16px 32px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 12px; background: #ffffff; }
+    
+    /* 미리보기 스타일 */
+    #previewText { margin: 0 auto; padding: 48px; background: #ffffff; max-width: 760px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); border-radius: 12px; border: 1px solid var(--border); font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif; font-size: 15.5px; line-height: 1.75; color: #334155; word-break: keep-all; }
+    #previewText h1 { font-size: 26px; margin-bottom: 24px; color: #0f172a; font-weight: 800; letter-spacing: -0.5px;}
+    #previewText h2 { font-size: 20px; margin-top: 32px; margin-bottom: 16px; color: #0f172a; font-weight: 700;}
+    #previewText h3 { font-size: 18px; margin-top: 28px; margin-bottom: 12px; color: #1e293b; font-weight: 700;}
+    #previewText p { margin-bottom: 16px; }
+    #previewText ul, #previewText ol { margin-bottom: 16px; padding-left: 28px; }
+    #previewText li { margin-bottom: 8px; line-height: 1.6; }
+    #previewText li > p { display: inline; } 
+    #previewText ul { list-style-type: disc; }
+    #previewText strong { color: #0f172a; font-weight: 700; }
+    #previewText em { font-style: normal; color: #0f172a; font-weight: 600; }
+    #previewText img { max-width: 100%; border-radius: 8px; border: 1px solid #e2e8f0; margin: 16px 0; }
+    #previewText blockquote { border-left: 4px solid #cbd5e1; padding-left: 16px; margin: 16px 0; color: #64748b; background: #f8fafc; padding: 12px 16px; border-radius: 4px 8px 8px 4px; }
+    #previewText pre { background: #f8fafc; padding: 16px; border-radius: 8px; overflow-x: auto; border: 1px solid #e2e8f0; margin-bottom: 16px;}
+    #previewText code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; font-family: monospace; color: #ef4444; }
+    #previewText pre code { background: transparent; padding: 0; border: none; color: inherit; }
+    #previewText table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+    #previewText th, #previewText td { border: 1px solid #e2e8f0; padding: 10px 14px; text-align: left; }
+    #previewText th { background: #f8fafc; font-weight: 600; }
+    
+    .dueum-box { background-color: #1a3a6c; color: #ffffff; border-radius: 8px; padding: 16px 20px; margin-top: 8px; margin-bottom: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    #previewText .dueum-box p, .dueum-box p { font-size: 16.5px !important; line-height: 1.7 !important; color: #ffffff !important; word-break: keep-all !important; margin: 0 !important; font-weight: 700 !important; }
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+    <div class="sidebar-header">
+        <h2>📝 블로그 에디터</h2>
+        <div class="search-box">
+            <input type="month" id="searchDate" title="연/월로 필터링" onchange="loadTimeline()">
+        </div>
+    </div>
+    <div class="timeline-list" id="timelineList"></div>
+</div>
+
+<div class="main-content" id="mainContent">
+    <div class="top-bar">
+        <h1></h1>
+        <div class="top-actions">
+            <div style="display: flex; gap: 4px; align-items: center; margin-right: 8px;">
+                <select id="importType" class="top-select">
+                    <option value="keynote">📂 키노트</option>
+                    <option value="dueum">📚 두음마스터</option>
+                    <option value="fiver">📘 5R</option>
+                    <option value="drill">📝 Drill</option>
+                    <option value="chat">💬 Chat</option>
+                    <option value="ismsp">🛡️ ISMS-P</option>
+                    <option value="link">🔗 Link</option>
+                </select>
+                <button class="btn" onclick="document.getElementById('commonImportInput').click()" title="선택한 양식의 JSON 파일을 불러옵니다.">
+                    <span>불러오기</span>
+                </button>
+                <input type="file" id="commonImportInput" accept=".json" style="display: none;" onchange="handleCommonImport(event)">
+            </div>
+            
+            <button class="btn" id="linkMdFolderBtn" onclick="linkMdFolder()">
+                <span>🔗 MD폴더연동</span>
+            </button>
+            <button class="btn" onclick="createNew()" title="단축키: Ctrl + Alt + N"><span>✨ 신규 작성</span></button>
+            <button class="btn" onclick="handleSave(false)" title="단축키: Ctrl + S"><span>💾 저장</span></button>
+            <button class="btn btn-danger" onclick="handleDelete()" title="현재 글 삭제"><span>🗑️ 삭제</span></button>
+            <button class="btn" onclick="openSettings()"><span>⚙️ 환경설정</span></button>
+            <button class="btn" onclick="handlePreviewMD()" title="단축키: Ctrl + H"><span>👁️ 미리보기</span></button>
+            <button class="btn btn-primary" onclick="handleDownloadMD()"><span>📥 다운로드</span></button>
+        </div>
+    </div>
+
+    <div class="editor-container">
+        <div class="card">
+            <h2 class="card-title">⚙️ 1. 블로그 기본정보</h2>
+            <div class="form-group">
+                <label>포스트 제목 (title)</label>
+                <input type="text" id="postTitle" placeholder="예: 6G·AI 네트워크 협력 확대와 차세대 통신 기술 동향">
+            </div>
+            <div class="flex-row">
+                <div class="form-group">
+                    <label>발행일자 (date)</label>
+                    <input type="date" id="issueDate" required>
+                </div>
+                <div class="form-group">
+                    <label>카테고리 (categories)</label>
+                    <select id="postCategory"></select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>태그 (tags)</label>
+                <input type="text" id="postTags" placeholder="예: 6G, AI-RAN, 네트워크AI (쉼표로 구분)">
+            </div>
+        </div>
+
+        <div class="card">
+            <h2 class="card-title">💬 2. 블로그 도입부 (선택)</h2>
+            <div class="form-group">
+                <label>오늘의 한 줄 인용구</label>
+                <input type="text" id="quoteKo" placeholder="예: 연결의 한계를 넘어, 스스로 생각하고 진화하는 AI 자율 네트워크의 시대가 다가오고 있습니다.">
+            </div>
+            <div class="form-group">
+                <label>인사말 / 서론 (마크다운 사용 가능)</label>
+                <textarea id="introText" placeholder="예: 안녕하세요! 오늘은 다가오는 6G 시대와 이를 이끌어갈 AI 네트워크 기술에 대한 소식을 전해드립니다."></textarea>
+            </div>
+        </div>
+
+        <div class="card" style="border: none; box-shadow: none; padding: 0; background: transparent;">
+            <h2 class="card-title" style="border: none; margin-bottom: 16px;">📝 3. 본문 작성 (블록 단위)</h2>
+            <div id="articlesContainer"></div>
+            <button class="btn btn-outline" onclick="addArticle()">+ 새로운 본문 블록 추가하기</button>
+        </div>
+    </div>
+</div>
+
+<div id="toast">저장 및 생성이 완료되었습니다!</div>
+
+<div id="previewModal" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>👁️ 미리보기</h2>
+            <button class="close-btn" onclick="closePreview()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div id="previewText"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn" onclick="closePreview()">닫기</button>
+            <button class="btn btn-primary" onclick="closePreview(); handleDownloadMD();">📥 다운로드</button>
+        </div>
+    </div>
+</div>
+
+<div id="settingsModal" class="modal-overlay">
+    <div class="modal-content" style="width: 500px; height: auto;">
+        <div class="modal-header">
+            <h2>⚙️ 환경설정</h2>
+            <button class="close-btn" onclick="closeSettings()">&times;</button>
+        </div>
+        <div class="modal-body" style="padding: 24px 32px;">
+            <div class="form-group">
+                <label>카테고리 설정 (쉼표로 구분)</label>
+                <textarea id="categorySettingsStr" style="min-height: 120px;"></textarea>
+                <span class="guide-text">블로그 포스트의 카테고리 목록을 쉼표(,)로 구분하여 입력하세요.<br>기본값으로 초기화하려면 내용을 모두 지우고 저장하세요.</span>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn" onclick="closeSettings()">취소</button>
+            <button class="btn btn-primary" onclick="saveSettings()">💾 저장</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const dbName = "MarkdownBlogDB";
+    let db;
+    let articleCount = 0;
+    let currentEditId = null;
+    let mdDirHandle = null; 
+
+    const defaultCategories = ["소프트웨어공학", "데이터베이스", "네트워크", "정보보안", "IT경영", "시스템구조", "AI데이터분석", "신기술융합"];
+
+    document.addEventListener('keydown', function(e) {
+        if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'n') {
+            e.preventDefault(); createNew();
+        } else if (e.ctrlKey && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 's') {
+            e.preventDefault(); handleSave(false); 
+        } else if (e.ctrlKey && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'h') {
+            e.preventDefault();
+            const previewModal = document.getElementById('previewModal');
+            if (previewModal.style.display === 'flex') closePreview();
+            else handlePreviewMD();
+        }
+    });
+
+    function loadCategories() {
+        let cats = localStorage.getItem('blogCategories');
+        if (!cats) {
+            cats = defaultCategories;
+        } else {
+            try { cats = JSON.parse(cats); } catch(e) { cats = defaultCategories; }
+        }
+        const selectEl = document.getElementById('postCategory');
+        const currentVal = selectEl.value;
+        selectEl.innerHTML = '';
+        cats.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c; opt.textContent = c;
+            selectEl.appendChild(opt);
+        });
+        
+        if (currentVal && cats.includes(currentVal)) {
+            selectEl.value = currentVal;
+        } else if (cats.length > 0) {
+            selectEl.selectedIndex = 0;
+        }
+    }
+
+    function openSettings() {
+        let cats = localStorage.getItem('blogCategories');
+        if (!cats) cats = defaultCategories;
+        else try { cats = JSON.parse(cats); } catch(e) { cats = defaultCategories; }
+        document.getElementById('categorySettingsStr').value = cats.join(', ');
+        document.getElementById('settingsModal').style.display = 'flex';
+    }
+
+    function closeSettings() { document.getElementById('settingsModal').style.display = 'none'; }
+
+    function saveSettings() {
+        const val = document.getElementById('categorySettingsStr').value;
+        const cats = val.split(',').map(s => s.trim()).filter(s => s.length > 0);
+        
+        if (cats.length === 0) localStorage.setItem('blogCategories', JSON.stringify(defaultCategories));
+        else localStorage.setItem('blogCategories', JSON.stringify(cats));
+        
+        loadCategories(); closeSettings(); showToast('✅ 환경설정이 저장되었습니다.');
+    }
+
+    function initDB() {
+        const request = indexedDB.open(dbName, 1);
+        request.onupgradeneeded = (e) => {
+            db = e.target.result;
+            if(!db.objectStoreNames.contains("posts")) db.createObjectStore("posts", { keyPath: "id", autoIncrement: true });
+        };
+        request.onsuccess = (e) => {
+            db = e.target.result; loadTimeline();
+        };
+    }
+
+    function generateId(date, title) { return date + "-" + (title || "제목없음"); }
+
+    async function linkMdFolder() {
+        try {
+            mdDirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+            const btn = document.getElementById('linkMdFolderBtn');
+            btn.classList.add('btn-success');
+            btn.innerHTML = '<span>✅ MD 폴더 연동됨</span>';
+            alert('마크다운 파일이 저장될 폴더가 성공적으로 연동되었습니다!\n이제 .md 파일 다운로드 시 이 폴더에 자동 저장됩니다.');
+        } catch (error) {
+            if(error.name !== 'AbortError') alert('폴더 연동에 실패했습니다. 브라우저에서 다시 시도해주세요.');
+        }
+    }
+
+    async function insertImage(inputEl, blockId) {
+        if (!inputEl.files || inputEl.files.length === 0) return;
+        
+        const textarea = document.querySelector(`#${blockId} .a-content`);
+        let insertText = '\n';
+        
+        for(let i=0; i<inputEl.files.length; i++) {
+            const file = inputEl.files[i];
+            const fileName = file.name;
+            
+            try {
+                const base64Data = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => resolve(e.target.result);
+                    reader.onerror = (e) => reject(e);
+                    reader.readAsDataURL(file);
+                });
+                
+                insertText += `![${fileName}](${base64Data})\n`;
+            } catch(e) {
+                console.error("이미지 변환 실패", e);
+                alert(`[${fileName}] 이미지를 내장 가능한 데이터로 변환하는데 실패했습니다.`);
+            }
+        }
+        
+        const startPos = textarea.selectionStart; const endPos = textarea.selectionEnd;
+        textarea.value = textarea.value.substring(0, startPos) + insertText + textarea.value.substring(endPos, textarea.value.length);
+        
+        showToast("✅ 이미지가 마크다운 본문에 완전히 내장되었습니다!");
+        
+        inputEl.value = ''; textarea.focus();
+    }
+
+    function stripHtmlTags(str) {
+        if(!str) return '';
+        // 테이블 관련 태그 및 mark 태그 추가
+        let temp = str.replace(/<([가-힣a-zA-Z0-9_\s]+)>/g, function(match, p1) {
+            const knownTags = ['p', 'b', 'strong', 'i', 'em', 'ul', 'ol', 'li', 'br', 'img', 'div', 'span', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'code', 'pre', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'tfoot', 'mark'];
+            if (knownTags.includes(p1.toLowerCase())) return match;
+            return `&lt;${p1}&gt;`;
+        });
+        temp = temp.replace(/<\/([가-힣a-zA-Z0-9_\s]+)>/g, function(match, p1) {
+            const knownTags = ['p', 'b', 'strong', 'i', 'em', 'ul', 'ol', 'li', 'br', 'img', 'div', 'span', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'code', 'pre', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'tfoot', 'mark'];
+            if (knownTags.includes(p1.toLowerCase())) return match;
+            return `&lt;/${p1}&gt;`;
+        });
+        return temp.replace(/<\/?[a-z][^>]*>/gi, ""); 
+    }
+
+    function convertHtmlToMd(html) {
+        if (!html) return '';
+        let md = html;
+        
+        md = md.replace(/<img[^>]+src=["']([^"']+)["'][^>]*>/gi, '![image]($1)');
+        md = md.replace(/<h[1-6][^>]*>([\s\S]*?)<\/h[1-6]>/gi, '\n**$1**\n\n');
+
+        // code 및 pre 태그 변환
+        md = md.replace(/<pre[^>]*><code[^>]*>([\s\S]*?)<\/code><\/pre>/gi, '\n```\n$1\n```\n');
+        md = md.replace(/<code[^>]*>([\s\S]*?)<\/code>/gi, '`$1`');
+
+        // 테이블(Table) 태그를 읽기 쉬운 파이프(|) 텍스트/리스트 형태로 변환
+        md = md.replace(/<tr[^>]*>/gi, '\n');
+        md = md.replace(/<td[^>]*>|<th[^>]*>/gi, ' | ');
+        md = md.replace(/<\/td>|<\/th>|<\/tr>/gi, '');
+        md = md.replace(/<\/?(table|thead|tbody|tfoot)[^>]*>/gi, '\n');
+
+        // 블록 레벨 태그들이 텍스트 병합을 유발하지 않도록 줄바꿈으로 변환 (수정된 핵심 로직)
+        md = md.replace(/<p[^>]*>/gi, '\n');
+        md = md.replace(/<\/p>/gi, '\n\n');
+        md = md.replace(/<div[^>]*>/gi, '\n');
+        md = md.replace(/<\/div>/gi, '\n');
+        md = md.replace(/<br\s*[\/]?>/gi, '\n');
+
+        md = md.replace(/<strong[^>]*>([\s\S]*?)<\/strong>/gi, '**$1**');
+        md = md.replace(/<b[^>]*>([\s\S]*?)<\/b>/gi, '**$1**');
+        md = md.replace(/<mark[^>]*>([\s\S]*?)<\/mark>/gi, '**$1**');
+        md = md.replace(/<em[^>]*>([\s\S]*?)<\/em>/gi, '*$1*');
+        md = md.replace(/<i[^>]*>([\s\S]*?)<\/i>/gi, '*$1*');
+
+        let temp = md;
+        const olRegex = /<ol[^>]*>([\s\S]*?)<\/ol>/gi;
+        temp = temp.replace(olRegex, function(match, olContent) {
+            let parsedOl = olContent.replace(/<li[^>]*>/gi, '\n1. ');
+            return `\n${parsedOl}\n`;
+        });
+        md = temp;
+
+        md = md.replace(/<ul[^>]*>/gi, ''); md = md.replace(/<\/ul>/gi, '\n');
+        md = md.replace(/<ol[^>]*>/gi, ''); md = md.replace(/<\/ol>/gi, '\n'); 
+        md = md.replace(/<li[^>]*>/gi, '- '); md = md.replace(/<\/li>/gi, '\n');
+        
+        md = stripHtmlTags(md);
+        
+        // 연속된 공백 및 줄바꿈 정리
+        md = md.replace(/\n\s*\n/g, '\n\n');
+        
+        let lines = md.split('\n');
+        let counters = {}; 
+
+        for (let i = 0; i < lines.length; i++) {
+            let line = lines[i];
+            let match = line.match(/^(\s*)\d+\.\s+(.*)/); 
+            
+            if (match) {
+                let indent = match[1].length;
+                let content = match[2];
+                
+                if (!counters[indent]) {
+                    counters[indent] = 1;
+                } else {
+                    counters[indent]++;
+                }
+                
+                for (let key in counters) {
+                    if (parseInt(key) > indent) delete counters[key];
+                }
+                
+                lines[i] = `${match[1]}${counters[indent]}. ${content}`;
+            }
+        }
+        md = lines.join('\n');
+
+        return md.trim();
+    }
+
+    function convertAsterisks(text) {
+        if(!text) return '';
+        let temp = text.replace(/\*\*/g, '@@DOUBLE_STAR@@');
+        temp = temp.replace(/\*([^*]+)\*/g, '**$1**');
+        return temp.replace(/@@DOUBLE_STAR@@/g, '**');
+    }
+
+    function setCategoryAndTag(catName, tagName) {
+        const selectEl = document.getElementById('postCategory');
+        let optionExists = Array.from(selectEl.options).some(opt => opt.value === catName);
+        
+        if (!optionExists) {
+            const opt = document.createElement('option');
+            opt.value = catName; opt.textContent = catName;
+            selectEl.appendChild(opt);
+            
+            let cats = localStorage.getItem('blogCategories');
+            try { cats = cats ? JSON.parse(cats) : [...defaultCategories]; } catch(e) { cats = [...defaultCategories]; }
+            if (!cats.includes(catName)) {
+                cats.push(catName); localStorage.setItem('blogCategories', JSON.stringify(cats));
+            }
+        }
+        selectEl.value = catName;
+
+        const tagEl = document.getElementById('postTags');
+        let currentTags = tagEl.value.split(',').map(s => s.trim()).filter(s => s.length > 0);
+        if (!currentTags.includes(tagName)) {
+            currentTags.push(tagName); tagEl.value = currentTags.join(', ');
+        }
+    }
+
+    async function processEmbeddedImages(html, indexPrefix) {
+        if (!html) return html;
+        const regex = /<img[^>]+src=["'](data:image\/[^;]+;base64,[^"']+)["'][^>]*>/gi;
+        const matches = [...html.matchAll(regex)];
+        let processedHtml = html;
+        let imgCount = 1;
+        
+        for (const m of matches) {
+            const fullImgTag = m[0];
+            const base64Data = m[1];
+            const fileName = `embedded_${indexPrefix}_img_${imgCount++}.png`;
+            processedHtml = processedHtml.replace(fullImgTag, `\n![${fileName}](${base64Data})\n`);
+        }
+        return processedHtml;
+    }
+    
+    function handleCommonImport(event) {
+        const type = document.getElementById('importType').value;
+        if (type === 'keynote') handleKeynoteImport(event);
+        else if (type === 'dueum') handleDueumImport(event);
+        else if (type === 'fiver') handle5RImport(event);
+        else if (type === 'drill') handleDrillImport(event);
+        else if (type === 'chat') handleChatImport(event);
+        else if (type === 'ismsp') handleIsmspImport(event);
+        else if (type === 'link') handleLinkImport(event);
+    }
+
+    function handleChatImport(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const fileNameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const json = JSON.parse(e.target.result);
+                const today = new Date().toISOString().split('T')[0];
+                
+                let importDate = today;
+                if (json.ts) {
+                    importDate = new Date(json.ts).toISOString().split('T')[0];
+                }
+
+                document.getElementById('issueDate').value = importDate;
+                document.getElementById('postTitle').value = json.summary || fileNameWithoutExt;
+                
+                setCategoryAndTag('Chat', 'Chat');
+                
+                document.getElementById('articlesContainer').innerHTML = ''; 
+                articleCount = 0;
+
+                let content = '';
+                if (json.description) {
+                    let rawDesc = await processEmbeddedImages(json.description, 'CHAT_DESC');
+                    content = convertHtmlToMd(rawDesc).trim();
+                }
+
+                addArticle({ title: '상세 내용', content: content, visualType: 'none' });
+                
+                showToast("✅ Chat JSON 데이터를 성공적으로 불러왔습니다.");
+            } catch (error) {
+                alert("JSON 파일 파싱 중 오류가 발생했습니다. 포맷을 확인해주세요.");
+            }
+            event.target.value = '';
+        };
+        reader.readAsText(file);
+    }
+
+    function handleLinkImport(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const fileNameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const json = JSON.parse(e.target.result);
+                
+                const today = new Date().toISOString().split('T')[0];
+                let importDate = today;
+                if (json.updatedAt) {
+                    importDate = new Date(json.updatedAt).toISOString().split('T')[0];
+                }
+
+                document.getElementById('issueDate').value = importDate;
+                document.getElementById('postTitle').value = json.title || fileNameWithoutExt;
+                
+                setCategoryAndTag('Link', 'Link');
+                document.getElementById('articlesContainer').innerHTML = ''; articleCount = 0;
+
+                // ★ 수정: 정렬된 exportedNodes가 존재하면 우선 적용, 없으면 트리 구조의 노드들을 평탄화
+                let nodes = [];
+                if (json.data && json.data.exportedNodes) {
+                    nodes = json.data.exportedNodes;
+                } else if (json.data && json.data.nodes) {
+                    function flattenNodes(nodeList) {
+                        let result = [];
+                        nodeList.forEach(n => {
+                            result.push(n);
+                            if (n.children && n.children.length > 0) {
+                                result = result.concat(flattenNodes(n.children));
+                            }
+                        });
+                        return result;
+                    }
+                    nodes = flattenNodes(json.data.nodes);
+                }
+
+                if (nodes.length > 0) {
+                    for (let index = 0; index < nodes.length; index++) {
+                        const node = nodes[index];
+                        const title = node.text ? stripHtmlTags(node.text) : `노드 ${index + 1}`;
+                        let content = '';
+                        
+                        let rawDescription = await processEmbeddedImages(node.description || '', `LINK_${index+1}_DESC`);
+                        let description = convertHtmlToMd(rawDescription).trim();
+                        
+                        if (description) content += `${description}\n\n`;
+                        
+                        let easyText = node.memo ? stripHtmlTags(node.memo) : '';
+                        
+                        addArticle({ 
+                            title: title, 
+                            content: content.trim(), 
+                            easy: easyText.trim(),
+                            visualType: 'none' 
+                        });
+                    }
+                } else {
+                    addArticle();
+                }
+                showToast("✅ Link 노드맵 데이터를 성공적으로 불러왔습니다.");
+            } catch (error) {
+                alert("JSON 파일 파싱 중 오류가 발생했습니다. 포맷을 확인해주세요.");
+            }
+            event.target.value = '';
+        };
+        reader.readAsText(file);
+    }
+
+    function handleKeynoteImport(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const fileNameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const json = JSON.parse(e.target.result);
+                const today = new Date().toISOString().split('T')[0];
+                
+                document.getElementById('issueDate').value = json.date ? new Date(json.date).toISOString().split('T')[0] : today;
+                document.getElementById('postTitle').value = json.title || (fileNameWithoutExt + " - " + today);
+                
+                setCategoryAndTag('키노트', '키노트');
+                document.getElementById('articlesContainer').innerHTML = ''; articleCount = 0;
+
+                if (json.items && json.items.length > 0) {
+                    for (let index = 0; index < json.items.length; index++) {
+                        const item = json.items[index];
+                        const title = item.problem ? stripHtmlTags(item.problem) : `문제 ${index + 1}`;
+                        let content = '';
+                        
+                        let rawLead = await processEmbeddedImages(item.lead || '', `KN_${index+1}_L`);
+                        let rawConcept = await processEmbeddedImages(item.concept || '', `KN_${index+1}_C`);
+                        let rawSolution = await processEmbeddedImages(item.solution || '', `KN_${index+1}_S`);
+                        
+                        let lead = convertHtmlToMd(rawLead).trim();
+                        let concept = convertHtmlToMd(rawConcept).trim();
+                        let solution = convertHtmlToMd(rawSolution).trim();
+                        
+                        if (lead) content += `**[리드]**\n\n${lead}\n\n`;
+                        if (concept) content += `**[개념]**\n\n${concept}\n\n`;
+                        if (solution) content += `**[상세설명 및 해결방안]**\n\n${solution}\n\n`;
+                        
+                        const imgData = item._img1Data || item.image || item.imgData || item.img || item.imageUrl;
+                        if (imgData) {
+                            if (imgData.startsWith('data:image')) {
+                                content += `![KN_image_${index + 1}](${imgData})\n\n`;
+                            } else {
+                                content += `![참고 이미지](${imgData})\n\n`;
+                            }
+                        }
+                        
+                        addArticle({ title: title, content: content.trim(), visualType: 'none' });
+                    }
+                } else {
+                    addArticle();
+                }
+                showToast("✅ 키노트 JSON 데이터를 성공적으로 불러왔습니다.");
+            } catch (error) {
+                alert("JSON 파일 파싱 중 오류가 발생했습니다. 포맷을 확인해주세요.");
+            }
+            event.target.value = '';
+        };
+        reader.readAsText(file);
+    }
+
+    function handleIsmspImport(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const fileNameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const json = JSON.parse(e.target.result);
+                const today = new Date().toISOString().split('T')[0];
+
+                let items = [];
+                let importTitle = fileNameWithoutExt;
+                let importDate = today;
+
+                if (Array.isArray(json)) {
+                    items = json;
+                } else {
+                    items = json.items || [];
+                    importTitle = json.title || fileNameWithoutExt;
+                    importDate = json.date ? new Date(json.date).toISOString().split('T')[0] : today;
+                }
+
+                document.getElementById('issueDate').value = importDate;
+                document.getElementById('postTitle').value = importTitle;
+                
+                setCategoryAndTag('ISMS-P', 'ISMS-P');
+                document.getElementById('articlesContainer').innerHTML = ''; articleCount = 0;
+
+                if (items.length > 0) {
+                    for (let index = 0; index < items.length; index++) {
+                        const item = items[index];
+                        let title = `항목 ${index + 1}`;
+                        
+                        if (item.problem) {
+                            const titleMatch = item.problem.match(/<strong[^>]*>([\s\S]*?)<\/strong>/i);
+                            if (titleMatch) {
+                                title = stripHtmlTags(titleMatch[1]).trim();
+                            } else {
+                                const pMatch = item.problem.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
+                                title = pMatch ? stripHtmlTags(pMatch[1]).trim() : stripHtmlTags(item.problem).substring(0, 30);
+                            }
+                        }
+
+                        let content = '';
+                        
+                        let rawLead = await processEmbeddedImages(item.lead || '', `ISMSP_${index+1}_L`);
+                        let rawProblem = await processEmbeddedImages(item.problem || '', `ISMSP_${index+1}_P`);
+                        let rawConcept = await processEmbeddedImages(item.concept || '', `ISMSP_${index+1}_C`);
+                        let rawDefect = await processEmbeddedImages(item.defect || '', `ISMSP_${index+1}_D`);
+                        
+                        let lead = convertHtmlToMd(rawLead).trim();
+                        let problem = convertHtmlToMd(rawProblem).trim();
+                        let concept = convertHtmlToMd(rawConcept).trim();
+                        let defect = convertHtmlToMd(rawDefect).trim();
+                        
+                        if (lead) content += `**[분류]**\n\n${lead}\n\n`;
+                        if (problem) content += `**[인증기준]**\n\n${problem}\n\n`;
+                        if (concept) content += `**[주요 확인사항]**\n\n${concept}\n\n`;
+                        if (defect) content += `**[결함사례]**\n\n${defect}\n\n`;
+                        
+                        const imgData = item._img1Data || item.image || item.imgData || item.img || item.imageUrl;
+                        if (imgData) {
+                            if (imgData.startsWith('data:image')) {
+                                content += `![ISMSP_image_${index + 1}](${imgData})\n\n`;
+                            } else {
+                                content += `![참고 이미지](${imgData})\n\n`;
+                            }
+                        }
+                        
+                        addArticle({ title: title, content: content.trim(), visualType: 'none' });
+                    }
+                } else {
+                    addArticle();
+                }
+                showToast("✅ ISMS-P JSON 데이터를 성공적으로 불러왔습니다.");
+            } catch (error) {
+                alert("JSON 파일 파싱 중 오류가 발생했습니다. 포맷을 확인해주세요.");
+            }
+            event.target.value = '';
+        };
+        reader.readAsText(file);
+    }
+
+    function handleDueumImport(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const fileNameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const jsonArr = JSON.parse(e.target.result);
+                if (!Array.isArray(jsonArr)) throw new Error("배열 형태의 데이터가 아닙니다.");
+
+                const today = new Date().toISOString().split('T')[0];
+                document.getElementById('issueDate').value = today;
+                document.getElementById('postTitle').value = fileNameWithoutExt;
+                setCategoryAndTag('두음마스터', '두음마스터');
+                document.getElementById('articlesContainer').innerHTML = ''; articleCount = 0;
+                
+                if (jsonArr.length > 0) {
+                    for (let index = 0; index < jsonArr.length; index++) {
+                        const item = jsonArr[index];
+                        const title = item.title ? `[${item.source || '기타'}] ${item.title}` : `두음 키워드 ${index + 1}`;
+                        let content = '';
+                        
+                        let rawKw = await processEmbeddedImages(item.keyword || '', `DM_${index+1}_K`);
+                        let rawDs = await processEmbeddedImages(item.desc || '', `DM_${index+1}_D`);
+                        
+                        let kw = stripHtmlTags(rawKw).trim();
+                        let ds = stripHtmlTags(rawDs).trim();
+                        
+                        if (kw) content += `**[두음/키워드]**\n\n${convertAsterisks(kw)}\n\n`;
+                        if (ds) content += `**[상세설명]**\n\n${convertAsterisks(ds)}\n\n`;
+                        
+                        const imgData = item._img1Data || item.image || item.imgData || item.img || item.imageUrl;
+                        if (imgData) {
+                            if (imgData.startsWith('data:image')) {
+                                content += `![Dueum_image_${index + 1}](${imgData})\n\n`;
+                            } else { 
+                                content += `![참고 이미지](${imgData})\n\n`; 
+                            }
+                        }
+                        addArticle({ title: title, content: content.trim(), visualType: 'none' });
+                    }
+                } else { addArticle(); }
+                showToast("✅ 두음마스터 JSON 데이터를 성공적으로 불러왔습니다.");
+            } catch (error) { alert("JSON 파일 파싱 중 오류가 발생했습니다."); }
+            event.target.value = '';
+        };
+        reader.readAsText(file);
+    }
+
+    function handle5RImport(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const fileNameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const jsonArr = JSON.parse(e.target.result);
+                if (!Array.isArray(jsonArr)) throw new Error("배열 형태의 데이터가 아닙니다.");
+
+                // 데이터 연번 순으로 정렬 (domainSeq 최우선, 없을시 기존 키 사용)
+                jsonArr.sort((a, b) => {
+                    const numA = Number(a.domainSeq || a.no || a.id || a.seq || 0);
+                    const numB = Number(b.domainSeq || b.no || b.id || b.seq || 0);
+                    return numA - numB;
+                });
+
+                const today = new Date().toISOString().split('T')[0];
+                document.getElementById('issueDate').value = today;
+                document.getElementById('postTitle').value = fileNameWithoutExt;
+                setCategoryAndTag('5R', '5R');
+                document.getElementById('articlesContainer').innerHTML = ''; articleCount = 0;
+                
+                if (jsonArr.length > 0) {
+                    for (let index = 0; index < jsonArr.length; index++) {
+                        const item = jsonArr[index];
+                        // 제목에 연번(domainSeq) 명시 추가, 도메인/분야(파일명) 제거
+                        const seqNum = item.domainSeq || item.no || item.seq || (index + 1);
+                        const title = item.topic ? `[${seqNum}] ${item.topic}` : `[${seqNum}] 제목없음`;
+                        let content = '';
+                        
+                        let rawDef = await processEmbeddedImages(item.definition || '', `5R_${index+1}_Def`);
+                        let rawMne = await processEmbeddedImages(item.mnemonic || '', `5R_${index+1}_Mne`);
+                        // 새롭게 추가된 참조 내용(notes) 처리
+                        let rawNote = await processEmbeddedImages(item.note || item.notes || item.reference || item.desc || item.description || '', `5R_${index+1}_Note`);
+                        
+                        let def = convertHtmlToMd(rawDef).trim();
+                        let mne = convertHtmlToMd(rawMne).trim();
+                        let note = convertHtmlToMd(rawNote).trim();
+                        
+                        if (def) content += `**[정의/개념]**\n\n${def}\n\n`;
+                        if (mne) content += `**[두음/키워드]**\n\n${mne}\n\n`;
+                        if (note) content += `**[참조/Notes]**\n\n${note}\n\n`;
+                        
+                        // --- 5R 다중 이미지 추출 로직 시작 ---
+                        let imgList = [];
+                        
+                        // 배열 형태 검사
+                        if (Array.isArray(item.images)) imgList.push(...item.images);
+                        if (Array.isArray(item.imageUrls)) imgList.push(...item.imageUrls);
+                        
+                        // 키값 패턴 검사 (예: _img1Data, image1, img1 등 최대 10개)
+                        for (let k = 1; k <= 10; k++) {
+                            if (item[`_img${k}Data`]) imgList.push(item[`_img${k}Data`]);
+                            if (item[`image${k}`]) imgList.push(item[`image${k}`]);
+                            if (item[`img${k}`]) imgList.push(item[`img${k}`]);
+                        }
+                        
+                        // 단일 키값 검사
+                        ['image', 'imgData', 'img', 'imageUrl'].forEach(key => {
+                            if (item[key] && typeof item[key] === 'string') imgList.push(item[key]);
+                        });
+
+                        // 중복 제거
+                        imgList = [...new Set(imgList)];
+
+                        // 본문에 삽입
+                        imgList.forEach((imgData, imgIdx) => {
+                            if (imgData) {
+                                if (imgData.startsWith('data:image')) {
+                                    content += `![5R_image_${index + 1}_${imgIdx + 1}](${imgData})\n\n`;
+                                } else { 
+                                    content += `![참고 이미지 ${imgIdx + 1}](${imgData})\n\n`; 
+                                }
+                            }
+                        });
+                        // --- 5R 다중 이미지 추출 로직 끝 ---
+
+                        addArticle({ title: title, content: content.trim(), visualType: 'none' });
+                    }
+                } else { addArticle(); }
+                showToast("✅ 5R JSON 데이터를 성공적으로 불러왔습니다.");
+            } catch (error) { alert("JSON 파일 파싱 중 오류가 발생했습니다."); }
+            event.target.value = '';
+        };
+        reader.readAsText(file);
+    }
+
+    function handleDrillImport(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const fileNameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const jsonArr = JSON.parse(e.target.result);
+                if (!Array.isArray(jsonArr)) throw new Error("배열 형태의 데이터가 아닙니다.");
+
+                const today = new Date().toISOString().split('T')[0];
+                document.getElementById('issueDate').value = today;
+                document.getElementById('postTitle').value = fileNameWithoutExt;
+                setCategoryAndTag('Drill', 'Drill');
+                document.getElementById('articlesContainer').innerHTML = ''; articleCount = 0;
+                
+                if (jsonArr.length > 0) {
+                    for (let index = 0; index < jsonArr.length; index++) {
+                        const item = jsonArr[index];
+                        const title = item.topic ? `[${item.domain || '분야'}] ${item.topic}` : `Drill 주제 ${index + 1}`;
+                        let content = '';
+                        
+                        let rawDef = await processEmbeddedImages(item.def || '', `DR_${index+1}_Def`);
+                        let rawKeys = await processEmbeddedImages(item.keys || '', `DR_${index+1}_Keys`);
+                        
+                        let def = convertHtmlToMd(rawDef).trim();
+                        let keys = convertHtmlToMd(rawKeys).trim();
+                        
+                        if (def) content += `**[정의]**\n\n${def}\n\n`;
+                        if (keys) content += `**[핵심/키워드]**\n\n${keys}\n\n`;
+                        
+                        const imgData = item._img1Data || item.image || item.imgData || item.img || item.imageUrl;
+                        if (imgData) {
+                            if (imgData.startsWith('data:image')) {
+                                content += `![Drill_image_${index + 1}](${imgData})\n\n`;
+                            } else { 
+                                content += `![참고 이미지](${imgData})\n\n`; 
+                            }
+                        }
+                        addArticle({ title: title, content: content.trim(), visualType: 'none' });
+                    }
+                } else { addArticle(); }
+                showToast("✅ Drill JSON 데이터를 성공적으로 불러왔습니다.");
+            } catch (error) { alert("JSON 파일 파싱 중 오류가 발생했습니다."); }
+            event.target.value = '';
+        };
+        reader.readAsText(file);
+    }
+
+    function loadTimeline() {
+        if(!db) return;
+        const tx = db.transaction("posts", "readonly");
+        const store = tx.objectStore("posts");
+        const request = store.getAll();
+        request.onsuccess = () => {
+            let dataList = request.result || [];
+            const searchVal = document.getElementById('searchDate').value;
+            if (searchVal) dataList = dataList.filter(item => item.date.startsWith(searchVal));
+            dataList.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            const container = document.getElementById('timelineList');
+            container.innerHTML = '';
+            if (dataList.length === 0) {
+                container.innerHTML = '<div class="empty-list">저장된 내역이 없습니다.</div>'; return;
+            }
+            const currentId = document.getElementById('issueDate').value + "-" + document.getElementById('postTitle').value;
+
+            dataList.forEach(item => {
+                const itemId = generateId(item.date, item.postTitle);
+                const div = document.createElement('div');
+                div.className = `timeline-item ${itemId === currentId ? 'active' : ''}`;
+                div.onclick = () => loadDataToForm(item.id);
+                div.innerHTML = `
+                    <div class="tl-item-header">
+                        <div class="tl-date" title="${item.postTitle || "제목 없음"}">${item.postTitle || "제목 없음"}</div>
+                        <button class="tl-delete-btn" onclick="handleDeleteById(event, ${item.id})" title="글 삭제">🗑️</button>
+                    </div>
+                    <div class="tl-meta"><span>${item.date}</span><span>${item.category}</span></div>
+                `;
+                container.appendChild(div);
+            });
+        };
+    }
+
+    function handleDeleteById(event, id) {
+        event.stopPropagation();
+        if (confirm("정말 이 블로그 포스트를 삭제하시겠습니까?\n(삭제 후 복구할 수 없습니다)")) executeDelete(id);
+    }
+
+    function handleDelete() {
+        if (!currentEditId) return alert("아직 저장되지 않은 글입니다.");
+        if (confirm("정말 현재 작성 중인 블로그 포스트를 삭제하시겠습니까?\n(삭제 후 복구할 수 복구할 수 없습니다)")) executeDelete(currentEditId);
+    }
+
+    function executeDelete(id) {
+        const tx = db.transaction("posts", "readwrite");
+        const store = tx.objectStore("posts");
+        const req = store.delete(id);
+        req.onsuccess = () => {
+            showToast("🗑️ 삭제되었습니다.");
+            if (currentEditId === id) createNew(); else loadTimeline();
+        };
+    }
+
+    function gatherFormData() {
+        const date = document.getElementById('issueDate').value;
+        const postTitle = document.getElementById('postTitle').value;
+        if (!date || !postTitle) return null;
+        const articles = [];
+        document.querySelectorAll('.article-block').forEach(block => {
+            const title = block.querySelector('.a-title').value.trim();
+            if(!title && !block.querySelector('.a-content').value) return;
+            const visualType = block.querySelector('.a-visual-type').value;
+            const presType = block.querySelector('.a-pres-type') ? block.querySelector('.a-pres-type').value : 'split3';
+            let presData = {};
+            if(visualType === 'pres1') {
+                const fields = block.querySelector('.pres-layout-fields');
+                fields.querySelectorAll('input, textarea, select').forEach(el => {
+                    const keyMatch = el.className.match(/p-([a-zA-Z0-9_]+)/);
+                    if(keyMatch) presData[keyMatch[1]] = el.value;
+                });
+            }
+            const getVal = (cls) => { const el = block.querySelector(cls); return el ? el.value : ''; };
+            articles.push({
+                title: title, content: block.querySelector('.a-content').value, easy: block.querySelector('.a-easy').value,
+                visualType: visualType, vIcon: getVal('.a-v-icon'), vTitle: getVal('.a-v-title'), vFooter: getVal('.a-v-footer'),
+                presType: presType, presData: presData, igTitle: getVal('.a-ig-title'),
+                igK1: getVal('.a-ig-k1'), igV1: getVal('.a-ig-v1'), igD1: getVal('.a-ig-d1'), igK2: getVal('.a-ig-k2'), igV2: getVal('.a-ig-v2'), igD2: getVal('.a-ig-d2'),
+                igK3: getVal('.a-ig-k3'), igV3: getVal('.a-ig-v3'), igD3: getVal('.a-ig-d3'), igK4: getVal('.a-ig-k4'), igV4: getVal('.a-ig-v4'), igD4: getVal('.a-ig-d4'),
+                igK5: getVal('.a-ig-k5'), igV5: getVal('.a-ig-v5'), igD5: getVal('.a-ig-d5'), igK6: getVal('.a-ig-k6'), igV6: getVal('.a-ig-v6'), igD6: getVal('.a-ig-d6')
+            });
+        });
+        return {
+            id: currentEditId, date: date, postTitle: postTitle, category: document.getElementById('postCategory').value,
+            tags: document.getElementById('postTags').value, quoteKo: document.getElementById('quoteKo').value, introText: document.getElementById('introText').value, articles: articles, updatedAt: Date.now()
+        };
+    }
+
+    function createNew() {
+        currentEditId = null; document.getElementById('postTitle').value = ''; document.getElementById('issueDate').value = new Date().toISOString().split('T')[0];
+        document.getElementById('postCategory').selectedIndex = 0; document.getElementById('postTags').value = ''; document.getElementById('quoteKo').value = ''; document.getElementById('introText').value = '';
+        document.getElementById('articlesContainer').innerHTML = ''; articleCount = 0; 
+        addArticle(); loadTimeline(); showToast("✨ 새로운 마크다운 문서를 시작합니다.");
+    }
+
+    function loadDataToForm(id) {
+        if(!db) return; const tx = db.transaction("posts", "readonly"); const store = tx.objectStore("posts"); const request = store.get(id);
+        request.onsuccess = () => {
+            const data = request.result; if(!data) return;
+            currentEditId = data.id; document.getElementById('postTitle').value = data.postTitle; document.getElementById('issueDate').value = data.date;
+            
+            const catSelect = document.getElementById('postCategory');
+            if (Array.from(catSelect.options).some(opt => opt.value === data.category)) catSelect.value = data.category;
+            else catSelect.selectedIndex = 0;
+            
+            document.getElementById('postTags').value = data.tags || '';
+            document.getElementById('quoteKo').value = data.quoteKo || ''; document.getElementById('introText').value = data.introText || '';
+            document.getElementById('articlesContainer').innerHTML = ''; articleCount = 0; 
+            
+            if (data.articles && data.articles.length > 0) data.articles.forEach(art => addArticle(art)); else addArticle();
+            loadTimeline(); document.getElementById('mainContent').scrollTo({top: 0, behavior: 'smooth'});
+        };
+    }
+
+    function toggleVisualOptions(id, type) {
+        const block = document.getElementById(id); block.querySelectorAll('.visual-options').forEach(opt => opt.style.display = 'none');
+        const commonHeader = block.querySelector('.visual-common-header'); const commonFooter = block.querySelector('.visual-common-footer');
+        if(type !== 'none') {
+            commonHeader.style.display = 'block'; commonFooter.style.display = 'block'; const target = block.querySelector(`.v-${type}`);
+            if(target) target.style.display = 'block'; if(type === 'pres1') togglePresLayout(id, block.querySelector('.a-pres-type').value);
+        } else { commonHeader.style.display = 'none'; commonFooter.style.display = 'none'; }
+    }
+
+    function togglePresLayout(id, layout) {
+        const block = document.getElementById(id); const container = block.querySelector('.pres-layout-fields'); let html = '';
+        if(layout === 'split3') { html = `<div class="flex-row"><input type="text" class="p-l1" placeholder="라벨1"> <input type="text" class="p-v1" placeholder="내용1"></div><div class="flex-row"><input type="text" class="p-l2" placeholder="라벨2"> <input type="text" class="p-v2" placeholder="내용2"></div><div class="flex-row"><input type="text" class="p-l3" placeholder="라벨3"> <input type="text" class="p-v3" placeholder="내용3"></div>`; } 
+        else if(layout === 'split2') { html = `<div class="flex-row"><select class="p-connector"><option value="→">연결 (→)</option><option value="+">조합 (+)</option><option value="VS">대조 (VS)</option></select><select class="p-color"><option value="normal">기본색상(회색/빨강)</option><option value="green">초록색상</option><option value="blue">파란색상</option></select></div><div class="flex-row"><textarea class="p-v1" placeholder="왼쪽 카드"></textarea><textarea class="p-v2" placeholder="오른쪽 카드"></textarea></div>`; } 
+        else if(layout === 'table_p') { html = `<input type="text" class="p-header" placeholder="표 헤더 (예: 구분|A|B)" style="margin-bottom:16px;"><textarea class="p-rows" placeholder="내용을 | 와 엔터로 구분 (예: 1|가|나)"></textarea>`; }
+        container.innerHTML = html;
+    }
+
+    function addArticle(data = null) {
+        articleCount++; const id = `article_${articleCount}`; let tableRowsHtml = '';
+        for(let i=1; i<=6; i++) tableRowsHtml += `<div class="flex-row"><div><input type="text" class="a-ig-k${i}" placeholder="${i}행 1열"></div><div><input type="text" class="a-ig-v${i}" placeholder="${i}행 2열"></div><div><input type="text" class="a-ig-d${i}" placeholder="${i}행 3열"></div></div>`;
+        const html = `
+            <div class="article-block card" id="${id}">
+                <button class="remove-btn" onclick="document.getElementById('${id}').remove()">삭제</button>
+                <div class="section-tag">본문 블록 ${articleCount}</div>
+                <div class="form-group"><label>소제목 (### 헤더로 변환됨)</label><input type="text" class="a-title" placeholder="예: 6G 핵심 기술 요소"></div>
+                <div class="form-group">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 8px;">
+                        <label style="margin-bottom: 0;">본문 내용 (마크다운 지원) <span style="font-weight:400; color:#ef4444; font-size:12px; margin-left:8px;">💡 AI 답변은 '복사(Copy)' 버튼으로 가져와야 굵게 등 양식이 유지됩니다.</span></label>
+                        <label for="img-upload-${id}" class="btn" style="padding: 6px 12px; font-size: 12.5px; margin: 0; cursor: pointer; background: #f8fafc; border-color: #cbd5e1; box-shadow: none;">
+                            🖼️ 파일에서 이미지 가져와 내장하기
+                        </label>
+                        <input type="file" id="img-upload-${id}" accept="image/*" style="display: none;" onchange="insertImage(this, '${id}')" multiple>
+                    </div>
+                    <textarea class="a-content" placeholder="- 마크다운 리스트\n**굵게** 등 지원"></textarea>
+                    <span class="guide-text">첨부한 이미지는 마크다운 파일 내부에 직접 내장됩니다. (외부 폴더 불필요)</span>
+                </div>
+                <div class="divider"></div>
+                <div class="form-group"><label>💡 쉬운 설명 박스(선택사항)</label><textarea class="a-easy" placeholder="UI 박스로 예쁘게 감싸집니다"></textarea></div>
+                <div class="visual-selector">
+                    <label style="margin-bottom:8px; display:block; font-weight:700;">📊 하단 시각자료 추가 (선택)</label>
+                    <select class="a-visual-type" onchange="toggleVisualOptions('${id}', this.value)">
+                        <option value="none">사용 안 함</option><option value="table">인포그래픽 요약표 (3열)</option><option value="pres1">UI 컴포넌트형 (2/3분할, 색상표)</option>
+                    </select>
+                    <div class="visual-common-header visual-common-fields" style="display:none; margin-top: 20px;">
+                        <div class="flex-row"><div style="flex: 0 0 160px;"><label>아이콘</label><input type="text" class="a-v-icon" placeholder="예: 📊"></div><div style="flex: 1;"><label>시각 자료 타이틀</label><input type="text" class="a-v-title" placeholder="예: 5G vs 6G 핵심 지표 비교"></div></div>
+                    </div>
+                    <div class="visual-options v-table" style="display:none;">
+                        <div class="form-group"><input type="text" class="a-ig-title" placeholder="표 상단 제목(선택)" style="margin-bottom: 16px;"></div>${tableRowsHtml}
+                    </div>
+                    <div class="visual-options v-pres1" style="display:none;">
+                        <div class="form-group"><select class="a-pres-type" onchange="togglePresLayout('${id}', this.value)"><option value="split3">3분할 강조 카드</option><option value="split2">2분할 대조/연결 카드</option><option value="table_p">스타일 적용된 표</option></select></div>
+                        <div class="pres-layout-fields" style="margin-top:20px;"></div>
+                    </div>
+                    <div class="visual-common-footer visual-common-fields" style="display:none; margin-bottom:0;">
+                        <label>👉 하단 마무리 요약 문구 (선택)</label><input type="text" class="a-v-footer" placeholder="예: 예상 출제 문제: ~~~ 설명하시오.">
+                    </div>
+                </div>
+            </div>
+        `;
+        document.getElementById('articlesContainer').insertAdjacentHTML('beforeend', html);
+
+        if (data) {
+            const block = document.getElementById(id); block.querySelector('.a-title').value = data.title || ''; block.querySelector('.a-content').value = data.content || ''; block.querySelector('.a-easy').value = data.easy || '';
+            const vType = data.visualType || 'none'; block.querySelector('.a-visual-type').value = vType; toggleVisualOptions(id, vType);
+            if (data.vIcon) block.querySelector('.a-v-icon').value = data.vIcon; if (data.vTitle) block.querySelector('.a-v-title').value = data.vTitle; if (data.vFooter) block.querySelector('.a-v-footer').value = data.vFooter;
+            if(vType === 'table') { block.querySelector('.a-ig-title').value = data.igTitle || ''; for(let i=1; i<=6; i++) { if(block.querySelector(`.a-ig-k${i}`)) block.querySelector(`.a-ig-k${i}`).value = data[`igK${i}`] || ''; if(block.querySelector(`.a-ig-v${i}`)) block.querySelector(`.a-ig-v${i}`).value = data[`igV${i}`] || ''; if(block.querySelector(`.a-ig-d${i}`)) block.querySelector(`.a-ig-d${i}`).value = data[`igD${i}`] || ''; } } 
+            else if(vType === 'pres1') { block.querySelector('.a-pres-type').value = data.presType || 'split3'; togglePresLayout(id, data.presType || 'split3'); const fields = block.querySelector('.pres-layout-fields'); if(data.presData) { for(let key in data.presData) { const el = fields.querySelector(`.p-${key}`); if(el) el.value = data.presData[key]; } } }
+        }
+    }
+
+    function showToast(msg) { const toast = document.getElementById("toast"); toast.textContent = msg; toast.className = "show"; setTimeout(() => toast.className = toast.className.replace("show", ""), 1000); }
+    
+    function handleSave() { 
+        const data = gatherFormData(); 
+        if (!data) return false; 
+        const tx = db.transaction("posts", "readwrite"); 
+        const store = tx.objectStore("posts"); 
+        if (data.id === null) delete data.id; 
+        const req = store.put(data); 
+        req.onsuccess = (e) => { 
+            currentEditId = e.target.result; loadTimeline(); showToast("💾 저장이 완료되었습니다."); 
+        }; 
+        return true; 
+    }
+
+    function generateMarkdownString(data, isPreview = false) {
+        const convertArrows = (str) => {
+            if (!str) return ''; return str.replace(/->/g, '→').replace(/<-/g, '←');
+        };
+
+        const escapeHtml = (str) => {
+            if (!str) return ''; let formatted = convertArrows(str); return formatted.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        };
+        
+        const protectMath = (str) => {
+            if (!str) return '';
+            let formatted = convertArrows(str);
+            return formatted.replace(/\$\$(.*?)\$\$/gs, (match) => 
+                        match.replace(/</g, "&lt;")
+                             .replace(/>/g, "&gt;")
+                             .replace(/\|/g, "&#124;")
+                             .replace(/_/g, "&#95;")
+                             .replace(/\*/g, "&#42;")
+                    )
+                    .replace(/\$(.*?)\$/g, (match) => 
+                        match.replace(/</g, "&lt;")
+                             .replace(/>/g, "&gt;")
+                             .replace(/\|/g, "&#124;")
+                             .replace(/_/g, "&#95;")
+                             .replace(/\*/g, "&#42;")
+                    );
+        };
+
+        let md = "";
+        
+        if (!isPreview) {
+            const tagsArr = data.tags ? data.tags.split(',').map(t => t.trim()).filter(t => t) : []; 
+            const tagsStr = tagsArr.length > 0 ? `[${tagsArr.join(', ')}]` : '[]';
+            const mathJaxScript = `\n<script>\n    window.MathJax = {\n        tex: {\n            inlineMath: [['$', '$'], ['\\\\(', '\\\\)']],\n            displayMath: [['$$', '$$'], ['\\\\[', '\\\\]']],\n            processEscapes: true\n        }\n    };\n<\/script>\n<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"><\/script>\n`;
+            md += `---\nlayout: post\ntitle: "${data.postTitle.replace(/"/g, '\\"')}"\ndate: ${data.date}\ncategories: ${data.category}\ntags: ${tagsStr}\n---\n\n${mathJaxScript}\n\n`;
+        }
+
+        md += `<style>\n.easy-box { background: linear-gradient(135deg, #fff8e1 0%, #fef5e7 100%); border-left: 4px solid #d68910; border-radius: 8px; padding: 16px 20px; margin-bottom: 28px; }\n.easy-box .easy-title { font-size: 16px; font-weight: 700; color: #b9770e; margin-bottom: 10px; letter-spacing: 0.5px; }\n.easy-box p { font-size: 15px; line-height: 1.7; color: #3a3a3a; word-break: keep-all; margin: 0; }\n\n.visual-container { background: #fff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; margin-bottom: 32px; }\n.visual-header { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 800; color: #1a3a6c; margin-bottom: 20px; padding-bottom: 14px; border-bottom: 2px solid #e8edf5; }\n\n.table-presentation { width: 100%; border-radius: 8px; overflow: hidden; border: 1px solid #1a3a6c; }\n.tp-header { display: flex; background: #1a3a6c; color: white; font-weight: 700; text-align: center; font-size: 15px; }\n.tp-header-col { flex: 1; padding: 14px 10px; border-right: 1px solid rgba(255,255,255,0.2); word-break: keep-all; display: flex; align-items: center; justify-content: center; }\n.tp-header-col:last-child { border-right: none; }\n.tp-row { display: flex; border-bottom: 1px solid #e2e8f0; background: white; }\n.tp-row:last-child { border-bottom: none; }\n.tp-row:nth-child(even) { background: #f8fafc; }\n.tp-col { flex: 1; padding: 14px 10px; font-size: 14.5px; text-align: center; border-right: 1px solid #e2e8f0; word-break: keep-all; color: #2d3748; display: flex; align-items: center; justify-content: center; }\n.tp-col:last-child { border-right: none; }\n\n.quote-card { background: linear-gradient(135deg, #f7f4ec 0%, #faf8f1 100%); border-radius: 12px; padding: 26px 28px; border-left: 5px solid #c0392b; box-shadow: 0 4px 12px rgba(0,0,0,0.06); margin-bottom: 32px; }\n.quote-card .quote-header { font-size: 14px; font-weight: 700; color: #c0392b; letter-spacing: 2px; margin-bottom: 14px; }\n.quote-card .quote-ko { font-size: 18px; line-height: 1.6; color: #1a1a1a; font-weight: 600; word-break: keep-all; margin: 0; }\n\n.split-2 { display: flex; align-items: stretch; gap: 12px; margin-bottom: 20px; }\n.split-2-card { flex: 1; padding: 24px 20px; border-radius: 12px; background: #f8fafc; border: 1px solid #e2e8f0; text-align: center; font-size: 15px; font-weight: 700; color: #2d3748; line-height: 1.7; word-break: keep-all; }\n.split-2-connector { font-size: 28px; font-weight: 900; color: #4a5568; display: flex; align-items: center; justify-content: center; }\n\n.split-3 { display: flex; gap: 10px; margin-bottom: 20px;}\n.split-3-item { flex: 1; padding: 16px 10px; border-radius: 12px; text-align: center; background: #f8fafc; border: 1px solid #e2e8f0; }\n.split-3-item.c1 { background: #fff5f5; border-top: 4px solid #fc8181; }\n.split-3-item.c2 { background: #fffaf0; border-top: 4px solid #fbd38d; }\n.split-3-item.c3 { background: #f0fff4; border-top: 4px solid #9ae6b4; }\n.split-label { font-size: 12px; color: #718096; margin-bottom: 6px; font-weight: 700; }\n.split-val { font-size: 15px; font-weight: 800; color: #2d3748; line-height: 1.4; }\n\n.dueum-box { background-color: #1a3a6c; color: #ffffff; border-radius: 8px; padding: 16px 20px; margin-top: 8px; margin-bottom: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }\n#previewText .dueum-box p, .dueum-box p { font-size: 16.5px !important; line-height: 1.7 !important; color: #ffffff !important; word-break: keep-all !important; margin: 0 !important; font-weight: 700 !important; }\n</style>\n\n`;
+
+        if (data.quoteKo) md += `<div class="quote-card">\n    <div class="quote-header">💬 오늘의 한 줄</div>\n    <p class="quote-ko">"${escapeHtml(data.quoteKo)}"</p>\n</div>\n\n`;
+        
+        if (data.introText) md += `${protectMath(data.introText)}\n\n`;
+        
+        data.articles.forEach((art, index) => {
+            if (art.title) md += `### ${escapeHtml(art.title)}\n\n`;
+            
+            if (art.content) {
+                let processedContent = art.content.replace(/^[ \t]*[•○◦▪][ \t]*/gm, '- ');
+                processedContent = protectMath(processedContent);
+                
+                processedContent = processedContent.replace(/(\*\*\[(?:리드|개념|상세설명 및 해결방안|상세설명|정의\/개념|정의|핵심\/키워드|분류|인증기준|주요 확인사항|결함사례|참조\/Notes)\]\*\*)\n(?!\n)/g, '$1\n\n');
+
+                processedContent = processedContent.replace(/^(\s*\d+)\.(\s+)/gm, '$1\\.$2');
+                
+                processedContent = processedContent.replace(/(?:\*\*\[두음\/키워드\]\*\*)\n+([\s\S]*?)(?=\n\n|\n\*\*\[|$)/g, (match, kwContent) => {
+                    let formattedKw = kwContent.trim().replace(/\n/g, '<br>').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+                    return `**[두음/키워드]**\n<div class="dueum-box"><p>${formattedKw}</p></div>`;
+                });
+
+                // 일반 마크다운 뷰어에서도 줄바꿈이 올바르게 보이도록(스페이스바 2개 추가 적용) 처리
+                let lines = processedContent.split('\n');
+                lines = lines.map(line => {
+                    let trimmed = line.trimEnd();
+                    if (trimmed.length > 0 && !trimmed.startsWith('```') && !trimmed.startsWith('|') && !trimmed.startsWith('<')) {
+                        return trimmed + '  '; // 강제 줄바꿈을 위한 공백 2개 추가
+                    }
+                    return trimmed.length === 0 ? '' : line;
+                });
+                processedContent = lines.join('\n');
+
+                md += `${processedContent}\n\n`;
+            }
+            
+            if (art.easy) { 
+                const easyPs = art.easy.split('\n').map(p => {
+                    let text = escapeHtml(p.trimEnd());
+                    if(text.length === 0) return '';
+                    return `<p>${text}</p>`;
+                }).join(''); 
+                md += `<div class="easy-box">\n    <div class="easy-title">💡 쉽게 풀어쓰면</div>\n    ${easyPs}\n</div>\n\n`; 
+            }
+            
+            if (art.visualType !== 'none') {
+                md += `<div class="visual-container">\n`;
+                if (art.vIcon || art.vTitle) md += `    <div class="visual-header"><span class="v-icon">${escapeHtml(art.vIcon) || ''}</span> <span class="v-title">${escapeHtml(art.vTitle) || ''}</span></div>\n`;
+                
+                if (art.visualType === 'table') {
+                    md += `    <div class="table-presentation">\n`; 
+                    let hasHeader = false; let trs = '';
+                    for(let i=1; i<=6; i++) {
+                        const k = escapeHtml(art[`igK${i}`] || ''); 
+                        const v = escapeHtml(art[`igV${i}`] || ''); 
+                        const d = escapeHtml(art[`igD${i}`] || '');
+                        if (!k && !v && !d) continue;
+                        if(i===1 && !hasHeader) { 
+                            md += `        <div class="tp-header"><div class="tp-header-col">${k}</div><div class="tp-header-col">${v}</div><div class="tp-header-col">${d}</div></div>\n`; 
+                            hasHeader = true; 
+                        } else { 
+                            trs += `        <div class="tp-row"><div class="tp-col">${k}</div><div class="tp-col"><strong>${v}</strong></div><div class="tp-col">${d}</div></div>\n`; 
+                        }
+                    }
+                    md += trs; md += `    </div>\n`;
+                } else if(art.visualType === 'pres1') {
+                    const pd = art.presData || {};
+                    if(art.presType === 'split3') {
+                        md += `    <div class="split-3">\n`;
+                        if(pd.v1) md += `        <div class="split-3-item c1">${pd.l1 ? `<div class="split-label">${escapeHtml(pd.l1)}</div>` : ''}<div class="split-val">${escapeHtml(pd.v1).replace(/\n/g, '<br>')}</div></div>\n`;
+                        if(pd.v2) md += `        <div class="split-3-item c2">${pd.l2 ? `<div class="split-label">${escapeHtml(pd.l2)}</div>` : ''}<div class="split-val">${escapeHtml(pd.v2).replace(/\n/g, '<br>')}</div></div>\n`;
+                        if(pd.v3) md += `        <div class="split-3-item c3">${pd.l3 ? `<div class="split-label">${escapeHtml(pd.l3)}</div>` : ''}<div class="split-val">${escapeHtml(pd.v3).replace(/\n/g, '<br>')}</div></div>\n`;
+                        md += `    </div>\n`;
+                    } else if(art.presType === 'split2') {
+                        let colorStyle1 = "", colorStyle2 = "";
+                        if (pd.color === 'green') { colorStyle1 = 'style="border-top: 5px solid #68d391; background: #f0fff4;"'; colorStyle2 = 'style="border-top: 5px solid #68d391; background: #f0fff4;"'; } 
+                        else if (pd.color === 'blue') { colorStyle1 = 'style="border-top: 5px solid #63b3ed; background: #ebf8ff;"'; colorStyle2 = 'style="border-top: 5px solid #63b3ed; background: #ebf8ff;"'; } 
+                        else { colorStyle1 = 'style="border-top: 5px solid #fc8181; background: #fff5f5;"'; colorStyle2 = 'style="border-top: 5px solid #90cdf4; background: #ebf8ff;"'; }
+                        md += `    <div class="split-2">\n        <div class="split-2-card" ${colorStyle1}>${escapeHtml(pd.v1||'').replace(/\n/g, '<br>')}</div>\n        <div class="split-2-connector">${escapeHtml(pd.connector || 'VS')}</div>\n        <div class="split-2-card" ${colorStyle2}>${escapeHtml(pd.v2||'').replace(/\n/g, '<br>')}</div>\n    </div>\n`;
+                    } else if(art.presType === 'table_p') {
+                        md += `    <div class="table-presentation">\n`; 
+                        const hCols = (pd.header || '').split('|'); 
+                        md += `        <div class="tp-header">${hCols.map(c => `<div class="tp-header-col">${escapeHtml(c.trim())}</div>`).join('')}</div>\n`;
+                        const rows = (pd.rows || '').split('\n').filter(r => r.trim());
+                        rows.forEach(r => { 
+                            const cols = r.split('|'); 
+                            md += `        <div class="tp-row">${cols.map(c => `<div class="tp-col">${escapeHtml(c.trim())}</div>`).join('')}</div>\n`; 
+                        });
+                        md += `    </div>\n`;
+                    }
+                }
+                if (art.vFooter) { 
+                    md += `    <div style="margin-top: 20px; padding: 16px; background: #f8fafc; border-radius: 8px; text-align: center; font-size: 15.5px; color: #4a5568; font-weight: 700; border: 1px dashed #cbd5e1;">\n        👉 ${escapeHtml(art.vFooter)}\n    </div>\n`; 
+                }
+                md += `</div>\n\n`;
+            }
+        });
+        return md;
+    }
+
+    function escapeMathHtml(str) {
+        return str.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    function handlePreviewMD() {
+        const data = gatherFormData(); if (!data) return alert('발행일자와 포스트 제목을 반드시 입력해주세요.');
+        
+        let mdStrProcessed = generateMarkdownString(data, true); 
+        
+        let mathBlocks = [];
+        
+        mdStrProcessed = mdStrProcessed.replace(/\$\$(.*?)\$\$/gs, (match) => {
+            mathBlocks.push(match); return `%%%MATH_BLOCK_${mathBlocks.length - 1}%%%`;
+        });
+        mdStrProcessed = mdStrProcessed.replace(/\$(.*?)\$/g, (match) => {
+            mathBlocks.push(match); return `%%%MATH_INLINE_${mathBlocks.length - 1}%%%`;
+        });
+
+        const headerHTML = `<h1>${data.postTitle}</h1>`; 
+        
+        const parsedHTML = marked.parse(mdStrProcessed, { breaks: true, gfm: true });
+        
+        let finalHTML = parsedHTML;
+        mathBlocks.forEach((math, i) => {
+            finalHTML = finalHTML.replace(`%%%MATH_BLOCK_${i}%%%`, escapeMathHtml(math));
+            finalHTML = finalHTML.replace(`%%%MATH_INLINE_${i}%%%`, escapeMathHtml(math));
+        });
+        
+        finalHTML = finalHTML.replace(/<p><div class="dueum-box">/g, '<div class="dueum-box">');
+        finalHTML = finalHTML.replace(/<\/div><\/p>/g, '</div>');
+        
+        if (window.MathJax) {
+            MathJax.typesetClear([document.getElementById('previewText')]); 
+        }
+
+        document.getElementById('previewText').innerHTML = headerHTML + finalHTML; 
+        document.getElementById('previewModal').style.display = 'flex';
+        
+        if (window.MathJax) {
+            MathJax.typesetPromise([document.getElementById('previewText')]).catch(function (err) {});
+        }
+    }
+
+    function closePreview() { document.getElementById('previewModal').style.display = 'none'; }
+    
+    async function handleDownloadMD() {
+        const data = gatherFormData(); if (!data) return alert('발행일자와 포스트 제목을 반드시 입력해주세요.');
+        
+        const mdStr = generateMarkdownString(data, false); 
+        const safeTitle = data.postTitle.replace(/[^a-zA-Z0-9가-힣]/g, '-').replace(/-+/g, '-');
+        const filename = `${data.date}-${safeTitle}.md`; 
+        
+        if (mdDirHandle) {
+            try {
+                const fileHandle = await mdDirHandle.getFileHandle(filename, { create: true });
+                const writable = await fileHandle.createWritable();
+                await writable.write(mdStr); await writable.close();
+                showToast(`✅ [${filename}] 연동된 폴더에 저장되었습니다!`); return;
+            } catch (e) {
+                alert('연동된 폴더에 파일을 저장하는데 실패했습니다. 일반 다운로드로 진행합니다.');
+            }
+        }
+        
+        const blob = new Blob([mdStr], { type: 'text/markdown;charset=utf-8' });
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click(); URL.revokeObjectURL(a.href);
+        showToast("📥 .md 다운로드가 완료되었습니다.");
+    }
+    
+    window.onload = () => { loadCategories(); initDB(); createNew(); };
+</script>
+</body>
+</html>

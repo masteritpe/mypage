@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WYSIWYG to MD</title>
+    
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="https://uicdn.toast.com/editor/latest/toastui-editor.min.css" />
+    
+    <style>
+        :root {
+            /* 라이트 테마 & 글래스모피즘 변수 */
+            --bg-color: #f8fafc;
+            --glass-bg: rgba(255, 255, 255, 0.65);
+            --glass-border: rgba(0, 0, 0, 0.08);
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --accent-color: #3b82f6;
+        }
+
+        * { 
+            box-sizing: border-box; 
+            margin: 0; 
+            padding: 0; 
+        }
+
+        body {
+            font-family: 'Inter', 'Pretendard', sans-serif;
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            color: var(--text-primary);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* 헤더 디자인 */
+        header {
+            padding: 1rem 2rem;
+            background: rgba(255, 255, 255, 0.5);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--glass-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 10;
+        }
+
+        header h1 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            background: linear-gradient(to right, #2563eb, #6366f1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        header p { 
+            font-size: 0.875rem; 
+            color: var(--text-secondary); 
+        }
+
+        /* 메인 레이아웃 (좌우 패널) */
+        main {
+            display: flex;
+            flex: 1;
+            padding: 1.5rem;
+            gap: 1.5rem;
+            height: calc(100vh - 60px);
+        }
+
+        .panel {
+            flex: 1;
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.05);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .panel-header {
+            padding: 0.75rem 1.5rem;
+            background: rgba(0, 0, 0, 0.03);
+            border-bottom: 1px solid var(--glass-border);
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* 폰트 선택기 디자인 */
+        input.font-selector {
+            background: rgba(255, 255, 255, 0.8);
+            border: 1px solid var(--glass-border);
+            border-radius: 6px;
+            padding: 0.3rem 0.5rem;
+            font-size: 0.75rem;
+            color: var(--text-primary);
+            outline: none;
+            font-family: inherit;
+            width: 160px;
+        }
+
+        input.font-selector::placeholder { 
+            color: #94a3b8; 
+        }
+
+        .hint-wrap { 
+            display: flex; 
+            align-items: center; 
+            gap: 10px; 
+        }
+
+        .hint {
+            font-size: 0.7rem;
+            color: #3b82f6;
+            background: rgba(59, 130, 246, 0.1);
+            padding: 0.2rem 0.6rem;
+            border-radius: 20px;
+            text-transform: none;
+            letter-spacing: normal;
+            cursor: pointer;
+        }
+
+        /* Toast UI Editor 스타일 덮어쓰기 */
+        #wysiwyg-editor { 
+            flex: 1; 
+            background: transparent; 
+        }
+        .toastui-editor-defaultUI { 
+            border: none !important; 
+            background: transparent !important; 
+        }
+        .toastui-editor-toolbar { 
+            background: rgba(255, 255, 255, 0.6) !important; 
+        }
+
+        /* WYSIWYG 에디터 본문 글꼴 크기 키우기 */
+        .toastui-editor-contents, 
+        .toastui-editor-contents p,
+        .ProseMirror {
+            font-size: 16px !important;
+            line-height: 1.7 !important;
+        }
+
+        /* 마크다운 출력 영역 (우측) */
+        textarea#md-output {
+            flex: 1;
+            width: 100%;
+            background: transparent;
+            border: none;
+            color: #4338ca;
+            /* 기본 폰트를 D2Coding으로 변경 */
+            font-family: 'D2Coding', 'Consolas', monospace; 
+            font-size: 16px;
+            line-height: 1.7;
+            padding: 1.5rem;
+            resize: none;
+            outline: none;
+            cursor: pointer;
+            /* 배경색 서서히 돌아오게 설정 */
+            transition: background 0.4s ease, font-family 0.3s;
+        }
+
+        textarea#md-output:hover { 
+            background: rgba(67, 56, 202, 0.02); 
+        }
+
+        /* 클릭 복사 완료 시 보여줄 조용한 배경 깜빡임 효과 */
+        textarea#md-output.copied {
+            background: rgba(16, 185, 129, 0.15) !important; /* 은은한 에메랄드(성공) 빛 배경 */
+            transition: background 0.05s ease; /* 켜질 때는 빠르게 반응 */
+        }
+
+        /* 스크롤바 디자인 */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.15); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.25); }
+
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>MD Flow <span style="font-size:0.8em; color:#64748b; font-weight:400;">LIGHT</span></h1>
+        <p>WYSIWYG to Markdown</p>
+    </header>
+
+    <main>
+        <div class="panel">
+            <div class="panel-header">WYSIWYG Editor</div>
+            <div id="wysiwyg-editor"></div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">
+                Markdown Source
+                <div class="hint-wrap">
+                    <input type="text" id="font-selector" list="local-fonts" class="font-selector" value="D2Coding" placeholder="PC 폰트명 입력" title="PC에 설치된 폰트 이름을 입력하세요">
+                    <datalist id="local-fonts">
+                        <option value="D2Coding">
+                        <option value="맑은 고딕">                          
+                        <option value="Consolas">
+                        <option value="돋움">
+                        <option value="Courier New">
+                        <option value="Arial">
+                    </datalist>
+                    <span class="hint" id="copy-btn">클릭하여 복사 ✨</span>
+                </div>
+            </div>
+            <textarea id="md-output" readonly title="클릭하면 조용히 복사됩니다."></textarea>
+        </div>
+    </main>
+
+    <script src="https://uicdn.toast.com/editor/latest/toastui-editor-all.min.js"></script>
+    <script>
+        const mdOutput = document.getElementById('md-output');
+        const fontSelector = document.getElementById('font-selector');
+
+        // 1. Toast UI Editor 초기화
+        const editor = new toastui.Editor({
+            el: document.querySelector('#wysiwyg-editor'),
+            height: '100%',
+            initialEditType: 'wysiwyg', 
+            previewStyle: 'vertical',
+            hideModeSwitch: true, 
+            initialValue: '상단의 툴바를 이용해 **글을 꾸며보세요.**\n\n- 우측 상단 폰트 입력창을 클릭하면 전체 목록이 보입니다.\n- 오른쪽 마크다운 창을 클릭하면 배경이 살짝 깜빡이며 조용히 복사됩니다.',
+            events: {
+                change: function() {
+                    mdOutput.value = editor.getMarkdown();
+                }
+            }
+        });
+
+        // 초기 화면에 마크다운 로드
+        mdOutput.value = editor.getMarkdown();
+
+        // 2. 폰트 입력창 포커스 시 전체 목록 다시 보이기
+        fontSelector.addEventListener('focus', function() {
+            this.dataset.oldValue = this.value; 
+            this.value = ''; 
+        });
+
+        // 3. 폰트 입력창에서 포커스가 벗어날 때 빈칸이면 원래 폰트로 복구
+        fontSelector.addEventListener('blur', function() {
+            if (this.value.trim() === '') {
+                this.value = this.dataset.oldValue || ''; 
+                mdOutput.style.fontFamily = `"${this.value}", monospace`;
+            }
+        });
+
+        // 4. 폰트 직접 입력 및 선택 시 실시간 적용
+        fontSelector.addEventListener('input', (e) => {
+            const fontName = e.target.value.trim();
+            if (fontName) {
+                mdOutput.style.fontFamily = `"${fontName}", monospace`;
+            }
+        });
+
+        // 5. 조용한 복사 로직 (텍스트 선택, 토스트 제거)
+        let copyTimeout;
+        mdOutput.addEventListener('click', async () => {
+            const textToCopy = mdOutput.value;
+            if (!textToCopy) return;
+
+            try {
+                // 클립보드에 텍스트 복사
+                await navigator.clipboard.writeText(textToCopy);
+                
+                // 배경색 깜빡임 클래스 추가
+                mdOutput.classList.add('copied');
+                
+                // 기존 타이머 초기화 (연속 클릭 방지)
+                if (copyTimeout) clearTimeout(copyTimeout);
+                
+                // 아주 짧은 시간 뒤에 클래스 제거하여 부드럽게 원래 색으로 복귀
+                copyTimeout = setTimeout(() => {
+                    mdOutput.classList.remove('copied');
+                }, 200);
+
+            } catch (err) {
+                console.error('클립보드 복사 실패:', err);
+            }
+        });
+    </script>
+</body>
+</html>

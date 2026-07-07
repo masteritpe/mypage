@@ -1,0 +1,1185 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1, viewport-fit=cover">
+<title>Study Card</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+<style>
+    :root {
+        --primary: #2563eb;
+        --primary-light: #eff6ff;
+        --bg: #f8f9fa;
+        --card-bg: #ffffff;
+        --text-main: #1f2937;
+        --text-sub: #6b7280;
+        --border: #e5e7eb;
+        --shadow: 0 4px 12px rgba(0,0,0,0.06);
+        --danger: #ef4444;
+        --success: #10b981;
+        --sat: env(safe-area-inset-top);
+        --sab: env(safe-area-inset-bottom);
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; font-family: "Pretendard", sans-serif; }
+    
+    body { 
+        margin: 0; background: var(--bg); color: var(--text-main); 
+        height: 100vh; height: 100dvh; 
+        display: flex; flex-direction: column; overflow: hidden; 
+    }
+
+    /* Header */
+    header { 
+        background: var(--card-bg); 
+        padding: var(--sat) 16px 0 16px; 
+        height: calc(60px + var(--sat)); 
+        display: flex; justify-content: space-between; align-items: center; 
+        border-bottom: 1px solid var(--border); flex-shrink: 0; z-index: 50; 
+    }
+    .logo { font-weight: 800; font-size: 1.2rem; color: var(--primary); display: flex; align-items: center; gap: 8px; }
+    .header-actions { display: flex; gap: 8px; }
+    
+    .icon-btn { 
+        width: 40px; height: 40px; border-radius: 10px; 
+        border: 1px solid var(--border); background: white;
+        color: var(--text-main); font-size: 1.1rem; cursor: pointer; 
+        display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05); transition: 0.2s;
+    }
+    .icon-btn:active { background: #f1f3f5; transform: scale(0.95); }
+
+    /* PC Only Buttons */
+    .pc-only-btn { display: none; }
+
+    /* Tabs */
+    .tab-nav {
+        background: var(--card-bg); 
+        padding: 0 16px; 
+        border-bottom: 1px solid var(--border);
+        display: flex; 
+        gap: 24px; 
+        flex-shrink: 0; 
+        overflow-x: auto;
+        height: 50px;
+        align-items: stretch;
+    }
+    
+    .tab-item {
+        display: flex; 
+        align-items: center; 
+        justify-content: center;
+        position: relative;
+        padding: 0 4px; 
+        font-weight: 600; 
+        color: var(--text-sub); 
+        cursor: pointer; 
+        border-bottom: 2px solid transparent; 
+        white-space: nowrap; 
+        transition: all 0.2s;
+        font-size: 0.95rem;
+        margin-bottom: -1px;
+    }
+    
+    .tab-item.active { 
+        color: var(--primary); 
+        border-bottom-color: var(--primary); 
+    }
+    .tab-pc-only { display: none; } 
+
+    /* Main Content */
+    main { 
+        flex: 1; overflow-y: auto; padding: 16px; 
+        padding-bottom: calc(90px + var(--sab));
+        -webkit-overflow-scrolling: touch; position: relative;
+    }
+    
+    .view-section { display: none; height: 100%; flex-direction: column; }
+    .view-section.active { display: flex; }
+
+    /* List View (Grid) */
+    .grid-container { 
+        display: grid; 
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); 
+        gap: 12px; 
+    }
+    .card {
+        background: var(--card-bg); border-radius: 16px; padding: 16px;
+        box-shadow: var(--shadow); border: 1px solid #fff;
+        display: flex; flex-direction: column; gap: 8px; cursor: pointer; transition: 0.1s;
+        position: relative; overflow: hidden;
+    }
+    .card:active { transform: scale(0.98); }
+    .card-domain { 
+        font-size: 0.7rem; font-weight: 700; color: var(--primary); 
+        text-transform: uppercase; background: var(--primary-light); 
+        padding: 4px 8px; border-radius: 6px; align-self: flex-start;
+    }
+    .card-topic { font-size: 1rem; font-weight: 700; line-height: 1.3; color: var(--text-main); }
+    .card-key { font-size: 0.85rem; color: var(--text-sub); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .card-star { font-size: 0.8rem; color: #fbbf24; font-weight: bold; margin-top: auto; }
+
+    /* --- FLASHCARD STYLES (수정됨: 모바일 최적화) --- */
+    .flash-wrapper {
+        flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+        perspective: 1000px; 
+        padding: 5px 0; /* 높이 확보를 위해 상하 패딩 축소 */
+    }
+    .flash-scene {
+        width: 100%; max-width: 400px; 
+        aspect-ratio: 5/6; /* 카드 비율 수정 (세로 길이 축소) */
+        position: relative; cursor: pointer;
+    }
+    .flash-inner {
+        width: 100%; height: 100%; position: relative;
+        text-align: center; transition: transform 0.6s;
+        transform-style: preserve-3d; border-radius: 20px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    }
+    .flash-scene.flipped .flash-inner { transform: rotateY(180deg); }
+    .flash-face {
+        position: absolute; inset: 0;
+        -webkit-backface-visibility: hidden; backface-visibility: hidden;
+        background: white; border-radius: 20px; border: 1px solid var(--border);
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        padding: 24px; /* 내부 여백 축소 */
+    }
+    .flash-front { z-index: 2; }
+    .flash-back { transform: rotateY(180deg); background: #fdfdfd; }
+    
+    .flash-domain { 
+        background: var(--primary); color: white; padding: 6px 12px; 
+        border-radius: 20px; font-size: 0.8rem; font-weight: 700; margin-bottom: 20px; 
+    }
+    .flash-topic { font-size: 1.8rem; font-weight: 800; line-height: 1.3; margin-bottom: 16px; color: #333; word-break: keep-all; }
+    
+    /* 뒷면 폰트 사이즈 확대 (1.6rem) */
+    .flash-key-back { 
+        font-size: 1.6rem; 
+        font-weight: 700; color: var(--primary); 
+        margin-bottom: 16px; line-height: 1.4; 
+        border-bottom: 2px solid #f1f3f5; padding-bottom: 10px; width: 100%; 
+    }
+    /* 뒷면 메모 사이즈 확대 (1.35rem) */
+    .flash-memo { 
+        font-size: 1.35rem; 
+        color: #444; line-height: 1.6; 
+        white-space: pre-wrap; word-break: break-word; 
+        flex:1; overflow-y:auto; width:100%; text-align: left;
+    }
+    
+    .flash-hint { position: absolute; bottom: 20px; font-size: 0.8rem; color: #ccc; }
+
+    .flash-controls {
+        display: flex; gap: 15px; width: 100%; max-width: 400px; justify-content: space-between; align-items: center; 
+        margin-top: 15px; /* 상단 여백 축소 */
+    }
+    .flash-btn {
+        background: white; border: 1px solid var(--border); color: var(--text-main);
+        width: 50px; height: 50px; border-radius: 50%; font-size: 1.2rem;
+        display: flex; align-items: center; justify-content: center; cursor: pointer;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05); transition: 0.2s;
+    }
+    .flash-btn:active { transform: scale(0.9); background: #f3f4f6; }
+    
+    .flash-center-actions { display: flex; gap: 12px; align-items: center; }
+    .btn-circle-action {
+        width: 45px; height: 45px; border-radius: 50%; border: none;
+        display: flex; align-items: center; justify-content: center; font-size: 1.1rem;
+        cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.1); transition: 0.2s; color: white;
+    }
+    .btn-circle-action:active { transform: scale(0.9); }
+    .btn-shuffle { background: #6b7280; }
+    .btn-check { background: var(--success); }
+
+    .flash-progress { font-weight: 700; color: var(--text-sub); font-size: 0.9rem; margin-top: 8px;}
+
+    /* Print Preview Layout */
+    .print-layout-wrapper { display: flex; flex-direction: column; height: 100%; gap: 16px; }
+
+    .preview-controls {
+        background: white; padding: 16px; border-radius: 16px;
+        box-shadow: var(--shadow); border: 1px solid var(--border);
+        display: flex; flex-direction: column; gap: 12px; flex-shrink: 0;
+        overflow-y: auto;
+    }
+    .control-row { display: flex; gap: 10px; align-items: center; justify-content: space-between; }
+    .btn-action {
+        flex: 1; padding: 12px; border-radius: 10px; border: 1px solid var(--border);
+        background: white; font-weight: 600; cursor: pointer; font-size: 0.9rem;
+    }
+    .btn-primary { background: var(--primary); color: white; border: none; }
+    
+    .slot-list { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
+    .slot-item { display: flex; align-items: center; gap: 8px; }
+    .slot-num { 
+        width: 24px; height: 24px; background: #f3f4f6; color: #6b7280; 
+        border-radius: 50%; display: flex; align-items: center; justify-content: center; 
+        font-size: 0.75rem; font-weight: 700; flex-shrink: 0;
+    }
+    .slot-input {
+        flex: 1; height: 36px; padding: 0 10px; border: 1px solid var(--border);
+        border-radius: 8px; font-size: 0.85rem; outline: none; transition: 0.2s;
+    }
+    .slot-input:focus { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-light); }
+
+    .preview-viewport {
+        flex: 1; background: #52525b; border-radius: 12px; overflow: hidden;
+        display: flex; align-items: center; justify-content: center; position: relative;
+        padding: 20px; box-shadow: inset 0 0 20px rgba(0,0,0,0.2);
+    }
+    .scale-wrapper {
+        transform-origin: center center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); background: white;
+    }
+
+    /* FAB */
+    .fab {
+        position: fixed; bottom: calc(24px + var(--sab)); right: 24px; 
+        width: 56px; height: 56px; border-radius: 50%; border: none;
+        background: var(--text-main); color: white; box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+        font-size: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 100;
+        transition: 0.2s;
+    }
+    .fab:active { transform: scale(0.9); }
+
+    /* Modal */
+    .modal-overlay { 
+        display: none; position: fixed; inset: 0; 
+        background: rgba(0,0,0,0.5); z-index: 200; 
+        backdrop-filter: blur(4px); align-items: flex-end; justify-content: center;
+    }
+    .modal-content {
+        background: white; width: 100%; max-width: 600px;
+        border-radius: 24px 24px 0 0; padding: 24px 24px calc(24px + var(--sab)) 24px; 
+        max-height: 90vh; overflow-y: auto; animation: slideUp 0.3s;
+        display: flex; flex-direction: column; gap: 16px;
+    }
+    @media (min-width: 769px) { .modal-overlay { align-items: center; } .modal-content { border-radius: 24px; padding-bottom: 24px; } }
+    @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+    .modal-handle { width: 40px; height: 5px; background: #e9ecef; border-radius: 10px; align-self: center; margin-bottom: 8px; }
+    .label { font-size: 0.8rem; font-weight: 700; color: var(--primary); margin-bottom: 6px; display: block; }
+    .input-box { width: 100%; padding: 14px; background: #f8f9fa; border: 1px solid #f1f3f5; border-radius: 12px; font-size: 1rem; outline: none; }
+    .input-box:focus { background: white; border-color: var(--primary); }
+    
+    .star-rating { display: flex; gap: 8px; }
+    .star-btn { font-size: 1.5rem; color: #e5e7eb; cursor: pointer; background: none; border: none; padding: 0; }
+    .star-btn.active { color: #fbbf24; }
+
+    /* TOAST MESSAGE CSS */
+    .toast-container {
+        position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
+        z-index: 2000; display: flex; flex-direction: column; gap: 10px;
+        pointer-events: none; width: 90%; max-width: 350px;
+    }
+    .toast {
+        background: rgba(30, 41, 59, 0.9); color: white; padding: 14px 24px;
+        border-radius: 50px; font-size: 0.95rem; text-align: center;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2); opacity: 0; transform: translateY(20px);
+        transition: all 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28); pointer-events: auto;
+        display: flex; align-items: center; justify-content: center; gap: 10px; font-weight: 500;
+        backdrop-filter: blur(4px);
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast.success { background: rgba(16, 185, 129, 0.95); } /* Green */
+    .toast.error { background: rgba(239, 68, 68, 0.95); }   /* Red */
+
+    /* PC Media Query (1024px+) */
+    @media (min-width: 1024px) {
+        .tab-pc-only { display: flex; }
+        .grid-container { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+        .print-layout-wrapper { flex-direction: row; align-items: stretch; }
+        .preview-controls { width: 340px; height: 100%; justify-content: flex-start; } 
+        .preview-viewport { height: 100%; }
+        .fab { right: 40px; bottom: 40px; }
+        .pc-only-btn { display: flex; }
+        .flash-scene { max-width: 500px; }
+        .toast-container { bottom: 40px; }
+    }
+
+    /* PAPER STYLES */
+    .page-a4 { width: 210mm; height: 297mm; background: white; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(4, 1fr); gap: 4mm; padding: 10mm; }
+    .page-zine { width: 297mm; height: 210mm; background: white; display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(2, 1fr); }
+
+    .p-card { border: 1px solid #374151; display: flex; flex-direction: column; overflow: hidden; }
+    .p-header { background: var(--primary); color: white; padding: 4px 8px; display: flex; justify-content: space-between; font-size: 12px; align-items: center; height: 28px; }
+    .p-topic { background: #f3f4f6; text-align: center; font-weight: 700; font-size: 14px; padding: 6px; border-bottom: 1px solid #e5e7eb; }
+    .p-body { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 800; text-align: center; padding: 8px; word-break: keep-all; }
+    .p-footer { height: 60px; border-top: 2px solid var(--primary); padding: 6px; font-size: 11px; color: #4b5563; }
+
+    .z-cell { border: 1px dashed #d1d5db; position: relative; padding: 5px; display: flex; flex-direction: column; }
+    .z-cell.inv { transform: rotate(180deg); }
+    .z-content { border: 1px solid #374151; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+    .z-head { background: #f3f4f6; padding: 2px 4px; display: flex; justify-content: space-between; font-size: 10px; border-bottom: 1px solid #ccc; }
+    .z-mid { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 800; text-align: center; padding: 2px; }
+    .z-bot { height: 35px; border-top: 1px solid #374151; font-size: 9px; padding: 4px; overflow: hidden; }
+    .z-num { position: absolute; bottom: 5px; right: 5px; background: #333; color: white; width: 14px; height: 14px; border-radius: 50%; font-size: 9px; display: flex; align-items: center; justify-content: center; z-index: 5; }
+    .z-cell.inv .z-num { bottom: auto; top: 5px; right: auto; left: 5px; transform: rotate(180deg); }
+
+    @media print {
+        @page { size: A4 portrait; margin: 0; }
+        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        body * { visibility: hidden; }
+        #print-area, #print-area * { visibility: visible; }
+        #print-area { 
+            position: fixed; top: 0; left: 0; 
+            width: 100% !important; height: 100% !important;
+            display: flex !important; align-items: center; justify-content: center; 
+            background: white; z-index: 9999; margin: 0 !important;
+        }
+        body.print-mode-book .scale-wrapper {
+            transform: rotate(90deg) !important; transform-origin: center center !important;
+            width: 297mm !important; height: 210mm !important; box-shadow: none !important;
+            position: fixed; left: 50%; top: 50%; margin-left: -148.5mm !important; margin-top: -105mm !important;
+        }
+        body.print-mode-card .scale-wrapper {
+            transform: none !important; width: 210mm !important; height: 297mm !important;
+            box-shadow: none !important; margin: 0 auto !important;
+        }
+        .page-zine, .page-a4 { width: 100% !important; height: 100% !important; }
+    }
+</style>
+</head>
+<body>
+
+<header>
+    <div class="logo"><i class="fas fa-graduation-cap"></i> Study Card</div>
+    <div class="header-actions">
+        <button class="icon-btn" title="JSON Import" onclick="document.getElementById('json-input').click()"><i class="fas fa-file-code"></i></button>
+        <button class="icon-btn" title="JSON Export" onclick="exportJSON()"><i class="fas fa-save"></i></button>
+        <button class="icon-btn pc-only-btn" title="Excel/CSV Import" onclick="document.getElementById('excel-input').click()"><i class="fas fa-file-excel" style="color:#10b981"></i></button>
+        <button class="icon-btn pc-only-btn" title="Excel Export" onclick="exportExcel()"><i class="fas fa-download"></i></button>
+        <button class="icon-btn" title="Reset" onclick="resetData()" style="color:var(--danger)"><i class="fas fa-trash-alt"></i></button>
+    </div>
+    <input type="file" id="excel-input" hidden accept=".xlsx, .xls, .csv" onchange="importExcel(this)">
+    <input type="file" id="json-input" hidden accept=".json" onchange="importJSON(this)">
+</header>
+
+<nav class="tab-nav">
+    <div class="tab-item active" onclick="setTab('list')">목록(Data)</div>
+    <div class="tab-item" onclick="setTab('flash')">플래시카드</div>
+    <div class="tab-item tab-pc-only" onclick="setTab('card')">암기카드(A4)</div>
+    <div class="tab-item tab-pc-only" onclick="setTab('book')">수첩(Zine)</div>
+</nav>
+
+<main>
+    <div id="view-list" class="view-section active">
+        <div style="margin-bottom:12px; display:flex; gap:8px;">
+            <input type="text" id="search-input" class="input-box" style="padding:10px;" placeholder="검색어 입력..." onkeyup="renderList()">
+        </div>
+        <div class="grid-container" id="grid-list"></div>
+        <div id="empty-msg" style="text-align:center; padding:40px; color:#adb5bd; display:none;">
+            <i class="fas fa-pencil-alt" style="font-size:3rem; margin-bottom:16px; opacity:0.3;"></i>
+            <p>데이터가 없습니다.</p>
+        </div>
+        <div style="margin-top:auto; padding:20px; text-align:center; font-size:0.8rem; color:#9ca3af;" class="mobile-only-msg">
+            <i class="fas fa-info-circle"></i> 인쇄 및 편집 모드, 엑셀은 PC에서 이용해주세요.
+        </div>
+    </div>
+
+    <div id="view-flash" class="view-section">
+        <div class="flash-wrapper">
+            <div style="width:100%; max-width:400px; display:flex; justify-content:flex-end; margin-bottom:10px;">
+                <button onclick="resetFlashProgress()" style="background:none; border:none; color:var(--text-sub); font-size:0.9rem; cursor:pointer;"><i class="fas fa-undo"></i> 학습 상태 초기화</button>
+            </div>
+
+            <div class="flash-scene" onclick="toggleFlashFlip()">
+                <div class="flash-inner" id="flash-card-inner">
+                    <div class="flash-face flash-front">
+                        <div class="flash-domain" id="f-domain">DOMAIN</div>
+                        <div class="flash-topic" id="f-topic">Topic Name</div>
+                        <div style="color:#fbbf24; margin-top:20px; font-size:1.5rem;" id="f-star">★★★</div>
+                        <div class="flash-hint"><i class="fas fa-sync-alt"></i> 터치하여 뒷면 확인</div>
+                    </div>
+                    <div class="flash-face flash-back">
+                        <div class="flash-key-back" id="f-key-back">Keywords Here</div>
+                        <div class="flash-memo" id="f-memo">상세 내용이 여기에 표시됩니다.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flash-controls">
+                <button class="flash-btn" onclick="prevFlash()"><i class="fas fa-chevron-left"></i></button>
+                
+                <div style="text-align:center;">
+                    <div class="flash-center-actions">
+                        <button class="btn-circle-action btn-shuffle" title="순서 섞기" onclick="shuffleFlash()"><i class="fas fa-random"></i></button>
+                        <button class="btn-circle-action btn-check" title="암기 완료 (카드 숨김)" onclick="toggleFlashComplete()"><i class="fas fa-check"></i></button>
+                    </div>
+                    <div class="flash-progress" id="f-progress">1 / 10</div>
+                </div>
+
+                <button class="flash-btn" onclick="nextFlash()"><i class="fas fa-chevron-right"></i></button>
+            </div>
+        </div>
+        <div id="flash-empty" style="display:none; text-align:center; padding:50px; color:#999;">
+            <i class="fas fa-check-circle" style="font-size:3rem; color:var(--success); margin-bottom:20px;"></i>
+            <p>모든 카드를 학습했습니다!</p>
+            <button class="btn-action btn-primary" style="margin-top:20px; width:auto; display:inline-block;" onclick="resetFlashProgress()">학습 상태 초기화</button>
+        </div>
+    </div>
+
+    <div id="view-card" class="view-section">
+        <div class="print-layout-wrapper">
+            <div class="preview-controls">
+                <div class="control-row">
+                    <span style="font-weight:700; font-size:1.1rem;">A4 암기카드</span>
+                </div>
+                <div class="control-row">
+                    <input type="date" id="date-card" class="input-box" style="padding:8px; width:auto; flex:1;" onchange="fillDate('card')">
+                    <button class="btn-action" style="flex:0 0 auto; padding:8px 12px;" onclick="fillRandom('card')"><i class="fas fa-dice"></i> 랜덤</button>
+                    <button class="btn-action" style="flex:0 0 auto; padding:8px 12px;" onclick="clearInputs('card')"><i class="fas fa-eraser"></i></button>
+                </div>
+                <div class="slot-list" id="card-slots"></div>
+                <div style="margin-top:auto;">
+                    <button class="btn-action btn-primary" style="width:100%; padding:16px;" onclick="printPage()"><i class="fas fa-print"></i> 인쇄하기</button>
+                </div>
+            </div>
+            <div class="preview-viewport">
+                <div id="preview-card-target" class="scale-wrapper page-a4"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="view-book" class="view-section">
+        <div class="print-layout-wrapper">
+            <div class="preview-controls">
+                <div class="control-row">
+                    <span style="font-weight:700; font-size:1.1rem;">Zine 포켓 수첩</span>
+                </div>
+                <div class="control-row">
+                    <input type="date" id="date-book" class="input-box" style="padding:8px; width:auto; flex:1;" onchange="fillDate('book')">
+                    <button class="btn-action" style="flex:0 0 auto; padding:8px 12px;" onclick="fillRandom('book')"><i class="fas fa-dice"></i> 랜덤</button>
+                    <button class="btn-action" style="flex:0 0 auto; padding:8px 12px;" onclick="clearInputs('book')"><i class="fas fa-eraser"></i></button>
+                </div>
+                <div class="slot-list" id="book-slots"></div>
+                <div style="margin-top:auto;">
+                    <button class="btn-action btn-primary" style="width:100%; padding:16px;" onclick="printPage()"><i class="fas fa-print"></i> 인쇄하기</button>
+                </div>
+            </div>
+            <div class="preview-viewport">
+                <div id="preview-book-target" class="scale-wrapper page-zine"></div>
+            </div>
+        </div>
+    </div>
+</main>
+
+<datalist id="topic-list"></datalist>
+
+<button class="fab" id="fab-add" onclick="openModal('new')"><i class="fas fa-plus"></i></button>
+
+<div class="modal-overlay" id="modal">
+    <div class="modal-content">
+        <div class="modal-handle"></div>
+        <h2 style="margin:0; font-size:1.3rem;" id="modal-title">새 학습 카드</h2>
+        <input type="hidden" id="edit-id">
+
+        <div>
+            <span class="label">과목(Domain)</span>
+            <input type="text" id="in-domain" class="input-box">
+        </div>
+
+        <div>
+            <span class="label">토픽(Topic)</span>
+            <input type="text" id="in-topic" class="input-box" style="font-weight:700;">
+        </div>
+
+        <div>
+            <span class="label">키워드(Keyword)</span>
+            <input type="text" id="in-keyword" class="input-box">
+        </div>
+
+        <div>
+            <span class="label">중요도</span>
+            <div class="star-rating" id="star-wrap">
+                <button class="star-btn" onclick="setStar(1)">★</button>
+                <button class="star-btn" onclick="setStar(2)">★</button>
+                <button class="star-btn" onclick="setStar(3)">★</button>
+                <button class="star-btn" onclick="setStar(4)">★</button>
+                <button class="star-btn" onclick="setStar(5)">★</button>
+            </div>
+            <input type="hidden" id="in-star" value="3">
+        </div>
+
+        <div>
+            <span class="label">상세 메모</span>
+            <textarea id="in-memo" class="input-box" rows="3"></textarea>
+        </div>
+
+        <div style="display:flex; gap:10px; margin-top:10px;">
+            <button class="btn-action" style="background:#ffe3e3; color:#fa5252; border:none;" onclick="deleteItem()" id="btn-del">삭제</button>
+            <button class="btn-action" onclick="closeModal()">취소</button>
+            <button class="btn-action btn-primary" onclick="saveItem()">저장</button>
+        </div>
+    </div>
+</div>
+
+<div id="print-area" style="display:none;"></div>
+
+<script>
+    let dbData = [];
+    let currentTab = 'list';
+    const DB_NAME = "StudyCardDB";
+    const STORE = "items";
+    let db;
+
+    let flashList = [];
+    let flashIndex = 0;
+    let flashFlipped = false;
+
+    document.addEventListener('DOMContentLoaded', () => {
+        if(window.innerWidth < 1024) document.querySelector('.mobile-only-msg').style.display = 'block';
+        else document.querySelector('.mobile-only-msg').style.display = 'none';
+
+        initDB().then(() => {
+            loadData().then(() => {
+                createInputSlots('card');
+                createInputSlots('book');
+                renderList();
+            });
+        });
+        window.addEventListener('resize', () => {
+             if(window.innerWidth < 1024 && (currentTab === 'card' || currentTab === 'book')) setTab('list');
+             adjustScale();
+        });
+    });
+
+    /* --- TOAST Message Function --- */
+    function showToast(msg, type='info') {
+        let container = document.getElementById('toast-container');
+        if(!container) {
+            container = document.createElement('div');
+            container.id = 'toast-container';
+            container.className = 'toast-container';
+            document.body.appendChild(container);
+        }
+        
+        const el = document.createElement('div');
+        el.className = `toast ${type}`;
+        
+        let icon = '<i class="fas fa-info-circle"></i>';
+        if(type === 'success') icon = '<i class="fas fa-check-circle"></i>';
+        if(type === 'error') icon = '<i class="fas fa-exclamation-triangle"></i>';
+        
+        el.innerHTML = `${icon} <span>${msg}</span>`;
+        
+        container.appendChild(el);
+        
+        requestAnimationFrame(() => {
+            el.classList.add('show');
+        });
+        
+        setTimeout(() => {
+            el.classList.remove('show');
+            setTimeout(() => el.remove(), 300);
+        }, 3000);
+    }
+
+    /* --- DB Functions --- */
+    function initDB() {
+        return new Promise((resolve) => {
+            const req = indexedDB.open(DB_NAME, 1); 
+            req.onupgradeneeded = e => {
+                const d = e.target.result;
+                if(!d.objectStoreNames.contains(STORE)) d.createObjectStore(STORE, {keyPath: "id", autoIncrement: true});
+            };
+            req.onsuccess = e => { db = e.target.result; resolve(); };
+        });
+    }
+    async function loadData() {
+        const tx = db.transaction(STORE, 'readonly');
+        const req = tx.objectStore(STORE).getAll();
+        return new Promise(resolve => {
+            req.onsuccess = () => {
+                dbData = req.result || [];
+                updateDatalist();
+                resolve();
+            };
+        });
+    }
+    async function saveDataToDB(item) {
+        const tx = db.transaction(STORE, 'readwrite');
+        tx.objectStore(STORE).put(item);
+        return new Promise(r => tx.oncomplete = r);
+    }
+    async function deleteFromDB(id) {
+        const tx = db.transaction(STORE, 'readwrite');
+        tx.objectStore(STORE).delete(id);
+        return new Promise(r => tx.oncomplete = r);
+    }
+    async function resetDB() {
+        const tx = db.transaction(STORE, 'readwrite');
+        tx.objectStore(STORE).clear();
+        return new Promise(r => tx.oncomplete = r);
+    }
+
+    /* --- Tab & View Control --- */
+    function setTab(tab) {
+        currentTab = tab;
+        document.querySelectorAll('.tab-item').forEach(el => el.classList.remove('active'));
+        const tabs = document.querySelectorAll('.tab-item');
+        if(tab==='list') tabs[0].classList.add('active');
+        else if(tab==='flash') tabs[1].classList.add('active');
+        else if(tab==='card') tabs[2].classList.add('active');
+        else if(tab==='book') tabs[3].classList.add('active');
+        
+        document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
+        document.getElementById(`view-${tab}`).classList.add('active');
+
+        const fab = document.getElementById('fab-add');
+        if(tab === 'list') fab.style.display = 'flex';
+        else fab.style.display = 'none';
+
+        if(tab === 'flash') initFlashcards();
+        else if(tab !== 'list') {
+            renderPreviewFromInputs(tab);
+            setTimeout(adjustScale, 50);
+        }
+    }
+
+    /* --- List View Logic --- */
+    function renderList() {
+        const container = document.getElementById('grid-list');
+        const search = document.getElementById('search-input').value.toLowerCase();
+        container.innerHTML = '';
+        
+        const filtered = dbData.filter(d => 
+            (d.topic||'').toLowerCase().includes(search) || 
+            (d.keyword||'').toLowerCase().includes(search) ||
+            (d.domain||'').toLowerCase().includes(search)
+        ).reverse();
+
+        document.getElementById('empty-msg').style.display = filtered.length===0 ? 'block' : 'none';
+
+        filtered.forEach(item => {
+            const el = document.createElement('div');
+            el.className = 'card';
+            if(item.completed) el.style.opacity = '0.6';
+            
+            el.onclick = () => openModal('edit', item.id);
+            el.innerHTML = `
+                <div class="card-domain">${item.domain || 'General'}</div>
+                <div class="card-topic">${item.topic || 'No Topic'} ${item.completed ? '✅' : ''}</div>
+                <div class="card-key">${item.keyword || ''}</div>
+                <div class="card-star">${"★".repeat(item.star || 3)}</div>
+            `;
+            container.appendChild(el);
+        });
+    }
+
+    /* --- Flashcard Logic --- */
+    function initFlashcards() {
+        flashList = dbData.filter(d => !d.completed).reverse();
+        flashIndex = 0;
+        flashFlipped = false;
+        renderFlashcard();
+    }
+    
+    function shuffleFlash() {
+        flashList.sort(() => Math.random() - 0.5);
+        flashIndex = 0;
+        flashFlipped = false;
+        renderFlashcard();
+        showToast("카드를 섞었습니다.", "success");
+    }
+
+    async function toggleFlashComplete() {
+        if(flashList.length === 0) return;
+        const currentItem = flashList[flashIndex];
+        
+        currentItem.completed = true;
+        await saveDataToDB(currentItem);
+        
+        const dbIdx = dbData.findIndex(d => d.id === currentItem.id);
+        if(dbIdx > -1) dbData[dbIdx].completed = true;
+
+        flashList.splice(flashIndex, 1);
+        if(flashIndex >= flashList.length) flashIndex = 0;
+        
+        flashFlipped = false;
+        renderFlashcard();
+    }
+
+    async function resetFlashProgress() {
+        if(!confirm("모든 카드의 완료 상태를 초기화하시겠습니까?")) return;
+        for(let item of dbData) {
+            item.completed = false;
+            await saveDataToDB(item);
+        }
+        await loadData();
+        initFlashcards();
+        showToast("학습 상태가 초기화되었습니다.", "success");
+    }
+
+    function toggleFlashFlip() {
+        const inner = document.getElementById('flash-card-inner');
+        flashFlipped = !flashFlipped;
+        if(flashFlipped) inner.parentElement.classList.add('flipped');
+        else inner.parentElement.classList.remove('flipped');
+    }
+
+    function renderFlashcard() {
+        const container = document.querySelector('.flash-wrapper');
+        const emptyMsg = document.getElementById('flash-empty');
+        const cardScene = document.querySelector('.flash-scene');
+        
+        if(flashList.length === 0) {
+            container.style.display = 'none';
+            emptyMsg.style.display = 'block';
+            return;
+        }
+        
+        container.style.display = 'flex';
+        emptyMsg.style.display = 'none';
+        
+        flashFlipped = false;
+        cardScene.classList.remove('flipped');
+
+        const item = flashList[flashIndex];
+        
+        document.getElementById('f-domain').textContent = item.domain || 'General';
+        document.getElementById('f-topic').textContent = item.topic || 'Topic';
+        document.getElementById('f-star').textContent = "★".repeat(item.star || 3);
+        
+        document.getElementById('f-key-back').textContent = item.keyword || 'No Keyword';
+        document.getElementById('f-memo').textContent = item.memo || '메모가 없습니다.';
+        
+        document.getElementById('f-progress').textContent = `${flashIndex + 1} / ${flashList.length}`;
+    }
+
+    function nextFlash() {
+        if(flashList.length === 0) return;
+        flashIndex = (flashIndex + 1) % flashList.length;
+        renderFlashcard();
+    }
+
+    function prevFlash() {
+        if(flashList.length === 0) return;
+        flashIndex = (flashIndex - 1 + flashList.length) % flashList.length;
+        renderFlashcard();
+    }
+
+    /* --- Modal Logic --- */
+    function openModal(mode, id) {
+        document.getElementById('modal').style.display = 'flex';
+        const isEdit = mode === 'edit';
+        document.getElementById('btn-del').style.display = isEdit ? 'block' : 'none';
+        document.getElementById('modal-title').textContent = isEdit ? '카드 수정' : '새 카드 작성';
+        
+        if(isEdit) {
+            const item = dbData.find(d => d.id === id);
+            document.getElementById('edit-id').value = item.id;
+            document.getElementById('in-domain').value = item.domain;
+            document.getElementById('in-topic').value = item.topic;
+            document.getElementById('in-keyword').value = item.keyword;
+            document.getElementById('in-memo').value = item.memo;
+            setStar(item.star);
+        } else {
+            document.getElementById('edit-id').value = '';
+            document.getElementById('in-domain').value = '';
+            document.getElementById('in-topic').value = '';
+            document.getElementById('in-keyword').value = '';
+            document.getElementById('in-memo').value = '';
+            setStar(3);
+        }
+    }
+    function closeModal() { document.getElementById('modal').style.display = 'none'; }
+    document.getElementById('modal').addEventListener('click', e => { if(e.target.id === 'modal') closeModal(); });
+    function setStar(n) {
+        document.getElementById('in-star').value = n;
+        document.querySelectorAll('.star-btn').forEach((b, i) => b.classList.toggle('active', i < n));
+    }
+    async function saveItem() {
+        const idVal = document.getElementById('edit-id').value;
+        const id = idVal ? parseInt(idVal) : null;
+        
+        let existingItem = {};
+        if(id) {
+            existingItem = dbData.find(d => d.id === id) || {};
+        }
+
+        const item = {
+            domain: document.getElementById('in-domain').value,
+            topic: document.getElementById('in-topic').value,
+            keyword: document.getElementById('in-keyword').value,
+            memo: document.getElementById('in-memo').value,
+            star: parseInt(document.getElementById('in-star').value),
+            date: new Date().toISOString().split('T')[0],
+            completed: existingItem.completed || false
+        };
+
+        if(id) item.id = id;
+        if(!item.topic) return showToast("토픽은 필수입니다.", "error");
+
+        await saveDataToDB(item);
+        await loadData();
+        renderList();
+        closeModal();
+        showToast("저장되었습니다.", "success");
+    }
+    async function deleteItem() {
+        if(confirm('삭제하시겠습니까?')) {
+            await deleteFromDB(parseInt(document.getElementById('edit-id').value));
+            await loadData();
+            renderList();
+            closeModal();
+            showToast("삭제되었습니다.");
+        }
+    }
+    function resetData() {
+        if(confirm('전체 삭제하시겠습니까?')) {
+            resetDB().then(() => { dbData=[]; renderList(); showToast("전체 데이터가 삭제되었습니다."); });
+        }
+    }
+
+    /* --- Preview & Print Logic --- */
+    function updateDatalist() {
+        const dl = document.getElementById('topic-list');
+        dl.innerHTML = '';
+        [...new Set(dbData.map(d=>d.topic))].forEach(t => {
+            const op = document.createElement('option');
+            op.value = t; dl.appendChild(op);
+        });
+    }
+
+    function createInputSlots(type) {
+        const container = document.getElementById(`${type}-slots`);
+        container.innerHTML = '';
+        for(let i=0; i<8; i++) {
+            const div = document.createElement('div');
+            div.className = 'slot-item';
+            div.innerHTML = `
+                <div class="slot-num">${i+1}</div>
+                <input type="text" class="slot-input" id="${type}-in-${i}" list="topic-list" placeholder="Topic 검색" onchange="renderPreviewFromInputs('${type}')" oninput="renderPreviewFromInputs('${type}')">
+            `;
+            container.appendChild(div);
+        }
+    }
+
+    function clearInputs(type) {
+        for(let i=0; i<8; i++) document.getElementById(`${type}-in-${i}`).value = '';
+        renderPreviewFromInputs(type);
+        showToast("입력란을 비웠습니다.");
+    }
+
+    function fillRandom(type) {
+        if(dbData.length === 0) return showToast("데이터가 없습니다.", "error");
+        const shuffled = [...dbData].sort(()=>0.5-Math.random());
+        for(let i=0; i<8; i++) {
+            document.getElementById(`${type}-in-${i}`).value = shuffled[i] ? shuffled[i].topic : '';
+        }
+        renderPreviewFromInputs(type);
+        showToast("랜덤으로 채웠습니다.", "success");
+    }
+
+    function fillDate(type) {
+        const date = document.getElementById(`date-${type}`).value;
+        if(!date) return;
+        const targets = dbData.filter(d => d.date === date);
+        if(targets.length === 0) return showToast("해당 날짜의 데이터가 없습니다.", "error");
+        clearInputs(type);
+        for(let i=0; i<8; i++) {
+            if(targets[i]) document.getElementById(`${type}-in-${i}`).value = targets[i].topic;
+        }
+        renderPreviewFromInputs(type);
+        showToast(`${targets.length}건을 불러왔습니다.`, "success");
+    }
+
+    function renderPreviewFromInputs(type) {
+        const isCard = type === 'card';
+        const container = document.getElementById(isCard ? 'preview-card-target' : 'preview-book-target');
+        container.innerHTML = '';
+
+        const inputValues = [];
+        for(let i=0; i<8; i++) inputValues.push(document.getElementById(`${type}-in-${i}`).value);
+
+        const zineMap = [4, 3, 2, 1, 5, 6, 7, 0];
+
+        for(let i=0; i<8; i++) {
+            let dataIdx = isCard ? i : zineMap[i];
+            let topicVal = inputValues[dataIdx];
+            let item = dbData.find(d => d.topic === topicVal) || {};
+            if(!item.topic && topicVal) item = { topic: topicVal, keyword: '?', domain: '직접 입력' };
+            let isEmpty = !item.topic;
+
+            if(isCard) {
+                const div = document.createElement('div');
+                div.className = 'p-card';
+                div.innerHTML = `
+                    <div class="p-header">
+                        <span>${item.domain||''}</span>
+                        <span>${isEmpty ? '' : "★".repeat(item.star||3)}</span>
+                    </div>
+                    <div class="p-topic">${item.topic||''}</div>
+                    <div class="p-body">${item.keyword||''}</div>
+                    <div class="p-footer">${item.memo||''}</div>
+                `;
+                container.appendChild(div);
+            } else {
+                const div = document.createElement('div');
+                div.className = `z-cell ${i<4 ? 'inv' : ''}`;
+                div.innerHTML = `
+                    <div class="z-content">
+                        <div class="z-head">
+                            <span>${item.domain||''}</span>
+                            <span style="color:#fbbf24">${isEmpty ? '' : "★".repeat(item.star||3)}</span>
+                        </div>
+                        <div class="z-mid">${item.keyword||(item.topic||'')}</div>
+                        <div class="z-bot">${item.topic ? (item.topic + ' : ' + (item.memo||'')) : ''}</div>
+                    </div>
+                    <div class="z-num">${dataIdx+1}</div>
+                `;
+                container.appendChild(div);
+            }
+        }
+
+        const pArea = document.getElementById('print-area');
+        pArea.innerHTML = '';
+        const clone = container.cloneNode(true);
+        clone.style.transform = ''; 
+        clone.style.boxShadow = '';
+        pArea.appendChild(clone);
+    }
+
+    function adjustScale() {
+        if(currentTab === 'list' || currentTab === 'flash') return;
+        const viewport = document.querySelector('.view-section.active .preview-viewport');
+        const target = document.querySelector('.view-section.active .scale-wrapper');
+        if(!viewport || !target) return;
+
+        const pW = viewport.clientWidth - 60; 
+        const pH = viewport.clientHeight - 60;
+        const isCard = currentTab === 'card';
+        const baseW = isCard ? 794 : 1123; 
+        const baseH = isCard ? 1123 : 794;
+
+        const scale = Math.min(pW / baseW, pH / baseH);
+        target.style.transform = `scale(${scale})`;
+    }
+
+    function printPage() {
+        if (currentTab === 'book') {
+            document.body.className = 'print-mode-book';
+        } else {
+            document.body.className = 'print-mode-card';
+        }
+        window.print();
+    }
+
+    function exportExcel() {
+        if(dbData.length === 0) return showToast("데이터가 없습니다.", "error");
+        const koreanData = dbData.map(item => ({
+            "도메인": item.domain,
+            "토픽": item.topic,
+            "키워드": item.keyword,
+            "메모": item.memo,
+            "중요도": item.star,
+            "날짜": item.date,
+            "완료여부": item.completed ? "Y" : "N"
+        }));
+        const ws = XLSX.utils.json_to_sheet(koreanData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "StudyItems");
+        XLSX.writeFile(wb, `study_card_${new Date().toISOString().slice(0,10)}.xlsx`);
+        showToast("엑셀 파일이 다운로드되었습니다.", "success");
+    }
+
+    function importExcel(input) {
+        const file = input.files[0];
+        if(!file) return;
+
+        // 1. CSV 파일인 경우
+        if (file.name.toLowerCase().endsWith('.csv')) {
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const text = e.target.result;
+                    const rows = text.split(/\r?\n/).filter(r => r.trim());
+                    
+                    if(rows.length === 0) {
+                        showToast('데이터가 없는 파일입니다.', 'error');
+                        return;
+                    }
+
+                    const parseCSVLine = (line) => {
+                        const res = [];
+                        let current = '';
+                        let inQuote = false;
+                        for (let i = 0; i < line.length; i++) {
+                            const char = line[i];
+                            if (char === '"') {
+                                inQuote = !inQuote; 
+                            } else if (char === ',' && !inQuote) {
+                                res.push(current.trim()); 
+                                current = '';
+                            } else {
+                                current += char;
+                            }
+                        }
+                        res.push(current.trim());
+                        return res.map(val => {
+                            if(val.startsWith('"') && val.endsWith('"')) return val.slice(1, -1).replace(/""/g, '"');
+                            return val;
+                        });
+                    };
+
+                    const headers = parseCSVLine(rows[0]).map(h => h.replace(/^\uFEFF/, '').trim());
+                    
+                    let count = 0;
+                    for(let i = 1; i < rows.length; i++) {
+                        const cols = parseCSVLine(rows[i]);
+                        if(cols.length < 2) continue;
+
+                        const row = {};
+                        headers.forEach((h, idx) => {
+                            if(idx < cols.length) row[h] = cols[idx];
+                        });
+
+                        await saveDataToDB({
+                            domain: row['도메인'] || row.domain || row.Domain || '',
+                            topic: row['토픽'] || row.topic || row.Topic || '',
+                            keyword: row['키워드'] || row.keyword || row.Keyword || '',
+                            memo: row['메모'] || row.memo || row.Memo || '',
+                            star: row['중요도'] || row.star || 3,
+                            date: new Date().toISOString().split('T')[0],
+                            completed: false
+                        });
+                        count++;
+                    }
+                    
+                    await loadData();
+                    document.getElementById('search-input').value = '';
+                    renderList(); 
+                    showToast(`${count}건의 데이터가 추가되었습니다.`, "success");
+
+                } catch(err) {
+                    console.error(err);
+                    showToast('CSV 형식 오류가 발생했습니다.', 'error');
+                }
+                input.value = '';
+            };
+            reader.readAsText(file, 'UTF-8');
+            return;
+        }
+
+        // 2. 엑셀(.xlsx) 파일인 경우
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const data = e.target.result;
+                const wb = XLSX.read(data, {type: 'array'});
+                const ws = wb.Sheets[wb.SheetNames[0]];
+                const json = XLSX.utils.sheet_to_json(ws);
+
+                if(json.length > 0) {
+                    if(confirm(`${json.length}건을 가져오시겠습니까?`)) {
+                        for(let row of json) {
+                            await saveDataToDB({
+                                domain: row['도메인'] || row.domain || '',
+                                topic: row['토픽'] || row.topic || '',
+                                keyword: row['키워드'] || row.keyword || '',
+                                memo: row['메모'] || row.memo || '',
+                                star: row['중요도'] || row.star || 3,
+                                date: new Date().toISOString().split('T')[0],
+                                completed: (row['완료여부'] === 'Y' || row.completed === true)
+                            });
+                        }
+                        await loadData();
+                        document.getElementById('search-input').value = ''; 
+                        renderList(); 
+                        showToast("가져오기가 완료되었습니다.", "success");
+                    }
+                } else {
+                    showToast('데이터를 읽을 수 없습니다.', 'error');
+                }
+            } catch(err) { 
+                console.error(err);
+                showToast('엑셀 파일 형식을 확인해주세요.', 'error'); 
+            }
+            input.value = '';
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    function exportJSON() {
+        if(dbData.length === 0) return showToast("저장할 데이터가 없습니다.", "error");
+        const dataStr = JSON.stringify(dbData, null, 2);
+        const blob = new Blob([dataStr], {type: "application/json"});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `study_card_backup_${new Date().toISOString().slice(0,10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast("백업 파일이 저장되었습니다.", "success");
+    }
+
+    function importJSON(input) {
+        const file = input.files[0];
+        if(!file) return;
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const loadedData = JSON.parse(e.target.result);
+                if(Array.isArray(loadedData) && loadedData.length > 0) {
+                    if(confirm(`${loadedData.length}개의 데이터를 복원하시겠습니까?`)) {
+                        for(let item of loadedData) {
+                            const { id, ...rest } = item;
+                            await saveDataToDB(rest);
+                        }
+                        await loadData();
+                        document.getElementById('search-input').value = '';
+                        renderList();
+                        showToast('복원이 완료되었습니다.', "success");
+                    }
+                }
+            } catch (err) { showToast('JSON 파일 오류입니다.', 'error'); }
+        };
+        reader.readAsText(file);
+        input.value = '';
+    }
+
+    // [PC 전용 키보드 단축키 추가]
+    document.addEventListener('keydown', (e) => {
+        // 화면 너비가 1024px 미만(모바일/태블릿)이면 작동 안 함
+        if(window.innerWidth < 1024) return;
+
+        const modal = document.getElementById('modal');
+        // 모달창이 열려있는 경우
+        if(modal.style.display === 'flex') {
+            // Ctrl + S : 저장
+            if((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
+                e.preventDefault(); // 브라우저 저장 방지
+                saveItem();
+            }
+            return;
+        }
+
+        // 플래시카드 탭인 경우
+        if(currentTab === 'flash') {
+            switch(e.key) {
+                case ' ': // 스페이스바: 뒤집기
+                    e.preventDefault(); // 스크롤 방지
+                    toggleFlashFlip();
+                    break;
+                case 'ArrowLeft': // 왼쪽 화살표: 이전
+                    prevFlash();
+                    break;
+                case 'ArrowRight': // 오른쪽 화살표: 다음
+                    nextFlash();
+                    break;
+                case 'Enter': // 엔터: 완료 체크
+                    toggleFlashComplete();
+                    break;
+                case 'r': // R: 셔플
+                case 'R':
+                    shuffleFlash();
+                    break;
+            }
+        }
+    });
+</script>
+</body>
+</html>

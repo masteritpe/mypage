@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>엑셀 이미지 일괄 삭제기</title>
+  
+  <script src="https://cdn.jsdelivr.net/npm/exceljs/dist/exceljs.min.js"></script>
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  
+  <style>
+    /* exceltoweb.html의 디자인 시스템 변수 적용 */
+    :root {
+      --bg-body: #F9FAFB;
+      --bg-surface: #FFFFFF;
+      --border-light: #F3F4F6;
+      --border-base: #E5E7EB;
+      --text-main: #111827;
+      --text-muted: #6B7280;
+      --primary: #111827;       
+      --primary-hover: #374151;
+      --secondary: #FFFFFF;
+      --secondary-hover: #F9FAFB;
+      --danger: #EF4444;
+      --success: #10B981;
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+      --radius-md: 8px;
+      --radius-lg: 12px;
+    }
+
+    /* 기본 리셋 & 폰트 */
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background: var(--bg-body);
+      color: var(--text-main);
+      margin: 0;
+      padding: 40px 20px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* 상단 헤더 & 컨트롤 레이아웃 */
+    .dashboard-header {
+      max-width: 1000px;
+      margin: 0 auto 24px auto;
+    }
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .title-area {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .title-area i { font-size: 28px; color: var(--text-main); }
+    h2 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+    
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+
+    /* 안내 문구 바 */
+    .instructions {
+      display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+      font-size: 13px; color: var(--text-muted);
+      background: var(--bg-surface); padding: 12px 20px;
+      border-radius: var(--radius-md); border: 1px solid var(--border-base);
+    }
+    .instructions span { display: inline-flex; align-items: center; gap: 6px; }
+    .instructions i { font-size: 16px; }
+
+    /* 버튼 스타일 */
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 10px 18px; border-radius: var(--radius-md);
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      border: 1px solid transparent;
+      outline: none;
+    }
+    .btn-primary {
+      background: var(--primary); color: white;
+      box-shadow: var(--shadow-sm);
+    }
+    .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
+    
+    .btn-outline {
+      background: var(--secondary); color: var(--text-main);
+      border-color: var(--border-base); box-shadow: var(--shadow-sm);
+    }
+    .btn-outline:hover { background: var(--secondary-hover); border-color: #D1D5DB; }
+
+    /* 메인 레이아웃 (2단 그리드) */
+    .layout-grid {
+      max-width: 1000px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    /* 카드 컴포넌트 */
+    .card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-base);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-md);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .card-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border-light);
+      font-weight: 600;
+      font-size: 15px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #FAFAFA;
+    }
+    .card-header .ph { margin-right: 6px; color: var(--text-muted); font-size: 18px; vertical-align: middle; }
+    .card-body {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      flex: 1;
+    }
+
+    /* 입력 폼 스타일 */
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+    .input-field {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid var(--border-base);
+      border-radius: var(--radius-md);
+      font-size: 14px;
+      font-family: inherit;
+      color: var(--text-main);
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .input-field:focus {
+      border-color: var(--primary);
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.1);
+    }
+    .input-field::placeholder { color: #9CA3AF; }
+
+    /* 커스텀 파일 업로드 영역 */
+    .file-upload-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    input[type="file"] { display: none; }
+    .file-name-display {
+      font-size: 13px;
+      color: var(--text-muted);
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      padding: 10px 14px;
+      background: var(--bg-body);
+      border-radius: var(--radius-md);
+      border: 1px dashed var(--border-base);
+    }
+
+    /* 로그 및 상태 창 */
+    .status-text {
+      font-size: 14px;
+      font-weight: 500;
+      padding: 12px;
+      border-radius: var(--radius-md);
+      background: var(--bg-body);
+      border: 1px solid var(--border-light);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .logbox {
+      background: #1F2937; /* 다크 테마 느낌으로 콘솔 효과 */
+      color: #E5E7EB;
+      border-radius: var(--radius-md);
+      padding: 14px;
+      font-size: 13px;
+      line-height: 1.6;
+      font-family: 'JetBrains Mono', 'Courier New', monospace;
+      flex: 1;
+      min-height: 150px;
+      max-height: 250px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    /* 스크롤바 */
+    .logbox::-webkit-scrollbar { width: 8px; }
+    .logbox::-webkit-scrollbar-track { background: transparent; }
+    .logbox::-webkit-scrollbar-thumb { background: #4B5563; border-radius: 4px; }
+    .logbox::-webkit-scrollbar-thumb:hover { background: #6B7280; }
+
+    /* 반응형 */
+    @media (max-width: 768px) {
+      body { padding: 20px 16px; }
+      .layout-grid { grid-template-columns: 1fr; }
+      .header-top { flex-direction: column; align-items: flex-start; }
+      .actions { width: 100%; justify-content: flex-start; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="dashboard-header">
+    <div class="header-top">
+      <div class="title-area">
+        <i class="ph ph-image-square"></i>
+        <h2>엑셀 이미지 삭제기</h2>
+      </div>
+      <div class="actions">
+        <button class="btn btn-outline" id="clearBtn" type="button">
+          <i class="ph ph-arrow-counter-clockwise"></i> 전체 초기화
+        </button>
+      </div>
+    </div>
+
+    <div class="instructions">
+      <span><i class="ph ph-file-xls"></i> 엑셀(.xlsx) 파일 내의 무거운 이미지 객체들을 스크립트로 일괄 제거합니다.</span>
+      <span style="color: #D1D5DB;">|</span>
+      <span><i class="ph ph-shield-check"></i> 브라우저 내에서만 처리되며 서버로 파일이 전송되지 않습니다.</span>
+    </div>
+  </div>
+
+  <main class="layout-grid">
+    
+    <section class="card">
+      <div class="card-header">
+        <div><i class="ph ph-sliders-horizontal"></i> 처리 설정</div>
+      </div>
+      <div class="card-body">
+        
+        <div class="form-group">
+          <label>1. 엑셀 파일 선택 (.xlsx)</label>
+          <div class="file-upload-wrapper">
+            <label for="excelFile" class="btn btn-outline">
+              <i class="ph ph-folder-open"></i> 파일 찾기
+            </label>
+            <input type="file" id="excelFile" accept=".xlsx" />
+            <div id="fileNameDisplay" class="file-name-display">선택된 파일이 없습니다</div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="sheetName">2. 타겟 시트명 (선택사항)</label>
+          <input type="text" id="sheetName" class="input-field" placeholder="예: Sheet1 (비워두면 모든 시트 처리)" />
+          <span style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+            <i class="ph ph-info"></i> 비워두면 통합 문서 내의 <b>모든 시트</b>에서 이미지를 제거합니다.
+          </span>
+        </div>
+
+        <div style="margin-top: auto; padding-top: 10px;">
+          <button id="removeBtn" type="button" class="btn btn-primary" style="width: 100%; justify-content: center; padding: 12px;">
+            <i class="ph ph-broom"></i> 이미지 제거 및 다운로드
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-header">
+        <div><i class="ph ph-terminal-window"></i> 처리 로그</div>
+        <button id="clearLogBtn" class="btn btn-outline" style="padding: 4px 10px; font-size: 12px; border-radius: 6px;">
+          <i class="ph ph-trash"></i> 로그 지우기
+        </button>
+      </div>
+      <div class="card-body" style="gap: 12px;">
+        
+        <div id="status" class="status-text">
+          <i class="ph ph-dots-three-circle" style="font-size: 20px; color: var(--text-muted);"></i>
+          대기 중... 파일을 업로드해주세요.
+        </div>
+
+        <div class="logbox" id="logBox">시스템 준비 완료.</div>
+        
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    // DOM 요소를 exceltoweb 컨벤션과 매핑
+    const fileInput = document.getElementById('excelFile');
+    const fileNameDisplay = document.getElementById('fileNameDisplay');
+    const sheetNameInput = document.getElementById('sheetName');
+    const statusBox = document.getElementById('status');
+    const logBox = document.getElementById('logBox');
+
+    // 파일 선택 시 파일명 표시 UI 업데이트
+    fileInput.addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (file) {
+        fileNameDisplay.textContent = file.name;
+        fileNameDisplay.style.color = 'var(--text-main)';
+        fileNameDisplay.style.fontWeight = '500';
+        updateStatus(`<i class="ph ph-check-circle" style="color: var(--success); font-size:20px;"></i> 파일 준비됨: ${file.name}`);
+      } else {
+        fileNameDisplay.textContent = '선택된 파일이 없습니다';
+        fileNameDisplay.style.color = 'var(--text-muted)';
+        fileNameDisplay.style.fontWeight = 'normal';
+      }
+    });
+
+    // 로그 추가 함수
+    function appendLog(msg) {
+      const ts = new Date().toLocaleTimeString('ko-KR', { hour12: false });
+      const line = `[${ts}] ${msg}`;
+      if (logBox.textContent.trim() === '시스템 준비 완료.') {
+        logBox.textContent = line;
+      } else {
+        logBox.textContent = line + "\n" + logBox.textContent;
+      }
+    }
+
+    // 상태창 업데이트 함수
+    function updateStatus(htmlContent) {
+      statusBox.innerHTML = htmlContent;
+    }
+
+    // 메인 로직: 이미지 제거
+    async function removeImages() {
+      const file = fileInput.files[0];
+      if (!file) {
+        alert("Excel 파일을 먼저 선택해주세요.");
+        return;
+      }
+      const sheetName = sheetNameInput.value.trim();
+
+      updateStatus(`<i class="ph ph-spinner-gap ph-spin" style="color: var(--primary); font-size:20px;"></i> 파일을 처리하고 있습니다...`);
+      appendLog("처리 시작: " + file.name);
+
+      const workbook = new ExcelJS.Workbook();
+      const reader = new FileReader();
+
+      reader.onload = async (e) => {
+        try {
+          const buffer = e.target.result;
+          await workbook.xlsx.load(buffer);
+          let count = 0;
+
+          if (sheetName) {
+            const ws = workbook.getWorksheet(sheetName);
+            if (!ws) {
+              alert(`'${sheetName}' 시트가 존재하지 않습니다.`);
+              updateStatus(`<i class="ph ph-x-circle" style="color: var(--danger); font-size:20px;"></i> 오류: 시트가 존재하지 않습니다.`);
+              appendLog("에러: 시트 찾을 수 없음 (" + sheetName + ")");
+              return;
+            }
+            ws._media = []; // 이미지 배열 초기화
+            count++;
+            appendLog(`'${sheetName}' 시트의 미디어 요소 초기화 완료`);
+          } else {
+            workbook.worksheets.forEach(ws => {
+              ws._media = [];
+              count++;
+            });
+            appendLog(`전체 시트(${count}개)의 미디어 요소 초기화 완료`);
+          }
+
+          // 파일 다운로드 생성
+          appendLog("변경된 파일 빌드 중...");
+          const out = await workbook.xlsx.writeBuffer();
+          const blob = new Blob([out], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+          const link = document.createElement("a");
+          link.href = URL.createObjectURL(blob);
+          
+          // 원본 파일명에 접미사 추가
+          const originalName = file.name.replace(/\.[^/.]+$/, "");
+          link.download = `${originalName}_이미지제거.xlsx`;
+          link.click();
+
+          updateStatus(`<i class="ph ph-check-circle" style="color: var(--success); font-size:20px;"></i> ${count}개 시트 처리 및 저장 완료`);
+          appendLog("작업 완료. 파일이 다운로드 되었습니다.");
+
+        } catch (error) {
+          updateStatus(`<i class="ph ph-warning" style="color: var(--danger); font-size:20px;"></i> 처리 중 오류 발생`);
+          appendLog("시스템 에러: " + error.message);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    // 이벤트 리스너 등록
+    document.getElementById('removeBtn').addEventListener('click', removeImages);
+    
+    document.getElementById('clearBtn').addEventListener('click', () => {
+      fileInput.value = '';
+      fileNameDisplay.textContent = '선택된 파일이 없습니다';
+      fileNameDisplay.style.color = 'var(--text-muted)';
+      fileNameDisplay.style.fontWeight = 'normal';
+      sheetNameInput.value = '';
+      updateStatus(`<i class="ph ph-dots-three-circle" style="font-size: 20px; color: var(--text-muted);"></i> 대기 중... 파일을 업로드해주세요.`);
+      logBox.textContent = '시스템 준비 완료.';
+    });
+
+    document.getElementById('clearLogBtn').addEventListener('click', () => {
+      logBox.textContent = '로그가 초기화되었습니다.';
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Media to MP3 Converter & Merger</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lamejs/1.2.1/lame.min.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+
+        :root {
+            --primary-color: #667eea;
+            --secondary-color: #764ba2;
+            --bg-color: #f4f7f6;
+            --card-bg: #ffffff;
+            --text-main: #2d3436;
+            --text-muted: #636e72;
+            --shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
+            --border-radius: 24px;
+        }
+
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            background-color: var(--card-bg);
+            width: 100%;
+            max-width: 520px;
+            padding: 40px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-top: 0;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        p.subtitle {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            margin-bottom: 32px;
+            line-height: 1.5;
+        }
+
+        /* 파일 업로드 영역 */
+        .upload-area {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border: 2px dashed #dfe6e9;
+            border-radius: 16px;
+            padding: 40px 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 24px;
+            background-color: #fafbfc;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .upload-area:hover {
+            border-color: var(--primary-color);
+            background-color: #f0f4f8;
+        }
+
+        .upload-area input[type="file"] { display: none; }
+
+        .upload-icon {
+            color: #a4b0be;
+            margin-bottom: 12px;
+            transition: color 0.3s ease;
+        }
+
+        .upload-area:hover .upload-icon { color: var(--primary-color); }
+
+        /* 파일 목록 스타일 */
+        .file-list-header {
+            font-weight: 600;
+            font-size: 1.05rem;
+            text-align: left;
+            margin-bottom: 12px;
+            display: none;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .reset-btn {
+            font-size: 0.85rem;
+            color: #e74c3c;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0;
+            text-decoration: underline;
+        }
+
+        .file-list {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 24px 0;
+            text-align: left;
+            max-height: 160px;
+            overflow-y: auto;
+        }
+
+        .file-list li {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 10px 14px;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            border: 1px solid #edf2f7;
+            word-break: break-all;
+        }
+
+        .file-list li::before {
+            content: '🎬';
+            margin-right: 10px;
+            font-size: 1.1rem;
+        }
+        .file-list li.audio-file::before {
+            content: '🎵';
+        }
+
+        /* 컨트롤 영역 */
+        .control-group {
+            text-align: left;
+            margin-bottom: 24px;
+            background: #fafbfc;
+            padding: 20px;
+            border-radius: 16px;
+            border: 1px solid #edf2f7;
+        }
+
+        .control-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .control-header label {
+            font-weight: 600;
+            font-size: 1.05rem;
+        }
+
+        .speed-value {
+            font-weight: 700;
+            color: var(--primary-color);
+            font-size: 1.1rem;
+            background: #eef2ff;
+            padding: 4px 12px;
+            border-radius: 20px;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            -webkit-appearance: none;
+            height: 8px;
+            background: #dfe6e9;
+            border-radius: 4px;
+            outline: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--primary-color);
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(102, 126, 234, 0.4);
+            transition: transform 0.1s;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.15); }
+
+        /* 내보내기 버튼 */
+        .btn-export {
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            padding: 16px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: white;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            border: none;
+            border-radius: 16px;
+            cursor: pointer;
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .btn-export:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 25px rgba(102, 126, 234, 0.4);
+        }
+        .btn-export:disabled {
+            background: #b2bec3;
+            box-shadow: none;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* 스크롤바 커스텀 */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+        
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Media to MP3 Converter</h1>
+        <p class="subtitle">동영상(MP4)이나 오디오에서 소리만 추출하고,<br>여러 파일을 하나로 합쳐 원하는 속도의 MP3로 저장하세요.</p>
+
+        <label class="upload-area" id="drop-zone">
+            <input type="file" id="media-upload" accept="audio/*,video/*" multiple>
+            <svg class="upload-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="12" y1="18" x2="12" y2="12"></line>
+                <line x1="9" y1="15" x2="15" y2="15"></line>
+            </svg>
+            <div style="color: #636e72; font-weight: 500;">클릭 또는 파일을 드래그하여 추가</div>
+        </label>
+
+        <div class="file-list-header" id="list-header">
+            <span>추출 및 병합 대기열 (<span id="file-count">0</span>)</span>
+            <button class="reset-btn" id="reset-btn">초기화</button>
+        </div>
+        <ul class="file-list" id="file-list"></ul>
+
+        <div class="control-group">
+            <div class="control-header">
+                <label for="speed-slider">최종 재생 속도 적용</label>
+                <span class="speed-value" id="speed-display">1.0x</span>
+            </div>
+            <input type="range" id="speed-slider" min="0.5" max="2.0" step="0.1" value="1.0">
+        </div>
+
+        <button class="btn-export" id="export-btn" disabled>오디오 추출 및 MP3로 저장</button>
+    </div>
+
+    <script>
+        const mediaUpload = document.getElementById('media-upload');
+        const dropZone = document.getElementById('drop-zone');
+        const fileListElement = document.getElementById('file-list');
+        const listHeader = document.getElementById('list-header');
+        const fileCountDisplay = document.getElementById('file-count');
+        const resetBtn = document.getElementById('reset-btn');
+        const speedSlider = document.getElementById('speed-slider');
+        const speedDisplay = document.getElementById('speed-display');
+        const exportBtn = document.getElementById('export-btn');
+
+        let mediaFiles = [];
+        let audioContext = null;
+
+        // 파일 추가 로직 (오디오 및 비디오 허용)
+        function handleFiles(files) {
+            for (let i = 0; i < files.length; i++) {
+                if (files[i].type.startsWith('audio/') || files[i].type.startsWith('video/')) {
+                    mediaFiles.push(files[i]);
+                }
+            }
+            updateFileList();
+        }
+
+        // UI 업데이트
+        function updateFileList() {
+            fileListElement.innerHTML = '';
+            
+            if (mediaFiles.length > 0) {
+                listHeader.style.display = 'flex';
+                fileCountDisplay.textContent = mediaFiles.length;
+                exportBtn.disabled = false;
+                
+                exportBtn.textContent = mediaFiles.length > 1 ? "순서대로 병합 및 MP3 저장" : "오디오 추출 및 MP3 저장";
+
+                mediaFiles.forEach(file => {
+                    const li = document.createElement('li');
+                    li.textContent = file.name;
+                    if (file.type.startsWith('audio/')) {
+                        li.classList.add('audio-file'); // 아이콘 변경용 클래스
+                    }
+                    fileListElement.appendChild(li);
+                });
+            } else {
+                listHeader.style.display = 'none';
+                exportBtn.disabled = true;
+                exportBtn.textContent = "오디오 추출 및 MP3로 저장";
+            }
+        }
+
+        // 초기화 버튼
+        resetBtn.addEventListener('click', () => {
+            mediaFiles = [];
+            mediaUpload.value = '';
+            updateFileList();
+        });
+
+        // 파일 업로드 이벤트
+        mediaUpload.addEventListener('change', (e) => handleFiles(e.target.files));
+
+        // 드래그 앤 드롭
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.borderColor = '#667eea'; dropZone.style.backgroundColor = '#f0f4f8'; });
+        dropZone.addEventListener('dragleave', () => { dropZone.style.borderColor = '#dfe6e9'; dropZone.style.backgroundColor = '#fafbfc'; });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = '#dfe6e9';
+            dropZone.style.backgroundColor = '#fafbfc';
+            if (e.dataTransfer.files.length > 0) handleFiles(e.dataTransfer.files);
+        });
+
+        // 속도 슬라이더 변경
+        speedSlider.addEventListener('input', function() {
+            speedDisplay.textContent = parseFloat(this.value).toFixed(1) + 'x';
+        });
+
+        // 변환 로직 (동영상에서 오디오 디코딩 -> 병합 -> 속도변경 -> MP3 인코딩)
+        exportBtn.addEventListener('click', async function() {
+            if (mediaFiles.length === 0) return;
+
+            exportBtn.innerHTML = `
+                <svg style="animation: spin 1s linear infinite; margin-right: 8px;" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
+                </svg> 추출 및 변환 중... (브라우저를 닫지 마세요)
+            `;
+            exportBtn.disabled = true;
+
+            try {
+                if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+                // 1. 모든 파일의 오디오 트랙 디코딩
+                const decodedBuffers = [];
+                for (let file of mediaFiles) {
+                    const arrayBuffer = await file.arrayBuffer();
+                    // 비디오 파일이더라도 여기서 오디오 데이터만 자동으로 추출됩니다.
+                    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+                    decodedBuffers.push(audioBuffer);
+                }
+
+                // 2. 병합을 위한 총 길이 및 최대 채널 수 계산
+                let totalLength = 0;
+                let maxChannels = 1;
+                const sampleRate = decodedBuffers[0].sampleRate;
+
+                decodedBuffers.forEach(buffer => {
+                    totalLength += buffer.length;
+                    maxChannels = Math.max(maxChannels, buffer.numberOfChannels);
+                });
+
+                // 3. 임시 버퍼에 모든 오디오 이어 붙이기 (Merge)
+                const mergedBuffer = audioContext.createBuffer(maxChannels, totalLength, sampleRate);
+                let offset = 0;
+
+                decodedBuffers.forEach(buffer => {
+                    for (let channel = 0; channel < maxChannels; channel++) {
+                        const sourceChannel = channel < buffer.numberOfChannels ? channel : 0; // 모노 파일일 경우 복사
+                        mergedBuffer.getChannelData(channel).set(buffer.getChannelData(sourceChannel), offset);
+                    }
+                    offset += buffer.length;
+                });
+
+                // 4. 병합된 버퍼에 재생 속도 적용 렌더링
+                const playbackRate = parseFloat(speedSlider.value);
+                const newDuration = mergedBuffer.duration / playbackRate;
+                
+                const offlineContext = new OfflineAudioContext(
+                    maxChannels,
+                    Math.ceil(sampleRate * newDuration),
+                    sampleRate
+                );
+
+                const source = offlineContext.createBufferSource();
+                source.buffer = mergedBuffer;
+                source.playbackRate.value = playbackRate;
+                source.connect(offlineContext.destination);
+                source.start();
+
+                const finalRenderedBuffer = await offlineContext.startRendering();
+                
+                // 5. lamejs를 활용한 최종 MP3 인코딩
+                const mp3Blob = encodeToMP3(finalRenderedBuffer);
+                
+                // 6. 다운로드 처리
+                const url = URL.createObjectURL(mp3Blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                
+                const prefix = mediaFiles.length > 1 ? "Merged" : "Extracted";
+                a.download = `${prefix}_Audio_${playbackRate}x.mp3`;
+                
+                document.body.appendChild(a);
+                a.click();
+                
+                setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+
+            } catch (error) {
+                console.error('Extraction error:', error);
+                alert("파일 처리 중 오류가 발생했습니다. 브라우저 메모리가 부족하거나 지원하지 않는 파일 형식일 수 있습니다.");
+            } finally {
+                updateFileList(); // 버튼 텍스트 원상복구 및 상태 초기화를 위해 호출
+            }
+        });
+
+        // Lamejs 인코딩 함수
+        function encodeToMP3(audioBuffer) {
+            const channels = audioBuffer.numberOfChannels;
+            const sampleRate = audioBuffer.sampleRate;
+            const kbps = 128; // 128kbps 비트레이트
+            const mp3encoder = new lamejs.Mp3Encoder(channels, sampleRate, kbps);
+            const mp3Data = [];
+
+            const left = audioBuffer.getChannelData(0);
+            const right = channels > 1 ? audioBuffer.getChannelData(1) : left;
+
+            const sampleBlockSize = 1152; 
+            
+            const floatToInt16 = (f32) => {
+                const i16 = new Int16Array(f32.length);
+                for (let i = 0; i < f32.length; i++) {
+                    let s = Math.max(-1, Math.min(1, f32[i]));
+                    i16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                }
+                return i16;
+            };
+
+            const leftInt16 = floatToInt16(left);
+            const rightInt16 = floatToInt16(right);
+
+            for (let i = 0; i < leftInt16.length; i += sampleBlockSize) {
+                const leftChunk = leftInt16.subarray(i, i + sampleBlockSize);
+                const rightChunk = rightInt16.subarray(i, i + sampleBlockSize);
+                let mp3buf = (channels === 2) ? mp3encoder.encodeBuffer(leftChunk, rightChunk) : mp3encoder.encodeBuffer(leftChunk);
+                if (mp3buf.length > 0) mp3Data.push(mp3buf);
+            }
+
+            const mp3buf = mp3encoder.flush();
+            if (mp3buf.length > 0) mp3Data.push(mp3buf);
+
+            return new Blob(mp3Data, { type: 'audio/mp3' });
+        }
+    </script>
+</body>
+</html>

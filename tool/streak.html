@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>해빗 트래커</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  
+  <style>
+    :root {
+      /* Premium Diary Palette */
+      --bg-body: #F9F8F5; /* 따뜻한 크림/오프화이트 */
+      --bg-card: #FFFFFF;
+      
+      --text-main: #2D2C2A; /* 완전한 검은색이 아닌 부드러운 다크 브라운/그레이 */
+      --text-sub: #8C8A85;
+      --border-light: #EBEAE4;
+      --border-dark: #D4D2C9;
+      
+      --primary: #74927A; /* 차분한 세이지 그린 */
+      --primary-hover: #5A7660;
+      --primary-light: #E7EFE9;
+      
+      --accent: #D4A373; /* 따뜻한 포인트 컬러 (베이지/카라멜) */
+      --danger: #E07A5F;
+      
+      /* Soft & Elegant Shadows */
+      --shadow-sm: 0 2px 8px rgba(45, 44, 42, 0.04);
+      --shadow-lg: 0 12px 32px rgba(45, 44, 42, 0.06);
+      --radius: 20px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Pretendard", -apple-system, BlinkMacSystemFont, serif;
+      background: var(--bg-body);
+      color: var(--text-main);
+      font-size: 15px;
+      line-height: 1.6;
+      letter-spacing: -0.01em;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Layout */
+    .app-container {
+      max-width: 1080px;
+      margin: 40px auto;
+      padding: 0 24px;
+      display: grid;
+      grid-template-columns: 1fr 380px; 
+      gap: 32px;
+      align-items: start;
+      flex: 1;
+    }
+
+    @media (max-width: 900px) {
+      .app-container { grid-template-columns: 1fr; margin: 20px auto; }
+    }
+
+    /* Diary Header */
+    header {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 40px 24px 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      border-bottom: 1px solid var(--border-light);
+    }
+    .header-text { display: flex; flex-direction: column; gap: 4px; }
+    .header-subtitle { color: var(--accent); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; }
+    h1 { margin: 0; font-size: 32px; font-weight: 300; color: var(--text-main); display: flex; align-items: center; gap: 10px; letter-spacing: -0.03em; }
+
+    /* Elegant Stats Chips */
+    .stats-chips { display: flex; gap: 16px; align-items: center; }
+    .stat-item { text-align: right; }
+    .stat-label { font-size: 12px; color: var(--text-sub); display: block; margin-bottom: 2px; }
+    .stat-value { font-size: 18px; font-weight: 600; color: var(--text-main); }
+    .streak-fire { color: var(--accent); }
+
+    /* Cards */
+    .card {
+      background: var(--bg-card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-lg);
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.5);
+    }
+    .card-body { padding: 32px; }
+    
+    .section-title { font-size: 18px; font-weight: 600; margin-bottom: 24px; color: var(--text-main); display: flex; justify-content: space-between; align-items: center;}
+    
+    /* Date Selector */
+    .date-selector-wrapper { display: flex; align-items: center; justify-content: space-between; margin-bottom: 32px; background: var(--bg-body); padding: 12px 20px; border-radius: 16px; }
+    .current-date-display { font-size: 16px; font-weight: 500; }
+    input[type="date"] {
+      border: none; background: transparent; font-family: inherit; font-size: 14px;
+      color: var(--text-sub); outline: none; cursor: pointer;
+    }
+
+    /* Progress Indicator */
+    .progress-container { margin-bottom: 32px; }
+    .progress-header { display: flex; justify-content: space-between; font-size: 14px; font-weight: 500; margin-bottom: 12px; color: var(--text-sub); }
+    .progress-track { width: 100%; height: 8px; background: var(--border-light); border-radius: 8px; overflow: hidden; position: relative; }
+    .progress-fill { height: 100%; background: var(--primary); border-radius: 8px; transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1); width: 0%; box-shadow: 0 0 10px rgba(116, 146, 122, 0.4); }
+
+    /* Checklist (Habit Items) */
+    .checklist-grid { display: flex; flex-direction: column; gap: 8px; margin-bottom: 32px; }
+    .checkbox-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 20px;
+      border-radius: 14px;
+      transition: all 0.3s ease;
+      background: transparent;
+      border: 1px solid transparent;
+      position: relative;
+    }
+    .checkbox-item:hover { background: var(--bg-body); }
+    .checkbox-item.checked { background: var(--primary-light); color: var(--primary-hover); }
+    
+    .checkbox-left { display: flex; align-items: center; gap: 16px; cursor: pointer; flex: 1; user-select: none; font-size: 16px; font-weight: 400; transition: color 0.3s; }
+    
+    /* Custom Circular Checkbox */
+    .checkbox-left input[type="checkbox"] {
+      appearance: none; -webkit-appearance: none;
+      width: 22px; height: 22px;
+      border: 2px solid var(--border-dark);
+      border-radius: 50%;
+      outline: none; cursor: pointer; transition: all 0.2s ease-in-out;
+      position: relative;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0;
+    }
+    .checkbox-left input[type="checkbox"]:checked { border-color: var(--primary); background-color: var(--primary); }
+    .checkbox-left input[type="checkbox"]:checked::after {
+      content: ''; width: 6px; height: 10px; border: solid white; border-width: 0 2px 2px 0;
+      transform: rotate(45deg); margin-bottom: 2px;
+      animation: checkPop 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    }
+    @keyframes checkPop { 0% { transform: scale(0) rotate(45deg); } 100% { transform: scale(1) rotate(45deg); } }
+
+    /* Strikethrough effect */
+    .item-label { position: relative; }
+    .item-label::after {
+      content: ''; position: absolute; left: 0; top: 50%; width: 0%; height: 1px;
+      background: var(--primary-hover); transition: width 0.3s ease;
+    }
+    .checkbox-item.checked .item-label::after { width: 100%; }
+    .checkbox-item.checked .item-label { color: var(--primary-hover); opacity: 0.7; }
+
+    /* Delete Button */
+    .btn-delete-habit {
+      background: transparent; border: none; color: #D1D5DB; cursor: pointer; font-size: 18px; padding: 4px; transition: color 0.2s;
+    }
+    .btn-delete-habit:hover { color: var(--danger); }
+
+    /* Add Habit Input (Diary Style) */
+    .add-habit-wrapper { display: flex; gap: 12px; align-items: center; margin-bottom: 40px; }
+    input[type="text"] {
+      flex: 1; padding: 12px 0; border: none; border-bottom: 1px dashed var(--border-dark);
+      background: transparent; font-size: 15px; color: var(--text-main); font-family: inherit;
+      transition: border-color 0.3s; outline: none;
+    }
+    input[type="text"]:focus { border-bottom-color: var(--primary); }
+    input[type="text"]::placeholder { color: var(--text-sub); font-style: italic; }
+
+    /* Buttons */
+    .btn {
+      padding: 14px 24px; border-radius: 30px; font-weight: 600; font-size: 14px;
+      border: none; cursor: pointer; transition: all 0.3s ease;
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn-icon { padding: 10px; border-radius: 50%; background: var(--bg-body); border: 1px solid var(--border-light); color: var(--text-main); cursor: pointer; transition: all 0.2s; }
+    .btn-icon:hover { background: var(--border-light); }
+
+    .btn-primary { background: var(--primary); color: white; width: 100%; box-shadow: 0 4px 12px rgba(116, 146, 122, 0.3); }
+    .btn-primary:hover { background: var(--primary-hover); transform: translateY(-2px); box-shadow: 0 6px 16px rgba(116, 146, 122, 0.4); }
+    
+    .action-row { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-light); margin-top: 24px; padding-top: 24px; }
+    .tools { display: flex; gap: 8px; }
+
+    /* Chart & History Lists (Right Column) */
+    .chart-container { position: relative; height: 180px; width: 100%; margin-bottom: 32px; }
+    
+    .history-list { display: flex; flex-direction: column; gap: 16px; max-height: calc(100vh - 400px); overflow-y: auto; padding-right: 8px; }
+    .history-item { background: var(--bg-body); padding: 16px; border-radius: 12px; display: flex; flex-direction: column; gap: 8px; }
+    .history-top { display: flex; justify-content: space-between; font-size: 13px; color: var(--text-sub); }
+    .history-date { font-weight: 600; color: var(--text-main); }
+    .history-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+    .history-tag { background: #fff; border: 1px solid var(--border-light); color: var(--text-sub); padding: 4px 10px; border-radius: 20px; font-size: 12px; }
+    
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-thumb { background: var(--border-dark); border-radius: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="header-text">
+      <span class="header-subtitle">Daily Journal</span>
+      <h1 id="header-date-title">기록장</h1>
+    </div>
+    <div class="stats-chips">
+      <div class="stat-item">
+        <span class="stat-label">현재 연속</span>
+        <span class="stat-value"><span class="streak-fire">🔥</span> <span id="stat-current-streak">0</span>일</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">최고 연속</span>
+        <span class="stat-value" id="stat-best-streak">0일</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="app-container">
+    
+    <main class="card">
+      <div class="card-body">
+        
+        <div class="date-selector-wrapper">
+          <div class="current-date-display" id="display-selected-date">오늘의 습관</div>
+          <input type="date" id="inp-date" title="다른 날짜 선택">
+        </div>
+
+        <div class="progress-container">
+          <div class="progress-header">
+            <span>달성률</span>
+            <span id="progress-percent">0%</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" id="progress-bar"></div>
+          </div>
+        </div>
+
+        <div class="checklist-grid" id="checklist-container">
+          </div>
+
+        <div class="add-habit-wrapper">
+          <input type="text" id="inp-new-habit" placeholder="+ 새로운 습관을 적어보세요..." onkeypress="if(event.key === 'Enter') UIManager.addHabit()">
+        </div>
+
+        <button class="btn btn-primary" id="btn-save">오늘의 기록 저장하기</button>
+        
+        <div class="action-row">
+          <span style="font-size: 12px; color: var(--text-sub);">소중한 데이터를 백업하세요</span>
+          <div class="tools">
+            <button class="btn-icon" id="btn-export" title="엑셀 내보내기">📤</button>
+            <button class="btn-icon" id="btn-import" title="엑셀 불러오기">📥</button>
+            <input type="file" id="file-import" accept=".xlsx" style="display:none">
+          </div>
+        </div>
+
+      </div>
+    </main>
+
+    <aside>
+      <div class="card" style="margin-bottom: 24px;">
+        <div class="card-body">
+          <div class="section-title">📊 주간 흐름</div>
+          <div class="chart-container">
+            <canvas id="chart-canvas"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-body">
+          <div class="section-title">🕰️ 지난 발자취</div>
+          <div class="history-list" id="history-container">
+            </div>
+        </div>
+      </div>
+    </aside>
+
+  </div>
+
+  <script>
+    /**
+     * 1. STORAGE SERVICE
+     */
+    const StorageService = {
+      DB_NAME: 'HabitJournalDB', 
+      STORE_NAME: 'appData',
+      
+      getDB() {
+        return new Promise((resolve) => {
+          const req = indexedDB.open(this.DB_NAME, 1);
+          req.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(this.STORE_NAME)) {
+              db.createObjectStore(this.STORE_NAME, { keyPath: 'id' });
+            }
+          };
+          req.onsuccess = (e) => resolve(e.target.result);
+          req.onerror = () => resolve(null);
+        });
+      },
+
+      async save(state) {
+        const db = await this.getDB();
+        if (db) {
+          return new Promise((resolve) => {
+            const tx = db.transaction(this.STORE_NAME, 'readwrite');
+            const store = tx.objectStore(this.STORE_NAME);
+            const req = store.put({ id: 'main', ...state });
+            req.onsuccess = () => resolve(true);
+          });
+        }
+      },
+
+      async load() {
+        const db = await this.getDB();
+        const emptyState = { habits: ["아침 스트레칭", "책 10페이지 읽기", "물 2L 마시기"], records: {} };
+        
+        if (db) {
+          return new Promise(resolve => {
+            const tx = db.transaction(this.STORE_NAME, 'readonly');
+            const req = tx.objectStore(this.STORE_NAME).get('main');
+            req.onsuccess = () => {
+              if (req.result) {
+                const { id, ...data } = req.result;
+                resolve(data);
+              } else {
+                resolve(emptyState);
+              }
+            };
+            req.onerror = () => resolve(emptyState);
+          });
+        }
+        return emptyState;
+      }
+    };
+
+    /**
+     * 2. DATA MANAGER
+     */
+    const DataManager = {
+      state: { habits: [], records: {} },
+
+      setState(newState) {
+        this.state.habits = newState.habits || [];
+        this.state.records = newState.records || {};
+      },
+
+      addHabit(habitName) {
+        if (!habitName || this.state.habits.includes(habitName)) return false;
+        this.state.habits.push(habitName);
+        StorageService.save(this.state);
+        return true;
+      },
+
+      removeHabit(habitName) {
+        this.state.habits = this.state.habits.filter(h => h !== habitName);
+        StorageService.save(this.state);
+      },
+
+      saveRecord(dateStr, completedHabits) {
+        this.state.records[dateStr] = completedHabits;
+        StorageService.save(this.state);
+      },
+
+      getRecord(dateStr) {
+        return this.state.records[dateStr] || [];
+      },
+
+      getSortedDates() {
+        return Object.keys(this.state.records).sort((a, b) => new Date(b) - new Date(a));
+      },
+
+      getStats() {
+        const dates = this.getSortedDates();
+        if (dates.length === 0) return { currentStreak: 0, bestStreak: 0 };
+
+        let currentStreak = 0;
+        let bestStreak = 0;
+        let tempStreak = 0;
+        
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        let dateToCheck = new Date(today);
+        let isActiveStreak = true;
+
+        for(let i=0; i<1000; i++) {
+            const dateStr = dateToCheck.toISOString().substring(0, 10);
+            const record = this.state.records[dateStr];
+            
+            if(record && record.length > 0) {
+                tempStreak++;
+                if(isActiveStreak) currentStreak = tempStreak;
+                if(tempStreak > bestStreak) bestStreak = tempStreak;
+            } else {
+                if(i > 0) isActiveStreak = false; 
+                tempStreak = 0;
+            }
+            dateToCheck.setDate(dateToCheck.getDate() - 1);
+        }
+        return { currentStreak, bestStreak };
+      }
+    };
+
+    /**
+     * 3. UI MANAGER
+     */
+    const UIManager = {
+      chartInstance: null,
+      currentSelectedDate: null,
+
+      init() {
+        const today = new Date();
+        const todayStr = today.toISOString().substring(0, 10);
+        this.currentSelectedDate = todayStr;
+        document.getElementById('inp-date').value = todayStr;
+        
+        this.updateHeaderDate(today);
+        this.bindEvents();
+      },
+
+      updateHeaderDate(dateObj) {
+        const options = { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' };
+        const formatted = new Intl.DateTimeFormat('ko-KR', options).format(dateObj);
+        document.getElementById('header-date-title').textContent = formatted;
+        
+        // 날짜 선택기 라벨 업데이트
+        const isToday = new Date().toISOString().substring(0, 10) === dateObj.toISOString().substring(0, 10);
+        document.getElementById('display-selected-date').textContent = isToday ? "오늘의 습관" : "선택된 날짜의 습관";
+      },
+
+      renderCheckboxes() {
+        const container = document.getElementById('checklist-container');
+        const habits = DataManager.state.habits;
+        const currentRecord = DataManager.getRecord(this.currentSelectedDate);
+
+        if (habits.length === 0) {
+          container.innerHTML = `<div style="padding:20px; text-align:center; color:var(--text-sub); border:1px dashed var(--border-dark); border-radius:14px;">아직 기록할 습관이 없어요.<br>아래에서 추가해보세요.</div>`;
+          this.updateProgressBar(0, 0);
+          return;
+        }
+
+        container.innerHTML = habits.map(habit => {
+          const isChecked = currentRecord.includes(habit);
+          return `
+            <label class="checkbox-item ${isChecked ? 'checked' : ''}">
+              <div class="checkbox-left">
+                <input type="checkbox" value="${habit}" ${isChecked ? 'checked' : ''} onchange="UIManager.onCheckboxChange()">
+                <span class="item-label">${habit}</span>
+              </div>
+              <button class="btn-delete-habit" onclick="UIManager.deleteHabit('${habit}', event)" title="삭제">×</button>
+            </label>
+          `;
+        }).join('');
+
+        this.updateProgressBar(currentRecord.length, habits.length);
+      },
+
+      onCheckboxChange() {
+        const habits = DataManager.state.habits;
+        const checkedCount = document.querySelectorAll('#checklist-container input:checked').length;
+        
+        document.querySelectorAll('.checkbox-item').forEach(item => {
+            const checkbox = item.querySelector('input');
+            if(checkbox.checked) item.classList.add('checked');
+            else item.classList.remove('checked');
+        });
+
+        this.updateProgressBar(checkedCount, habits.length);
+      },
+
+      updateProgressBar(completed, total) {
+        const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+        document.getElementById('progress-percent').textContent = `${percent}%`;
+        document.getElementById('progress-bar').style.width = `${percent}%`;
+      },
+
+      addHabit() {
+        const input = document.getElementById('inp-new-habit');
+        const habitName = input.value.trim();
+        if (habitName) {
+          if(DataManager.addHabit(habitName)) {
+            input.value = '';
+            this.renderCheckboxes();
+            this.updateDisplay();
+          } else {
+            alert('이미 존재하는 습관입니다.');
+          }
+        }
+      },
+
+      deleteHabit(habitName, event) {
+        event.preventDefault();
+        event.stopPropagation();
+        if(confirm(`'${habitName}' 습관을 지우시겠어요?`)) {
+          DataManager.removeHabit(habitName);
+          this.renderCheckboxes();
+          this.updateDisplay();
+        }
+      },
+
+      saveCurrentDate() {
+        const date = document.getElementById('inp-date').value;
+        if (!date) return;
+
+        const checked = Array.from(document.querySelectorAll('#checklist-container input:checked')).map(el => el.value);
+        DataManager.saveRecord(date, checked);
+        
+        this.updateDisplay();
+        
+        const btn = document.getElementById('btn-save');
+        const originalText = btn.textContent;
+        btn.innerHTML = "✨ 잘하셨어요! 기록 완료";
+        btn.style.background = "#5A7660";
+        setTimeout(() => {
+            btn.innerHTML = originalText;
+            btn.style.background = "var(--primary)";
+        }, 1500);
+      },
+
+      updateDisplay() {
+        this.renderCheckboxes();
+        
+        const stats = DataManager.getStats();
+        document.getElementById('stat-current-streak').textContent = stats.currentStreak;
+        document.getElementById('stat-best-streak').textContent = stats.bestStreak + '일';
+
+        // History List 업데이트
+        const dates = DataManager.getSortedDates();
+        const container = document.getElementById('history-container');
+        const totalHabits = DataManager.state.habits.length;
+        
+        let historyHtml = '';
+        dates.slice(0, 10).forEach(date => { // 최근 10개만 표시
+          const completed = DataManager.state.records[date];
+          if(completed.length === 0) return; 
+          
+          const rate = totalHabits > 0 ? Math.round((completed.length / totalHabits) * 100) : 0;
+          const tagsHtml = completed.map(h => `<span class="history-tag">${h}</span>`).join('');
+          
+          const options = { month: 'short', day: 'numeric', weekday: 'short' };
+          const displayDate = new Intl.DateTimeFormat('ko-KR', options).format(new Date(date));
+
+          historyHtml += `
+            <div class="history-item">
+              <div class="history-top">
+                <span class="history-date">${displayDate}</span>
+                <span style="color:var(--primary); font-weight:600;">${rate}% 달성</span>
+              </div>
+              <div class="history-tags">${tagsHtml}</div>
+            </div>
+          `;
+        });
+        container.innerHTML = historyHtml || '<div style="color:var(--text-sub); text-align:center; padding: 20px 0;">아직 기록이 없습니다.</div>';
+
+        this.renderChart();
+      },
+
+      renderChart() {
+        const ctx = document.getElementById('chart-canvas').getContext('2d');
+        const totalHabitsCount = DataManager.state.habits.length || 1;
+        
+        const labels = [];
+        const dataPoints = [];
+        const today = new Date();
+        
+        for(let i=6; i>=0; i--) {
+            const d = new Date(today);
+            d.setDate(d.getDate() - i);
+            const dateStr = d.toISOString().substring(0, 10);
+            
+            const options = { weekday: 'short' };
+            labels.push(new Intl.DateTimeFormat('ko-KR', options).format(d));
+            
+            const record = DataManager.state.records[dateStr];
+            dataPoints.push(record ? Math.round((record.length / totalHabitsCount) * 100) : 0);
+        }
+
+        if (this.chartInstance) this.chartInstance.destroy();
+
+        this.chartInstance = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: [{
+              data: dataPoints,
+              backgroundColor: dataPoints.map(val => val === 100 ? '#74927A' : val > 0 ? '#E7EFE9' : '#F9F8F5'),
+              hoverBackgroundColor: '#5A7660',
+              borderRadius: 6,
+              borderSkipped: false,
+              barThickness: 24
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false }, tooltip: { enabled: false } },
+            scales: {
+              x: { grid: { display: false }, border: { display: false }, ticks: { color: '#8C8A85', font: {family: 'Pretendard'} } },
+              y: { display: false, beginAtZero: true, max: 100 }
+            },
+            animation: { duration: 800, easing: 'easeOutQuart' }
+          }
+        });
+      },
+
+      bindEvents() {
+        document.getElementById('inp-date').addEventListener('change', (e) => {
+          this.currentSelectedDate = e.target.value;
+          this.updateHeaderDate(new Date(e.target.value));
+          this.renderCheckboxes();
+        });
+
+        document.getElementById('btn-save').addEventListener('click', () => this.saveCurrentDate());
+
+        // Export/Import
+        document.getElementById('btn-import').addEventListener('click', () => document.getElementById('file-import').click());
+        document.getElementById('file-import').addEventListener('change', (e) => {
+          const file = e.target.files[0];
+          if(!file) return;
+          const reader = new FileReader();
+          reader.onload = (evt) => {
+            try {
+                const data = new Uint8Array(evt.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                const json = XLSX.utils.sheet_to_json(sheet);
+                
+                const newRecords = {};
+                let loadedHabits = new Set(DataManager.state.habits);
+                
+                json.forEach(row => {
+                    const date = row['Date'];
+                    const habitsStr = row['Completed_Habits'];
+                    if(date && habitsStr) {
+                        const habitsArr = habitsStr.split(',').map(s => s.trim()).filter(Boolean);
+                        newRecords[date] = habitsArr;
+                        habitsArr.forEach(h => loadedHabits.add(h));
+                    }
+                });
+                
+                DataManager.setState({ habits: Array.from(loadedHabits), records: newRecords });
+                StorageService.save(DataManager.state);
+                this.updateDisplay();
+                alert('기록을 성공적으로 불러왔습니다.');
+            } catch(e) { alert('파일을 읽는 중 오류가 발생했습니다.'); }
+          };
+          reader.readAsArrayBuffer(file);
+        });
+
+        document.getElementById('btn-export').addEventListener('click', () => {
+          const dates = DataManager.getSortedDates();
+          const exportData = dates.map(date => ({
+              'Date': date,
+              'Completed_Habits': DataManager.state.records[date].join(', '),
+              'Count': DataManager.state.records[date].length
+          }));
+          const wb = XLSX.utils.book_new();
+          const ws = XLSX.utils.json_to_sheet(exportData);
+          XLSX.utils.book_append_sheet(wb, ws, "Journal");
+          XLSX.writeFile(wb, `MyHabitJournal_${new Date().toISOString().slice(0,10)}.xlsx`);
+        });
+      }
+    };
+
+    /**
+     * 4. APP INIT
+     */
+    (async function initApp() {
+      const savedState = await StorageService.load();
+      DataManager.setState(savedState);
+      
+      UIManager.init();
+      UIManager.updateDisplay();
+    })();
+  </script>
+</body>
+</html>

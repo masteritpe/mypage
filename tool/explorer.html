@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>Local Folder Explorer</title>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css" />
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <style>
+        /* === 기존 Design System === */
+        :root {
+            --bg-body: #f1f5f9; 
+            --bg-sidebar: #ffffff; 
+            --bg-code: #fafafa; 
+            --text-primary: #0f172a; 
+            --text-secondary: #475569; 
+            --text-tertiary: #94a3b8;
+            --text-code: #334155;
+            --accent: #2563eb; 
+            --accent-hover: #1d4ed8; 
+            --accent-soft: rgba(37, 99, 235, 0.08);
+            --border-light: #e2e8f0; 
+            --radius-md: 8px;
+            --font-main: 'Pretendard', -apple-system, sans-serif; 
+            --font-code: 'JetBrains Mono', monospace;
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        }
+
+        * { box-sizing: border-box; outline: none; }
+        
+        body { 
+            margin: 0; background: var(--bg-body); font-family: var(--font-main); 
+            height: 100vh; display: flex; flex-direction: column; overflow: hidden; 
+            color: var(--text-primary); 
+        }
+
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+
+        /* Header */
+        header { 
+            height: 56px; background: var(--bg-sidebar); border-bottom: 1px solid var(--border-light); 
+            display: flex; align-items: center; justify-content: space-between; padding: 0 24px; 
+            flex-shrink: 0; z-index: 50; box-shadow: var(--shadow-sm);
+        }
+        .brand { font-weight: 700; font-size: 18px; display: flex; align-items: center; gap: 12px; }
+        .brand i { color: var(--accent); font-size: 20px; }
+        
+        .btn-primary { 
+            background: var(--accent); color: white; padding: 8px 16px; border-radius: var(--radius-md); 
+            font-weight: 600; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; font-size: 14px;
+        }
+        .btn-primary:hover { background: var(--accent-hover); }
+
+        /* Layout */
+        .workspace { display: flex; flex: 1; overflow: hidden; }
+        
+        /* Sidebar (File Tree) */
+        .pane-list { 
+            width: 320px; background: var(--bg-sidebar); border-right: 1px solid var(--border-light); 
+            display: flex; flex-direction: column; overflow-y: auto; padding: 16px 0;
+        }
+
+        /* Tree Styles */
+        ul.tree-list { list-style: none; padding-left: 16px; margin: 0; }
+        ul.tree-list:first-child { padding-left: 0; } 
+        li.tree-item { margin-bottom: 2px; }
+        
+        .tree-title {
+            display: flex; align-items: center; gap: 8px; padding: 6px 16px;
+            cursor: pointer; font-size: 14px; color: var(--text-secondary);
+            border-radius: 0 20px 20px 0; margin-right: 16px; transition: 0.2s;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .tree-title:hover { background: var(--bg-body); }
+        .tree-title.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+        .tree-title i { width: 16px; text-align: center; font-size: 15px; }
+        .tree-title i.fa-folder, .tree-title i.fa-folder-open { color: #fbbf24; }
+        .tree-title i.fa-file-code, .tree-title i.fa-file { color: #94a3b8; }
+        .tree-children.hidden { display: none; }
+
+        /* Editor Area */
+        .pane-editor { 
+            flex: 1; display: flex; flex-direction: column; background: var(--bg-body); padding: 30px; overflow-y: auto;
+        }
+        
+        .file-header { margin-bottom: 20px; }
+        .file-name { font-size: 24px; font-weight: 800; color: var(--text-primary); margin-bottom: 8px; }
+        .file-path { font-size: 13px; color: var(--text-tertiary); }
+
+        .code-wrapper { 
+            flex: 1; display: flex; flex-direction: column; border: 1px solid var(--border-light); 
+            border-radius: var(--radius-md); overflow: hidden; background: var(--bg-code); box-shadow: var(--shadow-sm);
+            min-height: 500px;
+        }
+        
+        .code-editor { 
+            flex: 1; width: 100%; height: 100%; background: var(--bg-code); color: var(--text-code); 
+            font-family: var(--font-code); font-size: 14px; line-height: 1.7; padding: 24px; 
+            border: none; resize: none; outline: none; white-space: pre; overflow: auto; tab-size: 4;
+        }
+
+        /* Empty State */
+        #empty-state { 
+            display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; 
+            color: var(--text-tertiary); height: 100%;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="brand"><i class="fas fa-folder-tree"></i> Local Folder Explorer</div>
+    <button class="btn-primary" onclick="openFolder()">
+        <i class="fas fa-folder-open"></i> 폴더 열기 (권한 허용 필요)
+    </button>
+</header>
+
+<div class="workspace">
+    <aside class="pane-list" id="pane-list">
+        <div style="padding: 20px; text-align: center; color: var(--text-tertiary); font-size: 14px;">
+            우측 상단의 '폴더 열기' 버튼을 클릭하여<br>로컬 디렉토리를 선택해주세요.
+        </div>
+    </aside>
+
+    <main class="pane-editor">
+        <div id="empty-state">
+            <div style="background:#e2e8f0; width:80px; height:80px; border-radius:50%; display:flex; align-items:center; justify-content:center; margin-bottom:24px;">
+                <i class="fas fa-file-signature" style="font-size:36px; color:#64748b;"></i>
+            </div>
+            <div style="font-size:18px; font-weight:600; color:#334155; margin-bottom:8px;">조회할 파일을 선택하세요</div>
+            <div style="font-size:14px; color:#94a3b8;">좌측 목록에서 파일을 클릭하면 내용을 볼 수 있습니다.</div>
+        </div>
+
+        <div id="editor-content" style="display: none; height: 100%; flex-direction: column;">
+            <div class="file-header">
+                <div class="file-name" id="display-name">파일명.txt</div>
+                <div class="file-path" id="display-path">경로 정보</div>
+            </div>
+            <div class="code-wrapper" id="viewer-container">
+                </div>
+        </div>
+    </main>
+</div>
+
+<script>
+    if (!window.showDirectoryPicker) {
+        alert("이 브라우저는 File System Access API를 지원하지 않습니다. 최신 크롬, 엣지 등을 사용해주세요.");
+    }
+
+    let rootDirectoryHandle;
+
+    async function openFolder() {
+        try {
+            rootDirectoryHandle = await window.showDirectoryPicker();
+            const sidebar = document.getElementById('pane-list');
+            sidebar.innerHTML = ''; 
+            await renderDirectoryTree(rootDirectoryHandle, sidebar, '');
+        } catch (error) {
+            console.log("폴더 선택 취소 또는 오류:", error);
+        }
+    }
+
+    async function renderDirectoryTree(dirHandle, containerElement, currentPath) {
+        const entries = [];
+        for await (const entry of dirHandle.values()) {
+            entries.push(entry);
+        }
+
+        entries.sort((a, b) => {
+            if (a.kind === b.kind) return a.name.localeCompare(b.name);
+            return a.kind === 'directory' ? -1 : 1;
+        });
+
+        const ul = document.createElement('ul');
+        ul.className = 'tree-list';
+        containerElement.appendChild(ul);
+
+        for (const entry of entries) {
+            const li = document.createElement('li');
+            li.className = 'tree-item';
+
+            const titleDiv = document.createElement('div');
+            titleDiv.className = 'tree-title';
+            
+            const isDir = entry.kind === 'directory';
+            const iconClass = isDir ? 'fas fa-folder' : 'fas fa-file-code';
+            titleDiv.innerHTML = `<i class="${iconClass}"></i> <span>${entry.name}</span>`;
+            li.appendChild(titleDiv);
+
+            if (isDir) {
+                const childrenContainer = document.createElement('div');
+                childrenContainer.className = 'tree-children hidden';
+                li.appendChild(childrenContainer);
+
+                let isLoaded = false;
+                titleDiv.onclick = async (e) => {
+                    e.stopPropagation();
+                    const isHidden = childrenContainer.classList.contains('hidden');
+                    
+                    if (isHidden) {
+                        childrenContainer.classList.remove('hidden');
+                        titleDiv.querySelector('i').className = 'fas fa-folder-open';
+                        
+                        if (!isLoaded) {
+                            childrenContainer.innerHTML = '<div style="padding-left:36px;color:#94a3b8;font-size:12px;">로딩 중...</div>';
+                            await renderDirectoryTree(entry, childrenContainer, currentPath + entry.name + '/');
+                            childrenContainer.firstChild.remove(); // Remove loading text
+                            isLoaded = true;
+                        }
+                    } else {
+                        childrenContainer.classList.add('hidden');
+                        titleDiv.querySelector('i').className = 'fas fa-folder';
+                    }
+                };
+            } else {
+                titleDiv.onclick = (e) => {
+                    e.stopPropagation();
+                    document.querySelectorAll('.tree-title').forEach(el => el.classList.remove('active'));
+                    titleDiv.classList.add('active');
+                    viewFile(entry, currentPath + entry.name);
+                };
+            }
+            ul.appendChild(li);
+        }
+    }
+
+    // 파일 내용을 읽어 우측 뷰어에 표시하는 로직
+    async function viewFile(fileHandle, fullPath) {
+        document.getElementById('empty-state').style.display = 'none';
+        document.getElementById('editor-content').style.display = 'flex';
+        
+        const nameEl = document.getElementById('display-name');
+        const pathEl = document.getElementById('display-path');
+        const viewerContainer = document.getElementById('viewer-container');
+
+        nameEl.innerText = fileHandle.name;
+        pathEl.innerText = rootDirectoryHandle.name + '/' + fullPath;
+        
+        // 뷰어 초기화
+        viewerContainer.innerHTML = '<div style="padding: 24px; color: var(--text-tertiary);">파일을 읽는 중...</div>';
+
+        try {
+            const fileData = await fileHandle.getFile();
+            const fileName = fileHandle.name.toLowerCase();
+            const ext = fileName.split('.').pop();
+
+            // 1. PDF 렌더링 (iframe 사용)
+            if (ext === 'pdf') {
+                const objectUrl = URL.createObjectURL(fileData);
+                viewerContainer.innerHTML = `<iframe src="${objectUrl}" style="width: 100%; height: 100%; border: none; flex: 1;"></iframe>`;
+                return;
+            }
+
+            // 2. 이미지 렌더링 (img 태그 사용)
+            const imageExts = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico'];
+            if (imageExts.includes(ext)) {
+                const objectUrl = URL.createObjectURL(fileData);
+                viewerContainer.innerHTML = `
+                    <div style="display: flex; justify-content: center; align-items: center; width: 100%; height: 100%; background: #e2e8f0; padding: 20px; overflow: auto;">
+                        <img src="${objectUrl}" style="max-width: 100%; max-height: 100%; object-fit: contain; box-shadow: var(--shadow-sm);">
+                    </div>`;
+                return;
+            }
+
+            // 3. 오피스/한글/XMind/동영상 문서 등 브라우저 미리보기 미지원 파일 예외 처리
+            const unsupportedExts = ['ppt', 'pptx', 'xls', 'xlsx', 'doc', 'docx', 'hwp', 'zip', 'rar', '7z', 'exe', 'dmg', 'xmind', 'mp4', 'avi', 'mkv', 'mov'];
+            if (unsupportedExts.includes(ext)) {
+                // 확장자에 따른 아이콘 변경
+                let icon = 'fas fa-file';
+                if (ext.includes('xls')) icon = 'fas fa-file-excel';
+                else if (ext.includes('ppt')) icon = 'fas fa-file-powerpoint';
+                else if (ext.includes('doc')) icon = 'fas fa-file-word';
+                else if (ext.includes('zip') || ext.includes('rar') || ext.includes('7z')) icon = 'fas fa-file-archive';
+                else if (ext === 'xmind') icon = 'fas fa-sitemap'; // XMind 아이콘
+                else if (['mp4', 'avi', 'mkv', 'mov'].includes(ext)) icon = 'fas fa-file-video'; // 동영상 아이콘
+
+                viewerContainer.innerHTML = `
+                    <div style="display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; height: 100%; background: var(--bg-code); color: var(--text-tertiary);">
+                        <div style="font-size: 64px; color: #cbd5e1; margin-bottom: 20px;"><i class="${icon}"></i></div>
+                        <div style="font-size: 20px; font-weight: 700; color: var(--text-code); margin-bottom: 12px;">미리보기를 지원하지 않는 파일입니다</div>
+                        <div style="font-size: 14px; text-align: center; line-height: 1.6; color: var(--text-secondary);">
+                            웹 브라우저에서는 오피스 문서, 동영상 또는 특정 전용 프로그램 파일을 직접 열 수 없습니다.<br>
+                            해당 파일 내용을 확인하려면 내 컴퓨터의 폴더에서 직접 실행해 주세요.
+                        </div>
+                    </div>`;
+                return;
+            }
+
+            // 4. 텍스트 / MD 등 일반 파일 처리 (2MB 용량 제한)
+            if (fileData.size > 2 * 1024 * 1024) { 
+                 viewerContainer.innerHTML = '<div style="padding: 24px; color: #ef4444; font-family: var(--font-code);">// 파일이 너무 큽니다 (2MB 초과). 브라우저 성능을 위해 미리보기가 제한됩니다.</div>';
+                 return;
+            }
+
+            // ArrayBuffer로 먼저 읽은 뒤 인코딩 판단
+            const arrayBuffer = await fileData.arrayBuffer();
+            let text = "";
+            
+            try {
+                // 시도 1: UTF-8로 엄격하게 디코딩
+                const utf8Decoder = new TextDecoder('utf-8', { fatal: true });
+                text = utf8Decoder.decode(arrayBuffer);
+            } catch (e) {
+                // 시도 2: UTF-8 디코딩 실패 시 EUC-KR로 폴백
+                const eucKrDecoder = new TextDecoder('euc-kr');
+                text = eucKrDecoder.decode(arrayBuffer);
+            }
+
+            // 텍스트를 담을 textarea 생성
+            const textarea = document.createElement('textarea');
+            textarea.className = 'code-editor';
+            textarea.readOnly = true;
+            textarea.spellcheck = false;
+            textarea.value = text;
+            
+            viewerContainer.innerHTML = ''; // 로딩 텍스트 지우기
+            viewerContainer.appendChild(textarea);
+
+        } catch (error) {
+            viewerContainer.innerHTML = `<div style="padding: 24px; color: #ef4444; font-family: var(--font-code);">// 텍스트 형태로 읽을 수 없는 파일이거나 권한이 없습니다.<br>// 오류: ${error.message}</div>`;
+        }
+    }
+</script>
+</body>
+</html>

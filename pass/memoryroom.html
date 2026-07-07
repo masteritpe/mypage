@@ -1,0 +1,1435 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Room</title>
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Pretendard', 'sans-serif'] },
+                    colors: { brand: { 50: '#f0fdfa', 500: '#14b8a6', 600: '#0d9488', 900: '#134e4a' } },
+                    gridTemplateColumns: {
+                        '24': 'repeat(24, minmax(0, 1fr))',
+                    },
+                    gridColumn: {
+                        'span-13': 'span 13 / span 13',
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        body { 
+            font-family: 'Pretendard', sans-serif; 
+            background-color: #f8fafc; 
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        .logo-font {
+            font-family: 'Inter', sans-serif;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        .layer-wrapper {
+            position: absolute;
+            z-index: 10;
+            cursor: move;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            border: 1px solid #cbd5e1;
+            background-color: white;
+            overflow: hidden;
+            display: inline-block; 
+            vertical-align: top;
+        }
+
+        .layer-text-only {
+            position: absolute;
+            z-index: 10;
+            cursor: move;
+            display: inline-block;
+            background-color: transparent !important;
+            border: 1px dashed transparent;
+            box-shadow: none !important;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+        .layer-text-only:hover {
+            border-color: #94a3b8;
+            background-color: rgba(241, 245, 249, 0.5) !important;
+        }
+        
+        /* === 🔴 추가된 강조 키워드 레이어 스타일 === */
+        .layer-highlight {
+            position: absolute;
+            z-index: 10;
+            cursor: move;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            background-color: transparent !important;
+            border: 4px solid #ef4444 !important; /* 굵은 빨간색 테두리 */
+            border-radius: 8px;
+            padding: 10px 20px;
+        }
+        .layer-highlight .content-box {
+            font-size: 20px !important;
+            font-weight: 800 !important;
+            color: #ef4444 !important; /* 빨간색 텍스트 */
+            line-height: 1.2;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .layer-highlight:hover {
+            background-color: rgba(239, 68, 68, 0.05) !important;
+        }
+
+        /* === 🔵 두음 강조 효과 (Ctrl + Alt + M) === */
+        .dueum-highlight {
+            background-color: #0d3a9e !important;
+            color: #ffffff !important;
+            padding: 1px 4px;
+            border-radius: 3px;
+            font-weight: 700;
+        }
+
+        /* 캡쳐 시 배경이 잘리는 문제를 해결하기 위해 볼드 및 텍스트 색상 강조로 대체 */
+        .capturing .dueum-highlight {
+            background-color: transparent !important;
+            color: #0d3a9e !important;
+            padding: 0 !important;
+            font-weight: 900 !important;
+            border-radius: 0 !important;
+        }
+
+        .capturing .layer-text-only {
+            border-color: transparent !important;
+            background-color: transparent !important;
+        }
+        .capturing .layer-highlight {
+            /* 캡쳐 시 테두리와 텍스트 색상 유지 */
+            border-color: #ef4444 !important;
+            background-color: transparent !important;
+            box-shadow: none !important;
+        }
+
+        .layer-table {
+            display: table;
+            width: 100%;
+            height: 100%;
+            border-collapse: collapse;
+        }
+
+        .layer-num {
+            display: table-cell;
+            vertical-align: middle;
+            text-align: center;
+            background-color: #1e293b;
+            color: white;
+            font-weight: 700;
+            font-size: 13px;
+            padding: 0 12px;
+            width: 1%;
+            white-space: nowrap;
+        }
+
+        .layer-text-container {
+            display: table-cell;
+            vertical-align: middle;
+            padding: 8px 14px !important;
+            border-left: 1px solid #e2e8f0;
+            background-color: white;
+        }
+
+        .layer-title-container {
+            display: table-cell;
+            vertical-align: middle;
+            padding: 10px 18px;
+            background-color: white;
+        }
+
+        .title-style { font-size: 18px; font-weight: 700; color: #0f172a; line-height: 1.4; white-space: pre-wrap; word-break: break-all; }
+        .text-style { font-size: 13px; font-weight: 600; color: #0f172a; line-height: 1.4; white-space: pre-wrap; word-break: break-all; }
+        
+        .wysiwyg-content ul { list-style-type: disc; padding-left: 1.5rem; margin-top: 0.25rem; margin-bottom: 0.25rem; }
+        .wysiwyg-content ol { list-style-type: decimal; padding-left: 1.5rem; margin-top: 0.25rem; margin-bottom: 0.25rem; }
+        .wysiwyg-content div { margin: 0; padding: 0; }
+
+        [contenteditable]:empty:before {
+            content: attr(placeholder);
+            color: #94a3b8;
+            pointer-events: none;
+            display: block;
+        }
+
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        
+        .capturing #capture-area { border-color: transparent !important; border: none !important; box-shadow: none !important; }
+        .capturing .layer-wrapper { box-shadow: none !important; border-color: #94a3b8 !important; }
+        .no-print { display: block; }
+        .list-item.active { background-color: #f0fdfa; border-color: #14b8a6; }
+
+        .toast-enter { animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .toast-leave { animation: fadeOut 0.3s ease-out forwards; }
+        @keyframes slideIn { from { transform: translateY(100%) scale(0.9); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
+        @keyframes fadeOut { from { transform: scale(0.95); opacity: 1; } to { transform: scale(0.9); opacity: 0; } }
+
+        #layer-container .content-box br:last-child {
+            display: none !important;
+        }
+
+        body.image-only-mode aside { display: none !important; }
+        body.image-only-mode main { grid-column: span 24 / span 24 !important; }
+        body.image-only-mode .layout-container { max-width: 98% !important; transition: max-width 0.3s ease-in-out; }
+
+        body.hide-numbers .layer-num {
+            display: none !important;
+        }
+        body.hide-numbers .layer-text-container {
+            border-left: none !important;
+        }
+    </style>
+</head>
+<body class="min-h-screen p-3 text-slate-800">
+
+    <header class="w-[98%] mx-auto mb-3 flex items-center justify-between no-print layout-container">
+        <div>
+            <h1 class="text-lg text-[#1e293b] flex items-center gap-2 logo-font">
+                <i data-lucide="layers" class="text-brand-600 w-5 h-5"></i>
+                Memory Room
+            </h1>
+        </div>
+        
+        <div class="flex items-center gap-2">
+            <button id="btn-manage-details" class="px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg font-bold text-sm hover:bg-slate-50 transition-all shadow-sm flex items-center gap-2">
+                <i data-lucide="list" class="w-4 h-4"></i> <span>세부내역</span>
+            </button>
+
+            <button id="btn-capture-view" class="hidden px-5 py-2 bg-slate-900 text-white rounded-lg font-bold text-sm hover:bg-slate-800 transition-all shadow-md items-center gap-2 transform active:scale-[0.98]">
+                <i data-lucide="image" class="w-4 h-4"></i> <span>이미지 저장</span>
+            </button>
+
+            <button id="btn-image-view" class="px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg font-bold text-sm hover:bg-slate-50 transition-all shadow-sm flex items-center gap-2">
+                <i data-lucide="maximize" class="w-4 h-4"></i> <span>이미지 보기</span>
+            </button>
+
+            <button id="btn-new" class="px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg font-bold text-sm hover:bg-slate-50 transition-all shadow-sm flex items-center gap-2" title="단축키: Ctrl + Alt + N">
+                <i data-lucide="plus-circle" class="w-4 h-4"></i> 새 작업
+            </button>
+        </div>
+    </header>
+
+    <div class="w-[98%] mx-auto grid grid-cols-1 xl:grid-cols-24 gap-5 relative layout-container">
+        
+        <aside class="no-print xl:col-span-5 space-y-4 bg-white p-4 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 h-[calc(100vh-80px)] flex flex-col">
+            <h2 class="font-bold text-[14px] text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-3">
+                <i data-lucide="archive" class="w-4 h-4 text-brand-500"></i> 보관함
+            </h2>
+            <div class="relative mt-1 mb-2">
+                <input type="text" id="search-input" class="w-full text-xs pl-8 pr-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 bg-slate-50 transition-all" placeholder="제목, 키워드 검색...">
+                <i data-lucide="search" class="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-400"></i>
+            </div>
+            
+            <div id="saved-list" class="flex-1 overflow-y-auto space-y-2 pr-1">
+                <div class="text-center text-slate-400 text-sm mt-10">저장된 작업이 없습니다.</div>
+            </div>
+        </aside>
+
+        <aside class="no-print xl:col-span-6 space-y-5 bg-white p-6 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 h-[calc(100vh-80px)] overflow-y-auto flex flex-col relative">
+            
+            <div class="space-y-4 flex-1">
+                <div class="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                    <label class="flex items-center gap-2 font-semibold text-sm text-slate-800 mb-3">
+                        <span class="flex items-center justify-center w-5 h-5 rounded-full bg-brand-100 text-brand-600 text-[11px]">1</span>
+                        배경 이미지 업로드
+                    </label>
+                    <input type="file" id="image-loader" accept="image/*" class="w-full text-sm text-slate-500 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-white file:text-slate-700 file:border file:border-slate-200 file:shadow-sm hover:file:bg-slate-50 cursor-pointer transition-all">
+                </div>
+                
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <label class="flex items-center gap-2 font-semibold text-sm text-slate-800">
+                            <span class="flex items-center justify-center w-5 h-5 rounded-full bg-brand-100 text-brand-600 text-[11px]">2</span>
+                            제목
+                        </label>
+                        <div class="flex bg-slate-100 p-1 rounded-lg">
+                            <button id="mode-direct" class="px-3 py-1 text-xs font-bold rounded-md bg-white text-slate-800 shadow-sm transition-all">직접입력</button>
+                            <button id="mode-import" class="px-3 py-1 text-xs font-bold rounded-md text-slate-500 hover:text-slate-800 transition-all">가져오기</button>
+                        </div>
+                    </div>
+
+                    <div id="import-container" class="mb-3 hidden">
+                        <select id="detail-selector" class="w-full p-2.5 text-sm border border-slate-200 rounded-xl outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500 bg-white">
+                            <option value="">저장된 세부내역 선택...</option>
+                        </select>
+                    </div>
+
+                    <div id="main-title-input" contenteditable="true" spellcheck="false" class="wysiwyg-content title-style w-full p-3 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all shadow-sm min-h-[50px] bg-white cursor-text" placeholder="제목을 입력하세요"></div>
+                </div>
+
+                <hr class="border-slate-100">
+
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <label class="flex items-center gap-2 font-semibold text-sm text-slate-800">
+                            <span class="flex items-center justify-center w-5 h-5 rounded-full bg-brand-100 text-brand-600 text-[11px]">3</span>
+                            키워드
+                        </label>
+                        <div class="flex items-center gap-3">
+                            <label class="flex items-center gap-1.5 cursor-pointer text-xs text-slate-600 font-medium bg-slate-50 border border-slate-200 px-2 py-1 rounded-md hover:bg-slate-100 transition-colors">
+                                <input type="checkbox" id="toggle-numbers" class="rounded border-slate-300 text-brand-500 focus:ring-brand-500 w-3.5 h-3.5 cursor-pointer" checked>
+                                <span>번호 표시</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-1 mb-3 bg-slate-100 border border-slate-200 p-1.5 rounded-lg shadow-sm">
+                        <button class="font-size-btn flex items-center justify-center w-8 h-7 text-sm font-bold text-slate-600 hover:bg-white hover:text-slate-900 hover:shadow-sm rounded transition-all" data-delta="1" title="글자 크게 (Ctrl + +)">A+</button>
+                        <button class="font-size-btn flex items-center justify-center w-8 h-7 text-sm font-bold text-slate-600 hover:bg-white hover:text-slate-900 hover:shadow-sm rounded transition-all" data-delta="-1" title="글자 작게 (Ctrl + -)">A-</button>
+                        <div class="w-px h-4 bg-slate-300 mx-1"></div>
+                        <button class="insert-cmt-btn flex items-center gap-1 px-2.5 py-1 text-[13px] font-bold text-red-500 bg-white hover:bg-red-50 border border-slate-200 hover:border-red-200 rounded transition-all" data-color="#ef4444" title="현재 위치에 빨간색 작은 코멘트 추가">+ 코멘트</button>
+                        <button class="insert-cmt-btn flex items-center gap-1 px-2.5 py-1 text-[13px] font-bold text-blue-500 bg-white hover:bg-blue-50 border border-slate-200 hover:border-blue-200 rounded transition-all" data-color="#3b82f6" title="현재 위치에 파란색 작은 코멘트 추가">+ 코멘트</button>
+                    </div>
+
+                    <div id="keyword-list" class="space-y-3">
+                    </div>
+                </div>
+
+                <hr class="border-slate-100">
+
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <label class="flex items-center gap-2 font-semibold text-sm text-slate-800">
+                            <span class="flex items-center justify-center w-5 h-5 rounded-full bg-brand-100 text-brand-600 text-[11px]">4</span>
+                            추가 키워드
+                        </label>                        
+                    </div>
+                    <div id="additional-keyword-list" class="space-y-3">
+                    </div>
+                </div>
+
+                <hr class="border-slate-100">
+
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <label class="flex items-center gap-2 font-semibold text-sm text-slate-800">
+                            <span class="flex items-center justify-center w-5 h-5 rounded-full bg-red-100 text-red-600 text-[11px]">5</span>
+                            강조 키워드
+                        </label>                        
+                    </div>
+                    <div id="highlight-keyword-list" class="space-y-3">
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="pt-4 mt-auto bg-white border-t border-slate-50 space-y-2">
+                <button id="save-db-btn" class="w-full py-3.5 bg-brand-50 text-brand-700 border border-brand-200 rounded-xl font-bold text-sm hover:bg-brand-100 transition-all flex items-center justify-center gap-2" title="단축키: Ctrl + S">
+                    <i data-lucide="save" class="w-4 h-4"></i> 저장
+                </button>
+            </div>
+        </aside>
+
+        <main class="xl:col-span-13 w-full transition-all duration-300">
+            <div id="capture-area" class="relative w-full bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border-2 border-dashed border-slate-200 min-h-[calc(100vh-80px)] flex items-start justify-center overflow-auto p-2">
+                
+                <div id="welcome-msg" class="absolute inset-0 flex flex-col items-center justify-center text-slate-400 pointer-events-none z-0 whitespace-nowrap">
+                    <div class="w-16 h-16 mb-4 rounded-full bg-slate-50 flex items-center justify-center">
+                        <i data-lucide="image-plus" class="w-8 h-8 text-slate-300"></i>
+                    </div>
+                    <p class="font-medium text-sm">좌측 패널에서 이미지를 업로드해 주세요.</p>
+                </div>
+                
+                <div id="image-wrapper" class="relative inline-block max-w-full" style="display:none; z-index: 1;">
+                    <img id="bg-image" class="max-w-full h-auto block select-none pointer-events-none" src="">
+                    <div id="layer-container" class="absolute top-0 left-0 w-full h-full pointer-events-none"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="toast-container" class="fixed bottom-6 right-6 z-[1000] flex flex-col gap-3 pointer-events-none"></div>
+
+    <div id="manage-modal" class="hidden fixed inset-0 z-[2000] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col overflow-hidden">
+            <div class="flex items-center justify-between p-4 border-b border-slate-100 bg-slate-50">
+                <h2 class="font-bold text-lg text-slate-800 flex items-center gap-2">
+                    <i data-lucide="list-todo" class="w-5 h-5 text-brand-600"></i> 세부내역 관리
+                </h2>
+                <div class="flex items-center gap-3">
+                    <span class="text-[11px] text-slate-400">서식 단축키 지원</span>
+                    <button id="close-modal-btn" class="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg transition-colors">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="flex flex-1 overflow-hidden">
+                <div class="w-1/3 border-r border-slate-100 bg-slate-50 flex flex-col">
+                    <div class="p-3 border-b border-slate-100 flex justify-between items-center bg-white">
+                        <span class="text-xs font-bold text-slate-500">저장된 리스트</span>
+                        <div class="flex gap-1.5 items-center">
+                            <label class="cursor-pointer text-xs bg-green-50 text-green-600 px-2 py-1.5 rounded-md font-bold hover:bg-green-100 transition-colors flex items-center gap-1 shadow-sm" title="엑셀 파일로 대량 업로드">
+                                <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i>
+                                <span class="hidden sm:inline">엑셀 추가</span>
+                                <input type="file" id="excel-loader-modal" accept=".xlsx, .xls" class="hidden">
+                            </label>
+                            <button id="btn-new-detail" class="text-xs bg-brand-50 text-brand-600 px-2.5 py-1.5 rounded-md font-bold hover:bg-brand-100 transition-colors shadow-sm">+ 새 내역</button>
+                        </div>
+                    </div>
+                    <div id="detail-list" class="flex-1 overflow-y-auto p-2 space-y-1">
+                    </div>
+                </div>
+                <div class="w-2/3 p-6 overflow-y-auto bg-white flex flex-col gap-5">
+                    <input type="hidden" id="detail-id">
+                    <div>
+                        <label class="block text-sm font-bold text-slate-800 mb-1.5">제목</label>
+                        <div id="detail-title" contenteditable="true" spellcheck="false" class="wysiwyg-content title-style w-full px-3 py-2 text-sm border border-slate-200 rounded-xl outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500 bg-slate-50 focus:bg-white transition-colors cursor-text min-h-[42px] break-words" placeholder="제목을 입력하세요"></div>
+                    </div>
+                    
+                    <hr class="border-slate-100">
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="col-span-2">
+                            <label class="block text-sm font-bold text-slate-800 mb-2">키워드(1~10)</label>
+                            <div class="grid grid-cols-2 gap-3" id="detail-kw-container">
+                                </div>
+                        </div>
+                        <div class="col-span-2 mt-4">
+                            <label class="block text-sm font-bold text-slate-800 mb-2">추가 키워드(1~10)</label>
+                            <div class="grid grid-cols-2 gap-3" id="detail-add-kw-container">
+                                </div>
+                        </div>
+                        <div class="col-span-2 mt-4">
+                            <label class="block text-sm font-bold text-slate-800 mb-2">강조 키워드(1~5)</label>
+                            <div class="grid grid-cols-2 gap-3" id="detail-hl-kw-container">
+                                </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-auto pt-4 flex justify-end gap-2 border-t border-slate-50">
+                        <button id="btn-delete-detail" class="hidden px-4 py-2.5 text-sm font-bold text-red-500 bg-red-50 rounded-xl hover:bg-red-100 transition-colors">삭제</button>
+                        <button id="btn-save-detail" class="px-6 py-2.5 text-sm font-bold text-white bg-slate-900 rounded-xl hover:bg-slate-800 transition-colors">저장</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="shortcut-modal" class="hidden fixed inset-0 z-[3000] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4" onclick="this.classList.add('hidden')">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" onclick="event.stopPropagation()">
+            <div class="flex items-center justify-between p-4 border-b border-slate-100 bg-slate-50">
+                <h2 class="font-bold text-lg text-slate-800 flex items-center gap-2">
+                    <i data-lucide="keyboard" class="w-5 h-5 text-brand-600"></i> 유용한 단축키 & 팁
+                </h2>
+                <button onclick="document.getElementById('shortcut-modal').classList.add('hidden')" class="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg transition-colors">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="p-6">
+                <ul class="text-[14px] text-slate-700 space-y-3">
+                    <li><b>새 문서:</b> Ctrl + Alt + N</li>
+                    <li><b>저장하기:</b> Ctrl + S</li>
+                    <li><b>글자 확대/축소:</b> Ctrl + ➕ / ➖</li>
+                    <li><b>에디터 굵게:</b> Ctrl + B</li>
+                    <li><b>두음 강조(남색+흰글씨):</b> Ctrl + Alt + M</li>
+                    <li><b>에디터 서식:</b> 취소선(Ctrl+0) | 빨강(Ctrl+Alt+R) | 파랑(Ctrl+Alt+B)</li>
+                    <li><b>배경 하이라이트:</b> 연한 주황(Ctrl+M)</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+        
+        const shortcutModal = document.getElementById('shortcut-modal');
+        const btnManageDetailsHeader = document.getElementById('btn-manage-details');
+        
+        const shortcutBtnHtml = `
+            <button onclick="document.getElementById('shortcut-modal').classList.remove('hidden')" class="px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg font-bold text-sm hover:bg-slate-50 transition-all shadow-sm flex items-center gap-2">
+                <i data-lucide="keyboard" class="w-4 h-4"></i> <span>단축키</span>
+            </button>
+        `;
+        btnManageDetailsHeader.insertAdjacentHTML('beforebegin', shortcutBtnHtml);
+        lucide.createIcons();
+
+        const imageWrapper = document.getElementById('image-wrapper');
+        const layerContainer = document.getElementById('layer-container');
+        const bgImage = document.getElementById('bg-image');
+        const welcomeMsg = document.getElementById('welcome-msg');
+        const captureArea = document.getElementById('capture-area');
+        const mainTitleInput = document.getElementById('main-title-input');
+        const searchInput = document.getElementById('search-input');
+        
+        let activeEditor = null;
+
+        document.addEventListener('focusin', function(e) {
+            if(e.target.hasAttribute('contenteditable')) {
+                activeEditor = e.target;
+            }
+        });
+
+        document.querySelectorAll('.font-size-btn, .insert-cmt-btn').forEach(btn => {
+            btn.addEventListener('mousedown', (e) => {
+                e.preventDefault(); 
+            });
+        });
+
+        function changeFontSize(delta) {
+            let currentSize = 3; 
+            let sel = window.getSelection();
+            if (sel.rangeCount > 0) {
+                let parent = sel.getRangeAt(0).commonAncestorContainer;
+                if (parent.nodeType === 3) parent = parent.parentNode;
+                
+                let fontNode = parent.closest ? parent.closest('font[size]') : null;
+                if (fontNode && fontNode.size) {
+                    currentSize = parseInt(fontNode.size);
+                }
+            }
+            let newSize = Math.max(1, Math.min(7, currentSize + delta));
+            document.execCommand('fontSize', false, newSize);
+            if(activeEditor) activeEditor.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+
+        document.querySelectorAll('.font-size-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                let targetEditor = activeEditor;
+                if (!targetEditor && document.activeElement && document.activeElement.hasAttribute('contenteditable')) {
+                    targetEditor = document.activeElement;
+                }
+                if (!targetEditor) return;
+                
+                targetEditor.focus();
+                changeFontSize(parseInt(btn.dataset.delta));
+            });
+        });
+
+        document.querySelectorAll('.insert-cmt-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                let targetEditor = activeEditor;
+                if (!targetEditor && document.activeElement && document.activeElement.hasAttribute('contenteditable')) {
+                    targetEditor = document.activeElement;
+                }
+                
+                if (!targetEditor) {
+                    showToast('코멘트를 추가할 텍스트 영역을 클릭해주세요.', 'warning');
+                    return;
+                }
+                
+                targetEditor.focus();
+                const color = btn.dataset.color;
+                
+                const cmtHtml = `<br><span style="color: ${color}; font-size: 13px; font-weight: 500;">코멘트 입력</span>&nbsp;`;
+                document.execCommand('insertHTML', false, cmtHtml);
+                targetEditor.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+        });
+
+        const toggleNumbersCheckbox = document.getElementById('toggle-numbers');
+        toggleNumbersCheckbox.addEventListener('change', function() {
+            if(this.checked) {
+                document.body.classList.remove('hide-numbers');
+            } else {
+                document.body.classList.add('hide-numbers');
+            }
+        });
+
+        let currentRoomId = null;
+
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            let bgColor = 'bg-slate-800';
+            let icon = 'check-circle';
+            
+            if(type === 'error') { bgColor = 'bg-red-500'; icon = 'alert-circle'; }
+            else if(type === 'warning') { bgColor = 'bg-orange-500'; icon = 'alert-triangle'; }
+
+            toast.className = `${bgColor} text-white px-5 py-3.5 rounded-xl shadow-xl text-sm font-semibold flex items-center gap-2.5 toast-enter pointer-events-auto`;
+            toast.innerHTML = `<i data-lucide="${icon}" class="w-4 h-4"></i> ${message}`;
+            
+            container.appendChild(toast);
+            lucide.createIcons();
+            
+            setTimeout(() => {
+                toast.classList.remove('toast-enter');
+                toast.classList.add('toast-leave');
+                setTimeout(() => toast.remove(), 300); 
+            }, 1000);
+        }
+
+        const keywordList = document.getElementById('keyword-list');
+        for(let i=1; i<=10; i++) {
+            const div = document.createElement('div');
+            div.className = "group relative";
+            div.innerHTML = `
+                <div class="absolute left-3 top-3 w-5 h-5 rounded-md bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-bold group-focus-within:bg-slate-800 group-focus-within:text-white transition-colors z-10 pointer-events-none">${i}</div>
+                <div id="kw-${i}" data-idx="${i}" contenteditable="true" spellcheck="false" placeholder="내용을 입력하세요" class="kw-input wysiwyg-content text-style w-full py-3 pl-10 pr-3 text-sm text-slate-700 border border-slate-200 rounded-xl outline-none focus:border-slate-400 focus:ring-4 focus:ring-slate-50 transition-all shadow-sm min-h-[46px] bg-white cursor-text"></div>
+            `;
+            keywordList.appendChild(div);
+
+            const editor = div.querySelector('.kw-input');
+            editor.addEventListener('input', function() {
+                updateLayer(this.dataset.idx, this.innerHTML, 'keyword');
+            });
+        }
+
+        const additionalKeywordList = document.getElementById('additional-keyword-list');
+        for(let i=1; i<=10; i++) {
+            const div = document.createElement('div');
+            div.className = "group relative";
+            div.innerHTML = `
+                <div class="absolute left-3 top-3 w-5 h-5 rounded-md bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-bold group-focus-within:bg-brand-500 group-focus-within:text-white transition-colors z-10 pointer-events-none">${i}</div>
+                <div id="add-kw-${i}" data-idx="${i}" contenteditable="true" spellcheck="false" placeholder="내용을 입력하세요" class="add-kw-input wysiwyg-content text-style w-full py-3 pl-10 pr-3 text-sm text-slate-700 border border-slate-200 rounded-xl outline-none focus:border-brand-400 focus:ring-4 focus:ring-brand-50 transition-all shadow-sm min-h-[46px] bg-white cursor-text"></div>
+            `;
+            additionalKeywordList.appendChild(div);
+
+            const editor = div.querySelector('.add-kw-input');
+            editor.addEventListener('input', function() {
+                updateLayer(this.dataset.idx, this.innerHTML, 'additional');
+            });
+        }
+
+        const highlightKeywordList = document.getElementById('highlight-keyword-list');
+        for(let i=1; i<=5; i++) {
+            const div = document.createElement('div');
+            div.className = "group relative";
+            div.innerHTML = `
+                <div class="absolute left-3 top-3 w-5 h-5 rounded-md bg-red-50 text-red-500 flex items-center justify-center text-xs font-bold group-focus-within:bg-red-500 group-focus-within:text-white transition-colors z-10 pointer-events-none">${i}</div>
+                <div id="hl-kw-${i}" data-idx="${i}" contenteditable="true" spellcheck="false" placeholder="내용을 입력하세요" class="hl-kw-input wysiwyg-content text-style w-full py-3 pl-10 pr-3 text-sm text-slate-700 border border-slate-200 rounded-xl outline-none focus:border-red-400 focus:ring-4 focus:ring-red-50 transition-all shadow-sm min-h-[46px] bg-white cursor-text"></div>
+            `;
+            highlightKeywordList.appendChild(div);
+
+            const editor = div.querySelector('.hl-kw-input');
+            editor.addEventListener('input', function() {
+                updateLayer(this.dataset.idx, this.innerHTML, 'highlight');
+            });
+        }
+
+        const detailKwContainer = document.getElementById('detail-kw-container');
+        const detailAddKwContainer = document.getElementById('detail-add-kw-container');
+        const detailHlKwContainer = document.getElementById('detail-hl-kw-container');
+
+        for(let i=1; i<=10; i++) {
+            detailKwContainer.innerHTML += `
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">키워드 ${i}</label>
+                    <div id="detail-kw-${i}" contenteditable="true" spellcheck="false" class="wysiwyg-content text-style w-full px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 bg-slate-50 focus:bg-white transition-colors cursor-text min-h-[38px] break-words" placeholder="입력"></div>
+                </div>
+            `;
+            detailAddKwContainer.innerHTML += `
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">추가 키워드 ${i}</label>
+                    <div id="detail-add-kw-${i}" contenteditable="true" spellcheck="false" class="wysiwyg-content text-style w-full px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 bg-slate-50 focus:bg-white transition-colors cursor-text min-h-[38px] break-words" placeholder="입력"></div>
+                </div>
+            `;
+        }
+
+        for(let i=1; i<=5; i++) {
+            detailHlKwContainer.innerHTML += `
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">강조 키워드 ${i}</label>
+                    <div id="detail-hl-kw-${i}" contenteditable="true" spellcheck="false" class="wysiwyg-content text-style w-full px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 bg-slate-50 focus:bg-white transition-colors cursor-text min-h-[38px] break-words" placeholder="입력"></div>
+                </div>
+            `;
+        }
+
+        mainTitleInput.addEventListener('input', (e) => updateLayer('main', e.target.innerHTML, 'title'));
+
+        function convertLayersToPercentage() {
+            const pw = layerContainer.offsetWidth;
+            const ph = layerContainer.offsetHeight;
+            if(pw === 0 || ph === 0) return;
+            
+            document.querySelectorAll('.layer-wrapper, .layer-text-only, .layer-highlight').forEach(el => {
+                const leftPct = (el.offsetLeft / pw) * 100;
+                const topPct = (el.offsetTop / ph) * 100;
+                el.style.left = leftPct + "%";
+                el.style.top = topPct + "%";
+            });
+        }
+
+        document.getElementById('btn-image-view').addEventListener('click', function() {
+            convertLayersToPercentage();
+            
+            document.body.classList.toggle('image-only-mode');
+            const captureBtn = document.getElementById('btn-capture-view');
+            
+            if (document.body.classList.contains('image-only-mode')) {
+                this.innerHTML = `<i data-lucide="minimize" class="w-4 h-4"></i> <span>기본 보기</span>`;
+                captureBtn.classList.remove('hidden');
+                captureBtn.classList.add('flex');
+            } else {
+                this.innerHTML = `<i data-lucide="maximize" class="w-4 h-4"></i> <span>이미지 보기</span>`;
+                captureBtn.classList.add('hidden');
+                captureBtn.classList.remove('flex');
+            }
+            lucide.createIcons();
+        });
+
+        document.getElementById('image-loader').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if(!file) return;
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                bgImage.src = event.target.result;
+                imageWrapper.style.display = 'inline-block';
+                welcomeMsg.style.display = 'none';
+                captureArea.classList.remove('border-dashed');
+                captureArea.classList.add('border-solid', 'border-slate-100');
+            }
+            reader.readAsDataURL(file);
+        });
+
+        function updateLayer(id, htmlContent, type = 'keyword') {
+            let cleanHtml = htmlContent.replace(/(<br\s*\/?>\s*)+$/gi, '').trim();
+            const layerId = type === 'additional' ? `layer-add-${id}` : (type === 'highlight' ? `layer-hl-${id}` : `layer-${id}`);
+            let el = document.getElementById(layerId);
+            
+            if(!cleanHtml) {
+                if(el) el.remove();
+                return;
+            }
+
+            if(!el) {
+                el = document.createElement('div');
+                el.id = layerId;
+                
+                if (type === 'additional') {
+                    el.className = 'layer-text-only pointer-events-auto';
+                    el.style.top = (5 + (id * 6)) + '%';
+                    el.style.left = '50%';
+                    el.innerHTML = `<div class="content-box wysiwyg-content title-style text-[15px]" style="min-width: 20px; min-height: 20px;"></div>`;
+                } else if (type === 'highlight') { 
+                    el.className = 'layer-highlight pointer-events-auto';
+                    el.style.top = (5 + (id * 6)) + '%';
+                    el.style.left = '50%';
+                    el.innerHTML = `<div class="content-box wysiwyg-content" style="min-width: 20px; min-height: 20px;"></div>`;
+                } else {
+                    el.className = 'layer-wrapper pointer-events-auto';
+                    el.style.top = (type === 'title' ? '5%' : (5 + (id * 6)) + '%');
+                    el.style.left = '5%';
+                    
+                    if(type === 'title') {
+                        el.innerHTML = `<div class="layer-table"><div class="layer-title-container content-box wysiwyg-content title-style"></div></div>`;
+                    } else {
+                        el.innerHTML = `<div class="layer-table"><div class="layer-num">${id}</div><div class="layer-text-container content-box wysiwyg-content text-style"></div></div>`;
+                    }
+                }
+                
+                layerContainer.appendChild(el);
+                makeDraggable(el);
+            }
+            el.querySelector('.content-box').innerHTML = cleanHtml;
+        }
+
+        function makeDraggable(el) {
+            let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+            el.onmousedown = (e) => {
+                if(e.target.hasAttribute('contenteditable')) return;
+                e.preventDefault();
+                el.style.zIndex = "100";
+                pos3 = e.clientX;
+                pos4 = e.clientY;
+                
+                el.style.left = el.offsetLeft + "px";
+                el.style.top = el.offsetTop + "px";
+
+                document.onmouseup = () => { 
+                    document.onmouseup = null; 
+                    document.onmousemove = null; 
+                    el.style.zIndex = "10"; 
+                    convertLayersToPercentage();
+                };
+                
+                document.onmousemove = (e) => {
+                    pos1 = pos3 - e.clientX;
+                    pos2 = pos4 - e.clientY;
+                    pos3 = e.clientX;
+                    pos4 = e.clientY;
+                    el.style.top = (el.offsetTop - pos2) + "px";
+                    el.style.left = (el.offsetLeft - pos1) + "px";
+                };
+            };
+        }
+
+        // === 안정적인 이미지 저장 로직 ===
+        document.getElementById('btn-capture-view').addEventListener('click', async function() {
+            if(!bgImage.src) { showToast('배경 이미지를 먼저 업로드해주세요.', 'warning'); return; }
+            
+            const btn = this; 
+            const originalText = btn.innerHTML;
+            btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> <span>이미지 저장 중...</span>`; 
+            lucide.createIcons();
+            
+            document.body.classList.add('capturing');
+            
+            const targetElement = document.getElementById('image-wrapper');
+            
+            const originalScrollX = window.scrollX;
+            const originalScrollY = window.scrollY;
+            window.scrollTo(0, 0);
+
+            const exactWidth = targetElement.getBoundingClientRect().width;
+            const exactHeight = targetElement.getBoundingClientRect().height;
+            
+            // 텍스트 깨짐을 방지하기 위해 컨테이너 크기 강제 조작 제거 (본래 크기로 캡처)
+            const layers = document.querySelectorAll('.layer-wrapper, .layer-text-only, .layer-highlight');
+            layers.forEach(el => {
+                el.dataset.oldLeft = el.style.left;
+                el.dataset.oldTop = el.style.top;
+                
+                let leftPx = el.offsetLeft;
+                let topPx = el.offsetTop;
+
+                if (el.style.left.includes('%')) leftPx = (parseFloat(el.style.left) / 100) * exactWidth;
+                if (el.style.top.includes('%')) topPx = (parseFloat(el.style.top) / 100) * exactHeight;
+
+                el.style.left = leftPx + "px";
+                el.style.top = topPx + "px";
+            });
+
+            const restoreCaptureState = () => {
+                document.body.classList.remove('capturing'); 
+                btn.innerHTML = originalText;
+                window.scrollTo(originalScrollX, originalScrollY);
+                layers.forEach(el => {
+                    el.style.left = el.dataset.oldLeft;
+                    el.style.top = el.dataset.oldTop;
+                });
+                lucide.createIcons();
+            };
+            
+            document.fonts.ready.then(() => {
+                setTimeout(() => {
+                    html2canvas(targetElement, { 
+                        useCORS: true, 
+                        scale: 2, 
+                        backgroundColor: null, 
+                        logging: false,
+                        scrollY: -window.scrollY 
+                    }).then(canvas => {
+                        const titleText = document.getElementById('main-title-input').innerText.trim() || 'MemoryRoom';
+                        const link = document.createElement('a');
+                        link.download = `${titleText}_${new Date().toISOString().slice(0,10)}.png`;
+                        link.href = canvas.toDataURL('image/png'); 
+                        link.click();
+                        
+                        restoreCaptureState();
+                        showToast('이미지가 성공적으로 저장되었습니다!', 'success');
+                    }).catch(err => { 
+                        console.error(err);
+                        restoreCaptureState();
+                        showToast('이미지 저장 중 오류가 발생했습니다.', 'error'); 
+                    });
+                }, 150); 
+            });
+        });
+
+        const DB_NAME = "MemoryRoomDB"; 
+        const STORE_NAME = "rooms"; 
+        const DETAILS_STORE = "details"; 
+        let db;
+
+        const initDB = () => new Promise((resolve, reject) => {
+            const request = indexedDB.open(DB_NAME, 1); 
+            request.onupgradeneeded = (e) => { 
+                const tempDb = e.target.result;
+                if (!tempDb.objectStoreNames.contains(STORE_NAME)) tempDb.createObjectStore(STORE_NAME, { keyPath: "id", autoIncrement: true }); 
+                if (!tempDb.objectStoreNames.contains(DETAILS_STORE)) tempDb.createObjectStore(DETAILS_STORE, { keyPath: "id", autoIncrement: true }); 
+            };
+            request.onsuccess = (e) => { db = e.target.result; resolve(db); }; 
+            request.onerror = (e) => reject(e.target.error);
+        });
+
+        const getAllRooms = () => new Promise((resolve, reject) => {
+            const request = db.transaction(STORE_NAME, "readonly").objectStore(STORE_NAME).getAll();
+            request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+        });
+        const saveRoomDB = (data) => new Promise((resolve, reject) => {
+            const request = data.id ? db.transaction(STORE_NAME, "readwrite").objectStore(STORE_NAME).put(data) : db.transaction(STORE_NAME, "readwrite").objectStore(STORE_NAME).add(data);
+            request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+        });
+        const deleteRoomDB = (id) => new Promise((resolve, reject) => {
+            const request = db.transaction(STORE_NAME, "readwrite").objectStore(STORE_NAME).delete(id);
+            request.onsuccess = () => resolve(); request.onerror = () => reject(request.error);
+        });
+
+        const getAllDetails = () => new Promise((resolve, reject) => {
+            const request = db.transaction(DETAILS_STORE, "readonly").objectStore(DETAILS_STORE).getAll();
+            request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+        });
+        const saveDetailDB = (data) => new Promise((resolve, reject) => {
+            const request = data.id ? db.transaction(DETAILS_STORE, "readwrite").objectStore(DETAILS_STORE).put(data) : db.transaction(DETAILS_STORE, "readwrite").objectStore(DETAILS_STORE).add(data);
+            request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+        });
+        const deleteDetailDB = (id) => new Promise((resolve, reject) => {
+            const request = db.transaction(DETAILS_STORE, "readwrite").objectStore(DETAILS_STORE).delete(id);
+            request.onsuccess = () => resolve(); request.onerror = () => reject(request.error);
+        });
+
+        const btnManageDetails = document.getElementById('btn-manage-details');
+        const manageModal = document.getElementById('manage-modal');
+        const closeModalBtn = document.getElementById('close-modal-btn');
+        const btnNewDetail = document.getElementById('btn-new-detail');
+        const btnSaveDetail = document.getElementById('btn-save-detail');
+        const btnDeleteDetail = document.getElementById('btn-delete-detail');
+
+        btnManageDetails.addEventListener('click', () => {
+            manageModal.classList.remove('hidden');
+            renderDetailListModal();
+            clearDetailForm();
+        });
+        
+        closeModalBtn.addEventListener('click', () => {
+            manageModal.classList.add('hidden');
+        });
+
+        function clearDetailForm() {
+            document.getElementById('detail-id').value = '';
+            document.getElementById('detail-title').innerHTML = '';
+            for(let i=1; i<=10; i++) {
+                document.getElementById(`detail-kw-${i}`).innerHTML = '';
+                document.getElementById(`detail-add-kw-${i}`).innerHTML = '';
+            }
+            for(let i=1; i<=5; i++) {
+                document.getElementById(`detail-hl-kw-${i}`).innerHTML = '';
+            }
+            btnDeleteDetail.classList.add('hidden');
+        }
+
+        async function renderDetailListModal() {
+            const listEl = document.getElementById('detail-list');
+            try {
+                const details = await getAllDetails();
+                listEl.innerHTML = '';
+                if(details.length === 0) {
+                    listEl.innerHTML = '<div class="text-center text-xs text-slate-400 p-4 mt-10">저장된 내역이 없습니다.</div>';
+                    return;
+                }
+                details.sort((a,b) => b.updatedAt - a.updatedAt).forEach(d => {
+                    const item = document.createElement('div');
+                    item.className = 'p-3 rounded-lg hover:bg-white cursor-pointer transition-colors border border-transparent hover:border-slate-200 text-sm font-semibold text-slate-700 truncate shadow-sm bg-slate-50/50';
+                    const plainTextTitle = (d.title || '제목 없음').replace(/<[^>]*>?/gm, '');
+                    item.textContent = plainTextTitle;
+                    item.onclick = () => loadDetailIntoForm(d);
+                    listEl.appendChild(item);
+                });
+            } catch(e) { }
+        }
+
+        function loadDetailIntoForm(data) {
+            document.getElementById('detail-id').value = data.id;
+            document.getElementById('detail-title').innerHTML = data.title || '';
+            
+            for(let i=1; i<=10; i++) {
+                document.getElementById(`detail-kw-${i}`).innerHTML = data.keywords ? (data.keywords[i-1] || '') : '';
+                document.getElementById(`detail-add-kw-${i}`).innerHTML = data.additionalKeywords ? (data.additionalKeywords[i-1] || '') : '';
+            }
+            for(let i=1; i<=5; i++) {
+                document.getElementById(`detail-hl-kw-${i}`).innerHTML = data.highlightKeywords ? (data.highlightKeywords[i-1] || '') : '';
+            }
+            btnDeleteDetail.classList.remove('hidden');
+        }
+
+        btnNewDetail.addEventListener('click', clearDetailForm);
+
+        btnSaveDetail.addEventListener('click', async () => {
+            const idVal = document.getElementById('detail-id').value;
+            const title = document.getElementById('detail-title').innerHTML.trim();
+            const keywords = [];
+            const additionalKeywords = [];
+            const highlightKeywords = [];
+            
+            for(let i=1; i<=10; i++) {
+                keywords.push(document.getElementById(`detail-kw-${i}`).innerHTML.trim());
+                additionalKeywords.push(document.getElementById(`detail-add-kw-${i}`).innerHTML.trim());
+            }
+            for(let i=1; i<=5; i++) {
+                highlightKeywords.push(document.getElementById(`detail-hl-kw-${i}`).innerHTML.trim());
+            }
+            
+            if(!title && keywords.every(k => k === '') && additionalKeywords.every(k => k === '') && highlightKeywords.every(k => k === '')) {
+                showToast('내용을 입력해주세요.', 'warning'); return;
+            }
+
+            const data = { title, keywords, additionalKeywords, highlightKeywords, updatedAt: new Date().getTime() };
+            if(idVal) data.id = parseInt(idVal);
+
+            try {
+                await saveDetailDB(data);
+                showToast('세부내역이 성공적으로 저장되었습니다.');
+                renderDetailListModal();
+                if(!idVal) clearDetailForm(); 
+                if(!document.getElementById('import-container').classList.contains('hidden')) refreshDetailSelector();
+            } catch(e) { showToast('저장에 실패했습니다.', 'error'); }
+        });
+
+        btnDeleteDetail.addEventListener('click', async () => {
+            const idVal = document.getElementById('detail-id').value;
+            if(!idVal) return;
+            if(confirm('이 내역을 완전히 삭제하시겠습니까?')) {
+                await deleteDetailDB(parseInt(idVal));
+                showToast('삭제되었습니다.');
+                clearDetailForm();
+                renderDetailListModal();
+                refreshDetailSelector();
+            }
+        });
+
+        const modeDirectBtn = document.getElementById('mode-direct');
+        const modeImportBtn = document.getElementById('mode-import');
+        const importContainer = document.getElementById('import-container');
+        const detailSelector = document.getElementById('detail-selector');
+
+        modeDirectBtn.addEventListener('click', () => {
+            modeDirectBtn.classList.replace('text-slate-500', 'bg-white');
+            modeDirectBtn.classList.add('text-slate-800', 'shadow-sm');
+            modeDirectBtn.classList.remove('hover:text-slate-800');
+            
+            modeImportBtn.classList.replace('bg-white', 'text-slate-500');
+            modeImportBtn.classList.remove('text-slate-800', 'shadow-sm');
+            modeImportBtn.classList.add('hover:text-slate-800');
+            
+            importContainer.classList.add('hidden');
+            detailSelector.value = ""; 
+        });
+
+        modeImportBtn.addEventListener('click', async () => {
+            modeImportBtn.classList.replace('text-slate-500', 'bg-white');
+            modeImportBtn.classList.add('text-slate-800', 'shadow-sm');
+            modeImportBtn.classList.remove('hover:text-slate-800');
+            
+            modeDirectBtn.classList.replace('bg-white', 'text-slate-500');
+            modeDirectBtn.classList.remove('text-slate-800', 'shadow-sm');
+            modeDirectBtn.classList.add('hover:text-slate-800');
+            
+            importContainer.classList.remove('hidden');
+            await refreshDetailSelector();
+        });
+
+        async function refreshDetailSelector() {
+            const details = await getAllDetails();
+            const currentVal = detailSelector.value;
+            detailSelector.innerHTML = '<option value="">저장된 세부내역 선택...</option>';
+            details.sort((a,b) => b.updatedAt - a.updatedAt).forEach(d => {
+                const opt = document.createElement('option');
+                opt.value = d.id;
+                opt.textContent = (d.title || '제목 없음').replace(/<[^>]*>?/gm, '');
+                detailSelector.appendChild(opt);
+            });
+            if(currentVal) detailSelector.value = currentVal;
+        }
+
+        detailSelector.addEventListener('change', async (e) => {
+            const id = parseInt(e.target.value);
+            if(!id) return;
+            const details = await getAllDetails();
+            const data = details.find(d => d.id === id);
+            if(!data) return;
+
+            const htmlTitle = data.title || '';
+            mainTitleInput.innerHTML = htmlTitle;
+            updateLayer('main', htmlTitle, 'title');
+
+            for(let i=1; i<=10; i++) {
+                const kwInput = document.getElementById(`kw-${i}`);
+                if(kwInput) {
+                    const htmlText = data.keywords ? (data.keywords[i-1] || '') : '';
+                    kwInput.innerHTML = htmlText;
+                    updateLayer(i, htmlText, 'keyword');
+                }
+                
+                const addKwInput = document.getElementById(`add-kw-${i}`);
+                if(addKwInput) {
+                    const htmlText = data.additionalKeywords ? (data.additionalKeywords[i-1] || '') : '';
+                    addKwInput.innerHTML = htmlText;
+                    updateLayer(i, htmlText, 'additional');
+                }
+            }
+
+            for(let i=1; i<=5; i++) {
+                const hlKwInput = document.getElementById(`hl-kw-${i}`);
+                if(hlKwInput) {
+                    const htmlText = data.highlightKeywords ? (data.highlightKeywords[i-1] || '') : '';
+                    hlKwInput.innerHTML = htmlText;
+                    updateLayer(i, htmlText, 'highlight');
+                }
+            }
+
+            showToast('세부내역을 성공적으로 불러왔습니다.');
+        });
+
+        searchInput.addEventListener('input', renderList);
+
+        async function renderList() {
+            const listEl = document.getElementById('saved-list');
+            const searchTerm = searchInput.value.trim().toLowerCase();
+
+            try {
+                let rooms = await getAllRooms(); 
+                listEl.innerHTML = '';
+                
+                if(rooms.length === 0) { 
+                    listEl.innerHTML = `<div class="text-center text-slate-400 text-sm mt-10">저장된 작업이 없습니다.</div>`; 
+                    return; 
+                }
+
+                if (searchTerm) {
+                    rooms = rooms.filter(r => {
+                        const titleMatch = (r.plainTitle || '').toLowerCase().includes(searchTerm);
+                        const kwMatch = (r.keywords || []).some(k => k.html.replace(/<[^>]*>?/gm, '').toLowerCase().includes(searchTerm));
+                        const addKwMatch = (r.additionalKeywords || []).some(k => k.html.replace(/<[^>]*>?/gm, '').toLowerCase().includes(searchTerm));
+                        const hlKwMatch = (r.highlightKeywords || []).some(k => k.html.replace(/<[^>]*>?/gm, '').toLowerCase().includes(searchTerm));
+                        return titleMatch || kwMatch || addKwMatch || hlKwMatch;
+                    });
+                }
+
+                if(rooms.length === 0) {
+                    listEl.innerHTML = `<div class="text-center text-slate-400 text-sm mt-10">검색 결과가 없습니다.</div>`; 
+                    return; 
+                }
+
+                rooms.sort((a,b) => b.updatedAt - a.updatedAt).forEach(room => {
+                    const item = document.createElement('div'); const isActive = currentRoomId === room.id;
+                    const date = new Date(room.updatedAt).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit' });
+                    item.className = `list-item px-3 py-2.5 border rounded-lg cursor-pointer transition-all flex items-center justify-between group ${isActive ? 'active bg-brand-50 border-brand-500' : 'bg-white border-slate-200 hover:border-brand-300'}`;
+                    
+                    const plainTextTitle = (room.plainTitle || '제목 없음').replace(/<[^>]*>?/gm, '');
+                    item.innerHTML = `
+                        <div class="flex-1 min-w-0 pr-2" onclick="loadWork(${room.id}, this)">
+                            <h3 class="text-[13px] font-semibold text-slate-800 truncate leading-tight">${plainTextTitle}</h3>
+                            <p class="text-[10px] text-slate-400 mt-0.5">${date}</p>
+                        </div>
+                        <button onclick="deleteWork(${room.id}, event)" class="w-7 h-7 rounded-md bg-slate-50 text-slate-400 flex items-center justify-center hover:bg-red-50 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 shrink-0"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+                    `;
+                    listEl.appendChild(item);
+                }); lucide.createIcons();
+            } catch(e) {}
+        }
+
+        document.getElementById('save-db-btn').addEventListener('click', async () => {
+            if(!bgImage.src) { showToast('배경 이미지가 없으면 저장할 수 없습니다.', 'warning'); return; }
+            
+            convertLayersToPercentage();
+
+            const mainLayerEl = document.getElementById('layer-main');
+            
+            const keywords = [];
+            document.querySelectorAll('.kw-input').forEach(input => {
+                const layerEl = document.getElementById(`layer-${input.dataset.idx}`);
+                if (input.innerHTML.trim() && layerEl) keywords.push({ id: input.dataset.idx, html: input.innerHTML, top: layerEl.style.top, left: layerEl.style.left });
+            });
+
+            const additionalKeywords = [];
+            document.querySelectorAll('.add-kw-input').forEach(input => {
+                const layerEl = document.getElementById(`layer-add-${input.dataset.idx}`);
+                if (input.innerHTML.trim() && layerEl) additionalKeywords.push({ id: input.dataset.idx, html: input.innerHTML, top: layerEl.style.top, left: layerEl.style.left });
+            });
+
+            const highlightKeywords = [];
+            document.querySelectorAll('.hl-kw-input').forEach(input => {
+                const layerEl = document.getElementById(`layer-hl-${input.dataset.idx}`);
+                if (input.innerHTML.trim() && layerEl) highlightKeywords.push({ id: input.dataset.idx, html: input.innerHTML, top: layerEl.style.top, left: layerEl.style.left });
+            });
+            
+            const plainTitleText = mainTitleInput.innerText.trim() || `작업 ${new Date().toLocaleTimeString()}`;
+
+            const roomData = {
+                plainTitle: plainTitleText,
+                bgImage: bgImage.src.startsWith('data:') ? bgImage.src : '',
+                mainLayer: mainLayerEl ? { top: mainLayerEl.style.top, left: mainLayerEl.style.left, html: mainTitleInput.innerHTML } : null,
+                keywords, 
+                additionalKeywords,
+                highlightKeywords,
+                showNumbers: toggleNumbersCheckbox.checked,
+                updatedAt: new Date().getTime()
+            };
+            if (currentRoomId) roomData.id = currentRoomId;
+            try { 
+                currentRoomId = await saveRoomDB(roomData); 
+                showToast('보관함에 성공적으로 저장되었습니다.', 'success'); 
+                renderList(); 
+            } catch(e) { 
+                showToast('저장에 실패했습니다. (용량 제한 등)', 'error'); 
+            }
+        });
+
+        async function loadWork(id) {
+            try {
+                const data = (await getAllRooms()).find(r => r.id === id); if(!data) return;
+                currentRoomId = data.id; resetWorkspace(false); 
+                
+                if (data.showNumbers !== undefined) {
+                    toggleNumbersCheckbox.checked = data.showNumbers;
+                } else {
+                    toggleNumbersCheckbox.checked = true;
+                }
+                toggleNumbersCheckbox.dispatchEvent(new Event('change'));
+
+                if(data.bgImage) { 
+                    bgImage.src = data.bgImage; 
+                    imageWrapper.style.display = 'inline-block'; 
+                    welcomeMsg.style.display = 'none'; 
+                    captureArea.classList.remove('border-dashed'); 
+                    captureArea.classList.add('border-solid', 'border-slate-100'); 
+                }
+
+                if(data.mainLayer) { 
+                    mainTitleInput.innerHTML = data.mainLayer.html; 
+                    updateLayer('main', data.mainLayer.html, 'title'); 
+                    setTimeout(() => { const el = document.getElementById('layer-main'); if(el) { el.style.top = data.mainLayer.top; el.style.left = data.mainLayer.left; } }, 50); 
+                }
+                
+                if(data.keywords) {
+                    data.keywords.forEach(kw => { const input = document.getElementById(`kw-${kw.id}`); if(input) { input.innerHTML = kw.html; updateLayer(kw.id, kw.html, 'keyword'); setTimeout(() => { const el = document.getElementById(`layer-${kw.id}`); if(el) { el.style.top = kw.top; el.style.left = kw.left; } }, 50); } });
+                }
+
+                if(data.additionalKeywords) {
+                    data.additionalKeywords.forEach(kw => { const input = document.getElementById(`add-kw-${kw.id}`); if(input) { input.innerHTML = kw.html; updateLayer(kw.id, kw.html, 'additional'); setTimeout(() => { const el = document.getElementById(`layer-add-${kw.id}`); if(el) { el.style.top = kw.top; el.style.left = kw.left; } }, 50); } });
+                }
+
+                if(data.highlightKeywords) {
+                    data.highlightKeywords.forEach(kw => { const input = document.getElementById(`hl-kw-${kw.id}`); if(input) { input.innerHTML = kw.html; updateLayer(kw.id, kw.html, 'highlight'); setTimeout(() => { const el = document.getElementById(`layer-hl-${kw.id}`); if(el) { el.style.top = kw.top; el.style.left = kw.left; } }, 50); } });
+                }
+
+                renderList();
+            } catch(e) {}
+        }
+
+        async function deleteWork(id, event) { 
+            event.stopPropagation(); 
+            if(confirm("이 작업을 삭제하시겠습니까?")) { 
+                await deleteRoomDB(id); 
+                if(currentRoomId === id) resetWorkspace(true); 
+                renderList(); 
+                showToast('작업이 삭제되었습니다.', 'success');
+            } 
+        }
+
+        function resetWorkspace(clearId = true) {
+            if(clearId) currentRoomId = null;
+            mainTitleInput.innerHTML = ''; 
+            
+            document.querySelectorAll('.kw-input').forEach(input => { input.innerHTML = ''; }); 
+            document.querySelectorAll('.add-kw-input').forEach(input => { input.innerHTML = ''; }); 
+            document.querySelectorAll('.hl-kw-input').forEach(input => { input.innerHTML = ''; }); 
+            
+            document.getElementById('image-loader').value = '';
+            
+            layerContainer.innerHTML = ''; bgImage.src = ''; imageWrapper.style.display = 'none'; welcomeMsg.style.display = 'flex'; 
+            captureArea.classList.add('border-dashed'); captureArea.classList.remove('border-solid', 'border-slate-100');
+            
+            toggleNumbersCheckbox.checked = true;
+            document.body.classList.remove('hide-numbers');
+
+            document.getElementById('mode-direct').click();
+
+            if(clearId) renderList();
+        }
+
+        document.getElementById('btn-new').addEventListener('click', () => { 
+            if(confirm('진행 중인 내용이 초기화됩니다. 새 작업을 시작하시겠습니까?')) {
+                resetWorkspace(true);
+                showToast('새 작업이 시작되었습니다.', 'success');
+            }
+        });
+
+        window.addEventListener('DOMContentLoaded', async () => { 
+            try { 
+                await initDB(); 
+                renderList(); 
+                refreshDetailSelector();
+            } catch(e) {} 
+        });
+
+        document.addEventListener('keydown', async (e) => {
+            if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'n') { e.preventDefault(); document.getElementById('btn-new').click(); return; }
+            if (e.ctrlKey && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 's') { e.preventDefault(); document.getElementById('save-db-btn').click(); return; }
+            
+            // 텍스트 색상(빨강/파랑) 및 배경 마크(연한 주황색) 적용
+            if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'r') {
+                e.preventDefault();
+                let targetEditor = activeEditor || (document.activeElement && document.activeElement.hasAttribute('contenteditable') ? document.activeElement : null);
+                if (targetEditor) {
+                    document.execCommand('foreColor', false, '#ef4444'); 
+                    targetEditor.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+                return;
+            }
+
+            if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'b') {
+                e.preventDefault();
+                let targetEditor = activeEditor || (document.activeElement && document.activeElement.hasAttribute('contenteditable') ? document.activeElement : null);
+                if (targetEditor) {
+                    document.execCommand('foreColor', false, '#3b82f6'); 
+                    targetEditor.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+                return;
+            }
+
+            if (e.ctrlKey && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'm') {
+                e.preventDefault();
+                let targetEditor = activeEditor || (document.activeElement && document.activeElement.hasAttribute('contenteditable') ? document.activeElement : null);
+                if (targetEditor) {
+                    document.execCommand('backColor', false, '#ffedd5'); 
+                    targetEditor.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+                return;
+            }
+
+            // ✅ 두음 강조 (Ctrl + Alt + M) 적용/해제 토글
+            if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'm') {
+                e.preventDefault();
+                let targetEditor = activeEditor || (document.activeElement && document.activeElement.hasAttribute('contenteditable') ? document.activeElement : null);
+                
+                if (targetEditor) {
+                    const selection = window.getSelection();
+                    if (selection.rangeCount > 0) {
+                        const range = selection.getRangeAt(0);
+                        let parentNode = range.commonAncestorContainer;
+                        if (parentNode.nodeType === 3) parentNode = parentNode.parentNode;
+                        
+                        const dueumSpan = parentNode.closest ? parentNode.closest('.dueum-highlight') : null;
+                        
+                        if (dueumSpan) {
+                            // 토글 해제 (Unwrap)
+                            const parent = dueumSpan.parentNode;
+                            while (dueumSpan.firstChild) {
+                                parent.insertBefore(dueumSpan.firstChild, dueumSpan);
+                            }
+                            parent.removeChild(dueumSpan);
+                        } else if (!selection.isCollapsed) {
+                            // 토글 적용 (Wrap)
+                            const span = document.createElement('span');
+                            span.className = 'dueum-highlight';
+                            span.appendChild(range.extractContents());
+                            range.insertNode(span);
+                            
+                            // 드래그된 상태를 유지하도록 설정
+                            selection.removeAllRanges();
+                            const newRange = document.createRange();
+                            newRange.selectNodeContents(span);
+                            selection.addRange(newRange);
+                        }
+                        targetEditor.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                }
+                return;
+            }
+
+            // 폰트 크기 변경 단축키 (Ctrl + + / Ctrl + -) 및 브라우저 기본 확대/축소 방지
+            if (e.ctrlKey && (e.key === '=' || e.key === '+' || e.key === '-')) {
+                e.preventDefault();
+                const el = document.activeElement;
+                if (el && el.hasAttribute('contenteditable')) {
+                    const delta = (e.key === '-' ? -1 : 1);
+                    changeFontSize(delta);
+                }
+                return;
+            }
+
+            const el = document.activeElement;
+            if (!e.ctrlKey && !e.altKey && !e.shiftKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+                if (el.hasAttribute('contenteditable') || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; 
+                e.preventDefault();
+                const rooms = await getAllRooms();
+                if (rooms.length === 0) return;
+                rooms.sort((a,b) => b.updatedAt - a.updatedAt);
+                let currentIndex = rooms.findIndex(r => r.id === currentRoomId);
+                if (currentIndex === -1) currentIndex = 0;
+                if (e.key === 'ArrowLeft' && currentIndex - 1 >= 0) loadWork(rooms[currentIndex - 1].id);
+                else if (e.key === 'ArrowRight' && currentIndex + 1 < rooms.length) loadWork(rooms[currentIndex + 1].id);
+                return;
+            }
+        });
+
+        // 엑셀 파일 업로드
+        document.getElementById('excel-loader-modal').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            showToast('엑셀 파일을 불러오는 중...', 'success');
+
+            const reader = new FileReader();
+            reader.onload = async function(event) {
+                try {
+                    const data = new Uint8Array(event.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const json = XLSX.utils.sheet_to_json(worksheet);
+
+                    if (json.length === 0) {
+                        showToast('엑셀 파일에 데이터가 없습니다.', 'warning');
+                        e.target.value = '';
+                        return;
+                    }
+
+                    let importCount = 0;
+                    for (const row of json) {
+                        const title = row['제목'] || '';
+                        
+                        const keywords = [];
+                        const additionalKeywords = [];
+                        const highlightKeywords = [];
+                        
+                        for (let i = 1; i <= 10; i++) {
+                            keywords.push(row[`키워드 ${i}`] || row[`키워드${i}`] || '');
+                            additionalKeywords.push(row[`추가 키워드 ${i}`] || row[`추가키워드${i}`] || '');
+                        }
+                        for (let i = 1; i <= 5; i++) {
+                            highlightKeywords.push(row[`강조 키워드 ${i}`] || row[`강조키워드${i}`] || '');
+                        }
+
+                        if (title.toString().trim() !== '' || keywords.some(k => k.toString().trim() !== '') || additionalKeywords.some(k => k.toString().trim() !== '') || highlightKeywords.some(k => k.toString().trim() !== '')) {
+                            const detailData = { 
+                                title: title.toString(), 
+                                keywords: keywords.map(k=>k.toString()), 
+                                additionalKeywords: additionalKeywords.map(k=>k.toString()),
+                                highlightKeywords: highlightKeywords.map(k=>k.toString()),
+                                updatedAt: new Date().getTime() 
+                            };
+                            await saveDetailDB(detailData);
+                            importCount++;
+                        }
+                    }
+
+                    showToast(`${importCount}개의 세부내역을 성공적으로 불러왔습니다!`, 'success');
+                    renderDetailListModal(); 
+                    if(!document.getElementById('import-container').classList.contains('hidden')) {
+                        refreshDetailSelector(); 
+                    }
+                    e.target.value = ''; 
+                    
+                } catch (error) {
+                    console.error(error);
+                    showToast('엑셀 파일을 읽는 중 오류가 발생했습니다.', 'error');
+                    e.target.value = '';
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        });
+    </script>
+</body>
+</html>

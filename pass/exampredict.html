@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Exam Predictor</title>
+  
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <style>
+    :root {
+      --bg-body: #F9FAFB;
+      --bg-surface: #FFFFFF;
+      --bg-sidebar: #F3F4F6;
+      --border-light: #F3F4F6;
+      --border-base: #E5E7EB;
+      --border-dark: #D1D5DB;
+      --text-main: #111827;
+      --text-muted: #6B7280;
+      --primary: #111827;
+      --primary-hover: #374151;
+      --secondary: #FFFFFF;
+      --secondary-hover: #F9FAFB;
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      
+      /* 카테고리 컬러셋 */
+      --tag-ai: #EFF6FF; --tag-ai-text: #2563EB;
+      --tag-sys: #FEF2F2; --tag-sys-text: #DC2626;
+      --tag-sec: #ECFDF5; --tag-sec-text: #059669;
+      --tag-se: #FFFBEB; --tag-se-text: #D97706;
+      --tag-mgt: #F3F4F6; --tag-mgt-text: #4B5563;
+      --tag-db: #E0E7FF; --tag-db-text: #4338CA;
+      --tag-etc: #F3F4F6; --tag-etc-text: #4B5563;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background: var(--bg-body); color: var(--text-main); margin: 0; padding: 0;
+      -webkit-font-smoothing: antialiased; height: 100vh; display: flex; overflow: hidden;
+    }
+
+    /* 사이드바 */
+    .sidebar { width: 300px; background: var(--bg-surface); border-right: 1px solid var(--border-base); display: flex; flex-direction: column; z-index: 10; }
+    .sidebar-header { height: 64px; min-height: 64px; padding: 0 20px; border-bottom: 1px solid var(--border-base); display: flex; align-items: center; }
+    .app-title { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px; margin: 0; width: 100%; color: var(--primary); }
+    
+    .sidebar-tabs { display: flex; border-bottom: 1px solid var(--border-base); background: #F9FAFB; }
+    .sidebar-tab { flex: 1; text-align: center; padding: 14px 0; font-size: 13px; font-weight: 700; color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent; transition: 0.2s; user-select: none; }
+    .sidebar-tab.active { color: var(--primary); border-bottom-color: var(--primary); background: var(--bg-surface); }
+
+    .note-list { flex: 1; overflow-y: auto; padding: 10px; margin: 0; list-style: none; }
+    .note-item { padding: 12px 14px; border-radius: var(--radius-md); cursor: pointer; margin-bottom: 4px; display: flex; align-items: center; justify-content: space-between; transition: background 0.2s; }
+    .note-item:hover { background: var(--bg-sidebar); }
+    .note-item.active { background: var(--primary); color: white; }
+    .note-title { font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+    .note-badge { font-size: 11px; font-weight: bold; background: rgba(255,255,255,0.2); padding: 2px 6px; border-radius: 4px; transition: 0.2s; }
+
+    /* 메인 콘텐츠 */
+    .main-content { flex: 1; display: flex; flex-direction: column; overflow-y: auto; background: var(--bg-body); }
+    .top-bar { position: sticky; top: 0; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(8px); height: 64px; min-height: 64px; padding: 0 30px; border-bottom: 1px solid var(--border-base); display: flex; justify-content: space-between; align-items: center; z-index: 5; }
+    .title-display { font-size: 20px; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 10px; }
+    
+    .actions { display: flex; gap: 8px; align-items: center; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 14px; border-radius: var(--radius-md); font-size: 14px; font-weight: 600; cursor: pointer; transition: 0.2s; border: 1px solid transparent; }
+    .btn-primary { background: var(--primary); color: white; box-shadow: var(--shadow-sm); }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-outline { background: var(--secondary); color: var(--text-main); border-color: var(--border-base); }
+    .btn-outline:hover { background: var(--secondary-hover); }
+
+    /* 폼 영역 & 카드 */
+    .form-wrapper { padding: 30px 40px; max-width: 1100px; margin: 0 auto; width: 100%; }
+    .keynote-card { background: var(--bg-surface); border: 1px solid var(--border-base); border-radius: var(--radius-lg); padding: 28px; margin-bottom: 24px; box-shadow: var(--shadow-md); }
+    
+    .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; border-bottom: 1px solid var(--border-light); padding-bottom: 16px; }
+    .card-title { font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 8px; color: var(--primary); }
+    
+    /* 토글 뷰 버튼 */
+    .view-toggle { display: flex; background: var(--bg-sidebar); padding: 4px; border-radius: 8px; gap: 4px; }
+    .toggle-btn { padding: 4px 14px; font-size: 13px; font-weight: 600; border: none; border-radius: 6px; cursor: pointer; color: var(--text-muted); background: transparent; transition: all 0.2s ease; }
+    .toggle-btn.active { background: var(--bg-surface); color: var(--primary); box-shadow: var(--shadow-sm); }
+
+    /* 입력 필드 */
+    .input-group { margin-bottom: 16px; display: flex; align-items: center; gap: 12px; }
+    .input-label { font-size: 14px; font-weight: 600; min-width: 120px; color: var(--text-muted); }
+    .form-control { padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border-base); font-size: 14px; flex: 1; max-width: 300px; outline: none; font-family: inherit; }
+    .form-control:focus { border-color: var(--primary); }
+
+    /* 태그 스타일 */
+    .tag-container { display: flex; flex-wrap: wrap; gap: 8px; }
+    .tag { padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+    .tag.clickable { cursor: pointer; transition: 0.2s; }
+    .tag.clickable:hover { opacity: 0.8; transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+    .tag.ai { background: var(--tag-ai); color: var(--tag-ai-text); border: 1px solid #BFDBFE; }
+    .tag.sys { background: var(--tag-sys); color: var(--tag-sys-text); border: 1px solid #FECACA; }
+    .tag.sec { background: var(--tag-sec); color: var(--tag-sec-text); border: 1px solid #A7F3D0; }
+    .tag.se { background: var(--tag-se); color: var(--tag-se-text); border: 1px solid #FDE68A; }
+    .tag.mgt { background: var(--tag-mgt); color: var(--tag-mgt-text); border: 1px solid #D1D5DB; }
+    .tag.db { background: var(--tag-db); color: var(--tag-db-text); border: 1px solid #A5B4FC; }
+    .tag.etc { background: var(--tag-etc); color: var(--tag-etc-text); border: 1px solid var(--border-dark); }
+
+    /* 데이터 테이블 */
+    .data-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    .data-table th, .data-table td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--border-base); font-size: 14px; }
+    .data-table th { background: var(--bg-sidebar); font-weight: 700; color: var(--text-muted); }
+    .data-table tr:hover td { background: #F9FAFB; }
+    
+    .score-bar-bg { width: 100%; background: #E5E7EB; border-radius: 4px; height: 8px; overflow: hidden; margin-top: 4px; }
+    .score-bar-fill { background: var(--primary); height: 100%; border-radius: 4px; transition: width 0.5s ease-out; }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    .hidden { display: none !important; }
+
+    /* 모달 공통 */
+    .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(17, 24, 39, 0.4); backdrop-filter: blur(2px); display: none; justify-content: center; align-items: center; z-index: 50; }
+    .modal-content { background: var(--bg-surface); width: 500px; max-width: 90%; padding: 24px; border-radius: var(--radius-lg); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1); border: 1px solid var(--border-base); }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .modal-title { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+    
+    /* 텍스트 영역 리스트 스타일 특화 */
+    .list-textarea {
+        width: 100%; 
+        height: 250px; 
+        resize: vertical; 
+        line-height: 1.6; 
+        max-width: 100%;
+        padding: 12px;
+        font-family: monospace; /* 정렬된 리스트 느낌 부여 */
+        font-size: 14px;
+        background: #F9FAFB;
+    }
+    .list-textarea:focus {
+        background: #FFFFFF;
+    }
+  </style>
+</head>
+<body>
+
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="app-title"><i class="ph-fill ph-chart-line-up"></i> Exam Predictor</div>
+    </div>
+    
+    <div class="sidebar-tabs">
+      <div class="sidebar-tab active" onclick="switchTab('simulation')" id="tab-simulation">시뮬레이션</div>
+      <div class="sidebar-tab" onclick="switchTab('settings')" id="tab-settings">데이터 & 설정</div>
+    </div>
+
+    <ul class="note-list" id="sidebar-list">
+      <li class="note-item active">
+        <div class="note-title"><i class="ph-bold ph-target"></i> <span id="sidebar-target-round">140</span>회차 예측</div>
+        <div class="note-badge" id="status-badge">Ready</div>
+      </li>
+    </ul>
+  </aside>
+
+  <main class="main-content">
+    <div class="top-bar">
+      <div class="title-display">
+        <i class="ph-fill ph-cpu" style="color: #2563EB;"></i> <span id="main-target-round">140</span>회차 키워드 예측 대시보드
+      </div>
+      <div class="actions">
+        <button class="btn btn-outline" onclick="runPrediction()"><i class="ph ph-arrow-clockwise"></i> 재계산</button>
+        <button class="btn btn-primary" onclick="exportJSON()"><i class="ph ph-export"></i> JSON 내보내기</button>
+      </div>
+    </div>
+
+    <div class="form-wrapper">
+      
+      <div id="view-settings" class="hidden">
+        <div class="keynote-card">
+          <div class="card-header">
+            <div class="card-title"><i class="ph-fill ph-database"></i> 기본 데이터 입력</div>
+          </div>
+          <div class="input-group">
+            <div class="input-label">타겟 회차 (Target)</div>
+            <input type="number" id="input-target-round" class="form-control" value="140" onchange="updateTargetRoundUI()">
+          </div>
+          
+          <div class="input-group">
+            <div class="input-label">엑셀 데이터 업로드</div>
+            <div style="display: flex; gap: 8px; flex: 1; max-width: 500px;">
+              <input type="file" id="file-upload" class="form-control" accept=".xls,.xlsx" onchange="handleFileUpload(event)" style="max-width: 250px;">
+              <button class="btn btn-primary" onclick="completeData()"><i class="ph-bold ph-check"></i> 완료</button>
+              <button class="btn btn-outline" onclick="deleteData()" style="color: #DC2626; border-color: #FCA5A5;"><i class="ph-bold ph-trash"></i> 삭제</button>
+            </div>
+          </div>
+          <div style="font-size: 12px; color: var(--text-muted); margin-left: 132px;">
+            * 파이썬 스크립트와 동일하게 '기출', '모의', '합숙' 시트를 파싱합니다.
+          </div>
+          <div id="upload-status" style="margin-top: 12px; margin-left: 132px; font-size: 13px; font-weight: 600; color: #2563EB;"></div>
+        </div>
+
+        <div class="keynote-card">
+          <div class="card-header">
+            <div class="card-title"><i class="ph-fill ph-sliders"></i> 가중치 (Weights) 설정</div>
+          </div>
+          <div class="grid-2">
+            <div>
+              <div class="input-group">
+                <div class="input-label" style="min-width: 100px;">기출 (Past)</div>
+                <input type="number" id="w-past" class="form-control" value="5.0" step="0.1">
+              </div>
+              <div class="input-group">
+                <div class="input-label" style="min-width: 100px;">합숙 (Camp)</div>
+                <input type="number" id="w-camp" class="form-control" value="5.0" step="0.1">
+              </div>
+              <div class="input-group">
+                <div class="input-label" style="min-width: 100px;">모의 (Mock)</div>
+                <input type="number" id="w-mock" class="form-control" value="1.5" step="0.1">
+              </div>
+            </div>
+            <div>
+              <div class="input-group">
+                <div class="input-label" style="min-width: 100px;">1교시 단답</div>
+                <input type="number" id="w-type1" class="form-control" value="0.8" step="0.1">
+              </div>
+              <div class="input-group">
+                <div class="input-label" style="min-width: 100px;">2교시 논술</div>
+                <input type="number" id="w-type2" class="form-control" value="1.3" step="0.1">
+              </div>
+              <div class="input-group">
+                <div class="input-label" style="min-width: 100px;">추출 개수</div>
+                <input type="number" id="total-quota" class="form-control" value="30" step="1">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="view-simulation">
+        <div class="keynote-card grid-2">
+          <div>
+            <div class="card-header" style="border:none; padding:0; margin-bottom:12px;">
+              <div class="card-title"><i class="ph-fill ph-rocket"></i> 신규 부스트 풀 (Boost Pool)</div>
+            </div>
+            <div class="tag-container">
+              <span class="tag sys clickable" onclick="openBoostModal('cs')" title="클릭하여 편집"><i class="ph-bold ph-memory"></i> CS 기본기 (x2.5)</span>
+              <span class="tag ai clickable" onclick="openBoostModal('trendy')" title="클릭하여 편집"><i class="ph-bold ph-trend-up"></i> 시사/신규 (x1.5)</span>
+            </div>
+            <p style="font-size: 13px; color: var(--text-muted); margin-top: 12px; line-height: 1.5;">
+              * <b>단답 부스트:</b> N-1회차 단답은 논술 출제 후보로 부스트 (x1.25)<br>
+              * <b>논술 페널티:</b> N-1회차 논술은 출제 확률 하락 (x0.3)<br>
+              * <span style="color:var(--primary); font-weight:600;">태그를 클릭</span>하면 부스트 키워드를 직접 편집할 수 있습니다.
+            </p>
+          </div>
+          <div>
+             <div class="card-header" style="border:none; padding:0; margin-bottom:12px;">
+              <div class="card-title"><i class="ph-fill ph-info"></i> 시스템 상태</div>
+            </div>
+            <p id="status-text" style="font-size: 14px; color: var(--text-muted); line-height: 1.6;">
+              엑셀 데이터를 업로드하고 <b>[완료]</b> 버튼을 누른 후, <b>[재계산]</b> 버튼을 눌러주세요.<br>
+              (현재 데이터가 없으면 임시 Mockup 로직으로 동작합니다)
+            </p>
+          </div>
+        </div>
+
+        <div class="keynote-card">
+          <div class="card-header">
+            <div class="card-title"><i class="ph-fill ph-ranking"></i> 예측 결과 Top-N</div>
+            <div class="view-toggle">
+              <button id="btn-view-all" class="toggle-btn active" onclick="setViewMode('all')">기본 전체조회</button>
+              <button id="btn-view-boost" class="toggle-btn" onclick="setViewMode('boosted')">부스트 적중만</button>
+            </div>
+          </div>
+          <table class="data-table" id="result-table">
+            <thead>
+              <tr>
+                <th style="width: 60px; text-align: center;">순위</th>
+                <th style="width: 140px;">분류 (추정)</th>
+                <th>키워드 (Keyword)</th>
+                <th style="width: 200px;">스코어</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td colspan="4" style="text-align:center; padding: 30px;">계산 대기 중...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+    
+    <div id="boostModal" class="modal-overlay" onclick="if(event.target===this) closeBoostModal()">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div class="modal-title" id="boostModalTitle"><i class="ph-fill ph-rocket"></i> 부스트 풀 편집</div>
+          <button class="btn" style="padding: 4px; border: none; background: transparent;" onclick="closeBoostModal()"><i class="ph ph-x" style="font-size: 18px;"></i></button>
+        </div>
+        <div style="margin-bottom: 16px;">
+          <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 8px;">
+            <i class="ph-bold ph-list-dashes"></i> 한 줄에 하나의 키워드를 입력하세요. (엑셀 등에서 복사 붙여넣기 가능)
+          </p>
+          <textarea id="boostKeywords" class="form-control list-textarea" spellcheck="false" placeholder="키워드 입력..."></textarea>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 8px;">
+          <button class="btn btn-outline" onclick="closeBoostModal()">취소</button>
+          <button class="btn btn-primary" onclick="saveBoostPool()">적용 및 저장</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    // --- 부스트 풀 데이터 ---
+    let CS_BASIC_POOL = [
+        '가상메모리', '동기화', '뮤텍스', '세마포어', '모니터', '데드락', '교착상태',
+        '은행가', '우선순위 역전', '페이징', '페이지 교체', '단편화',
+        '소프트웨어 테스트', '화이트박스', '블랙박스', '경계값', '동등분할', '동등 분할',
+        '맥케이브', '순환복잡도', '리팩토링', '코드스멜', '코드 스멜', '기술부채', '기술 부채',
+        '무중단 배포', 'Blue-Green', 'Canary', '카나리',
+        '서브네팅', '슈퍼네팅', 'VLSM', 'CIDR', 'OSPF',
+        'WBS', '위험관리', 'PMBOK', '부정적 위험', '공공 SLA', 'SLA',
+        '분산 데이터베이스', '투명성', '정규화', '데이터 레이크', '데이터 스웜프',
+        '이진 탐색', '이진탐색', '라우팅 테이블',
+        '엣지 컴퓨팅', '엣지컴퓨팅',
+        '과적합', '과소적합', '이상치', '편향',
+        '대수의 법칙', '중심극한정리'
+    ];
+
+    let TRENDY_NEW_POOL = [
+        'Wi-Fi 7', 'WiFi 7', 'CTEM', 'TurboQuant', 'RAFT',
+        'Advanced RAG', 'Modular RAG', 'sLLM', 'AI Act', '인공지능기본법',
+        '데이터 자산화', '데이터 가치평가', 'VPP', '가상발전소',
+        'AI Native', 'AI-Native', 'GNN', '강화학습'
+    ];
+
+    let currentModalType = ''; 
+
+    // --- 부스트 풀 모달 제어 함수 ---
+    function openBoostModal(type) {
+        currentModalType = type;
+        const title = document.getElementById('boostModalTitle');
+        const textarea = document.getElementById('boostKeywords');
+        
+        if (type === 'cs') {
+            title.innerHTML = '<i class="ph-bold ph-memory" style="color:var(--tag-sys-text);"></i> CS 기본기 풀 편집 (x2.5)';
+            // 배열을 엔터(\n) 단위 문자로 조인
+            textarea.value = CS_BASIC_POOL.join('\n');
+        } else {
+            title.innerHTML = '<i class="ph-bold ph-trend-up" style="color:var(--tag-ai-text);"></i> 시사/신규 풀 편집 (x1.5)';
+            // 배열을 엔터(\n) 단위 문자로 조인
+            textarea.value = TRENDY_NEW_POOL.join('\n');
+        }
+        
+        document.getElementById('boostModal').style.display = 'flex';
+    }
+
+    function closeBoostModal() {
+        document.getElementById('boostModal').style.display = 'none';
+    }
+
+    function saveBoostPool() {
+        const textarea = document.getElementById('boostKeywords');
+        // 엔터(\n) 기준으로 배열 분리 후 공백제거, 빈줄 무시
+        const newArray = textarea.value.split('\n').map(item => item.trim()).filter(item => item.length > 0);
+        
+        if (currentModalType === 'cs') {
+            CS_BASIC_POOL = newArray;
+        } else {
+            TRENDY_NEW_POOL = newArray;
+        }
+        
+        closeBoostModal();
+        alert('부스트 풀 키워드가 성공적으로 업데이트되었습니다.\n우측 상단의 [재계산] 버튼을 눌러 시뮬레이션에 반영해주세요.');
+    }
+
+    // --- 추출 로직 ---
+    function extractTerms(text) {
+        if(!text) return [];
+
+        let cleanedText = text
+            .replace(/[①-⑳]/g, ' ')
+            .replace(/\b[가-하]\./g, ' ')
+            .replace(/\b[A-Za-z]\./g, ' ')
+            .replace(/\b[0-9]+\./g, ' ')
+            .replace(/[\[\](){}<>,'"?/:;=]/g, ' '); 
+
+        let words = cleanedText.split(/\s+/);
+        let result = [];
+
+        const VERB_STEMS = /^(설명|기술|비교|제시|작성|나열|정의|논하|도출|수행|분석|설계|구현|적용|활용|구분|대하|관하|관련|고려|요구)/;
+
+        const STOPWORDS = new Set([
+            '기법', '방식', '유형', '아래', '개발', '관리', '구조', '종류', '개념', '특징', '장단점', '차이점',
+            '필요성', '요소', '과정', '방법', '역할', '기능', '목적', '효과', '의의', '동향', '사례', '이슈',
+            '이유', '방안', '사항', '절차', '원리', '기준', '현황', '모형', '모델', '기술', '데이터', '시스템',
+            '서비스', '네트워크', '보안', '소프트웨어', '컴퓨팅', '인프라', '플랫폼', '환경', '문제', '해결',
+            '다음', '대해', '관해', '대한', '관한', '위한', '따른', '가장', '크게', '작게', '있는', '없는',
+            '같은', '다양한', '각각', '모두', '어떤', '무엇', '상태', '위험', '기반', '테스트', '데이터베이스',
+            '모니터링', '지원', '제공', '구성', '핵심', '주요', '최근', '수행', '발생', '처리',
+            'management', 'system', 'data'
+        ]);
+
+        for (let w of words) {
+            w = w.replace(/\.$/, ''); 
+            
+            if (/^[0-9]+(\.[0-9]+)?$/.test(w)) continue;
+            if (/^[^a-zA-Z0-9가-힣]+$/.test(w)) continue; 
+
+            if (VERB_STEMS.test(w)) continue;
+
+            w = w.replace(/(을|를|이|가|은|는|의|와|과|에|에서|으로|로|까지|부터|다|입니다|한다|이다|라|고|라고|라는|하|하는|하여|하기|하고|되|되는|되어|되기|되고|된|될)$/, '');
+
+            if (w.length < 2) continue;
+
+            let checkWord = w.toLowerCase();
+            if (w.length > 0 && !STOPWORDS.has(checkWord) && !STOPWORDS.has(w)) {
+                if (/^[a-zA-Z]+$/.test(w)) {
+                    w = w.toUpperCase();
+                }
+                result.push(w);
+            }
+        }
+        return result;
+    }
+
+    function classifyTerm(term) {
+        const t = term.toLowerCase();
+        const sys = ['메모리', 'os', '데드락', '동기화', '가상', '교착', '페이지', '캐시', '아키텍처'];
+        const ai = ['ai', 'rag', '학습', 'gnn', 'llm', '딥러닝', '머신러닝', '인공지능'];
+        const db = ['데이터베이스', 'db', '정규화', '트랜잭션', 'sql', 'nosql', '데이터웨어하우스', '레이크'];
+        const mgt = ['거버넌스', '법', '가이드', 'wbs', 'pmbok', 'sla', '전략', '감리'];
+        const se = ['테스트', '리팩토링', '코드', '배포', '복잡도', '애자일', 'devops'];
+        const sec = ['보안', '암호', '해킹', '취약점', '인증', '방화벽', 'vpn'];
+
+        for(let k of sys) if(t.includes(k)) return '시스템구조';
+        for(let k of ai) if(t.includes(k)) return 'AI데이터분석';
+        for(let k of db) if(t.includes(k)) return '데이터베이스';
+        for(let k of mgt) if(t.includes(k)) return 'IT경영';
+        for(let k of se) if(t.includes(k)) return '소프트웨어공학';
+        for(let k of sec) if(t.includes(k)) return '정보보안';
+        return '기타';
+    }
+
+    let globalRecords = [];
+    
+    let allSortedResult = [];
+    let currentlyRenderedResult = [];
+    
+    let currentViewMode = 'all'; 
+
+    // --- UI 인터랙션 ---
+    function switchTab(tab) {
+        document.getElementById('tab-simulation').classList.remove('active');
+        document.getElementById('tab-settings').classList.remove('active');
+        document.getElementById('tab-' + tab).classList.add('active');
+
+        document.getElementById('view-simulation').classList.add('hidden');
+        document.getElementById('view-settings').classList.add('hidden');
+        document.getElementById('view-' + tab).classList.remove('hidden');
+    }
+
+    function updateTargetRoundUI() {
+        const val = document.getElementById('input-target-round').value;
+        document.getElementById('sidebar-target-round').innerText = val;
+        document.getElementById('main-target-round').innerText = val;
+    }
+    
+    // 토글 버튼 제어
+    function setViewMode(mode) {
+        currentViewMode = mode;
+        document.getElementById('btn-view-all').classList.remove('active');
+        document.getElementById('btn-view-boost').classList.remove('active');
+        
+        if (mode === 'all') {
+            document.getElementById('btn-view-all').classList.add('active');
+        } else {
+            document.getElementById('btn-view-boost').classList.add('active');
+        }
+        
+        renderTable();
+    }
+
+    // --- 엑셀 파일 처리 및 버튼 로직 ---
+    function handleFileUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, {type: 'array'});
+                
+                globalRecords = [];
+                const sheetMaps = [
+                    { name: '기출', source: 'past' },
+                    { name: '모의', source: 'mock' },
+                    { name: '합숙', source: 'camp' }
+                ];
+
+                sheetMaps.forEach(map => {
+                    if(workbook.Sheets[map.name]) {
+                        const rows = XLSX.utils.sheet_to_json(workbook.Sheets[map.name], {header: 1});
+                        rows.forEach((row, idx) => {
+                            if(idx === 0) return; 
+                            const round_v = row[0];
+                            const ptype_v = row[1];
+                            const kyo = row[2];
+                            const q = row[3];
+                            
+                            if (!q || !round_v) return;
+                            
+                            const parsedRound = parseInt(round_v.toString().replace(/[^0-9]/g, ''));
+                            if(isNaN(parsedRound)) return;
+
+                            globalRecords.push({
+                                source: map.source,
+                                meta: ['round', parsedRound],
+                                type: parseInt(kyo) || 0,
+                                subject: ptype_v || '',
+                                terms: extractTerms(q.toString()),
+                                date: new Date(2025, 0, 1 - ((140 - parsedRound) * 6 * 30)) 
+                            });
+                        });
+                    }
+                });
+
+                document.getElementById('upload-status').innerText = `총 ${globalRecords.length}개의 레코드가 임시로 로드되었습니다. [완료] 버튼을 눌러주세요.`;
+            } catch (error) {
+                alert("엑셀 파일 파싱 중 오류가 발생했습니다: " + error.message);
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    function completeData() {
+        if (globalRecords.length === 0) {
+            alert("업로드된 데이터가 없습니다. 엑셀 파일을 먼저 선택해주세요.");
+            return;
+        }
+        
+        const badge = document.getElementById('status-badge');
+        if (badge) {
+            badge.innerText = '완료';
+            badge.style.background = 'rgba(107, 114, 128, 0.2)'; 
+            badge.style.color = '#4B5563';
+        }
+        
+        document.getElementById('upload-status').innerText = `총 ${globalRecords.length}개의 레코드가 성공적으로 로드 및 저장되었습니다.`;
+        document.getElementById('status-text').innerHTML = `총 <b style="color:var(--primary)">${globalRecords.length}</b>건의 데이터가 준비되었습니다. <br>재계산 버튼을 눌러 시뮬레이션을 돌려보세요.`;
+        
+        alert("데이터 처리가 완료되었습니다.");
+    }
+
+    function deleteData() {
+        if (confirm("현재 업로드된 데이터를 모두 삭제하시겠습니까?")) {
+            globalRecords = [];
+            document.getElementById('file-upload').value = '';
+            document.getElementById('upload-status').innerText = '';
+            document.getElementById('status-text').innerHTML = `엑셀 데이터를 업로드하고 <b>[완료]</b> 버튼을 누른 후, <b>[재계산]</b> 버튼을 눌러주세요.<br>(현재 데이터가 없으면 임시 Mockup 로직으로 동작합니다)`;
+            
+            const badge = document.getElementById('status-badge');
+            if (badge) {
+                badge.innerText = 'Ready';
+                badge.style.background = 'rgba(255,255,255,0.2)';
+                badge.style.color = 'inherit';
+            }
+            
+            alert("업로드 데이터가 삭제되었습니다.");
+        }
+    }
+
+    // --- Predictor Algorithm ---
+    function timeWeight(targetDate, recDate) {
+        if (recDate >= targetDate) return 0;
+        const months = (targetDate.getFullYear() - recDate.getFullYear()) * 12 + (targetDate.getMonth() - recDate.getMonth());
+        if (months <= 6) return 5.0;
+        if (months <= 12) return 3.0;
+        if (months <= 24) return 1.5;
+        return 0.5;
+    }
+    
+    function checkBoost(term, pool) {
+        const t = term.toLowerCase().replace(/\s+/g, '');
+        return pool.some(kw => {
+            const k = kw.toLowerCase().replace(/\s+/g, '');
+            if (t === k) return true;
+            
+            if (k.includes(' ')) {
+                const kWords = k.split(/\s+/);
+                if (kWords.includes(t)) return true;
+            }
+            return false;
+        });
+    }
+
+    function runPrediction() {
+        const targetRound = parseInt(document.getElementById('input-target-round').value);
+        const wPast = parseFloat(document.getElementById('w-past').value);
+        const wCamp = parseFloat(document.getElementById('w-camp').value);
+        const wMock = parseFloat(document.getElementById('w-mock').value);
+        
+        const W_SOURCE = { 'past': wPast, 'camp': wCamp, 'mock': wMock };
+        const W_TYPE = { 1: parseFloat(document.getElementById('w-type1').value), 2: parseFloat(document.getElementById('w-type2').value), 0: 1.0 };
+        
+        if (globalRecords.length === 0) {
+            alert("엑셀 데이터가 없습니다. 임시 더미 데이터로 실행합니다.");
+            simulateMockupData();
+            return;
+        }
+
+        const scoreMap = {};
+        const prevEssay = new Set();
+        const prevShort = new Set();
+        
+        const targetDate = new Date(); 
+
+        globalRecords.forEach(rec => {
+            if (rec.meta[0] === 'round' && rec.meta[1] === targetRound - 1) {
+                if (rec.type === 2) rec.terms.forEach(t => prevEssay.add(t));
+                else if (rec.type === 1) rec.terms.forEach(t => prevShort.add(t));
+            }
+        });
+
+        globalRecords.forEach(rec => {
+            if (rec.meta[0] === 'round' && rec.meta[1] >= targetRound) return;
+            const tw = timeWeight(targetDate, rec.date);
+            if (tw === 0) return;
+
+            const w = tw * (W_SOURCE[rec.source] || 1.0) * (W_TYPE[rec.type] || 1.0);
+            
+            rec.terms.forEach(t => {
+                if (!scoreMap[t]) scoreMap[t] = 0;
+                scoreMap[t] += w;
+            });
+        });
+
+        Object.keys(scoreMap).forEach(t => {
+            if (prevEssay.has(t)) scoreMap[t] *= 0.3;
+            else if (prevShort.has(t)) scoreMap[t] *= 1.25; 
+        });
+        
+        Object.keys(scoreMap).forEach(t => {
+            if (checkBoost(t, CS_BASIC_POOL)) scoreMap[t] *= 2.5;
+            if (checkBoost(t, TRENDY_NEW_POOL)) scoreMap[t] *= 1.5;
+        });
+
+        allSortedResult = Object.keys(scoreMap).map(k => {
+            const isCS = checkBoost(k, CS_BASIC_POOL);
+            const isTrendy = checkBoost(k, TRENDY_NEW_POOL);
+
+            return { 
+                term: k, 
+                score: scoreMap[k], 
+                cat: classifyTerm(k),
+                isCS: isCS,
+                isTrendy: isTrendy,
+                isBoosted: isCS || isTrendy 
+            };
+        });
+
+        allSortedResult.sort((a, b) => b.score - a.score);
+        
+        switchTab('simulation');
+        renderTable(); 
+    }
+
+    function renderTable() {
+        const tbody = document.querySelector('#result-table tbody');
+        tbody.innerHTML = '';
+        
+        const totalQuota = parseInt(document.getElementById('total-quota').value);
+        
+        let filteredResult = allSortedResult;
+        if (currentViewMode === 'boosted') {
+            filteredResult = allSortedResult.filter(item => item.isBoosted);
+        }
+        
+        currentlyRenderedResult = filteredResult.slice(0, totalQuota);
+
+        if(currentlyRenderedResult.length === 0) {
+            const msg = currentViewMode === 'boosted' 
+                        ? '결과가 없습니다. (부스트 풀에 히트된 키워드가 존재하지 않습니다.)' 
+                        : '결과가 없습니다. 계산을 다시 실행해주세요.';
+            tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding: 30px; color: var(--text-muted);">${msg}</td></tr>`;
+            return;
+        }
+
+        const maxScore = currentlyRenderedResult[0].score;
+
+        currentlyRenderedResult.forEach((item, index) => {
+            let tagClass = 'etc';
+            if(item.cat === '시스템구조') tagClass = 'sys';
+            if(item.cat === 'AI데이터분석') tagClass = 'ai';
+            if(item.cat === '데이터베이스') tagClass = 'db';
+            if(item.cat === '소프트웨어공학') tagClass = 'se';
+            if(item.cat === '정보보안') tagClass = 'sec';
+            if(item.cat === 'IT경영') tagClass = 'mgt';
+
+            let boostLabel = '';
+            if(item.isCS) boostLabel += '<span style="color:#DC2626; font-size:11px; margin-left:4px;">[CS 부스트]</span>';
+            if(item.isTrendy) boostLabel += '<span style="color:#2563EB; font-size:11px; margin-left:4px;">[시사 부스트]</span>';
+
+            const percent = Math.min(100, (item.score / maxScore) * 100);
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td style="text-align: center; font-weight: bold;">${index + 1}</td>
+                <td><span class="tag ${tagClass}" style="padding: 2px 8px; font-size: 12px;">${item.cat}</span></td>
+                <td style="font-weight: 600;">${item.term} ${boostLabel}</td>
+                <td>
+                    <div style="font-size: 13px; font-weight: 600;">${item.score.toFixed(2)}</div>
+                    <div class="score-bar-bg"><div class="score-bar-fill" style="width: 0%;"></div></div>
+                </td>
+            `;
+            tbody.appendChild(tr);
+
+            setTimeout(() => {
+                tr.querySelector('.score-bar-fill').style.width = percent + '%';
+            }, 50);
+        });
+    }
+
+    function exportJSON() {
+        if (currentlyRenderedResult.length === 0) return alert("내보낼 예측 결과가 없습니다. 먼저 계산을 실행하세요.");
+        
+        const targetRound = document.getElementById('input-target-round').value;
+        const filename = currentViewMode === 'boosted' ? `predict_v7_${targetRound}round_boosted.json` : `predict_v7_${targetRound}round_all.json`;
+        
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(currentlyRenderedResult, null, 2));
+        const a = document.createElement('a'); 
+        a.setAttribute("href", dataStr); 
+        a.setAttribute("download", filename);
+        document.body.appendChild(a); 
+        a.click(); 
+        a.remove();
+    }
+
+    function simulateMockupData() {
+        allSortedResult = [
+            { term: '교착상태', score: 85.42, cat: '시스템구조', isCS: true, isTrendy: false, isBoosted: true },
+            { term: 'RAG', score: 79.15, cat: 'AI데이터분석', isCS: false, isTrendy: true, isBoosted: true },
+            { term: 'AI', score: 75.22, cat: 'AI데이터분석', isCS: false, isTrendy: false, isBoosted: false },
+            { term: '페이지 교체', score: 72.80, cat: '시스템구조', isCS: true, isTrendy: false, isBoosted: true },
+            { term: '정규화', score: 65.12, cat: '데이터베이스', isCS: true, isTrendy: false, isBoosted: true },
+            { term: '순환복잡도', score: 61.20, cat: '소프트웨어공학', isCS: true, isTrendy: false, isBoosted: true },
+            { term: '비정규화', score: 45.10, cat: '데이터베이스', isCS: false, isTrendy: false, isBoosted: false }
+        ];
+        
+        switchTab('simulation');
+        renderTable();
+    }
+  </script>
+</body>
+</html>

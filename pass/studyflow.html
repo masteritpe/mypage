@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Study Flow - 학습 루틴 매니저</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+    /* --- 1. 차분한 컬러 팔레트 (Slate Theme) --- */
+    :root {
+        --bg-app: #f8fafc;        /* 아주 연한 회색 배경 */
+        --bg-surface: #ffffff;    /* 카드 배경 */
+        
+        /* 메인 컬러: 차분한 Slate 톤 */
+        --primary: #475569;       /* Slate 600 */
+        --primary-dark: #334155;  /* Slate 700 */
+        --primary-light: #f1f5f9; /* Slate 100 */
+        
+        --text-main: #1e293b;     /* Slate 800 */
+        --text-sub: #64748b;      /* Slate 500 */
+        
+        --border: #e2e8f0;        /* Slate 200 */
+        
+        --weekend: #059669;       /* 차분한 Green */
+        --danger: #ef4444;        /* Red */
+        
+        --radius: 8px;
+        --sidebar-width: 250px;
+    }
+
+    /* --- 2. 기본 설정 --- */
+    * { box-sizing: border-box; outline: none; }
+    body {
+        margin: 0;
+        font-family: 'Pretendard', sans-serif;
+        background: var(--bg-app);
+        color: var(--text-main);
+        font-size: 14px;
+        height: 100vh;
+        overflow: hidden;
+    }
+    
+    /* --- 3. 레이아웃 --- */
+    .app-container { display: flex; height: 100%; }
+
+    /* 사이드바 */
+    .sidebar {
+        width: var(--sidebar-width);
+        background: var(--bg-surface);
+        border-right: 1px solid var(--border);
+        display: flex; flex-direction: column;
+        padding: 24px; gap: 32px;
+        flex-shrink: 0; z-index: 30;
+    }
+    .logo {
+        font-size: 16px; font-weight: 700; color: var(--primary-dark);
+        display: flex; align-items: center; gap: 8px;
+    }
+    .nav-group h3 {
+        font-size: 11px; font-weight: 600; color: var(--text-sub);
+        text-transform: uppercase; margin: 0 0 12px 12px; letter-spacing: 0.5px;
+    }
+    .nav-menu { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+    .nav-item {
+        padding: 10px 14px; border-radius: 6px; cursor: pointer;
+        font-weight: 500; color: var(--text-sub);
+        display: flex; align-items: center; gap: 10px;
+        transition: all 0.2s;
+    }
+    .nav-item:hover { background: var(--bg-app); color: var(--text-main); }
+    .nav-item.active {
+        background: var(--primary-light);
+        color: var(--primary-dark);
+        font-weight: 700;
+    }
+
+    /* 메인 영역 */
+    .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+    
+    .header {
+        height: 60px;
+        background: var(--bg-surface);
+        border-bottom: 1px solid var(--border);
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 0 24px; flex-shrink: 0;
+    }
+    .page-title { font-size: 16px; font-weight: 700; color: var(--text-main); }
+
+    .content-body {
+        flex: 1; padding: 24px;
+        overflow: hidden; display: flex; flex-direction: column; gap: 16px;
+    }
+
+    /* --- 4. 컴포넌트 --- */
+    
+    /* 버튼 */
+    .btn {
+        padding: 8px 14px; border-radius: 6px; font-size: 13px; font-weight: 500;
+        border: 1px solid var(--border); background: var(--bg-surface);
+        color: var(--text-main); cursor: pointer;
+        display: inline-flex; align-items: center; gap: 6px;
+        transition: 0.2s;
+    }
+    .btn:hover { background: var(--bg-app); border-color: #cbd5e1; }
+    
+    .btn-primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .btn-primary:hover { background: var(--primary-dark); }
+    
+    .btn-ghost { border: none; background: transparent; color: var(--text-sub); }
+    .btn-ghost:hover { background: var(--bg-app); color: var(--danger); }
+    .btn-icon { padding: 6px; border-radius: 4px; font-size: 14px; }
+
+    /* 카드 */
+    .card {
+        background: var(--bg-surface); border: 1px solid var(--border);
+        border-radius: var(--radius); overflow: hidden;
+        display: flex; flex-direction: column; flex: 1;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+    }
+
+    /* 툴바 */
+    .toolbar {
+        padding: 12px 16px; border-bottom: 1px solid var(--border);
+        display: flex; gap: 10px; align-items: center;
+        background: #fdfdfd;
+    }
+    .spacer { flex: 1; }
+
+    /* 테이블 */
+    .table-container { flex: 1; overflow: auto; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    
+    thead th {
+        background: #f8fafc; color: var(--text-sub);
+        font-weight: 600; font-size: 12px;
+        padding: 10px 16px; text-align: left;
+        border-bottom: 1px solid var(--border);
+        white-space: nowrap; position: sticky; top: 0; z-index: 10;
+    }
+    
+    tbody td {
+        border-bottom: 1px solid var(--border);
+        padding: 0; height: 44px;
+    }
+    tbody tr:hover td { background: var(--primary-light); }
+    
+    .cell-input {
+        width: 100%; height: 100%; padding: 0 16px;
+        border: 2px solid transparent; background: transparent;
+        font-family: inherit; font-size: 13px; color: var(--text-main);
+    }
+    .cell-input:focus { background: #fff; border-color: var(--primary-light); box-shadow: inset 0 0 0 1px var(--primary); }
+    
+    /* --- 5. 타임라인 (스크롤 개선) --- */
+    .timeline-view { display: none; flex-direction: column; height: 100%; }
+    .timeline-view.active { display: flex; }
+    
+    /* 스크롤 영역 전체를 감싸는 컨테이너 */
+    .timeline-scroll-area {
+        flex: 1;
+        overflow: auto; /* 가로, 세로 스크롤 모두 허용 */
+        position: relative;
+        background: #fff;
+    }
+    
+    /* 실제 콘텐츠가 그려지는 내부 래퍼 (JS로 너비 지정) */
+    .timeline-content-wrapper {
+        min-height: 100%;
+        position: relative;
+    }
+
+    /* 헤더 (시간 표시) - 스크롤 내려도 상단 고정 */
+    .timeline-header-row {
+        height: 40px;
+        background: #f8fafc;
+        border-bottom: 1px solid var(--border);
+        position: sticky; top: 0; z-index: 20;
+        display: flex;
+    }
+    
+    .timeline-body-area {
+        position: relative;
+        /* 격자 무늬 배경 */
+        background-image: linear-gradient(90deg, transparent calc(100% - 1px), var(--border) 100%);
+        /* background-size는 JS에서 설정 */
+        min-height: 300px;
+    }
+
+    .time-marker {
+        position: absolute; top: 0; bottom: 0;
+        border-left: 1px dashed var(--border);
+        font-size: 11px; color: var(--text-sub);
+        padding-left: 6px; padding-top: 6px;
+        pointer-events: none;
+    }
+
+    .time-label-top {
+        height: 100%; border-left: 1px solid var(--border);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 11px; color: var(--text-sub); font-weight: 600;
+    }
+
+    .task-block {
+        position: absolute; height: 32px; border-radius: 4px;
+        background: var(--primary); color: #fff;
+        display: flex; align-items: center; padding: 0 10px;
+        font-size: 12px;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        cursor: default; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+        transition: transform 0.1s;
+    }
+    .task-block:hover { transform: scale(1.01); z-index: 10; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+
+    /* Toast */
+    .toast {
+        position: fixed; bottom: 30px; right: 30px;
+        background: var(--primary-dark); color: #fff;
+        padding: 12px 24px; border-radius: 99px; font-weight: 500; font-size: 13px;
+        transform: translateY(100px); opacity: 0; transition: all 0.3s; z-index: 999;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .toast.show { transform: translateY(0); opacity: 1; }
+
+    @media (max-width: 800px) {
+        .sidebar { display: none; }
+        .header { padding: 0 16px; }
+        .content-body { padding: 16px; }
+    }
+</style>
+</head>
+<body>
+
+<div id="app" class="app-container">
+    <aside class="sidebar">
+        <div class="logo">
+            <span>📅 Study Flow</span>
+        </div>
+        
+        <nav class="nav-group">
+            <h3>Routine</h3>
+            <ul class="nav-menu" id="nav-category">
+                <li class="nav-item active" data-id="weekday">📅 평일 루틴</li>
+                <li class="nav-item" data-id="weekend">🌿 주말 집중</li>
+                <li class="nav-item" data-id="strategy">📌 요일별 전략</li>
+            </ul>
+        </nav>
+
+        <nav class="nav-group">
+            <h3>View</h3>
+            <ul class="nav-menu" id="nav-view">
+                <li class="nav-item active" data-id="table">📋 리스트 보기</li>
+                <li class="nav-item" data-id="timeline">⏱️ 타임라인 보기</li>
+            </ul>
+        </nav>
+
+        <div style="margin-top:auto">
+            <button id="btn-reset" class="btn btn-ghost" style="width:100%">
+                🔄 초기화
+            </button>
+        </div>
+    </aside>
+
+    <main class="main">
+        <header class="header">
+            <div class="page-title" id="page-title">평일 루틴</div>
+            <div class="toolbar" style="border:0; padding:0; background:transparent;">
+                <button class="btn" id="btn-export">📥 엑셀 저장</button>
+                <button class="btn btn-primary" id="btn-import">📂 엑셀 열기</button>
+                <input type="file" id="file-import" hidden accept=".xlsx">
+            </div>
+        </header>
+
+        <div class="content-body">
+            
+            <div id="view-table" class="card" style="display:flex">
+                <div class="toolbar">
+                    <span style="font-weight:600; color:var(--text-sub)">목록 관리</span>
+                    <div class="spacer"></div>
+                    <button class="btn btn-primary" id="btn-add-row">+ 행 추가</button>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <colgroup id="col-group"></colgroup>
+                        <thead id="table-head"></thead>
+                        <tbody id="table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="view-timeline" class="card timeline-view">
+                <div class="toolbar">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="font-weight:600; color:var(--text-sub)">간격 설정:</span>
+                        <select id="tl-scale" class="cell-input" style="width:auto; border:1px solid var(--border); padding:4px 8px; border-radius:4px;">
+                            <option value="60">1시간</option>
+                            <option value="120" selected>넓게</option>
+                            <option value="180">아주 넓게</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="timeline-scroll-area">
+                    <div id="timeline-inner-wrap" class="timeline-content-wrapper">
+                        <div id="tl-header" class="timeline-header-row"></div>
+                        <div id="tl-body" class="timeline-body-area"></div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+</div>
+
+<div id="toast" class="toast">저장되었습니다 ✅</div>
+
+<script>
+/* --------------------------------------------------------------------------
+   Store (IndexedDB)
+   -------------------------------------------------------------------------- */
+class Store {
+    constructor(dbName, storeName) {
+        this.dbName = dbName;
+        this.storeName = storeName;
+        this.db = null;
+    }
+    async init() {
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(this.dbName, 1);
+            req.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains(this.storeName)) {
+                    db.createObjectStore(this.storeName, { keyPath: "id" });
+                }
+            };
+            req.onsuccess = (e) => { this.db = e.target.result; resolve(); };
+            req.onerror = (e) => reject(e);
+        });
+    }
+    async getAll() {
+        return new Promise((resolve) => {
+            const tx = this.db.transaction(this.storeName, "readonly");
+            const req = tx.objectStore(this.storeName).getAll();
+            req.onsuccess = () => resolve(req.result || []);
+        });
+    }
+    async saveAll(items) {
+        const tx = this.db.transaction(this.storeName, "readwrite");
+        const store = tx.objectStore(this.storeName);
+        await new Promise(resolve => {
+            store.clear().onsuccess = () => {
+                items.forEach(item => store.put(item));
+                resolve();
+            }
+        });
+    }
+}
+
+/* --------------------------------------------------------------------------
+   UI Manager
+   -------------------------------------------------------------------------- */
+class UIManager {
+    constructor(app) {
+        this.app = app;
+        this.el = {
+            tHead: document.getElementById('table-head'),
+            tBody: document.getElementById('table-body'),
+            cGroup: document.getElementById('col-group'),
+            pTitle: document.getElementById('page-title'),
+            tlWrapper: document.getElementById('timeline-inner-wrap'), // wrapper
+            tlHead: document.getElementById('tl-header'),
+            tlBody: document.getElementById('tl-body'),
+            vTable: document.getElementById('view-table'),
+            vTimeline: document.getElementById('view-timeline'),
+            toast: document.getElementById('toast')
+        };
+    }
+
+    showToast(msg) {
+        this.el.toast.innerText = msg;
+        this.el.toast.classList.add('show');
+        setTimeout(() => this.el.toast.classList.remove('show'), 2000);
+    }
+
+    switchView(mode) {
+        if(mode === 'table') {
+            this.el.vTable.style.display = 'flex';
+            this.el.vTimeline.classList.remove('active');
+        } else {
+            this.el.vTable.style.display = 'none';
+            this.el.vTimeline.classList.add('active');
+            this.renderTimeline();
+        }
+    }
+
+    updateTitle(cat) {
+        const map = { 'weekday': '📅 평일 루틴', 'weekend': '🌿 주말 집중', 'strategy': '📌 요일별 전략' };
+        this.el.pTitle.innerText = map[cat];
+    }
+
+    renderTable(data, category) {
+        this.el.tHead.innerHTML = '';
+        this.el.tBody.innerHTML = '';
+        this.el.cGroup.innerHTML = '';
+
+        const isStrategy = category === 'strategy';
+        const cols = isStrategy 
+            ? [{w:'60px', t:'삭제'}, {w:'120px', t:'요일'}, {w:'250px', t:'핵심 포인트'}, {w:'auto', t:'설명 / 세부내용'}]
+            : [{w:'60px', t:'삭제'}, {w:'140px', t:'시작'}, {w:'140px', t:'종료'}, {w:'250px', t:'활동 명'}, {w:'auto', t:'목표 / 비고'}];
+
+        cols.forEach(c => this.el.cGroup.innerHTML += `<col style="width:${c.w}">`);
+        
+        let headerHTML = '<tr>';
+        cols.forEach(c => headerHTML += `<th>${c.t}</th>`);
+        headerHTML += '</tr>';
+        this.el.tHead.innerHTML = headerHTML;
+
+        const days = ["월요일","화요일","수요일","목요일","금요일","토요일","일요일"];
+        const sorted = [...data].sort((a,b) => {
+            if(isStrategy) return days.indexOf(a.start) - days.indexOf(b.start);
+            return (a.start||"").localeCompare(b.start||"");
+        });
+
+        sorted.forEach(item => {
+            const tr = document.createElement('tr');
+            if(isStrategy) {
+                const opts = days.map(d => `<option value="${d}" ${d===item.start?'selected':''}>${d}</option>`).join('');
+                tr.innerHTML = `
+                    <td style="text-align:center"><button class="btn-ghost btn-icon" onclick="app.removeRow(${item.id})">❌</button></td>
+                    <td><select class="cell-input" onchange="app.updateRow(${item.id}, 'start', this.value)">${opts}</select></td>
+                    <td><input class="cell-input" value="${item.col1||''}" onchange="app.updateRow(${item.id}, 'col1', this.value)"></td>
+                    <td><input class="cell-input" value="${item.col2||''}" onchange="app.updateRow(${item.id}, 'col2', this.value)"></td>
+                `;
+            } else {
+                tr.innerHTML = `
+                    <td style="text-align:center"><button class="btn-ghost btn-icon" onclick="app.removeRow(${item.id})">❌</button></td>
+                    <td><input type="time" class="cell-input" value="${item.start||''}" onchange="app.updateRow(${item.id}, 'start', this.value)"></td>
+                    <td><input type="time" class="cell-input" value="${item.end||''}" onchange="app.updateRow(${item.id}, 'end', this.value)"></td>
+                    <td><input type="text" class="cell-input" value="${item.col1||''}" onchange="app.updateRow(${item.id}, 'col1', this.value)"></td>
+                    <td><input type="text" class="cell-input" value="${item.col2||''}" onchange="app.updateRow(${item.id}, 'col2', this.value)"></td>
+                `;
+            }
+            this.el.tBody.appendChild(tr);
+        });
+    }
+
+    renderTimeline() {
+        const { tlWrapper, tlHead, tlBody } = this.el;
+        tlHead.innerHTML = ''; tlBody.innerHTML = '';
+        
+        const data = this.app.getCurrentData().filter(d => d.start && d.end);
+        if(!data.length) {
+            tlBody.innerHTML = `<div style="padding:60px; text-align:center; color:#94a3b8">등록된 일정이 없습니다</div>`;
+            tlWrapper.style.width = '100%'; 
+            return;
+        }
+
+        const scale = parseInt(document.getElementById('tl-scale').value);
+        const sH = 4; // 04:00 Start
+        const eH = 24; // 24:00 End
+        const totalW = (eH - sH) * scale;
+        
+        // 1. 전체 너비 설정 (스크롤 발생 트리거)
+        tlWrapper.style.width = `${totalW}px`;
+        // 2. 배경 그리드 설정
+        tlBody.style.backgroundSize = `${scale}px 100%`;
+
+        // 3. 헤더 시간 라벨 생성
+        for(let h=0; h<(eH-sH); h++) {
+            const label = document.createElement('div');
+            label.className = 'time-label-top';
+            label.style.width = `${scale}px`;
+            label.innerText = `${sH + h}:00`;
+            tlHead.appendChild(label);
+        }
+
+        const toMin = (str) => { const [h,m]=str.split(':').map(Number); return h*60+m; };
+        data.sort((a,b) => toMin(a.start) - toMin(b.start));
+
+        // 4. 태스크 블록 생성
+        data.forEach((item, i) => {
+            const sMin = toMin(item.start);
+            const eMin = toMin(item.end);
+            
+            const startOffsetMin = sMin - (sH*60);
+            const durationMin = eMin - sMin;
+            
+            // 화면 밖 시간대면 패스
+            if(startOffsetMin < 0) return;
+
+            const pxPerMin = scale/60;
+            const left = startOffsetMin * pxPerMin;
+            const width = Math.max(durationMin * pxPerMin, 10); // 최소 10px
+            const top = i * 40 + 20; // 겹치지 않게 계단식 배치
+
+            const blk = document.createElement('div');
+            blk.className = 'task-block';
+            blk.style.left = `${left}px`;
+            blk.style.width = `${width}px`;
+            blk.style.top = `${top}px`;
+            blk.innerText = item.col1;
+            blk.title = `${item.start}~${item.end} | ${item.col2}`;
+            
+            // 주말 색상 변경 (차분한 그린)
+            if(this.app.state.category === 'weekend') blk.style.background = 'var(--weekend)';
+
+            tlBody.appendChild(blk);
+        });
+        
+        // 바디 높이 자동 조절
+        tlBody.style.height = `${data.length * 40 + 100}px`;
+    }
+}
+
+/* --------------------------------------------------------------------------
+   App Logic
+   -------------------------------------------------------------------------- */
+class App {
+    constructor() {
+        this.store = new Store("StudyFlowDB", "plans");
+        this.ui = new UIManager(this);
+        this.state = { data: [], category: 'weekday', view: 'table' };
+        this.defaultData = [
+            { id: 1, category: 'weekday', start: '07:00', end: '08:00', col1: '기상 및 명상', col2: '마인드셋' },
+            { id: 2, category: 'weekend', start: '09:00', end: '12:00', col1: '주말 심화 학습', col2: '취약점 보완' },
+            { id: 3, category: 'strategy', start: '월요일', col1: '한 주 계획 수립', col2: '우선순위 정리' },
+        ];
+    }
+
+    async init() {
+        await this.store.init();
+        const stored = await this.store.getAll();
+        this.state.data = stored.length ? stored : JSON.parse(JSON.stringify(this.defaultData));
+        if(!stored.length) await this.save();
+        this.bindEvents();
+        this.refresh();
+    }
+
+    getCurrentData() { return this.state.data.filter(d => d.category === this.state.category); }
+    
+    refresh() {
+        this.ui.updateTitle(this.state.category);
+        this.ui.switchView(this.state.view);
+        this.ui.renderTable(this.getCurrentData(), this.state.category);
+        if(this.state.view === 'timeline') this.ui.renderTimeline();
+    }
+
+    async save() { await this.store.saveAll(this.state.data); this.ui.showToast("저장되었습니다 ✅"); }
+
+    updateRow(id, field, val) { 
+        const item = this.state.data.find(d => d.id === id);
+        if(item) { item[field] = val; this.save(); }
+    }
+    removeRow(id) { 
+        this.state.data = this.state.data.filter(d => d.id !== id);
+        this.save(); this.refresh();
+    }
+    addRow() {
+        const isStrat = this.state.category === 'strategy';
+        this.state.data.push({
+            id: Date.now(), category: this.state.category,
+            start: isStrat ? '월요일' : '09:00', end: isStrat ? '' : '10:00', col1: '', col2: ''
+        });
+        this.save(); this.refresh();
+    }
+    
+    reset() {
+        if(confirm('모든 데이터를 초기화 하시겠습니까?')) {
+            this.state.data = JSON.parse(JSON.stringify(this.defaultData));
+            this.save(); this.refresh();
+        }
+    }
+
+    // Excel
+    exportExcel() {
+        const data = this.getCurrentData().map(d => ({
+            "시작": d.start, "종료": d.end, "내용": d.col1, "비고": d.col2
+        }));
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+        XLSX.writeFile(wb, `Plan_${this.state.category}.xlsx`);
+    }
+    importExcel(file) {
+        if(!file) return;
+        const r = new FileReader();
+        r.onload = (e) => {
+            const wb = XLSX.read(e.target.result, {type:'binary'});
+            const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+            const add = json.map(row => ({
+                id: Date.now() + Math.random(), category: this.state.category,
+                start: row["시작"]||"", end: row["종료"]||"", col1: row["내용"]||"", col2: row["비고"]||""
+            }));
+            this.state.data = [...this.state.data, ...add];
+            this.save(); this.refresh();
+        };
+        r.readAsBinaryString(file);
+    }
+
+    bindEvents() {
+        document.getElementById('nav-category').onclick = (e) => {
+            const li = e.target.closest('li');
+            if(!li) return;
+            document.querySelectorAll('#nav-category li').forEach(l=>l.classList.remove('active'));
+            li.classList.add('active');
+            this.state.category = li.dataset.id;
+            if(this.state.category === 'strategy' && this.state.view === 'timeline') {
+                alert('전략 탭은 타임라인을 지원하지 않습니다.');
+                document.querySelector('[data-id="table"]').click();
+            }
+            this.refresh();
+        };
+        document.getElementById('nav-view').onclick = (e) => {
+            const li = e.target.closest('li');
+            if(!li) return;
+            if(this.state.category === 'strategy' && li.dataset.id === 'timeline') return alert('지원하지 않는 뷰입니다.');
+            document.querySelectorAll('#nav-view li').forEach(l=>l.classList.remove('active'));
+            li.classList.add('active');
+            this.state.view = li.dataset.id;
+            this.refresh();
+        };
+        document.getElementById('btn-add-row').onclick = () => this.addRow();
+        document.getElementById('btn-reset').onclick = () => this.reset();
+        document.getElementById('btn-export').onclick = () => this.exportExcel();
+        document.getElementById('btn-import').onclick = () => document.getElementById('file-import').click();
+        document.getElementById('file-import').onchange = (e) => this.importExcel(e.target.files[0]);
+        document.getElementById('tl-scale').onchange = () => this.ui.renderTimeline();
+    }
+}
+
+const app = new App();
+window.app = app;
+window.onload = () => app.init();
+</script>
+</body>
+</html>

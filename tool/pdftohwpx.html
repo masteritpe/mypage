@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDF to HWPX</title>
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  
+  <style>
+    /* 참조하신 세련된 UI 스타일 및 색상 변수 그대로 적용 */
+    :root {
+      --bg-body: #F9FAFB; --bg-surface: #FFFFFF; --border-light: #F3F4F6;
+      --border-base: #E5E7EB; --text-main: #111827; --text-muted: #6B7280;
+      --primary: #111827; --primary-hover: #374151; --secondary: #FFFFFF;
+      --secondary-hover: #F9FAFB; --selection-bg: #F3F4F6;  
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+      --radius-md: 8px; --radius-lg: 12px;
+    }
+
+    * { box-sizing: border-box; }
+    body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif; background: var(--bg-body); color: var(--text-main); margin: 0; padding: 40px; -webkit-font-smoothing: antialiased; }
+
+    .dashboard-header { max-width: 100%; margin: 0 auto 24px auto; }
+    .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 16px; }
+    .title-area { display: flex; align-items: center; gap: 12px; }
+    .title-area i { font-size: 28px; color: var(--text-main); }
+    h2 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+
+    input[type="file"] { display: none; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: var(--radius-md);
+      font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); border: 1px solid transparent;
+    }
+    .btn-primary { background: var(--primary); color: white; box-shadow: var(--shadow-sm); }
+    .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
+    .btn-outline { background: var(--secondary); color: var(--text-main); border-color: var(--border-base); box-shadow: var(--shadow-sm); }
+    .btn-outline:hover { background: var(--secondary-hover); border-color: #D1D5DB; }
+    /* HWPX 다운로드 버튼용 특별 색상 (한컴 블루 느낌) */
+    .btn-hwp { background: #0055FF; color: white; box-shadow: var(--shadow-sm); }
+    .btn-hwp:hover { background: #0044CC; transform: translateY(-1px); }
+
+    .instructions {
+      display: flex; gap: 16px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--text-muted); background: var(--bg-surface);
+      padding: 12px 20px; border-radius: var(--radius-md); border: 1px solid var(--border-base);
+    }
+    .instructions span { display: inline-flex; align-items: center; gap: 6px; }
+
+    /* 문서 컨테이너 (테이블 대신 A4 용지 스타일) */
+    #document-wrapper {
+      max-width: 900px; margin: 0 auto; background: var(--bg-surface); border: 1px solid var(--border-base); border-radius: var(--radius-lg);
+      overflow-y: auto; max-height: calc(100vh - 200px); box-shadow: var(--shadow-md); padding: 40px; position: relative;
+    }
+    #document-wrapper::-webkit-scrollbar { width: 8px; height: 8px; }
+    #document-wrapper::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 4px; }
+    
+    .page-divider {
+      border-top: 2px dashed var(--border-base); margin: 30px 0; position: relative; text-align: center;
+    }
+    .page-divider span {
+      background: var(--bg-surface); padding: 0 10px; color: #9CA3AF; font-size: 12px; position: relative; top: -9px;
+    }
+
+    /* 추출된 문단 블록 */
+    .text-block {
+      padding: 8px 12px; margin-bottom: 8px; border-radius: 6px; border: 1px solid transparent; transition: all 0.2s;
+      line-height: 1.6; font-size: 15px; cursor: text; position: relative;
+    }
+    .text-block:hover { border-color: var(--border-light); background-color: var(--secondary-hover); }
+    
+    .selected-block { background-color: var(--selection-bg) !important; border-color: var(--border-base) !important; }
+    
+    [contenteditable="true"] { outline: none; background-color: var(--bg-surface) !important; box-shadow: inset 0 0 0 2px var(--primary); border-radius: 6px; }
+    
+    .empty-msg { padding: 80px 20px; text-align: center; color: var(--text-muted); display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  </style>
+</head>
+<body>
+
+  <div class="dashboard-header">
+    <div class="header-top">
+      <div class="title-area">
+        <i class="ph ph-file-text"></i>
+        <h2>PDF to HWPX</h2>
+      </div>
+      
+      <div class="actions">
+        <label for="upload-pdf" class="btn btn-primary">
+          <i class="ph ph-file-pdf"></i> PDF 불러오기
+        </label>
+        <input type="file" id="upload-pdf" accept=".pdf" />
+        
+        <button class="btn btn-outline" onclick="removeSelectedBlocks()">
+          <i class="ph ph-trash"></i> 선택 삭제
+        </button>
+
+        <button class="btn btn-hwp" onclick="exportHWPX()">
+          <i class="ph ph-download-simple"></i> HWPX 출력
+        </button>
+      </div>
+    </div>
+
+    <div class="instructions">
+      <span><i class="ph ph-cursor-click"></i> 더블클릭: 텍스트 수정</span>
+      <span style="color: #D1D5DB;">|</span>
+      <span><i class="ph ph-arrows-out"></i> 클릭: 단락 선택 (Shift/Ctrl 클릭으로 다중 선택)</span>
+      <span style="color: #D1D5DB;">|</span>
+      <span><i class="ph ph-trash"></i> Del키: 선택된 단락 삭제</span>
+    </div>
+  </div>
+
+  <div id="document-wrapper">
+    <div class="empty-msg">
+      <i class="ph ph-file-dashed" style="font-size: 40px; color: #D1D5DB;"></i>
+      PDF 문서를 업로드하면 텍스트와 문단을 추출하여 HWPX 변환을 준비합니다.
+    </div>
+  </div>
+
+  <script>
+    const wrapper = document.getElementById('document-wrapper');
+    let lastSelectedBlock = null;
+
+    // 1. PDF 파싱 로직 (테이블 구조 대신 문단 구조로 추출)
+    document.getElementById('upload-pdf').addEventListener('change', async function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      wrapper.innerHTML = `<div class="empty-msg"><i class="ph ph-spinner ph-spin" style="font-size: 40px; color: var(--primary);"></i>문서를 분석하여 문단을 구성 중입니다...</div>`;
+
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        let htmlContent = '';
+
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+          const page = await pdf.getPage(pageNum);
+          const textContent = await page.getTextContent();
+          
+          let items = textContent.items.filter(item => item.str.trim() !== '');
+          if (items.length === 0) continue;
+
+          // Y좌표 기준으로 정렬 (위에서 아래로)
+          items.sort((a, b) => b.transform[5] - a.transform[5]);
+
+          let paragraphs = [];
+          let currentParagraph = [];
+          let lastY = items[0].transform[5];
+
+          // Y좌표가 크게 차이나면 새로운 문단으로 간주
+          items.forEach(item => {
+            if (Math.abs(item.transform[5] - lastY) > 12) {
+              if (currentParagraph.length > 0) paragraphs.push(currentParagraph);
+              currentParagraph = [item];
+            } else {
+              currentParagraph.push(item);
+            }
+            lastY = item.transform[5];
+          });
+          if (currentParagraph.length > 0) paragraphs.push(currentParagraph);
+
+          if (pageNum > 1) {
+            htmlContent += `<div class="page-divider"><span>Page ${pageNum}</span></div>`;
+          }
+
+          paragraphs.forEach(p => {
+            // X좌표 기준으로 문단 내 텍스트 정렬
+            p.sort((a, b) => a.transform[4] - b.transform[4]);
+            let text = p.map(item => item.str).join(' ');
+            htmlContent += `<div class="text-block" tabindex="0">${text}</div>`;
+          });
+        }
+
+        wrapper.innerHTML = htmlContent || `<div class="empty-msg"><i class="ph ph-folder-open"></i>추출된 텍스트가 없습니다.</div>`;
+        initInteractions();
+
+      } catch (err) {
+        console.error(err);
+        wrapper.innerHTML = `<div class="empty-msg"><i class="ph ph-warning-circle" style="color: #EF4444;"></i>변환 중 오류가 발생했습니다.</div>`;
+      } finally {
+        e.target.value = '';
+      }
+    });
+
+    // 2. 상호작용 (단락 선택, 더블클릭 수정, 삭제)
+    function initInteractions() {
+      const blocks = document.querySelectorAll('.text-block');
+      
+      blocks.forEach((block, index) => {
+        // 단일/다중 선택
+        block.addEventListener('click', (e) => {
+          if (block.getAttribute('contenteditable') === 'true') return;
+          
+          if (!e.ctrlKey && !e.metaKey && !e.shiftKey) {
+            blocks.forEach(b => b.classList.remove('selected-block'));
+          }
+          
+          if (e.shiftKey && lastSelectedBlock) {
+            let start = Array.from(blocks).indexOf(lastSelectedBlock);
+            let end = index;
+            let min = Math.min(start, end), max = Math.max(start, end);
+            for(let i=min; i<=max; i++) blocks[i].classList.add('selected-block');
+          } else {
+            block.classList.toggle('selected-block');
+            lastSelectedBlock = block;
+          }
+        });
+
+        // 더블클릭 시 편집 모드
+        block.addEventListener('dblclick', (e) => {
+          blocks.forEach(b => b.classList.remove('selected-block'));
+          block.setAttribute('contenteditable', 'true');
+          block.focus();
+          // 커서를 텍스트 끝으로
+          const selection = window.getSelection();
+          const range = document.createRange();
+          range.selectNodeContents(block);
+          range.collapse(false);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        });
+
+        block.addEventListener('blur', () => {
+          block.removeAttribute('contenteditable');
+        });
+      });
+    }
+
+    // 3. 키보드 단축키 및 삭제
+    document.addEventListener('keydown', (e) => {
+      const editingBlock = document.querySelector('[contenteditable="true"]');
+      if (editingBlock) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          editingBlock.blur();
+        }
+        return;
+      }
+
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        removeSelectedBlocks();
+      }
+    });
+
+    function removeSelectedBlocks() {
+      const selected = document.querySelectorAll('.selected-block');
+      if (selected.length === 0) return;
+      selected.forEach(block => block.remove());
+    }
+
+    // 4. HWPX 출력 (Mock-up)
+    // 실제 HWPX(OWPML)는 복잡한 XML 구조를 가지므로 프론트엔드 단독 생성은 한계가 있습니다.
+    // 본 예제에서는 추출된 텍스트를 구조화하여 다운로드 가능한 형태로 시뮬레이션합니다.
+    function exportHWPX() {
+      const blocks = document.querySelectorAll('.text-block');
+      if (blocks.length === 0) return alert('출력할 내용이 없습니다.');
+
+      // 추출된 텍스트 데이터 수집
+      let extractedText = "";
+      blocks.forEach(block => {
+        extractedText += block.innerText + "\r\n";
+      });
+
+      // 안내 메시지 
+      alert("프론트엔드 환경에서는 완벽한 OWPML(HWPX) 규격을 압축(Zip)하여 생성하기 어렵습니다.\n실무에서는 추출된 데이터를 백엔드로 보내 한컴 SDK/라이브러리로 생성하는 것을 권장합니다.\n\n여기서는 임시로 '.hwpx' 확장자를 가진 호환 텍스트 파일로 출력합니다.");
+
+      // 간단한 파일 생성 및 다운로드 (Blob 활용)
+      const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), extractedText], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'PDF_텍스트추출결과.hwpx'; // 확장자 변경
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
+</html>

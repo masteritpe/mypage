@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>버전 관리 보드</title>
+
+<!-- 폰트: Nanum Gothic (UI) + D2Coding (코드) -->
+<link href="https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700;800&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/gh/naver/d2codingfont/webfont/D2Coding.css" rel="stylesheet" type="text/css">
+
+
+<!-- highlight.js -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css" />
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/highlight.min.js"></script>
+
+
+<!-- mark.js -->
+<script src="https://cdn.jsdelivr.net/npm/mark.js@8.11.1/dist/mark.min.js"></script>
+
+
+<style>
+:root{
+--bg:#f7fafc;--card:#ffffff;--ink:#1a202c;--muted:#718096;--accent:#2b6cb0;--ok:#2f855a;--bad:#c53030;
+--code-max-h:460px;
+}
+*{box-sizing:border-box}
+html,body{width:100%;overflow-x:hidden}
+body{
+margin:0;
+background:var(--bg);
+color:var(--ink);
+font-family:'Noto Sans KR','Nanum Gothic','Malgun Gothic','Apple SD Gothic Neo',sans-serif;
+}
+
+
+/* 코드 폰트 */
+.mono, code, pre, .hljs {
+font-family:'Noto Sans KR', monospace !important;
+}
+
+#source {
+  font-family: 'Noto Sans KR', monospace !important;
+  font-size: 13px;   /* 코드 입력창용 권장 크기 */
+  line-height: 1.5;
+}
+
+#changes {
+  font-family: 'Noto Sans KR', monospace !important;
+  font-size: 13px;   /* 코드 입력창용 권장 크기 */
+  line-height: 1.5;
+}
+
+/* 헤더 */
+header{position:sticky;top:0;background:var(--card);border-bottom:1px solid #e2e8f0;z-index:10}
+header .wrap{width:100%;display:flex;gap:12px;align-items:center;padding:12px 16px}
+header h1{font-size:18px;margin:0}
+header .btns{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.btn{appearance:none;border:1px solid #cbd5e0;background:#fff;color:var(--ink);padding:8px 12px;border-radius:10px;cursor:pointer;font-weight:500;font-size:13px}
+.btn.primary{background:linear-gradient(180deg,#e6f0ff,#dbeafe);border-color:#b6c3e6}
+.btn.danger{background:#fff5f5;border-color:#feb2b2;color:#c53030}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+
+/* 레이아웃 */
+main{width:100%;margin:20px 0;padding:0 16px;display:grid;grid-template-columns:minmax(360px,3.5fr) minmax(520px,6.5fr);gap:16px}
+@media (max-width: 1000px){ main{ grid-template-columns:1fr; } }
+
+.card{background:var(--card);border:1px solid #e2e8f0;border-radius:14px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.card h2{margin:0;padding:12px;border-bottom:1px solid #edf2f7;font-size:16px}
+.card .body{padding:12px;display:flex;flex-direction:column;gap:10px}
+
+label{font-size:12px;color:var(--muted);font-weight:700}
+input[type="text"], textarea{width:100%;padding:10px 12px;border:1px solid #cbd5e0;border-radius:10px;background:#fff;color:#2d3748;resize:vertical;font-size:13px}
+textarea{min-height:120px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pill{background:#eef5fd;color:#0b57d0;border:1px solid #d9e7fb;border-radius:999px;padding:4px 8px;font-size:12px}
+
+/* 검색바 */
+.search-input{flex:1;padding:8px 10px;border:1px solid #cbd5e0;border-radius:10px;background:#fff;color:#2d3748}
+.badge{background:#edf2f7;border:1px solid #e2e8f0;border-radius:999px;font-size:12px;padding:4px 8px;color:#2d3748}
+
+/* 미리보기 */
+.qbox{padding:12px;border:1px dashed #cbd5e0;border-radius:12px;background:#fff;overflow:auto}
+.pv-label{color:#0b3d91;font-weight:700;font-size:13px}
+.pre{white-space:pre-wrap}
+
+/* 목록 */
+.tablewrap{font:inherit;max-height:430px;overflow:auto;border:1px solid #edf2f7;border-radius:12px}
+table{width:100%;border-collapse:separate;border-spacing:0}
+th,td{padding:10px 12px;border-bottom:1px solid #edf2f7;font-size:13px;vertical-align:top}
+th{background:#f7fafc;text-align:left;position:sticky;top:0;z-index:2;font-weight:600}
+tbody tr:hover{background:#f9fbff}
+.right-actions{display:flex;gap:8px;flex-wrap:wrap}
+
+/* 코드 미리보기(줄번호 + 스크롤 동기화) */
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;font-size:13px}
+.codewrap{display:grid;grid-template-columns:auto 1fr;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;max-height:var(--code-max-h)}
+.code-nums{background:#f7fafc;color:#a0aec0;border-right:1px solid #e2e8f0;overflow:hidden;max-height:var(--code-max-h)}
+.code-nums-inner{padding:10px 6px}
+.code-nums-inner div{line-height:1.5;text-align:right;padding:0 6px}
+.code-content{overflow:auto;max-height:var(--code-max-h);overscroll-behavior:contain}
+.code-pre{margin:0;padding:10px 12px;white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;line-height:1.5}
+.code-pre.nowrap{white-space:pre}
+
+/* 검색 하이라이트 표시 (mark.js가 쓰는 엘리먼트) */
+mark.qmark{
+  background:#ffe58f !important;
+  color:inherit;
+  border-radius:3px;
+  padding:0 .2em;
+  box-decoration-break:clone;
+  -webkit-box-decoration-break:clone;
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>버전 관리 보드</h1>
+    <input id="search-input" class="search-input" type="search" placeholder="파일명/버전명/변경사항/소스로 검색…">
+    <span id="result-badge" class="badge">0건</span>
+    <div class="btns">
+      <button class="btn" id="btn-wrap">줄바꿈: 켬</button>
+      <button class="btn" id="btn-new">새 항목</button>
+      <button class="btn primary" id="btn-save">저장</button>
+      <button class="btn danger" id="btn-delete">삭제</button>
+      <button class="btn" id="btn-export">JSON 내보내기</button>
+      <label class="btn" for="importJson">가져오기</label>
+      <input id="importJson" type="file" accept="application/json" style="display:none" />
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="card">
+    <h2>입력</h2>
+    <div class="body">
+      <label>파일명</label>
+      <input id="filename" type="text" placeholder="예: main.js, index.html" />
+      <div class="row">
+        <div style="flex:1">
+          <label>버전명</label>
+          <input id="ver" type="text" placeholder="예: v1.0, 2025-10-06" />
+        </div>
+        <div style="flex:1">
+          <label>태그(선택, 쉼표)</label>
+          <input id="tags" type="text" placeholder="prompt,doc" />
+        </div>
+      </div>
+      <label>변경사항</label>
+      <textarea id="changes" placeholder="이번 버전에서 바뀐 점…"></textarea>
+      <label>소스 (핵심 코드/설명)</label>
+      <textarea id="source" placeholder="핵심 소스/프롬프트 텍스트…"></textarea>
+      <div class="row">
+        <span class="pill" id="status-pill">상태: 대기</span>
+      </div>
+      <input type="hidden" id="editId" />
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>미리보기 & 목록</h2>
+    <div class="body" style="gap:14px">
+      <div id="preview" class="qbox">
+        <div class="pv-label">파일명 · 버전</div>
+        <div id="prev-filever" class="pre"></div>
+        <div class="pv-label" style="margin-top:8px">변경사항</div>
+        <div id="prev-changes" class="pre"></div>
+        <div class="pv-label" style="margin-top:8px">소스</div>
+        <div id="prev-source" class="pre"></div>
+      </div>
+
+      <div class="tablewrap">
+        <table id="list">
+          <thead>
+            <tr>
+              <th style="width:180px">파일명</th>
+              <th style="width:120px">버전명</th>
+              <th>변경사항</th>
+              <th>소스</th>
+              <th style="width:160px">작성일</th>
+              <th style="width:120px">작업</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+(function(){
+  'use strict';
+  const $ = (s)=>document.querySelector(s);
+  const fmt = (t)=> new Date(t).toLocaleString();
+  const DB = 'vc_file_board';
+  let db;
+
+  /* ===== IndexedDB ===== */
+  function openDB(){
+    return new Promise((res, rej)=>{
+      const r = indexedDB.open(DB, 1);
+      r.onupgradeneeded = ()=>{
+        const d = r.result;
+        if(!d.objectStoreNames.contains('posts')){
+          const s = d.createObjectStore('posts', { keyPath:'id', autoIncrement:true });
+          s.createIndex('by_time', 'createdAt', { unique:false });
+        }
+      };
+      r.onsuccess = ()=>{ db = r.result; res(); };
+      r.onerror = ()=> rej(r.error);
+    });
+  }
+  const tx = (stores, mode)=> db.transaction(stores, mode||'readonly');
+
+  /* ===== Helpers & CRUD ===== */
+  function tagify(s){ return (s||'').split(',').map(v=>v.trim()).filter(Boolean); }
+  function esc(s){
+    const ESC_MAP = { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' };
+    return String(s ?? '').replace(/[&<>"']/g, ch => ESC_MAP[ch]);
+  }
+  function nl2br(s){ return (s||'').replace(/\n/g,'<br>'); }
+  function cleanTail(str){
+    return String(str||'')
+      .replace(/\r\n?/g,'\n')
+      .replace(/[\t \u00A0\u3000\u200B-\u200D\uFEFF]+$/gm,'')
+      .replace(/(?:\n[\t \u00A0\u3000\u200B-\u200D\uFEFF]*)+$/,'');
+  }
+  function escapeRegExp(str){return String(str).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');}
+
+  function matches(p,q){
+    if(!q) return true;
+    q = q.toLowerCase();
+    const hay = [p.filename,p.ver,p.source,p.changes,(p.tags||[]).join(',')].join(' ').toLowerCase();
+    return hay.includes(q);
+  }
+
+  async function addOrUpdate(post){
+    if(post.id == null) delete post.id;
+    return new Promise((res,rej)=>{
+      const t = tx(['posts'],'readwrite');
+      const req = t.objectStore('posts').put(post);
+      req.onsuccess = ()=> res();
+      req.onerror   = ()=> rej(req.error||t.error);
+    });
+  }
+  async function remove(id){
+    return new Promise((res,rej)=>{
+      const t = tx(['posts'],'readwrite');
+      const req = t.objectStore('posts').delete(id);
+      req.onsuccess = ()=> res();
+      req.onerror   = ()=> rej(req.error||t.error);
+    });
+  }
+  async function allPosts(){
+    return new Promise((res,rej)=>{
+      const out = [];
+      const r = tx(['posts']).objectStore('posts').index('by_time').openCursor(null,'prev');
+      r.onsuccess = ()=>{ const c=r.result; if(c){ out.push(c.value); c.continue(); } else res(out); };
+      r.onerror   = ()=> rej(r.error);
+    });
+  }
+
+  /* ===== mark.js helpers ===== */
+  function applyMark(root, query, {onFirst}={}){
+    const el = (typeof root === 'string') ? document.querySelector(root) : root;
+    if(!el) return;
+    const inst = new Mark(el);
+    let firstEl = null;
+    inst.unmark({
+      done(){
+        const q = (query||'').trim();
+        if(!q) return;
+        const tokens = q.split(/\s+/).filter(Boolean).slice(0,6);
+        if(!tokens.length) return;
+        inst.mark(tokens, {
+          separateWordSearch: true,
+          acrossElements: true,
+          className: 'qmark',
+          diacritics: false,
+          ignoreJoiners: true,
+          each(node){ if(!firstEl) firstEl = node; },
+          done(){ if(typeof onFirst === 'function') onFirst(firstEl); }
+        });
+      }
+    });
+  }
+
+  /* ===== 코드 미리보기 ===== */
+  let WRAP_ON = true;
+
+  function renderCodePreview(src, query){
+    const container = document.getElementById('prev-source');
+    if(!container) return;
+
+    let text = cleanTail(src);
+    if(!text){
+      container.innerHTML = '<div style="color:#718096">소스 없음</div>';
+      return;
+    }
+
+    const lines = Math.max(1, text.split('\n').length);
+    container.innerHTML = '';
+
+    const wrap = document.createElement('div'); wrap.className = 'codewrap';
+
+    // 줄번호
+    const gutter = document.createElement('div'); gutter.className = 'code-nums mono';
+    const gutterInner = document.createElement('div'); gutterInner.className = 'code-nums-inner';
+    let nums = '';
+    for(let i=1;i<=lines;i++){ nums += '<div>'+i+'</div>'; }
+    gutterInner.innerHTML = nums;
+    gutter.appendChild(gutterInner);
+
+    // 코드
+    const content = document.createElement('div'); content.className = 'code-content';
+    const pre = document.createElement('pre'); pre.className = 'code-pre mono' + (WRAP_ON ? '' : ' nowrap');
+    const code = document.createElement('code'); code.className = 'hljs';
+    code.textContent = text;
+    pre.appendChild(code); content.appendChild(pre);
+
+    wrap.appendChild(gutter); wrap.appendChild(content);
+    container.appendChild(wrap);
+
+    // hljs 적용 후 → mark.js 마킹
+    if(window.hljs){ try{ window.hljs.highlightElement(code); }catch(_){} }
+
+    // mark.js로 코드 내부를 마킹하고, 첫 매치로 스크롤 이동
+    applyMark(code, query, {
+      onFirst(first){
+        requestAnimationFrame(()=>{
+          if(first){
+            const r1 = first.getBoundingClientRect();
+            const r2 = content.getBoundingClientRect();
+            content.scrollTop += (r1.top - r2.top) - 20;
+          }
+        });
+      }
+    });
+
+    // 가로 스크롤 초기화
+    content.scrollLeft = 0;
+
+    // 세로 스크롤 동기화 (줄번호)
+    const syncScroll = ()=> { gutterInner.style.transform = 'translateY(' + (-content.scrollTop) + 'px)'; };
+    content.addEventListener('scroll', syncScroll, { passive:true });
+    gutter.addEventListener('wheel', (e)=>{ content.scrollTop += e.deltaY; e.preventDefault(); }, { passive:false });
+    syncScroll();
+
+    // 줄번호 높이 동기화
+    const syncSize = ()=>{ gutter.style.height = content.clientHeight + 'px'; };
+    syncSize();
+    if('ResizeObserver' in window){
+      const ro = new ResizeObserver(syncSize); ro.observe(content);
+    }else{
+      window.addEventListener('resize', syncSize);
+    }
+  }
+
+  /* ===== UI ===== */
+  function updatePreview(fromItem){
+    const it = fromItem || {
+      filename: $('#filename')?.value || '',
+      ver: $('#ver')?.value || '',
+      changes: $('#changes')?.value || '',
+      source: $('#source')?.value || ''
+    };
+    const fv = $('#prev-filever'); if(fv) fv.textContent = (it.filename||'') + (it.ver? ' · '+it.ver : '');
+
+    const pc = document.getElementById('prev-changes');
+    if(pc){
+      const cleanChanges = cleanTail(it.changes || '');
+      pc.textContent = cleanChanges; // 안전한 텍스트 삽입
+    }
+
+    const q = ($('#search-input')?.value||'').trim();
+
+    // 프리뷰: 파일명/버전, 변경사항 하이라이트
+    applyMark('#prev-filever', q);
+    applyMark('#prev-changes', q);
+
+    // 코드 프리뷰 렌더 + 하이라이트
+    renderCodePreview(it.source||'', q);
+  }
+
+  async function render(){
+    const q = $('#search-input').value.trim();
+    const posts = (await allPosts()).filter(p=>matches(p,q));
+    $('#result-badge').textContent = posts.length+'건';
+    const tb = $('#list tbody'); tb.innerHTML = '';
+    if(!posts.length){
+      tb.innerHTML = '<tr><td colspan="6" style="color:#718096;padding:18px">등록된 항목이 없습니다. 좌측에서 저장하세요.</td></tr>';
+      return;
+    }
+
+    for(const p of posts){
+      const tr = document.createElement('tr');
+
+      const tdFile = document.createElement('td');
+      const b1 = document.createElement('b'); b1.textContent = p.filename||''; tdFile.appendChild(b1);
+
+      const tdVer = document.createElement('td');
+      const b2 = document.createElement('b'); b2.textContent = p.ver||''; tdVer.appendChild(b2);
+      const tagDiv = document.createElement('div'); tagDiv.style.cssText='color:#718096;font-size:12px'; tagDiv.textContent = (p.tags||[]).map(t=>'#'+t).join(' ');
+      tdVer.appendChild(tagDiv);
+
+      const tdChanges = document.createElement('td'); tdChanges.textContent = p.changes||'';
+      const tdSource  = document.createElement('td'); tdSource.textContent  = p.source||'';
+      const tdDate = document.createElement('td'); tdDate.textContent = fmt(p.createdAt);
+
+      const tdAct = document.createElement('td'); tdAct.className='right-actions';
+      const btn = document.createElement('button'); btn.className='btn'; btn.textContent='수정';
+      btn.addEventListener('click', ()=>loadToForm(p.id));
+      tdAct.appendChild(btn);
+
+      tr.appendChild(tdFile);
+      tr.appendChild(tdVer);
+      tr.appendChild(tdChanges);
+      tr.appendChild(tdSource);
+      tr.appendChild(tdDate);
+      tr.appendChild(tdAct);
+
+      tb.appendChild(tr);
+    }
+
+    // 테이블 전체에 mark.js 적용
+    applyMark('#list tbody', q);
+  }
+
+  async function loadToForm(id){
+    const posts = await allPosts();
+    const p = posts.find(x=>x.id===id); if(!p) return;
+    $('#editId').value = p.id;
+    $('#filename').value = p.filename||'';
+    $('#ver').value = p.ver||'';
+    $('#tags').value = (p.tags||[]).join(', ');
+    $('#changes').value = p.changes||'';
+    $('#source').value = p.source||'';
+    updatePreview(p);
+    setStatus('불러오기 완료','warn');
+  }
+
+  function setStatus(t,kind){
+    const pill=$('#status-pill'); if(!pill) return;
+    pill.textContent='상태: '+t;
+    pill.style.borderColor = kind==='ok'? '#9ae6b4' : kind==='warn'? '#fbd38d' : '#cbd5e0';
+  }
+  function toast(msg){
+    setStatus(msg,'ok');
+    setTimeout(()=>setStatus('대기'),1200);
+  }
+
+  async function onSave(){
+    try{
+      const rawId = ($('#editId').value||'').trim();
+      const hasId = rawId !== '';
+
+      const filename = ($('#filename').value||'').trim();
+      if(!filename) return alert('파일명을 입력하세요.');
+
+      const ver = ($('#ver').value||'').trim();
+      if(!ver) return alert('버전명을 입력하세요.');
+
+      let createdAt = Date.now();
+      let idNum = null;
+
+      if(hasId){
+        idNum = Number(rawId);
+        if(Number.isFinite(idNum)){
+          const prev = (await allPosts()).find(p=>p.id===idNum);
+          if(prev && prev.createdAt) createdAt = prev.createdAt;
+        }else{
+          idNum = null;
+        }
+      }
+
+      const post = {
+        filename,
+        ver,
+        tags: tagify($('#tags').value),
+        changes: cleanTail($('#changes').value || ''),
+        source:  cleanTail($('#source').value  || ''),
+        createdAt
+      };
+      if(idNum != null) post.id = idNum;
+
+      await addOrUpdate(post);
+      $('#editId').value = '';
+      setStatus('저장 완료','ok');
+      toast('저장되었습니다.');
+      updatePreview();
+      render();
+    }catch(err){
+      console.error(err);
+      alert('저장 중 오류: '+(err?.message||err));
+    }
+  }
+
+  async function onDelete(){
+    const id = Number($('#editId').value)||undefined;
+    if(!id) return alert('삭제할 항목을 먼저 선택(수정)하세요.');
+    if(!confirm('정말 삭제하시겠습니까?')) return;
+    await remove(id);
+    $('#editId').value = '';
+    setStatus('삭제 완료','ok');
+    updatePreview();
+    render();
+  }
+
+  function clearForm(){
+    ['#editId','#filename','#ver','#tags','#changes','#source'].forEach(sel=>{
+      const el=$(sel); if(el) el.value='';
+    });
+    updatePreview();
+    setStatus('대기');
+  }
+
+  /* ===== Export/Import ===== */
+  async function exportAll(){
+    const posts = await allPosts();
+    const payload = { type:'vc-file-board-v1', savedAt: Date.now(), posts };
+    const blob = new Blob([JSON.stringify(payload)], {type:'application/json'});
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().slice(0,19).replace('T','_').replace(/:/g,'-');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'version_board_'+stamp+'.json';
+    a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),1500);
+  }
+  async function importFile(file){
+    const text = await file.text();
+    const data = JSON.parse(text);
+    if(data.type!=='vc-file-board-v1'){ alert('알 수 없는 백업 형식입니다.'); return; }
+    for(const p of (data.posts||[])) await addOrUpdate(p);
+    setStatus('가져오기 완료','ok');
+    render();
+  }
+
+  /* ===== INIT ===== */
+  window.addEventListener('DOMContentLoaded', async ()=>{
+    await openDB();
+
+    ['#filename','#ver','#tags','#changes','#source'].forEach(sel=>{
+      const el=$(sel); el && el.addEventListener('input', ()=>updatePreview());
+    });
+
+    $('#btn-wrap')?.addEventListener('click', ()=>{
+      WRAP_ON = !WRAP_ON;
+      $('#btn-wrap').textContent = '줄바꿈: ' + (WRAP_ON ? '켬' : '끔');
+      const q = ($('#search-input')?.value||'').trim();
+      renderCodePreview($('#source')?.value || '', q);
+    });
+
+    $('#btn-new').onclick   = clearForm;
+    $('#btn-save').onclick  = onSave;
+    $('#btn-delete').onclick= onDelete;
+    $('#btn-export').onclick= exportAll;
+    $('#importJson').onchange = (e)=>{ const f=e.target.files?.[0]; if(f) importFile(f); e.target.value=''; };
+
+    // Ctrl/Cmd+S 저장
+    document.addEventListener('keydown', (e)=>{
+      const key=(e.key||'').toLowerCase();
+      if((e.ctrlKey||e.metaKey) && !e.shiftKey && key==='s'){
+        e.preventDefault();
+        $('#btn-save')?.click();
+      }
+    });
+
+    // 검색 시 목록 + 미리보기 하이라이트 동시 갱신
+    let tId=null;
+    $('#search-input').addEventListener('input', ()=>{
+      clearTimeout(tId);
+      tId = setTimeout(()=>{ render(); updatePreview(); }, 120);
+    });
+
+    updatePreview();
+    render();
+  });
+})();
+</script>
+</body>
+</html>

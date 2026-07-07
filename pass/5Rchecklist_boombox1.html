@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>5R Cassette Player</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+    /* 레트로 카세트 플레이어 컬러 및 테마 변수 */
+    :root {
+        --deck-body: #2c2c2e;         
+        --deck-panel: #1e1e1e;        
+        --silver: #d1d5db;            
+        --silver-dark: #9ca3af;
+        
+        --tape-bg: #fdf6e3;           
+        --tape-line: #d1c8b4;         
+        
+        --lcd-bg: #8b9bb4;            
+        --lcd-text: #111827;          
+        
+        --btn-red: #dc2626;           
+        --btn-yellow: #eab308;        
+        --btn-blue: #3b82f6;          
+        --btn-dark: #374151;          
+        
+        --border-dark: #000000;
+        --shadow-inset: inset 0 4px 8px rgba(0,0,0,0.6);
+    }
+
+    * { box-sizing: border-box; outline: none; margin: 0; padding: 0; }
+    
+    body { 
+        font-family: 'Courier New', Courier, 'Noto Sans KR', monospace; 
+        background-color: #4a3b32; 
+        background-image: radial-gradient(circle, #5c4a3d, #2d241e);
+        height: 100vh; display: flex; flex-direction: column; overflow: hidden; 
+        transition: all 0.3s ease; 
+    }
+
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: var(--deck-panel); border-left: 2px solid var(--border-dark); }
+    ::-webkit-scrollbar-thumb { background: var(--silver-dark); border: 2px solid var(--border-dark); }
+    
+    .header-area { display: flex; justify-content: space-between; align-items: flex-end; padding: 20px 24px 0 24px; flex-shrink: 0; transition: all 0.3s ease; }
+    .tabs-container { display: flex; gap: 4px; overflow-x: auto; flex: 1; min-width: 0; }
+    .tabs-container::-webkit-scrollbar { display: none; }
+    .tab-btn { 
+        padding: 10px 24px; background: var(--silver-dark); color: #111; 
+        border: 2px solid var(--border-dark); border-bottom: none; border-radius: 8px 8px 0 0; 
+        cursor: pointer; font-weight: 900; font-size: 15px; text-transform: uppercase;
+        box-shadow: inset 0 2px 4px rgba(255,255,255,0.2); flex-shrink: 0;
+    }
+    .tab-btn.active { background: var(--deck-body); color: var(--silver); }
+    
+    .exit-btn { 
+        padding: 8px 16px; border-radius: 4px; background: var(--btn-dark); 
+        border: 2px solid var(--border-dark); color: #fff; cursor: pointer; 
+        font-size: 14px; font-weight: 900; font-family: inherit; margin-bottom: 4px;
+        box-shadow: 2px 2px 0px #000; transition: 0.1s; flex-shrink: 0;
+    }
+    .exit-btn:active { transform: translate(2px, 2px); box-shadow: none; }
+
+    .main-wrapper { 
+        flex: 1; display: flex; padding: 20px; gap: 20px; 
+        background: var(--deck-body); border: 4px solid var(--border-dark); 
+        border-radius: 12px 12px 0 0; margin: 0 20px; overflow: hidden; min-height: 0; 
+        box-shadow: inset 0 0 20px rgba(0,0,0,0.5), 0 -4px 15px rgba(0,0,0,0.4);
+        transition: all 0.3s ease; 
+    }
+
+    .sidebar { 
+        width: 300px; background: var(--tape-bg); border: 3px solid var(--border-dark); 
+        border-radius: 4px; display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0; 
+        box-shadow: inset 0 0 10px rgba(0,0,0,0.1); transition: all 0.3s ease; 
+    }
+    .sidebar-header { 
+        padding: 15px; background: #e5dcc5; color: #111; font-weight: 900; 
+        border-bottom: 3px solid var(--border-dark); display: flex; justify-content: space-between; 
+        align-items: center; flex-shrink: 0; text-transform: uppercase; letter-spacing: -1px;
+    }
+    .check-all-label { font-size: 14px; font-weight: 900; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+    .check-all-label input[type="checkbox"] { accent-color: var(--border-dark); width: 16px; height: 16px; cursor: pointer; }
+    
+    .list-container { flex: 1; overflow-y: auto; padding: 10px 0; }
+    .list-item { 
+        display: flex; align-items: center; gap: 12px; padding: 10px 15px; 
+        border-bottom: 2px dashed #bba; cursor: pointer; transition: 0.1s; 
+    }
+    .list-item:hover { background: rgba(0,0,0,0.05); }
+    .list-item.active { background: #111; color: #fff; }
+    .list-item input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: var(--border-dark); flex-shrink: 0; }
+    .list-item-title { flex: 1; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 900; letter-spacing: -0.5px; }
+    .list-item.active .list-item-title { color: #fff; }
+    
+    .completed-text { color: #888 !important; text-decoration: line-through; text-decoration-thickness: 2px; text-decoration-color: #ef4444; }
+
+    .player-area { flex: 1; display: flex; flex-direction: column; gap: 15px; min-width: 0; position: relative; }
+    
+    .player-header { 
+        display: flex; justify-content: space-between; align-items: center; 
+        background: var(--deck-panel); padding: 10px 20px; border-radius: 6px; 
+        border: 4px solid var(--border-dark); box-shadow: var(--shadow-inset); flex-shrink: 0; 
+    }
+    .lcd-display {
+        background: var(--lcd-bg); color: var(--lcd-text); padding: 8px 16px;
+        border: 3px inset #555; border-radius: 4px; display: flex; gap: 20px;
+        font-weight: 900; font-size: 16px; text-transform: uppercase;
+        box-shadow: inset 0 0 10px rgba(0,0,0,0.2); letter-spacing: 1px; flex-shrink: 0;
+    }
+    .lcd-box { display: flex; flex-direction: column; align-items: center; }
+    .lcd-title { font-size: 10px; color: #333; margin-bottom: 2px; }
+    
+    .speed-select { 
+        border: 2px solid var(--border-dark); background: #eee; padding: 4px 8px; 
+        font-family: inherit; font-weight: 900; color: #111; cursor: pointer; 
+    }
+
+    .cassette-window-container {
+        display: flex; justify-content: center; align-items: center; gap: 30px;
+        background: #111; border: 3px solid var(--border-dark); border-radius: 6px;
+        padding: 6px 20px; box-shadow: inset 0 4px 10px rgba(0,0,0,0.8);
+        position: relative; flex-shrink: 0;
+    }
+    .cassette-window-container::after {
+        content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+        background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 50%);
+        pointer-events: none; border-radius: 4px;
+    }
+    .tape-reel {
+        width: 36px; height: 36px; border-radius: 50%;
+        background-color: #eee; border: 4px solid #fff;
+        background-image: conic-gradient(#444 0 30deg, transparent 30deg 180deg, #444 180deg 210deg, transparent 210deg 360deg);
+        position: relative; box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+    }
+    .tape-reel::before {
+        content: ''; position: absolute; top: 50%; left: 50%;
+        width: 10px; height: 10px; background: #111; border-radius: 50%;
+        transform: translate(-50%, -50%);
+    }
+    .tape-center-window {
+        width: 60px; height: 20px; background: #222; border-radius: 4px; 
+        border: 2px inset #555; display: flex; justify-content: center; align-items: center;
+    }
+    .tape-center-inner { width: 100%; height: 8px; background: #111; }
+    
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+    .cassette-window-container.playing .tape-reel { animation: spin 2.5s linear infinite; }
+
+    .screen { 
+        flex: 1; background: var(--tape-bg); border-radius: 8px; border: 3px solid var(--border-dark); 
+        display: flex; flex-direction: column; overflow: hidden; position: relative; min-height: 0; 
+        background-image: repeating-linear-gradient(transparent, transparent 35px, var(--tape-line) 35px, var(--tape-line) 36px);
+        line-height: 36px;
+    }
+    
+    .progress-bar { height: 8px; background: #111; width: 100%; position: absolute; top: 0; left: 0; z-index: 5; border-bottom: 2px solid #333; }
+    .progress-fill { height: 100%; background: #f97316; width: 0%; transition: width 0.1s linear; box-shadow: 0 0 10px #f97316; } 
+    
+    .screen-content { flex: 1; padding: 36px 60px; overflow-y: auto; display: block; }
+    
+    .play-title { font-size: 32px; font-weight: 900; color: #111; text-align: center; margin-bottom: 18px; word-break: keep-all; letter-spacing: -1px; white-space: pre-wrap; }
+    .play-desc { font-size: 18px; line-height: 1.6; color: #333; margin-bottom: 36px; text-align: left; word-break: keep-all; font-weight: bold; font-family: 'Noto Sans KR', sans-serif; white-space: pre-wrap; }
+    
+    .play-extra-box { 
+        background: rgba(0,0,0,0.03); border: 2px solid var(--border-dark); border-radius: 4px; 
+        padding: 15px 20px; margin-top: 20px; font-family: 'Noto Sans KR', sans-serif; text-align: left;
+    }
+    .play-extra-title { font-size: 15px; font-weight: 900; color: #111; display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+    .play-extra-content { font-size: 16px; color: #222; font-weight: 500; white-space: pre-wrap; line-height: 1.6; }
+    
+    .play-images { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; margin-top: 20px; }
+    
+    /* 이미지 클릭 효과 및 스타일 수정 */
+    .play-images img { 
+        max-width: 100%; max-height: 300px; border: 4px solid #fff; 
+        box-shadow: 2px 2px 8px rgba(0,0,0,0.3); transform: rotate(-1deg); 
+        cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .play-images img:hover {
+        transform: scale(1.05) rotate(0deg);
+        box-shadow: 4px 4px 15px rgba(0,0,0,0.4);
+        z-index: 2;
+    }
+    
+    mark { background: #fef08a; padding: 2px 4px; color: #111; font-weight: 900; border-radius: 2px; }
+    red { color: var(--btn-red); font-weight: 900; } blue { color: var(--btn-blue); font-weight: 900; } green { color: #16a34a; font-weight: 900; }
+
+    .controls { 
+        padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; 
+        background: var(--deck-body); border-top: 4px solid var(--border-dark); flex-shrink: 0; 
+        border-radius: 0 0 8px 8px;
+    }
+    .ctrl-group { display: flex; gap: 10px; align-items: center; }
+    
+    .tape-btn { 
+        background: var(--silver); border: 2px solid var(--border-dark); border-bottom: 6px solid var(--border-dark); border-right: 4px solid var(--border-dark);
+        border-radius: 4px; font-weight: 900; font-size: 15px; cursor: pointer; transition: 0.1s; 
+        display: flex; align-items: center; justify-content: center; gap: 8px; color: #111; font-family: 'Courier New', monospace; padding: 12px 20px; text-transform: uppercase;
+    }
+    .tape-btn:active:not(:disabled) { border-bottom: 2px solid var(--border-dark); border-right: 2px solid var(--border-dark); transform: translate(2px, 4px); }
+    .tape-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .nav-btn { width: 60px; padding: 12px 0; }
+    
+    .btn-complete { background: var(--btn-red); color: #fff; border-color: #500; border-bottom-color: #500; border-right-color: #500; }
+    .btn-undo { background: var(--btn-yellow); color: #111; }
+    .btn-play { background: var(--btn-blue); color: #fff; border-color: #002; border-bottom-color: #002; border-right-color: #002; }
+    .btn-stop { background: var(--btn-dark); color: #fff; border-color: #000; border-bottom-color: #000; border-right-color: #000; }
+
+    .empty-state { position: absolute; inset: 0; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 10; text-align: center; color: #fff; font-family: 'Courier New', monospace; }
+    .empty-state i { font-size: 60px; color: var(--silver-dark); margin-bottom: 20px; }
+    .empty-state p.main-text { font-size: 24px; font-weight: 900; color: #fff; margin-bottom: 8px; letter-spacing: 2px; }
+    .empty-state p.sub-text { font-size: 16px; color: #aaa; }
+
+    /* --- 몰입 모드 (Ctrl + H키) --- */
+    body.immersive .header-area { display: none !important; }
+    body.immersive .sidebar { display: none !important; }
+    body.immersive .main-wrapper { margin: 10px 20px; border-radius: 12px; }
+
+    /* --- 프리젠테이션 모드 (Ctrl + M 키) --- */
+    body.presentation .header-area { display: none !important; }
+    body.presentation .sidebar { display: none !important; }
+    body.presentation .player-header { display: none !important; }
+    body.presentation .controls { display: none !important; }
+    body.presentation .main-wrapper { 
+        margin: 0 !important; 
+        padding: 0 !important; 
+        border: none !important; 
+        border-radius: 0 !important; 
+        background: var(--tape-bg) !important; 
+        box-shadow: none !important; 
+    }
+    body.presentation .player-area { padding: 0 !important; gap: 0 !important; }
+    body.presentation .screen { border-radius: 0 !important; border: none !important; box-shadow: none !important; }
+
+    /* 이미지 전체화면 모달 (추가된 부분) */
+    .image-modal {
+        display: none; 
+        position: fixed; 
+        z-index: 9999; 
+        left: 0; top: 0; 
+        width: 100%; height: 100%; 
+        background-color: rgba(0,0,0,0.9); 
+        justify-content: center; 
+        align-items: center; 
+        flex-direction: column;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+    .image-modal.show {
+        display: flex;
+        opacity: 1;
+    }
+    .image-modal img {
+        max-width: 90%; 
+        max-height: 90vh; 
+        border: 4px solid #fff; 
+        box-shadow: 0 0 25px rgba(0,0,0,1);
+        border-radius: 4px;
+        object-fit: contain;
+    }
+    .modal-close {
+        position: absolute; 
+        top: 20px; 
+        right: 30px; 
+        color: #fff; 
+        font-size: 40px; 
+        font-weight: bold; 
+        cursor: pointer; 
+        transition: color 0.2s;
+        z-index: 10000;
+    }
+    .modal-close:hover { color: #aaa; }
+</style>
+</head>
+<body>
+
+<div class="header-area">
+    <div class="tabs-container" id="domain-tabs"></div>
+    <button class="exit-btn" onclick="window.location.href='5Rchecklist.html'"><i class="fas fa-eject"></i> EJECT (복귀)</button>
+</div>
+
+<div class="main-wrapper">
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <span>TRACKLIST</span>
+            <label class="check-all-label"><input type="checkbox" id="check-all"> ALL</label>
+        </div>
+        <div class="list-container" id="topic-list"></div>
+    </div>
+
+    <div class="player-area">
+        
+        <div class="player-header">
+            <div class="lcd-display">
+                <div class="lcd-box">
+                    <span class="lcd-title">TRACK</span>
+                    <span id="status-counter">00/00</span>
+                </div>
+                <div style="width:2px; background:#444; margin:0 5px;"></div>
+                <div class="lcd-box" style="align-items:flex-start;">
+                    <span class="lcd-title">STATUS</span>
+                    <span id="status-text">STOPPED</span>
+                </div>
+            </div>
+
+            <div class="cassette-window-container" id="deck-window">
+                <div class="tape-reel"></div>
+                <div class="tape-center-window">
+                    <div class="tape-center-inner"></div>
+                </div>
+                <div class="tape-reel"></div>
+            </div>
+            
+            <div style="display:flex; align-items:center; gap:10px;">
+                <span style="color:var(--silver); font-weight:bold; font-size:12px;">PITCH (SPEED)</span>
+                <select id="speed-select" class="speed-select">
+                    <option value="3000">x1.5 (3s)</option>
+                    <option value="5000" selected>x1.0 (5s)</option>
+                    <option value="8000">x0.7 (8s)</option>
+                    <option value="15000">x0.5 (15s)</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="screen">
+            <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+
+            <div id="empty-state" class="empty-state">
+                <i class="fas fa-tape"></i>
+                <p class="main-text">NO TAPE INSERTED</p>
+                <p class="sub-text">좌측 리스트에서 재생할 트랙을 체크해주세요.</p>
+            </div>
+
+            <div class="screen-content" id="screen-content" style="display: none;">
+                <div class="play-title" id="play-title">제목</div>
+                <div class="play-desc" id="play-desc">내용</div>
+                <div id="play-extra-container" class="play-extra-box" style="display:none;">
+                    <div class="play-extra-title"><i class="fas fa-pen"></i> 메모</div>
+                    <div class="play-extra-content" id="play-extra"></div>
+                </div>
+                <div class="play-images" id="play-images"></div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <div class="ctrl-group">
+                <button class="tape-btn nav-btn" id="btn-prev" title="Rewind (←)"><i class="fas fa-backward"></i></button>
+                <button class="tape-btn nav-btn" id="btn-next" title="Fast Forward (→)"><i class="fas fa-forward"></i></button>
+            </div>
+            
+            <button class="tape-btn btn-complete" id="btn-complete" title="스페이스바를 누르면 상태를 변경합니다">
+                <i class="fas fa-circle"></i> REC (완료)
+            </button>
+
+            <div class="ctrl-group">
+                <button class="tape-btn btn-play" id="btn-play"><i class="fas fa-play"></i> PLAY</button>
+                <button class="tape-btn btn-stop" id="btn-stop" style="display:none;"><i class="fas fa-square"></i> STOP</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="image-modal" class="image-modal">
+    <span class="modal-close" id="modal-close">&times;</span>
+    <img id="modal-image" src="" alt="확대된 이미지">
+</div>
+
+<script src="5R_core.js"></script>
+<script>
+    const S = window.SELTE;
+
+    let allItems = [];
+    let currentDomain = '';
+    let filteredItems = [];
+    let selectedIndices = []; 
+    let currentPlayIndex = -1;
+
+    let playInterval = null;
+    let progressInterval = null;
+    let isPlaying = false;
+    let slideDuration = 5000;
+    let startTime = 0;
+
+    const $tabs = document.getElementById('domain-tabs');
+    const $list = document.getElementById('topic-list');
+    const $checkAll = document.getElementById('check-all');
+    const $screenContent = document.getElementById('screen-content');
+    const $emptyState = document.getElementById('empty-state');
+    
+    const $deckWindow = document.getElementById('deck-window');
+    const $statusText = document.getElementById('status-text');
+    
+    const $btnPrev = document.getElementById('btn-prev');
+    const $btnNext = document.getElementById('btn-next');
+    const $btnComplete = document.getElementById('btn-complete');
+    const $btnPlay = document.getElementById('btn-play');
+    const $btnStop = document.getElementById('btn-stop');
+    
+    const $counter = document.getElementById('status-counter');
+    const $speedSelect = document.getElementById('speed-select');
+    const $progressFill = document.getElementById('progress-fill');
+
+    // 모달 관련 요소 (추가된 부분)
+    const $imageModal = document.getElementById('image-modal');
+    const $modalImage = document.getElementById('modal-image');
+    const $modalClose = document.getElementById('modal-close');
+
+    // 모달 열기/닫기 함수
+    function openModal(src) {
+        $modalImage.src = src;
+        $imageModal.classList.add('show');
+    }
+    function closeModal() {
+        $imageModal.classList.remove('show');
+        setTimeout(() => { $modalImage.src = ''; }, 300); // 닫히는 애니메이션 후 src 초기화
+    }
+
+    $modalClose.onclick = closeModal;
+    $imageModal.onclick = (e) => {
+        if (e.target === $imageModal) closeModal();
+    };
+
+    async function init() {
+        try {
+            await S.openDB();
+            await reloadData();
+        } catch(e) {
+            alert('DB 연결 실패. 데이터를 먼저 등록해주세요.');
+        }
+    }
+
+    async function reloadData() {
+        allItems = await S.getAllItems();
+        allItems.sort((a,b) => {
+            if(a.domain !== b.domain) return (a.domain||'').localeCompare(b.domain||'');
+            return (a.domainSeq||0)-(b.domainSeq||0);
+        });
+
+        renderTabs();
+        if(currentDomain) loadDomain(currentDomain);
+    }
+
+    function renderTabs() {
+        const domains = [...new Set(allItems.map(x => x.domain))].filter(Boolean);
+        $tabs.innerHTML = '';
+        if(domains.length === 0) return $tabs.innerHTML = '<div style="color:#111; padding:10px; font-weight:bold;">데이터 없음</div>';
+        if(!currentDomain) currentDomain = domains[0];
+
+        domains.forEach(d => {
+            const btn = document.createElement('button');
+            btn.className = `tab-btn ${d === currentDomain ? 'active' : ''}`;
+            btn.textContent = d;
+            btn.onclick = () => { if(isPlaying) stopPlay(); currentDomain = d; renderTabs(); loadDomain(d); };
+            $tabs.appendChild(btn);
+        });
+    }
+
+    function loadDomain(domain) {
+        filteredItems = allItems.filter(x => x.domain === domain);
+        renderList();
+        updateSelection();
+        if(selectedIndices.length > 0) {
+            showSlide(0);
+        } else {
+            showEmpty();
+        }
+    }
+
+    function renderList() {
+        $list.innerHTML = '';
+        
+        filteredItems.forEach((item, index) => {
+            const div = document.createElement('div');
+            div.className = 'list-item';
+            div.id = `list-item-${index}`;
+            const plainTitle = (item.topic || '').replace(/<[^>]+>/g, '').trim() || '(제목 없음)';
+            
+            const isChecked = item.checked ? '' : 'checked';
+            const completedClass = item.checked ? 'completed-text' : '';
+            
+            div.innerHTML = `
+                <input type="checkbox" class="item-checkbox" data-idx="${index}" ${isChecked}>
+                <div class="list-item-title ${completedClass}">${plainTitle}</div>
+            `;
+            
+            div.querySelector('.list-item-title').onclick = () => {
+                if(isPlaying) stopPlay();
+                const checkbox = div.querySelector('input');
+                if(!checkbox.checked) { checkbox.checked = true; updateSelection(); }
+                const newPlayIndex = selectedIndices.indexOf(index);
+                if(newPlayIndex !== -1) showSlide(newPlayIndex);
+            };
+            
+            div.querySelector('input').onchange = () => updateSelection();
+            $list.appendChild(div);
+        });
+    }
+
+    function updateSelection() {
+        const checkboxes = document.querySelectorAll('.item-checkbox');
+        selectedIndices = [];
+        checkboxes.forEach(cb => { if(cb.checked) selectedIndices.push(parseInt(cb.dataset.idx)); });
+        $checkAll.checked = checkboxes.length > 0 && selectedIndices.length === checkboxes.length;
+        
+        if(selectedIndices.length === 0) {
+            showEmpty();
+        } else {
+            if(selectedIndices[currentPlayIndex] === undefined) {
+                 if(!isPlaying) showSlide(0);
+            } else {
+                 updateCounter(); updateNavButtons();
+            }
+        }
+    }
+
+    $checkAll.onchange = (e) => {
+        document.querySelectorAll('.item-checkbox').forEach(cb => cb.checked = e.target.checked);
+        updateSelection();
+        if(selectedIndices.length > 0 && !isPlaying) showSlide(0);
+    };
+
+    function updateCompleteButtonUI(isCompleted) {
+        if (isCompleted) {
+            $btnComplete.innerHTML = '<i class="fas fa-undo"></i> OVERWRITE (해제)';
+            $btnComplete.classList.remove('btn-complete');
+            $btnComplete.classList.add('btn-undo');
+        } else {
+            $btnComplete.innerHTML = '<i class="fas fa-circle"></i> REC (완료)';
+            $btnComplete.classList.remove('btn-undo');
+            $btnComplete.classList.add('btn-complete');
+        }
+    }
+
+    $btnComplete.onclick = async () => {
+        if(selectedIndices.length === 0) return;
+        
+        const realIndex = selectedIndices[currentPlayIndex];
+        const item = filteredItems[realIndex];
+
+        const willBeCompleted = !item.checked;
+        item.checked = willBeCompleted;
+
+        await S.putItem(item);
+        const memItem = allItems.find(x => x.id === item.id);
+        if(memItem) memItem.checked = willBeCompleted;
+        
+        const titleDiv = document.querySelector(`#list-item-${realIndex} .list-item-title`);
+        if(titleDiv) {
+            if(willBeCompleted) titleDiv.classList.add('completed-text');
+            else titleDiv.classList.remove('completed-text');
+        }
+        
+        updateCompleteButtonUI(willBeCompleted);
+        
+        if (willBeCompleted) {
+            const cb = document.querySelector(`.item-checkbox[data-idx="${realIndex}"]`);
+            if(cb) cb.checked = false;
+            
+            updateSelection();
+            
+            if(selectedIndices.length > 0) {
+                let nextIdx = currentPlayIndex; 
+                if(nextIdx >= selectedIndices.length) nextIdx = 0;
+                showSlide(nextIdx);
+                
+                if(isPlaying) resetProgressTimer(); 
+            } else {
+                showEmpty();
+                if(isPlaying) stopPlay();
+            }
+        }
+    };
+
+    async function showSlide(playIndex) {
+        if(selectedIndices.length === 0) return showEmpty();
+        
+        currentPlayIndex = playIndex;
+        const realIndex = selectedIndices[currentPlayIndex];
+        const item = filteredItems[realIndex];
+
+        $emptyState.style.display = 'none';
+        $screenContent.style.display = 'block'; 
+        $btnComplete.style.display = 'flex';
+
+        // 💡 새 슬라이드 로드 시 스크롤 최상단으로 리셋
+        $screenContent.scrollTop = 0;
+
+        updateCompleteButtonUI(item.checked);
+
+        document.getElementById('play-title').innerHTML = S.renderWithMark(item.topic) || '제목 없음';
+        document.getElementById('play-desc').innerHTML = S.renderWithMark(item.definition) || '내용 없음';
+        
+        let extraHtml = '';
+        if(item.mnemonic) extraHtml += `<strong>[암기팁]</strong> ${S.renderWithMark(item.mnemonic)}<br><br>`;
+        if(item.notes) extraHtml += `<span style="color:#555;">${S.renderWithMark(item.notes)}</span>`;
+        
+        const extraContainer = document.getElementById('play-extra-container');
+        if(extraHtml.trim()) {
+            document.getElementById('play-extra').innerHTML = extraHtml;
+            extraContainer.style.display = 'block';
+        } else {
+            extraContainer.style.display = 'none';
+        }
+
+        const imgContainer = document.getElementById('play-images');
+        imgContainer.innerHTML = '';
+        for(let i=1; i<=5; i++) {
+            const imgId = item[`img${i}Id`];
+            if(imgId) {
+                const url = await S.getImageDataURL(imgId);
+                if(url) {
+                    const img = document.createElement('img'); 
+                    img.src = url; 
+                    img.title = "클릭하여 크게 보기";
+                    // 이미지 클릭시 모달 오픈 이벤트 추가
+                    img.onclick = () => openModal(url);
+                    imgContainer.appendChild(img);
+                }
+            }
+        }
+
+        document.querySelectorAll('.list-item').forEach(el => el.classList.remove('active'));
+        const activeEl = document.getElementById(`list-item-${realIndex}`);
+        if(activeEl) { activeEl.classList.add('active'); activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+        
+        updateCounter(); updateNavButtons();
+        $progressFill.style.width = '0%';
+        $progressFill.style.transition = 'none';
+    }
+
+    function showEmpty() {
+        $emptyState.style.display = 'flex';
+        $screenContent.style.display = 'none';
+        $counter.textContent = '00/00';
+        $statusText.textContent = 'EJECTED';
+        $btnPrev.disabled = true; $btnNext.disabled = true;
+        $btnComplete.style.display = 'none';
+        $progressFill.style.width = '0%';
+    }
+
+    function updateCounter() {
+        if(selectedIndices.length > 0) {
+            let cur = (currentPlayIndex + 1).toString().padStart(2, '0');
+            let tot = selectedIndices.length.toString().padStart(2, '0');
+            $counter.textContent = `${cur}/${tot}`;
+        }
+    }
+
+    function updateNavButtons() {
+        const disabled = selectedIndices.length <= 1;
+        $btnPrev.disabled = disabled; $btnNext.disabled = disabled;
+    }
+
+    function playNext() {
+        if(selectedIndices.length === 0) return stopPlay();
+        let nextIdx = currentPlayIndex + 1;
+        if(nextIdx >= selectedIndices.length) nextIdx = 0; 
+        showSlide(nextIdx);
+        if(isPlaying) resetProgressTimer();
+    }
+
+    function playPrev() {
+        if(selectedIndices.length === 0) return;
+        let prevIdx = currentPlayIndex - 1;
+        if(prevIdx < 0) prevIdx = selectedIndices.length - 1; 
+        showSlide(prevIdx);
+        if(isPlaying) resetProgressTimer();
+    }
+
+    function startPlay() {
+        if(selectedIndices.length === 0) return alert('재생할 항목을 선택하세요.');
+        if(currentPlayIndex === -1) currentPlayIndex = 0;
+        
+        isPlaying = true;
+        slideDuration = parseInt($speedSelect.value);
+        
+        $btnPlay.style.display = 'none';
+        $btnStop.style.display = 'flex';
+        
+        $deckWindow.classList.add('playing');
+        $statusText.textContent = 'PLAYING';
+        $statusText.style.color = '#ef4444'; 
+        
+        showSlide(currentPlayIndex);
+        resetProgressTimer();
+    }
+
+    function stopPlay() {
+        isPlaying = false;
+        clearInterval(playInterval);
+        clearInterval(progressInterval);
+        
+        $btnPlay.style.display = 'flex';
+        $btnStop.style.display = 'none';
+        
+        $deckWindow.classList.remove('playing');
+        $statusText.textContent = 'STOPPED';
+        $statusText.style.color = 'var(--lcd-text)';
+        
+        $progressFill.style.width = '0%';
+        $progressFill.style.transition = 'none';
+    }
+
+    function resetProgressTimer() {
+        clearInterval(playInterval); clearInterval(progressInterval);
+        startTime = Date.now();
+        $progressFill.style.transition = 'width 0.1s linear';
+        
+        progressInterval = setInterval(() => {
+            const elapsed = Date.now() - startTime;
+            let percent = (elapsed / slideDuration) * 100;
+            if(percent > 100) percent = 100;
+            $progressFill.style.width = `${percent}%`;
+        }, 100);
+
+        playInterval = setInterval(() => { playNext(); }, slideDuration);
+    }
+
+    $btnPlay.onclick = startPlay;
+    $btnStop.onclick = stopPlay;
+    $btnNext.onclick = () => { if(isPlaying) stopPlay(); playNext(); };
+    $btnPrev.onclick = () => { if(isPlaying) stopPlay(); playPrev(); };
+    $speedSelect.onchange = () => { if(isPlaying) { slideDuration = parseInt($speedSelect.value); resetProgressTimer(); } };
+
+    document.addEventListener('keydown', (e) => {
+        // 모달창이 열려있을 때 다른 단축키 작동 방지 및 ESC 닫기
+        if ($imageModal.classList.contains('show')) {
+            if (e.key === 'Escape') closeModal();
+            return;
+        }
+
+        const isInput = e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA';
+        
+        if (!isInput) {
+            // 프리젠테이션 모드 (Ctrl + M)
+            if (e.ctrlKey && e.key.toLowerCase() === 'm') {
+                e.preventDefault();
+                document.body.classList.toggle('presentation');
+                document.body.classList.remove('immersive'); // 충돌 방지
+                return;
+            }
+
+            // 💡 수정된 부분: 몰입 모드 (Ctrl + H)
+            if (e.ctrlKey && e.key.toLowerCase() === 'h') {
+                e.preventDefault();
+                document.body.classList.toggle('immersive');
+                document.body.classList.remove('presentation'); // 충돌 방지
+                return;
+            }
+            
+            if (selectedIndices.length > 0) {
+                if(e.key === 'ArrowRight') { 
+                    e.preventDefault(); 
+                    if(isPlaying) stopPlay(); 
+                    playNext(); 
+                } 
+                else if(e.key === 'ArrowLeft') { 
+                    e.preventDefault(); 
+                    if(isPlaying) stopPlay(); 
+                    playPrev(); 
+                }
+                else if(e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    $screenContent.scrollBy({ top: -80, behavior: 'smooth' });
+                }
+                else if(e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    $screenContent.scrollBy({ top: 80, behavior: 'smooth' });
+                }
+                else if(e.key === ' ') {
+                    e.preventDefault();
+                    if($btnComplete.style.display !== 'none') {
+                        $btnComplete.click();
+                    }
+                }
+            }
+        }
+    });
+
+    $tabs.addEventListener('wheel', (e) => {
+        if (e.deltaY !== 0) {
+            e.preventDefault(); 
+            $tabs.scrollLeft += e.deltaY; 
+        }
+    });
+
+    init();
+</script>
+
+</body>
+</html>

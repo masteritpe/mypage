@@ -1,0 +1,1128 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PAO Builder</title>
+  
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <style>
+    /* === 웹폰트 적용 === */
+    @font-face {
+        font-family: 'KoPubWorldDotum';
+        font-weight: 500;
+        font-style: normal;
+        src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/KoPubWorldDotumMedium.woff') format('woff');
+    }
+    @font-face {
+        font-family: 'KoPubWorldDotum';
+        font-weight: 700;
+        font-style: normal;
+        src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/KoPubWorldDotumBold.woff') format('woff');
+    }
+
+    /* === 1. 디자인 시스템 변수 === */
+    :root {
+      --bg-app: #F9FAFB;
+      --bg-canvas: #E5E7EB;
+      --bg-panel: #FFFFFF;
+      
+      --text-main: #111827;
+      --text-muted: #6B7280;
+      --border-light: #F3F4F6;
+      --border-base: #E5E7EB;
+      --border-hover: #D1D5DB;
+      
+      --primary: #111827;
+      --accent: #2563EB;
+      --accent-hover: #1D4ED8;
+      --accent-light: #EFF6FF;
+      
+      --danger: #EF4444;
+      --danger-hover: #DC2626;
+      --success: #10B981;
+      
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+      --shadow-canvas: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+      
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --font-ui: 'KoPubWorldDotum', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    }
+
+    * { box-sizing: border-box; outline: none; }
+    body {
+      margin: 0; background: var(--bg-app); color: var(--text-main);
+      font-family: var(--font-ui); font-size: 14px;
+      height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* 스크롤바 커스텀 */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
+
+    /* === 2. Header === */
+    header {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(8px);
+      height: 64px; padding: 0 24px;
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid var(--border-base); z-index: 50; flex-shrink: 0;
+      box-shadow: var(--shadow-sm);
+    }
+    
+    .logo { 
+      font-size: 18px; font-weight: 700; color: var(--primary); 
+      display: flex; align-items: center; gap: 8px; margin: 0; white-space: nowrap;
+      letter-spacing: -0.02em;
+    }
+    .logo i { color: var(--accent); font-size: 24px; }
+    
+    .toolbar { display: flex; gap: 8px; align-items: center; }
+    
+    #doc-title-input {
+        margin-right: 8px; font-weight: 600; font-size: 15px; 
+        color: var(--text-muted); background: transparent; 
+        padding: 8px 12px; border-radius: var(--radius-md); width: 160px; 
+        border: 1px solid transparent; transition: all 0.2s ease; font-family: var(--font-ui);
+    }
+    #doc-title-input:hover { border-color: var(--border-hover); color: var(--text-main); }
+    #doc-title-input:focus { background: #fff; color: var(--text-main); border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-light); }
+
+    .btn {
+      height: 38px; padding: 0 14px; border-radius: var(--radius-md); border: 1px solid var(--border-base);
+      background: #fff; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+      font-weight: 600; font-family: var(--font-ui); font-size: 13px; color: var(--text-main); 
+      transition: all 0.2s ease; white-space: nowrap; box-shadow: var(--shadow-sm);
+    }
+    .btn i { font-size: 16px; }
+    .btn:hover { background: #F9FAFB; border-color: var(--border-hover); transform: translateY(-1px); }
+    .btn-accent { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .btn-accent:hover { background: var(--accent-hover); color: #fff; }
+    .divider { width: 1px; height: 24px; background: var(--border-base); margin: 0 4px; }
+
+    /* === 3. Main Layout & Canvas === */
+    main { flex: 1; display: flex; overflow: hidden; background: var(--bg-canvas); position: relative; }
+
+    /* 좌측 사이드바 */
+    #sidebar {
+      width: 340px; background: var(--bg-panel); border-right: 1px solid var(--border-base);
+      padding: 24px 20px; display: flex; flex-direction: column; gap: 20px; z-index: 10;
+      overflow-y: auto; flex-shrink: 0; box-shadow: 2px 0 10px rgba(0,0,0,0.03);
+    }
+    
+    .sidebar-title { 
+      font-size: 13px; font-weight: 700; color: var(--primary); 
+      margin-bottom: 8px; display: flex; align-items: center; gap: 6px;
+      border-bottom: 1px solid var(--border-light); padding-bottom: 8px;
+    }
+    .sidebar-title i { font-size: 16px; color: var(--accent); }
+
+    /* PAO 매핑 그리드 (모달용) */
+    .mapping-grid {
+        display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px;
+        max-height: 200px; overflow-y: auto; padding: 2px;
+    }
+    .mapping-item {
+        border: 1px solid var(--border-base); border-radius: var(--radius-sm);
+        display: flex; align-items: center; justify-content: center;
+        padding: 4px; cursor: pointer; transition: 0.2s; background: #fff;
+        height: 40px; font-weight: 700; font-size: 13px; color: var(--text-muted);
+    }
+    .mapping-item:hover { background: var(--bg-app); }
+    .mapping-item.active {
+        border-color: var(--accent); background: var(--accent-light); color: var(--accent);
+    }
+
+    /* PAO 에디터 (모달용) */
+    .pao-editor {
+        background: var(--bg-app); border: 1px solid var(--border-base);
+        border-radius: var(--radius-md); padding: 16px; display: flex; flex-direction: column; gap: 12px;
+    }
+    .pao-editor-header {
+        display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;
+    }
+    .pao-editor-header strong { font-size: 16px; color: var(--primary); display: flex; align-items: center; gap: 4px; }
+    
+    .pao-img-preview {
+        width: 72px; height: 72px; border-radius: var(--radius-sm); border: 1px dashed var(--border-hover);
+        display: flex; align-items: center; justify-content: center; cursor: pointer; background: #fff; overflow: hidden;
+        transition: 0.2s;
+    }
+    .pao-img-preview:hover { border-color: var(--accent); }
+    .pao-img-preview img { width: 100%; height: 100%; object-fit: cover; }
+    .pao-img-preview i { font-size: 28px; color: var(--text-muted); }
+
+    .input-group { display: flex; align-items: center; gap: 8px; }
+    .input-group label { width: 55px; font-size: 12px; font-weight: 700; color: var(--text-muted); text-align: right; }
+    .input-group input {
+        flex: 1; height: 36px; border: 1px solid var(--border-base); border-radius: var(--radius-sm);
+        padding: 0 10px; font-size: 13px; font-family: var(--font-ui);
+    }
+    .input-group input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 2px var(--accent-light); }
+
+    /* 암기 카드 생성 UI */
+    .generator-box { display: flex; flex-direction: column; gap: 8px; }
+    .generator-input-row { display: flex; gap: 8px; width: 100%; }
+    .generator-input-row input {
+        flex: 1; min-width: 0; height: 38px; padding: 0 12px; border: 1px solid var(--border-base);
+        border-radius: var(--radius-md); font-size: 15px; font-family: var(--font-ui);
+        outline: none; transition: 0.2s; text-align: center; letter-spacing: 4px; font-weight: 700;
+    }
+    .generator-input-row input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-light); }
+    .generator-input-row button { flex-shrink: 0; }
+
+    /* 서식 도구 행 */
+    .style-row { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
+    .btn-format {
+      height: 34px; flex: 1; border: 1px solid var(--border-base); border-radius: var(--radius-md);
+      background: #fff; cursor: pointer; color: var(--text-muted); transition: all 0.2s;
+      display: flex; align-items: center; justify-content: center; font-size: 16px; box-shadow: var(--shadow-sm);
+    }
+    .btn-format:hover { background: var(--accent-light); color: var(--accent); border-color: var(--accent); }
+
+    /* 캔버스 영역 */
+    #canvas-wrapper {
+      flex: 1; overflow: auto; padding: 60px; display: flex; justify-content: center; align-items: flex-start;
+    }
+    #a4-canvas {
+      width: 297mm; height: 210mm; background: #fff; position: relative;
+      border-radius: 4px; transform-origin: top left;
+      box-shadow: var(--shadow-canvas);
+    }
+
+    /* === 4. Widgets on Canvas === */
+    .widget {
+      position: absolute; top: 50px; left: 50px;
+      border: 1px solid transparent; padding: 6px; 
+      display: flex; flex-direction: column; z-index: 100;
+      border-radius: var(--radius-md); transition: box-shadow 0.2s;
+      width: fit-content; height: fit-content;
+    }
+    .widget:hover { border: 1px dashed var(--border-hover); }
+    .widget.active { 
+      border: 1px solid var(--accent) !important; 
+      box-shadow: 0 0 0 3px var(--accent-light); 
+      background: rgba(255,255,255,0.8); backdrop-filter: blur(4px);
+    }
+    
+    .drag-handle {
+      height: 18px; background: var(--accent); color: #fff; cursor: grab; width: 100%;
+      position: absolute; top: -18px; left: -1px; display: none;
+      justify-content: center; align-items: center; font-size: 14px;
+      border-radius: var(--radius-sm) var(--radius-sm) 0 0; border: 1px solid var(--accent); border-bottom: none;
+    }
+    .drag-handle:active { cursor: grabbing; }
+    .widget.active .drag-handle { display: flex; }
+    
+    .btn-delete-widget {
+      position: absolute; top: -22px; right: -22px; background: var(--danger); color: #fff;
+      cursor: pointer; display: none; border-radius: 50%; width: 24px; height: 24px;
+      text-align: center; line-height: 24px; font-size: 14px; z-index: 10;
+      border: 2px solid #fff; box-shadow: var(--shadow-sm); transition: 0.2s;
+      align-items: center; justify-content: center;
+    }
+    .btn-delete-widget:hover { background: var(--danger-hover); transform: scale(1.1); }
+    .widget.active .btn-delete-widget { display: flex; }
+
+    /* === PAO 암기 카드 디자인 === */
+    .w-mnemonic .content-area {
+        border: 1px solid var(--border-base); border-radius: var(--radius-md);
+        background: #fff; box-shadow: var(--shadow-sm); 
+        width: max-content; min-width: 320px; /* 유동적 너비 구조 */
+        overflow: hidden;
+    }
+    .w-mnemonic .image-band {
+        display: flex; background: #F1F5F9; border-bottom: 1px solid var(--border-base);
+        padding: 16px; justify-content: center; gap: 10px; min-height: 110px; align-items: center;
+    }
+    .w-mnemonic .img-box {
+        width: 105px; height: 105px; /* 기존(70px)의 1.5배 */
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        background: #fff; border-radius: var(--radius-sm); box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-light);
+        color: var(--primary); position: relative; overflow: hidden;
+    }
+    .w-mnemonic .img-box img { 
+        width: 100%; height: 100%; object-fit: contain; 
+        padding: 4px; 
+    }
+    .w-mnemonic .img-box i { font-size: 60px; color: var(--border-hover); } /* 1.5배 스케일에 맞춤 */
+    
+    .w-mnemonic .img-box .num-tag {
+        position: absolute; bottom: 4px; right: 6px; font-size: 14px; font-weight: 900; 
+        color: var(--text-muted); opacity: 0.5; padding: 0; z-index: 10;
+    }
+    .w-mnemonic .info-band { padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+    
+    .w-mnemonic input.topic-input {
+        width: 100%; border: none; font-size: 18px; font-weight: 700; font-family: var(--font-ui);
+        color: var(--primary); padding: 4px; border-bottom: 2px solid transparent; transition: 0.2s; outline: none;
+    }
+    .w-mnemonic input.topic-input:focus { border-bottom-color: var(--accent); }
+
+    .w-mnemonic .number-title {
+        font-size: 16px; /* 한 사이즈 키움 */
+        font-weight: 900; color: var(--text-muted); letter-spacing: 2px;
+        padding: 0 4px; margin-bottom: -4px;
+    }
+
+    .w-mnemonic .pao-sentence {
+        width: 100%; border: none; font-size: 16px; /* 한 사이즈 키움 */
+        font-weight: 700; font-family: var(--font-ui);
+        color: var(--danger); padding: 4px; border-bottom: 1px solid transparent; transition: 0.2s; outline: none;
+        word-break: keep-all; line-height: 1.4;
+    }
+    .w-mnemonic .pao-sentence:focus { border-bottom-color: var(--danger); }
+
+    .w-mnemonic .desc-editor {
+        width: 100%; min-height: 80px; padding: 8px; border: 1px solid var(--border-light);
+        border-radius: var(--radius-sm); background: #FAFAFA;
+        font-size: 15px; line-height: 1.5; outline: none;
+        color: var(--text-main); transition: 0.2s; word-break: break-all;
+    }
+    .w-mnemonic .desc-editor:focus { border-color: var(--border-hover); background: #fff; }
+
+    /* 일반 요소들 */
+    .content-area { flex: 1; outline: none; line-height: 1.5; font-family: var(--font-ui); }
+    .w-text .content-area { font-size: 26px; font-weight: 700; color: var(--primary); letter-spacing: -0.02em; }
+    .w-plain .content-area { font-size: 14px; font-weight: 500; color: var(--text-main); padding: 4px; }
+
+    /* 인쇄(PDF) 모드 */
+    .printing .widget { border: none !important; resize: none !important; box-shadow: none !important; background: transparent !important; backdrop-filter: none !important; padding: 0 !important; margin: 6px !important; }
+    .printing .drag-handle, .printing .btn-delete-widget { display: none !important; }
+    .printing .w-mnemonic .topic-input, .printing .w-mnemonic .pao-sentence { border: none !important; }
+    .printing .w-mnemonic .desc-editor { border: none !important; background: transparent !important; padding: 4px !important; }
+
+    /* 줌 컨트롤 */
+    .zoom-controls { 
+      position: absolute; bottom: 30px; right: 30px; display: flex; gap: 4px; 
+      background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(8px); 
+      padding: 6px; border-radius: 999px; box-shadow: var(--shadow-md); border: 1px solid var(--border-base);
+    }
+    .zoom-controls button { 
+      width: 36px; height: 36px; border: none; background: transparent; 
+      cursor: pointer; border-radius: 50%; font-weight: 700; font-family: var(--font-ui); 
+      color: var(--text-main); transition: 0.2s; display: flex; align-items: center; justify-content: center; font-size: 16px;
+    }
+    .zoom-controls button:hover { background: var(--bg-canvas); color: var(--accent); }
+    #btn-zoom-reset { width: auto; padding: 0 16px; border-radius: 18px; font-size: 13px; }
+
+    /* === 토스트 알림 === */
+    #toast {
+      position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%);
+      background-color: #000000; color: #fff; padding: 12px 24px;
+      border-radius: 8px; font-size: 14px; font-weight: 500; z-index: 9999;
+      opacity: 0; transition: opacity 0.3s ease; pointer-events: none;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+
+    /* === 모달(문서 불러오기 및 환경설정) 스타일 === */
+    .modal-overlay {
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0, 0, 0, 0.4); z-index: 1000;
+        display: flex; align-items: center; justify-content: center;
+        backdrop-filter: blur(2px);
+    }
+    .modal-container {
+        background: #fff; width: 480px; max-height: 85vh; 
+        border-radius: var(--radius-lg); display: flex; flex-direction: column; 
+        box-shadow: var(--shadow-canvas); overflow: hidden;
+    }
+    .modal-header {
+        padding: 16px 20px; border-bottom: 1px solid var(--border-base);
+        display: flex; justify-content: space-between; align-items: center;
+    }
+    .modal-header h2 { 
+        margin: 0; font-size: 16px; display: flex; align-items: center; 
+        gap: 8px; color: var(--primary); font-weight: 700; 
+    }
+    .modal-header h2 i { color: var(--accent); font-size: 20px; }
+    .modal-header .btn-close { 
+        background: none; border: none; font-size: 20px; 
+        cursor: pointer; color: var(--text-muted); transition: 0.2s;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .modal-header .btn-close:hover { color: var(--text-main); transform: scale(1.1); }
+    
+    .doc-list { 
+        padding: 16px 20px; overflow-y: auto; display: flex; 
+        flex-direction: column; gap: 12px; 
+    }
+    .doc-item {
+        border: 1px solid var(--border-base); border-radius: var(--radius-md);
+        padding: 16px; display: flex; justify-content: space-between; align-items: center;
+        transition: all 0.2s; background: #fff;
+    }
+    .doc-item:hover { border-color: var(--border-hover); box-shadow: var(--shadow-sm); }
+    .doc-info { display: flex; flex-direction: column; gap: 6px; }
+    .doc-info strong { font-size: 15px; color: var(--primary); }
+    .doc-info span { font-size: 13px; color: var(--text-muted); }
+    
+    .doc-actions { display: flex; gap: 8px; }
+    .btn-open {
+        background: var(--accent-light); color: var(--accent); border: none;
+        padding: 8px 16px; border-radius: var(--radius-sm); font-weight: 700; 
+        font-size: 13px; font-family: var(--font-ui); cursor: pointer; 
+        display: flex; align-items: center; gap: 6px; transition: 0.2s;
+    }
+    .btn-open:hover { background: #DBEAFE; }
+    .btn-delete {
+        background: #FEE2E2; color: var(--danger); border: none;
+        padding: 8px; border-radius: var(--radius-sm); font-size: 16px;
+        cursor: pointer; display: flex; align-items: center; justify-content: center; 
+        transition: 0.2s; width: 36px; height: 36px;
+    }
+    .btn-delete:hover { background: #FECACA; }
+
+    /* 환경설정 모달 내부 여백 */
+    .settings-content {
+        padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; background: #fff;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1 class="logo"><i class="ph ph-brain"></i> PAO Builder</h1>
+  <div class="toolbar">
+    <input type="text" id="doc-title-input" value="새 문서" autocomplete="off">
+    <button class="btn" onclick="newDocument()"><i class="ph ph-file-plus"></i> 새로생성</button>
+    <button class="btn" onclick="saveDocument()"><i class="ph ph-floppy-disk"></i> 저장</button>
+    <button class="btn" onclick="openLoadModal()"><i class="ph ph-folder-open"></i> 불러오기</button>
+    <button class="btn" onclick="openSettingsModal()"><i class="ph ph-gear"></i> 환경설정</button>
+    <div class="divider"></div>
+    <button class="btn btn-accent" id="btn-pdf"><i class="ph ph-file-pdf"></i> PDF 내보내기</button>
+  </div>
+</header>
+
+<main>
+  <aside id="sidebar">
+    <div>
+        <div class="sidebar-title"><i class="ph ph-cards"></i> PAO 암기 카드 생성</div>
+        <div class="generator-box">
+            <div class="generator-input-row">
+                <input type="text" id="num-sequence" placeholder="PAO코드" maxlength="6" onkeypress="if(event.key==='Enter') generateCard()">
+                <button class="btn btn-accent" onclick="generateCard()"><i class="ph ph-magic-wand"></i> 생성</button>
+            </div>
+            <p style="font-size: 12px; color: var(--text-muted); margin: 0; line-height: 1.4;">
+                * <strong>[P]사람 - [O]대상 - [A]행동</strong><br>
+                * 데이터 매핑 변경은 상단의 <strong>[환경설정]</strong>을 이용하세요.
+            </p>
+        </div>
+    </div>
+
+    <div>
+        <div class="sidebar-title"><i class="ph ph-squares-four"></i> 일반 요소 추가</div>
+        <div class="style-row">
+            <button class="btn-format" onclick="addWidget('text')" style="font-size:13px; font-weight:600;"><i class="ph ph-text-t"></i> 텍스트</button>
+            <button class="btn-format" onmousedown="event.preventDefault(); document.execCommand('bold', false, null);" title="굵게(Ctrl+B)"><i class="ph ph-text-b"></i></button>
+            <button class="btn-format" onmousedown="event.preventDefault(); document.execCommand('foreColor', false, '#EF4444');" title="빨간색"><i class="ph ph-palette" style="color:#EF4444;"></i></button>
+            <button class="btn-format" onmousedown="event.preventDefault(); document.execCommand('foreColor', false, '#2563EB');" title="파란색"><i class="ph ph-palette" style="color:#2563EB;"></i></button>
+        </div>
+    </div>
+  </aside>
+
+  <div id="canvas-wrapper">
+    <div id="a4-canvas"></div>
+  </div>
+
+  <div class="zoom-controls">
+    <button id="btn-zoom-out"><i class="ph ph-minus"></i></button>
+    <button id="btn-zoom-reset">100%</button>
+    <button id="btn-zoom-in"><i class="ph ph-plus"></i></button>
+  </div>
+</main>
+
+<div id="toast">메시지</div>
+
+<div id="load-modal" class="modal-overlay" style="display: none;">
+  <div class="modal-container">
+    <div class="modal-header">
+      <h2><i class="ph ph-folder-open"></i> 저장된 문서 목록</h2>
+      <button class="btn-close" onclick="closeLoadModal()"><i class="ph ph-x"></i></button>
+    </div>
+    <div class="doc-list" id="doc-list">
+      </div>
+  </div>
+</div>
+
+<div id="settings-modal" class="modal-overlay" style="display: none;">
+  <div class="modal-container" style="width: 520px;">
+    <div class="modal-header">
+      <h2><i class="ph ph-table"></i> PAO 데이터 매핑 (00~99)</h2>
+      <button class="btn-close" onclick="closeSettingsModal()"><i class="ph ph-x"></i></button>
+    </div>
+    <div class="settings-content">
+        <div class="mapping-grid" id="mapping-grid"></div>
+        
+        <div class="pao-editor" id="pao-editor">
+            <div class="pao-editor-header">
+                <strong><i class="ph ph-pencil-simple"></i> <span id="edit-current-num">00</span> 설정</strong>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <button id="btn-clear-img" onclick="clearCurrentImage()" title="이미지 삭제" style="display:none; background:none; border:none; color:var(--danger); cursor:pointer; font-size:20px; padding:0;"><i class="ph ph-trash"></i></button>
+                    <div class="pao-img-preview" onclick="document.getElementById('image-uploader').click()" title="이미지 업로드">
+                        <img id="edit-img-preview" src="" style="display:none;">
+                        <i id="edit-img-icon" class="ph ph-image"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="input-group">
+                <label>P(사람)</label>
+                <input type="text" id="edit-p" placeholder="예: 소방관" oninput="saveCurrentEdit()">
+            </div>
+            <div class="input-group">
+                <label>A(행동)</label>
+                <input type="text" id="edit-a" placeholder="예: 물 분사하다" oninput="saveCurrentEdit()">
+            </div>
+            <div class="input-group">
+                <label>O(대상)</label>
+                <input type="text" id="edit-o" placeholder="예: 소화기" oninput="saveCurrentEdit()">
+            </div>
+        </div>
+        <input type="file" id="image-uploader" accept="image/*" style="display:none;">
+
+        <button class="btn btn-accent" onclick="saveSettingsFromModal()" style="width: 100%; justify-content: center; height: 42px; font-size: 15px; margin-top: 4px;">
+            <i class="ph ph-floppy-disk"></i> 설정 저장 및 닫기
+        </button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // === 1. PAO 매핑 데이터 초기화 ===
+  const defaultPaoData = {
+    '00': { imgData: null, p: '소방관', a: '물 분사하다', o: '소화기' },
+    '01': { imgData: null, p: '김연아', a: '목에 걸다', o: '금메달' },
+    '02': { imgData: null, p: '할머니', a: '공이찧다', o: '떡' },
+    '03': { imgData: null, p: '김영삼', a: '악수하다', o: '무궁화' },
+    '04': { imgData: null, p: '공사장 인부', a: '수레로 쏟다', o: '벽돌' },
+    '05': { imgData: null, p: '미식축구 선수', a: '충돌하다', o: '럭비공' },
+    '06': { imgData: null, p: '프로게이머', a: '타이핑하다', o: '공유기' },
+    '07': { imgData: null, p: '콩쥐', a: '장독대 막다', o: '개구리' },
+    '08': { imgData: null, p: '우는사람', a: '껍질 벗기다', o: '양파' },
+    '09': { imgData: null, p: '수리공', a: '수리하다', o: '공구상자' },
+    '10': { imgData: null, p: '예수님', a: '성수 뿌리다', o: '십자가' },
+    '11': { imgData: null, p: '마른사람', a: '젓가락으로 집다', o: '빼빼로' },
+    '12': { imgData: null, p: '경찰관', a: '수갑채우다', o: '수갑' },
+    '13': { imgData: null, p: '잠옷 입은 사람', a: '베고 자다', o: '베개' },
+    '14': { imgData: null, p: '심사위원', a: '도장찍다', o: '증서' },
+    '15': { imgData: null, p: '인어', a: '꼬리치다', o: '조개' },
+    '16': { imgData: null, p: '원시인', a: '창던지다', o: '바위' },
+    '17': { imgData: null, p: '쌍둥이', a: '복사하다', o: '퍼즐' },
+    '18': { imgData: null, p: '심판', a: '불다', o: '호루라기' },
+    '19': { imgData: null, p: '야구선수', a: '글러브로 받다', o: '야구공' },
+    '20': { imgData: null, p: '우주인', a: '주의를 돌다', o: '인공위성' },
+    '21': { imgData: null, p: '캠핑족', a: '텐트치다', o: '라면' },
+    '22': { imgData: null, p: '율곡이이', a: '붓글씨 쓰다', o: '오천원' },
+    '23': { imgData: null, p: '심마니', a: '캐내다', o: '인삼' },
+    '24': { imgData: null, p: '이삿짐 아저씨', a: '나르다', o: '박스' },
+    '25': { imgData: null, p: '농구선수', a: '농구하다', o: '이온음료' },
+    '26': { imgData: null, p: '스튜어디스', a: '날리다', o: '비행기' },
+    '27': { imgData: null, p: '치과의사', a: '칫솔로 닦다', o: '치약' },
+    '28': { imgData: null, p: '드라큘라', a: '물다', o: '악어' },
+    '29': { imgData: null, p: '이누이트족', a: '쌓다', o: '얼음' },
+    '30': { imgData: null, p: '영화감독', a: '프로젝트로 쏘다', o: '팝콘' },
+    '31': { imgData: null, p: '유관순', a: '만세하다', o: '태극기' },
+    '32': { imgData: null, p: '디자이너', a: '줄자로 재다', o: '티셔츠' },
+    '33': { imgData: null, p: '정육점 아저씨', a: '저울에 올리다', o: '삼겹살' },
+    '34': { imgData: null, p: '스님', a: '두드리다', o: '목탁' },
+    '35': { imgData: null, p: '사모님', a: '카트에 담다', o: '핸드백' },
+    '36': { imgData: null, p: '도둑', a: '도둑질하다', o: '열쇠' },
+    '37': { imgData: null, p: '농부', a: '상추로 싸다', o: '양상추' },
+    '38': { imgData: null, p: '삼바댄서', a: '위에서 춤추다', o: '깃털' },
+    '39': { imgData: null, p: '제갈량', a: '부채질하다', o: '만두' },
+    '40': { imgData: null, p: '뱃사공', a: '노젓다', o: '배' },
+    '41': { imgData: null, p: '김정은', a: '발사시키다', o: '미사일' },
+    '42': { imgData: null, p: '싸이', a: '가랑이에 끼고 타다', o: '사이다' },
+    '43': { imgData: null, p: '한의사', a: '침놓다', o: '한약' },
+    '44': { imgData: null, p: '나무꾼', a: '지게로 지다', o: '사슴' },
+    '45': { imgData: null, p: '사오정', a: '입에서 나오다', o: '나방' },
+    '46': { imgData: null, p: '사육사', a: '꺼내 던지다', o: '닭고기' },
+    '47': { imgData: null, p: '부자', a: '신용카드로 긁다', o: '보석' },
+    '48': { imgData: null, p: '도예가', a: '빚다', o: '사발' },
+    '49': { imgData: null, p: '간호사', a: '주사하다', o: '알콜솜' },
+    '50': { imgData: null, p: '손오공', a: '쌍절곤으로 때리다', o: '바나나' },
+    '51': { imgData: null, p: '주유소 아저씨', a: '주유하다', o: '기름통' },
+    '52': { imgData: null, p: '헐크', a: '얼굴에 붙이다', o: '오이' },
+    '53': { imgData: null, p: '요리사', a: '후라이팬에 볶다', o: '오삼불고기' },
+    '54': { imgData: null, p: '우비 입은 사람', a: '우산으로 막다', o: '장화' },
+    '55': { imgData: null, p: '서커스 광대', a: '요요하다', o: '요요' },
+    '56': { imgData: null, p: '체조선수', a: '높게 던져받다', o: '훌라후프' },
+    '57': { imgData: null, p: '할아버지', a: '옻칠하다', o: '나전칠기' },
+    '58': { imgData: null, p: '오빠 (아이돌)', a: '잡고 올라가다', o: '동아줄' },
+    '59': { imgData: null, p: '어부', a: '낚시하다', o: '생선' },
+    '60': { imgData: null, p: '안중근', a: '가슴에 달다', o: '훈장' },
+    '61': { imgData: null, p: '모델', a: '드레스 입히다', o: '육일돌' },
+    '62': { imgData: null, p: '기사', a: '타고날다', o: '유니콘' },
+    '63': { imgData: null, p: '육상선수', a: '쥐고 달라다', o: '바톤' },
+    '64': { imgData: null, p: '요구르트 판매원', a: '빨대로 빨다', o: '요구르트' },
+    '65': { imgData: null, p: '유목민', a: '채찍질하다', o: '양떼' },
+    '66': { imgData: null, p: '악마', a: '찌르다', o: '해골' },
+    '67': { imgData: null, p: '유치원생', a: '스티커 붙이다', o: '병아리' },
+    '68': { imgData: null, p: '하회탈 양반', a: '윷판에 던지다', o: '윷' },
+    '69': { imgData: null, p: '육군', a: '오리걸음 하다', o: '방탄모' },
+    '70': { imgData: null, p: '외계인', a: '레이저 총 쏘다', o: 'UFO' },
+    '71': { imgData: null, p: '페인트공', a: '페인트칠 하다', o: '페인트통' },
+    '72': { imgData: null, p: '멕시코 사람', a: '칠리소스 뿌리다', o: '칠리' },
+    '73': { imgData: null, p: '권투선수', a: '펀치하다', o: '샌드백' },
+    '74': { imgData: null, p: '청소부', a: '빗자루로 쓸다', o: '쓰레기' },
+    '75': { imgData: null, p: '뮤지션', a: '활을 켜다', o: '첼로' },
+    '76': { imgData: null, p: '체육인', a: '뛰어넘다', o: '뜀틀' },
+    '77': { imgData: null, p: '정원사', a: '분무기 뿌리다', o: '화분' },
+    '78': { imgData: null, p: '선생님', a: '분필로 쓰다', o: '칠판' },
+    '79': { imgData: null, p: '축구선수', a: '슈팅하다', o: '축구공' },
+    '80': { imgData: null, p: '제빵사', a: '밀대로 밀다', o: '팥빵' },
+    '81': { imgData: null, p: '직장인', a: '서류봉투에 넣다', o: '파일' },
+    '82': { imgData: null, p: '파리지앵', a: '파리채로 때리다', o: '파리' },
+    '83': { imgData: null, p: '아인슈타인', a: '현미경으로 보다', o: '전구' },
+    '84': { imgData: null, p: '판사', a: '판결봉으로 치다', o: '법전' },
+    '85': { imgData: null, p: '파라오', a: '붕대로 감다', o: '고양이' },
+    '86': { imgData: null, p: '아기', a: '쪽쪽 빨다', o: '젖병' },
+    '87': { imgData: null, p: '배트맨', a: '거꾸로 매달리다', o: '박쥐' },
+    '88': { imgData: null, p: '아빠', a: '비행기 태우다', o: '신문' },
+    '89': { imgData: null, p: '방귀대장', a: '방귀뀌다', o: '고구마' },
+    '90': { imgData: null, p: '자원봉사자', a: '연탄집게로 집다', o: '구공탄' },
+    '91': { imgData: null, p: '해녀', a: '망에 담다', o: '굴' },
+    '92': { imgData: null, p: '고깃집 알바', a: '꼬챙이로 굽다', o: '소세지' },
+    '93': { imgData: null, p: '고3 학생', a: '책가방에 넣다', o: '필통' },
+    '94': { imgData: null, p: '궁사', a: '활쏘다', o: '사과' },
+    '95': { imgData: null, p: '구미호', a: '꼬리에 달다', o: '여우구슬' },
+    '96': { imgData: null, p: '헬스 트레이너', a: '벤치프레스 하다', o: '바벨' },
+    '97': { imgData: null, p: '범죄자', a: '갇히다', o: '두부' },
+    '98': { imgData: null, p: '무속인', a: '들고 흔들다', o: '부적' },
+    '99': { imgData: null, p: '마술사', a: '입으로 쪼다', o: '비둘기' }
+  };
+
+  let paoData = JSON.parse(JSON.stringify(defaultPaoData));
+  let currentEditKey = '00';
+
+  // === 2. 환경설정 UI 로직 ===
+  function renderMappingGrid() {
+      const grid = document.getElementById('mapping-grid');
+      grid.innerHTML = '';
+      
+      for(let i=0; i<100; i++) {
+          let key = i.toString().padStart(2, '0');
+          const div = document.createElement('div');
+          div.className = `mapping-item ${key === currentEditKey ? 'active' : ''}`;
+          div.innerText = key;
+          div.onclick = () => selectMapping(key);
+          grid.appendChild(div);
+      }
+      // 선택된 항목으로 스크롤 이동
+      const activeEl = grid.querySelector('.active');
+      if(activeEl) activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function selectMapping(key) {
+      currentEditKey = key;
+      renderMappingGrid();
+      
+      const data = paoData[key];
+      document.getElementById('edit-current-num').innerText = key;
+      document.getElementById('edit-p').value = data.p;
+      document.getElementById('edit-a').value = data.a;
+      document.getElementById('edit-o').value = data.o;
+      
+      const previewImg = document.getElementById('edit-img-preview');
+      const previewIcon = document.getElementById('edit-img-icon');
+      const btnClear = document.getElementById('btn-clear-img');
+      
+      if(data.imgData) {
+          previewImg.src = data.imgData;
+          previewImg.style.display = 'block';
+          previewIcon.style.display = 'none';
+          btnClear.style.display = 'block'; // 이미지가 있을 때만 삭제 버튼 표시
+      } else {
+          previewImg.style.display = 'none';
+          previewIcon.style.display = 'block';
+          btnClear.style.display = 'none';
+      }
+  }
+
+  function saveCurrentEdit() {
+      const data = paoData[currentEditKey];
+      data.p = document.getElementById('edit-p').value;
+      data.a = document.getElementById('edit-a').value;
+      data.o = document.getElementById('edit-o').value;
+  }
+
+  // 모달 안에서 설정 저장 버튼 클릭 시 처리
+  function saveSettingsFromModal() {
+      saveCurrentEdit();  // 현재 에디터 내용 안전하게 반영
+      saveGlobalSettings(); // 별도의 환경설정 스토어에 데이터 저장
+      showToast('환경설정이 저장되었습니다.');
+      closeSettingsModal();
+  }
+
+  // 이미지 삭제 로직
+  function clearCurrentImage() {
+      if(confirm('등록된 이미지를 삭제하시겠습니까?')) {
+          paoData[currentEditKey].imgData = null;
+          selectMapping(currentEditKey);
+      }
+  }
+
+  // 이미지 자동 압축 로직 적용 (Canvas API 활용)
+  document.getElementById('image-uploader').addEventListener('change', function(e) {
+      const file = e.target.files[0]; 
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(event) {
+          const img = new Image();
+          img.onload = function() {
+              const canvas = document.createElement('canvas');
+              const MAX_SIZE = 300; // 최대 해상도를 300px로 제한
+              let width = img.width;
+              let height = img.height;
+
+              // 비율 유지하며 사이즈 조정
+              if (width > height && width > MAX_SIZE) {
+                  height *= MAX_SIZE / width;
+                  width = MAX_SIZE;
+              } else if (height > MAX_SIZE) {
+                  width *= MAX_SIZE / height;
+                  height = MAX_SIZE;
+              }
+
+              canvas.width = width;
+              canvas.height = height;
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0, width, height);
+
+              // 용량을 대폭 줄인 jpeg 형식으로 변환 (품질 85%)
+              const compressedBase64 = canvas.toDataURL('image/jpeg', 0.85);
+              
+              paoData[currentEditKey].imgData = compressedBase64;
+              selectMapping(currentEditKey); // UI 업데이트
+          };
+          img.src = event.target.result;
+      };
+      reader.readAsDataURL(file); 
+      e.target.value = '';
+  });
+
+  // 초기화 실행
+  renderMappingGrid();
+  selectMapping('00');
+
+  // 환경설정 모달 제어
+  function openSettingsModal() {
+      document.getElementById('settings-modal').style.display = 'flex';
+      const activeEl = document.querySelector('.mapping-item.active');
+      if(activeEl) activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function closeSettingsModal() {
+      document.getElementById('settings-modal').style.display = 'none';
+  }
+
+  document.getElementById('settings-modal').addEventListener('click', function(e) {
+      if (e.target === this) closeSettingsModal();
+  });
+
+
+  // === 3. 한국어 조사 자동 처리 함수 ===
+  function getJosa(word, josaType) {
+      if (!word) return josaType.split('/')[0];
+      const lastChar = word.charCodeAt(word.length - 1);
+      // 한글 가(44032) ~ 힣(55203) 사이인지 확인
+      if (lastChar < 0xAC00 || lastChar > 0xD7A3) return josaType.split('/')[0]; 
+      
+      const hasJongseong = (lastChar - 44032) % 28 > 0;
+      
+      if (josaType === '이/가') return hasJongseong ? '이' : '가';
+      if (josaType === '을/를') return hasJongseong ? '을' : '를';
+      if (josaType === '은/는') return hasJongseong ? '은' : '는';
+      return '';
+  }
+
+  // === 4. 캔버스 및 위젯 관리 ===
+  const canvas = document.getElementById('a4-canvas');
+  let zIndexCounter = 100;
+  let zoomLevel = 1.0; 
+  let selectedWidget = null;
+
+  const generateId = () => 'w_' + Math.random().toString(36).substr(2, 9);
+
+  const updateZoom = () => {
+    canvas.style.transform = `scale(${zoomLevel})`;
+    document.getElementById('btn-zoom-reset').innerText = Math.round(zoomLevel * 100) + '%';
+  };
+  document.getElementById('btn-zoom-in').onclick = () => { zoomLevel = Math.min(2, zoomLevel + 0.1); updateZoom(); };
+  document.getElementById('btn-zoom-out').onclick = () => { zoomLevel = Math.max(0.3, zoomLevel - 0.1); updateZoom(); };
+  document.getElementById('btn-zoom-reset').onclick = () => { zoomLevel = 1.0; updateZoom(); };
+  updateZoom();
+
+  function clearCanvas() {
+      if(confirm('캔버스를 모두 지우시겠습니까?')) { canvas.innerHTML = ''; }
+  }
+
+  function addWidget(type) {
+    const div = document.createElement('div');
+    div.id = generateId(); 
+    div.className = `widget w-plain`;
+    div.style.left = '100px'; div.style.top = '100px';
+    div.style.zIndex = ++zIndexCounter;
+
+    div.innerHTML = `
+      <div class="drag-handle"><i class="ph ph-dots-six"></i></div>
+      <div class="btn-delete-widget"><i class="ph ph-x"></i></div>
+      <div class="content-area" contenteditable="true" spellcheck="false" style="font-size:20px; font-weight:700;">텍스트를 입력하세요</div>
+    `;
+    canvas.appendChild(div);
+  }
+
+  // === 5. PAO 카드 생성 핵심 로직 ===
+  function generateCard() {
+      const inputEl = document.getElementById('num-sequence');
+      const sequence = inputEl.value.replace(/[^0-9]/g, ''); 
+      
+      if (sequence.length !== 6) return showToast('정확히 6자리 숫자를 입력해주세요.');
+
+      const numP = sequence.slice(0, 2); 
+      const numO = sequence.slice(2, 4); 
+      const numA = sequence.slice(4, 6); 
+
+      const dataP = paoData[numP];
+      const dataO = paoData[numO];
+      const dataA = paoData[numA];
+
+      const getImgHtml = (data) => data.imgData ? `<img src="${data.imgData}">` : `<i class="ph ph-image"></i>`;
+
+      const pWord = dataP.p;
+      const oWord = dataO.o;
+      const aWord = dataA.a;
+      
+      const sentence = `${pWord}<b>${getJosa(pWord, '이/가')}</b> ${oWord}<b>${getJosa(oWord, '을/를')}</b> ${aWord}`;
+
+      const div = document.createElement('div');
+      div.id = generateId(); 
+      div.className = `widget w-mnemonic`;
+      div.style.left = '150px'; div.style.top = '150px';
+      div.style.zIndex = ++zIndexCounter;
+
+      div.innerHTML = `
+        <div class="drag-handle"><i class="ph ph-dots-six"></i></div>
+        <div class="btn-delete-widget"><i class="ph ph-x"></i></div>
+        <div class="content-area">
+            <div class="image-band">
+                <div class="img-box">
+                    ${getImgHtml(dataP)}
+                    <span class="num-tag">${numP}</span>
+                </div>
+                <div class="img-box">
+                    ${getImgHtml(dataO)}
+                    <span class="num-tag">${numO}</span>
+                </div>
+                <div class="img-box">
+                    ${getImgHtml(dataA)}
+                    <span class="num-tag">${numA}</span>
+                </div>
+            </div>
+            <div class="info-band">
+                <input type="text" class="topic-input" placeholder="토픽명 입력">
+                <div class="number-title">${sequence}</div>
+                <div class="pao-sentence" contenteditable="true" spellcheck="false">${sentence}</div>
+                <div class="desc-editor" contenteditable="true" spellcheck="false">암기할 내용을 자유롭게 작성하세요...</div>
+            </div>
+        </div>
+      `;
+      canvas.appendChild(div);
+      inputEl.value = ''; 
+  }
+
+  // === 6. 드래그 및 인터랙션 로직 ===
+  canvas.addEventListener('mousedown', (e) => {
+    const widget = e.target.closest('.widget');
+    if (widget) { 
+        document.querySelectorAll('.widget').forEach(w => w.classList.remove('active'));
+        widget.classList.add('active');
+        widget.style.zIndex = ++zIndexCounter;
+        selectedWidget = widget; 
+    } else {
+        document.querySelectorAll('.widget').forEach(w => w.classList.remove('active'));
+        selectedWidget = null;
+    }
+  });
+
+  let isDragging = false;
+  let dragStartX = 0, dragStartY = 0, initialLeft = 0, initialTop = 0;
+
+  document.addEventListener('mousedown', (e) => {
+    if (e.target.classList.contains('drag-handle') || e.target.closest('.drag-handle')) {
+      isDragging = true;
+      const clickedWidget = e.target.closest('.widget');
+      
+      document.querySelectorAll('.widget').forEach(w => w.classList.remove('active'));
+      clickedWidget.classList.add('active');
+      clickedWidget.style.zIndex = ++zIndexCounter;
+      selectedWidget = clickedWidget;
+      
+      initialLeft = parseFloat(clickedWidget.style.left) || 0;
+      initialTop = parseFloat(clickedWidget.style.top) || 0;
+      
+      const canvasRect = canvas.getBoundingClientRect();
+      dragStartX = (e.clientX - canvasRect.left) / zoomLevel;
+      dragStartY = (e.clientY - canvasRect.top) / zoomLevel;
+    }
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!isDragging || !selectedWidget) return;
+    const canvasRect = canvas.getBoundingClientRect();
+    let currentX = (e.clientX - canvasRect.left) / zoomLevel;
+    let currentY = (e.clientY - canvasRect.top) / zoomLevel;
+    
+    let deltaX = currentX - dragStartX;
+    let deltaY = currentY - dragStartY;
+    
+    selectedWidget.style.left = `${Math.max(0, initialLeft + deltaX)}px`;
+    selectedWidget.style.top = `${Math.max(0, initialTop + deltaY)}px`;
+  });
+
+  document.addEventListener('mouseup', () => { isDragging = false; });
+
+  document.addEventListener('click', (e) => {
+    if (e.target.classList.contains('btn-delete-widget') || e.target.closest('.btn-delete-widget')) {
+      e.target.closest('.widget').remove();
+    }
+  });
+
+  // PDF 다운로드
+  document.getElementById('btn-pdf').onclick = async () => {
+    const docName = document.getElementById('doc-title-input').value.trim() || 'PAO암기장';
+    const originalScale = canvas.style.transform;
+    canvas.style.transform = 'scale(1)'; 
+    canvas.classList.add('printing');
+    
+    document.querySelectorAll('.widget').forEach(w => w.classList.remove('active'));
+    await new Promise(r => setTimeout(r, 100));
+
+    try {
+      const canvasEl = await html2canvas(canvas, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+      const imgData = canvasEl.toDataURL('image/png');
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF('l', 'mm', 'a4');
+      pdf.addImage(imgData, 'PNG', 0, 0, 297, 210);
+      pdf.save(docName + '_' + new Date().toISOString().slice(0,10) + '.pdf');
+    } catch (e) { 
+        alert('PDF 생성에 실패했습니다.'); 
+        console.error(e);
+    } finally {
+      canvas.classList.remove('printing');
+      canvas.style.transform = originalScale;
+    }
+  };
+
+  // 토스트 메시지
+  let toastTimer;
+  function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.innerText = msg;
+      toast.style.opacity = '1';
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { toast.style.opacity = '0'; }, 1000);
+  }
+
+  // === 7. DB 관리 (IndexedDB) 및 단축키 ===
+  const dbName = "PAOBuilderDB";
+  let db;
+  let currentDocId = null; // 현재 작업 중인 문서 ID (null이면 새 문서)
+
+  const request = indexedDB.open(dbName, 1);
+  
+  request.onupgradeneeded = (e) => {
+      db = e.target.result;
+      if (!db.objectStoreNames.contains('documents')) {
+          db.createObjectStore('documents', { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains('settings')) {
+          db.createObjectStore('settings', { keyPath: 'id' });
+      }
+  };
+  request.onsuccess = (e) => { 
+      db = e.target.result; 
+      loadGlobalSettings(); // 시작 시 글로벌 설정 불러오기
+  };
+  request.onerror = (e) => { console.error("IndexedDB Error", e); };
+
+  function newDocument() {
+      if (confirm('캔버스를 비우고 새 문서를 시작하시겠습니까?\n(현재 설정한 PAO 매핑 데이터는 그대로 유지됩니다)')) {
+          currentDocId = null; 
+          canvas.innerHTML = '';
+          document.getElementById('doc-title-input').value = '새 문서';
+          selectMapping('00');
+          showToast('새 문서가 생성되었습니다.');
+      }
+  }
+
+  // === 문서별 저장 로직 (환경설정 매핑 정보는 제외) ===
+  function saveDocument(silent = false) {
+      if (!db) return showToast('데이터베이스 초기화 중입니다.');
+      
+      if (!currentDocId) {
+          currentDocId = Date.now().toString();
+      }
+      
+      const saveData = {
+          id: currentDocId,
+          title: document.getElementById('doc-title-input').value,
+          date: new Date().toLocaleString(),
+          // paoData는 글로벌 설정을 사용하므로 문서별 데이터에서 제외합니다.
+          canvasHTML: canvas.innerHTML
+      };
+
+      const tx = db.transaction('documents', 'readwrite');
+      tx.objectStore('documents').put(saveData);
+      tx.oncomplete = () => {
+          if(!silent) showToast('문서가 저장되었습니다.');
+      };
+      tx.onerror = () => {
+          if(!silent) showToast('저장에 실패했습니다.');
+      };
+  }
+
+  // === 글로벌 설정 불러오기 ===
+  function loadGlobalSettings() {
+      if (!db) return;
+      const tx = db.transaction("settings", "readonly");
+      const store = tx.objectStore("settings");
+      const req = store.get("global_pao");
+      
+      req.onsuccess = (e) => {
+          if (e.target.result && e.target.result.data) {
+              paoData = e.target.result.data;
+              selectMapping(currentEditKey); // UI 갱신
+          }
+      };
+  }
+
+  // === 글로벌 설정 저장 ===
+  function saveGlobalSettings() {
+      if (!db) return;
+      const tx = db.transaction("settings", "readwrite");
+      const store = tx.objectStore("settings");
+      store.put({ id: "global_pao", data: paoData });
+  }
+
+  // === 모달 및 리스트 관리 로직 ===
+  function openLoadModal() {
+      if (!db) return showToast('데이터베이스 초기화 중입니다.');
+      
+      const tx = db.transaction('documents', 'readonly');
+      const req = tx.objectStore('documents').getAll();
+      
+      req.onsuccess = (e) => {
+          const docs = e.target.result;
+          renderDocList(docs);
+          document.getElementById('load-modal').style.display = 'flex';
+      };
+      req.onerror = () => showToast('목록을 불러오는데 실패했습니다.');
+  }
+
+  function closeLoadModal() {
+      document.getElementById('load-modal').style.display = 'none';
+  }
+
+  function renderDocList(docs) {
+      const listEl = document.getElementById('doc-list');
+      listEl.innerHTML = '';
+      
+      // 혹시 과거 데이터에 남아있을지 모를 임시저장용 파일 필터링 유지
+      const filteredDocs = docs.filter(doc => doc.id !== '_autosave_');
+      
+      if (filteredDocs.length === 0) {
+          listEl.innerHTML = '<div style="text-align:center; padding:30px; color:var(--text-muted);">저장된 문서가 없습니다.</div>';
+          return;
+      }
+      
+      // 최신순으로 정렬
+      filteredDocs.sort((a, b) => b.id - a.id);
+      
+      filteredDocs.forEach(doc => {
+          const div = document.createElement('div');
+          div.className = 'doc-item';
+          div.innerHTML = `
+              <div class="doc-info">
+                  <strong>${doc.title || '제목 없음'}</strong>
+                  <span>${doc.date || '날짜 없음'}</span>
+              </div>
+              <div class="doc-actions">
+                  <button class="btn-open" onclick="loadSpecificDoc('${doc.id}')"><i class="ph ph-folder-open"></i> 열기</button>
+                  <button class="btn-delete" onclick="deleteSpecificDoc('${doc.id}')"><i class="ph ph-trash"></i></button>
+              </div>
+          `;
+          listEl.appendChild(div);
+      });
+  }
+
+  function loadSpecificDoc(id) {
+      const tx = db.transaction('documents', 'readonly');
+      const req = tx.objectStore('documents').get(id);
+      
+      req.onsuccess = (e) => {
+          const data = e.target.result;
+          if (data) {
+              currentDocId = data.id;
+              document.getElementById('doc-title-input').value = data.title || '새 문서';
+              // 과거 버전 문서에 종속된 paoData가 있더라도 글로벌 설정 유지를 위해 불러오지 않습니다.
+              if (data.canvasHTML) canvas.innerHTML = data.canvasHTML;
+              selectMapping('00'); // 에디터 뷰 초기화
+              closeLoadModal();
+              showToast('성공적으로 불러왔습니다.');
+          }
+      };
+  }
+
+  function deleteSpecificDoc(id) {
+      if (!confirm('정말 삭제하시겠습니까?')) return;
+      
+      const tx = db.transaction('documents', 'readwrite');
+      tx.objectStore('documents').delete(id);
+      
+      tx.oncomplete = () => {
+          showToast('삭제되었습니다.');
+          // 만약 현재 작업중인 문서를 삭제했다면 새 문서 상태로 전환
+          if (currentDocId === id) {
+              currentDocId = null;
+          }
+          // 리스트 새로고침
+          openLoadModal(); 
+      };
+  }
+
+  // 불러오기 모달 영역 밖 클릭 시 닫기
+  document.getElementById('load-modal').addEventListener('click', function(e) {
+      if (e.target === this) {
+          closeLoadModal();
+      }
+  });
+
+  // 단축키 설정
+  document.addEventListener('keydown', (e) => {
+      // Ctrl + Alt + N (새로생성)
+      if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'n') {
+          e.preventDefault();
+          newDocument();
+      }
+      // Ctrl + S (저장)
+      else if (e.ctrlKey && e.key.toLowerCase() === 's') {
+          e.preventDefault();
+          saveDocument();
+      }
+  });
+
+</script>
+</body>
+</html>

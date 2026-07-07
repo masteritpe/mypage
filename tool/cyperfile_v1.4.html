@@ -1,0 +1,1383 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>문서 암호화</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <style>
+    :root{
+      --bg:#f5f7fb; --card:#fff; --ink:#1f2937; --muted:#6b7280; --line:#e5e7eb;
+      --brand:#2563eb; --brand2:#1d4ed8; --radius:14px; --sel:#dbeafe;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,"Segoe UI","Nanum Gothic",sans-serif;background:var(--bg);color:var(--ink);}
+    header{background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:10;}
+    header .wrap{max-width:1320px;margin:0 auto;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;gap:8px;}
+    header h1{font-size:17px;margin:0;font-weight:700}
+    .layout{max-width:1320px;margin:18px auto;padding:0 16px 30px;display:grid;grid-template-columns:320px 1fr;gap:16px;}
+    .sidebar{display:grid;gap:16px;height:max-content;position:sticky;top:68px}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:0 1px 2px rgba(15,23,42,.03);}
+    .card .hd{padding:13px 16px 10px;border-bottom:1px solid #edf0f3;font-weight:600;display:flex;justify-content:space-between;align-items:center;gap:8px;}
+    .card .bd{padding:12px 16px 16px;display:grid;gap:10px}
+    label{font-size:12px;color:var(--muted);display:block;margin-bottom:4px}
+    input[type="password"], input[type="text"], input[type="search"], select{
+      width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:13px;
+    }
+    button{background:var(--brand);color:#fff;border:0;border-radius:10px;padding:9px 12px;font-weight:600;cursor:pointer;font-size:13px;}
+    button:hover{background:var(--brand2)}
+    .btn-line{background:#fff;border:1px solid var(--line);color:#1f2937}
+    .muted{color:var(--muted);font-size:12px}
+    .content{display:grid;gap:16px;grid-template-rows:1.1fr 0.9fr 0.8fr;min-height:0}
+    .scroll{max-height:220px;overflow:auto;margin-bottom:4px}
+    .scroll.big{max-height:260px}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:8px 10px;text-align:left;border-bottom:1px solid #edf0f3;font-size:13px}
+    th{background:#f3f4f6;font-weight:600}
+    tr:hover{background:#f3f6ff}
+    tr.selected{background:var(--sel) !important}
+    .row-actions{display:flex;align-items:center;gap:4px;flex-wrap:wrap;justify-content:flex-start}
+    .small-btn{padding:0 8px;font-size:12px;height:24px;line-height:22px;border-radius:6px;min-width:48px;text-align:center}
+    .empty{padding:16px 12px;color:var(--muted);font-size:13px}
+    .pill{background:#eef2ff;border-radius:999px;padding:3px 8px;font-size:11px}
+    .code{background:#0b1020;color:#d1e6ff;border-radius:10px;padding:10px;font-size:12px;line-height:1.5;white-space:pre-wrap;max-height:170px;overflow:auto;}
+    .opts-inline{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+    .opts-inline label{display:flex;gap:4px;align-items:center;font-size:11.5px;color:var(--muted);margin-bottom:0}
+
+    .badge-ip{
+      display:inline-flex;
+      align-items:center;
+      padding:2px 6px;
+      border-radius:999px;
+      font-size:10px;
+      background:#eff6ff;
+      color:#1d4ed8;
+      border:1px solid #bfdbfe;
+    }
+    .toast{
+      min-width:180px;
+      margin-top:8px;
+      padding:10px 14px;
+      border-radius:10px;
+      box-shadow:0 6px 20px rgba(15,23,42,.18);
+      color:#fff;
+      font-weight:600;
+      font-size:13px;
+      opacity:0;
+      transform:translateY(6px);
+      transition:opacity .25s, transform .25s;
+    }
+    .toast.show{ opacity:1; transform:translateY(0); }
+    .toast.success{ background:linear-gradient(90deg,#10b981,#059669); }
+    .toast.warn{ background:linear-gradient(90deg,#f59e0b,#d97706); }
+    .toast.error{ background:linear-gradient(90deg,#ef4444,#b91c1c); }
+    @media(max-width:1100px){
+      .layout{grid-template-columns:1fr}
+      .content{grid-template-rows:auto}
+      .sidebar{position:static}
+    }
+	/* 파일명 / 경로가 길어질 경우 자동 줄바꿈 */
+	table td:nth-child(1),
+	table td:nth-child(2) {
+	  white-space: normal !important;
+	  word-break: break-all !important;
+	  line-height: 1.35;
+	}
+
+	/* 줄바꿈 후 경로 요소 간격 유지 */
+	.muted {
+	  display: block;
+	  margin-top: 3px;
+	}	
+	
+/* 둥근 회색 체크박스 (기본 회색, 체크 시 파란 원형 점) */
+input[type="checkbox"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 2px solid #9ca3af;   /* 회색 테두리 */
+  background-color: #fff;
+  cursor: pointer;
+  position: relative;
+  vertical-align: middle;
+  transition: all 0.2s ease;
+}
+
+/* 체크 시 테두리와 내부 점이 파란색으로 변경 */
+input[type="checkbox"]:checked {
+  border-color: #1e90ff;
+  background-color: #fff;
+}
+
+input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  background-color: #1e90ff;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* 포커스 시 부드러운 파란 그림자 효과 */
+input[type="checkbox"]:focus-visible {
+  outline: 2px solid #93c5fd;
+  outline-offset: 2px;
+}
+	
+  </style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>문서 암호화</h1>
+    <div class="muted">로컬 파일 검색 → 암호화/복호화</div>
+  </div>
+</header>
+
+<main class="layout">
+  <aside class="sidebar">
+    <!-- 1) 폴더 선택 -->
+    <section class="card">
+      <div class="hd">
+        <span>1) 폴더 선택</span>
+        <button id="pickDirBtn" class="btn-line">폴더 열기</button>
+      </div>
+      <div class="bd">
+        <div>
+          <label>현재 폴더</label>
+          <div id="currentPath" style="font-size:13px;line-height:1.3">미선택</div>
+        </div>
+        <div class="muted" id="scanState">파일 0개</div>
+        <progress id="scanProgress" max="100" value="0" style="width:100%"></progress>
+      </div>
+    </section>
+
+    <!-- 2) 파일 검색 -->
+    <section class="card">
+      <div class="hd">
+        <span>2) 파일 검색</span>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button id="scanIpBtn" class="btn-line">검색</button>
+          <button id="checkIpMacBtn" class="btn-line">IP/MAC 검사</button>
+        </div>
+      </div>
+      <div class="bd">
+        <div>
+          <label>검색어 (비워두면 전체)</label>
+          <input id="searchQuery" type="search" placeholder="파일명/내용에서 찾기" />
+        </div>
+        <div class="opts-inline">
+          <label><input type="checkbox" id="optName" checked>이름</label>
+          <label><input type="checkbox" id="optContent" checked>내용</label>
+          <label><input type="checkbox" id="optCase">대소문자</label>
+          <label><input type="checkbox" id="optRegex">정규식</label>
+        </div>
+        <div>
+          <label>텍스트 확장자 (내용 검색용)</label>
+          <input id="exts" type="text" value="txt, md, html, css, js, json, csv, log, xml" />
+        </div>
+        <div>
+          <label>내용 검색 최대 크기</label>
+          <select id="sizeLimit">
+            <option value="524288">0.5 MB</option>
+            <option value="1048576" selected>1 MB</option>
+            <option value="2097152">2 MB</option>
+            <option value="4194304">4 MB</option>
+            <option value="6291456">6 MB (Office/HWPX)</option>
+          </select>
+        </div>
+        <div>
+          <label><input type="checkbox" id="optLargeIp"> IP/MAC 검사 시 큰 파일(최대 20MB)도 포함</label>
+        </div>
+        <div>
+          <label><input type="checkbox" id="optIpFilter"> IPv4 내부망 IP 필터링 사용</label>
+        </div>
+        <div class="muted">
+          검색어 없이 “검색”을 누르면 선택한 폴더의 모든 <b>비암호화</b> 파일만 표시합니다. (PDF도 포함)
+        </div>
+      </div>
+    </section>
+
+    <!-- 3) 암호화 / 복호화 -->
+    <section class="card">
+      <div class="hd">
+        <span>3) 암호화 / 복호화</span>
+      </div>
+      <div class="bd">
+        <div>
+          <label>암호(대칭키)</label>
+          <input id="encPassword" type="password" placeholder="같은 걸로 풀기" />
+        </div>
+        <div class="muted">암호화 → 원본 삭제 → <b>이름_(ENC).확장자</b>로 저장</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button id="encryptSelectedBtn" class="small-btn">선택 파일 암호화</button>
+          <button id="encryptAllIpBtn" class="small-btn btn-line">검색 결과 전체 암호화</button>
+        </div>
+        <hr style="border:0;border-top:1px solid #edf0f3">
+        <div>
+          <label>복호화 암호</label>
+          <input id="decPassword" type="password" placeholder="암호화에 쓴 그 암호" />
+        </div>
+        <div class="muted">아래 암호화 목록에 있는 파일을 선택/전체 복호화</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button id="decryptSelectedBtn" class="small-btn btn-line">선택 암호화 파일 복호화</button>
+          <button id="decryptAllBtn" class="small-btn btn-line">암호화 문서 전체 복호화</button>
+          <button id="refreshEncBtn" class="small-btn btn-line">암호화 목록 새로고침</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4) 로그 -->
+    <section class="card">
+      <div class="hd">
+        <span>4) 암호 로그</span>
+        <span id="logCount" class="pill">0건</span>
+      </div>
+      <div class="bd">
+        <div class="muted">파일명·경로·암호를 이 브라우저(IndexDB)에 저장합니다.</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button id="showLogsBtn" class="small-btn btn-line">로그 보기</button>
+          <button id="exportLogsBtn" class="small-btn btn-line">CSV로 내보내기</button>
+          <button id="clearLogsBtn" class="small-btn btn-line">로그 비우기</button>
+        </div>
+      </div>
+    </section>
+  </aside>
+
+  <section class="content">
+    <!-- 검색 결과 -->
+    <section class="card">
+      <div class="hd">
+        <span>검색 결과</span>
+        <span id="ipCount" class="pill">0개</span>
+      </div>
+      <div class="bd" style="display:block">
+        <div class="scroll big">
+          <table>
+            <thead><tr><th style="width:6%"></th>
+			<th style="width:40%">파일</th>
+            <th style="width:32%">경로</th>
+            <th style="width:8%">크기</th>
+            <th style="width:20%">작업</th></tr></thead>
+            <tbody id="ipTableBody">
+            <tr><td colspan="5" class="empty">[파일 검색]을 먼저 하세요.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 암호화된 파일 -->
+    <section class="card">
+      <div class="hd">
+        <span>암호화된 파일(이름에_(ENC))</span>
+        <span id="encCount" class="pill">0개</span>
+      </div>
+      <div class="bd" style="display:block">
+        <div class="scroll">
+          <table>
+            <thead><tr><th style="width:6%"></th><th style="width:45%">파일명</th><th style="width:35%">경로</th><th style="width:20%">작업</th></tr></thead>
+            <tbody id="encTableBody">
+            <tr><td colspan="4" class="empty">암호화된 파일이 없습니다.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 미리보기 -->
+    <section class="card">
+      <div class="hd">
+        <span>미리보기 / 로그 출력</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span id="pvLabel" class="muted"></span>
+        </div>
+      </div>
+      <div class="bd">
+        <div id="pvMeta" class="muted" style="margin-bottom:6px"></div>
+        <div id="pvBox" class="code">(위 표에서 파일/로그를 선택하면 여기 뜹니다)</div>
+      </div>
+    </section>
+  </section>
+  <div id="toastContainer" style="position:fixed;right:20px;bottom:20px;z-index:9999;"></div>
+
+</main>
+
+<script>
+  const $ = s => document.querySelector(s);
+  let dirHandle = null;
+  let files = [];
+  let searchResults = [];
+  let encFound = [];
+  let selectedSearchItem = null;
+  let selectedEncItem = null;
+
+  // IP/MAC 검사 결과
+  let ipMacResults = [];
+  let ipMacExportText = '';
+
+  /* ===== IndexedDB ===== */
+  let encDB = null;
+  function openEncDB(){
+    return new Promise((resolve, reject)=>{
+      const req = indexedDB.open('LocalEncLog', 1);
+      req.onupgradeneeded = (e)=>{
+        const db = e.target.result;
+        if(!db.objectStoreNames.contains('encLogs')){
+          const store = db.createObjectStore('encLogs', {keyPath:'id', autoIncrement:true});
+          store.createIndex('ts','ts',{unique:false});
+        }
+      };
+      req.onsuccess = (e)=>{ encDB = e.target.result; resolve(encDB); };
+      req.onerror = (e)=>{ reject(e); };
+    });
+  }
+  async function addEncLog(op, fileName, filePath, password){
+    if(!encDB) await openEncDB();
+    return new Promise((res,rej)=>{
+      const tx = encDB.transaction('encLogs','readwrite');
+      tx.oncomplete = ()=>res();
+      tx.onerror = e=>rej(e);
+      tx.objectStore('encLogs').add({
+        op, fileName, filePath, password,
+        ts: new Date().toISOString()
+      });
+    });
+  }
+  async function getAllLogs(){
+    if(!encDB) await openEncDB();
+    return new Promise((res,rej)=>{
+      const tx = encDB.transaction('encLogs','readonly');
+      const req = tx.objectStore('encLogs').getAll();
+      req.onsuccess = ()=>res(req.result || []);
+      req.onerror = (e)=>rej(e);
+    });
+  }
+  async function clearAllLogs(){
+    if(!encDB) await openEncDB();
+    return new Promise((res,rej)=>{
+      const tx = encDB.transaction('encLogs','readwrite');
+      const req = tx.objectStore('encLogs').clear();
+      req.onsuccess = ()=>res();
+      req.onerror = (e)=>rej(e);
+    });
+  }
+  async function updateLogCount(){
+    const logs = await getAllLogs();
+    $('#logCount').textContent = logs.length + '건';
+  }
+
+  /* ===== helpers ===== */
+  function utf8ToBase64(str){ return btoa(unescape(encodeURIComponent(str))); }
+  function base64ToUtf8(b64){ return decodeURIComponent(escape(atob(b64))); }
+  function fmtBytes(b){ if(!b) return '0 B'; const k=1024,s=['B','KB','MB','GB']; const i=Math.floor(Math.log(b)/Math.log(k)); return (b/Math.pow(k,i)).toFixed(1)+' '+s[i]; }
+  function escapeHtml(str){ return String(str).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
+  function isOffice(n){ n=n.toLowerCase(); return n.endsWith('.docx')||n.endsWith('.xlsx')||n.endsWith('.pptx'); }
+  function isHwp(n){ return n.toLowerCase().endsWith('.hwp'); }
+  function isHwpx(n){ return n.toLowerCase().endsWith('.hwpx'); }
+  function isTextLike(n,m){
+    const ex = $('#exts') ? $('#exts').value.split(',').map(x=>x.trim().toLowerCase()).filter(Boolean) : ['txt','md','html','css','js','json','csv','log','xml'];
+    n = n.toLowerCase();
+    return ex.some(e=>n.endsWith('.'+e)) || (m && m.startsWith('text/'));
+  }
+  function makeEncName(orig){
+    const i = orig.lastIndexOf('.');
+    if(i === -1) return orig + '_(ENC)';
+    return orig.slice(0,i) + '_(ENC)' + orig.slice(i);
+  }
+  function removeEncFromName(name){
+    const m = name.match(/(.*)_(ENC)(\.[^.]*)?$/i);
+    if(m) return (m[1]) + (m[3]||'');
+    return name;
+  }
+  function isEncFile(name){
+    return /_(ENC)(\.[^.]*)?$/i.test(name) || /\(ENC\)(\.[^.]*)?$/i.test(name);
+  }
+  function upsertFileInList(path, handle, name){
+    const idx = files.findIndex(f => f.path === path);
+    if(idx >= 0){
+      files[idx].handle = handle;
+      files[idx].name = name;
+    } else {
+      files.push({handle, name, path});
+    }
+  }
+
+  /* ===== dir walk ===== */
+  async function* walk(dir, prefix=''){
+    for await (const [name,entry] of dir.entries()){
+      const path = prefix ? `${prefix}/${name}` : name;
+      if(entry.kind === 'file') yield {handle:entry, name, path};
+      else if(entry.kind === 'directory') yield* walk(entry, path);
+    }
+  }
+  async function indexDirectory(){
+    if(!dirHandle) return;
+    files = [];
+    $('#scanState').textContent = '스캔 중...';
+    let cnt=0;
+    for await (const f of walk(dirHandle)){
+      files.push({handle:f.handle, name:f.name, path:f.path});
+      cnt++;
+    }
+    $('#scanState').textContent = `파일 ${cnt}개`;
+    await refreshEncList();
+  }
+  async function deleteFileAtPath(root, relPath){
+    const parts = relPath.split('/').filter(Boolean);
+    const fileName = parts.pop();
+    let cur = root;
+    for(const p of parts){
+      cur = await cur.getDirectoryHandle(p, {create:false});
+    }
+    await cur.removeEntry(fileName);
+  }
+
+  async function getParentDirectoryHandle(relPath){
+    const parts = relPath.split('/').filter(Boolean);
+    parts.pop(); // filename 제거
+    let cur = dirHandle;
+    for(const p of parts){
+      cur = await cur.getDirectoryHandle(p, {create:false});
+    }
+    return cur;
+  }
+
+  /* ===== 텍스트 추출 ===== */
+  async function extractTextFromOffice(fileObj){
+    const ab = await fileObj.arrayBuffer();
+    const zip = await JSZip.loadAsync(ab);
+    if(zip.files['word/document.xml']){
+      const xml = await zip.files['word/document.xml'].async('string');
+      return xml.replace(/<[^>]+>/g,' ');
+    }
+    if(zip.files['xl/sharedStrings.xml']){
+      const xml = await zip.files['xl/sharedStrings.xml'].async('string');
+      return xml.replace(/<[^>]+>/g,' ');
+    }
+    const slides = Object.keys(zip.files).filter(n=>n.startsWith('ppt/slides/slide') && n.endsWith('.xml'));
+    if(slides.length){
+      let out = '';
+      for(const s of slides){
+        const xml = await zip.files[s].async('string');
+        out += ' ' + xml.replace(/<[^>]+>/g,' ');
+      }
+      return out;
+    }
+    return '';
+  }
+  async function extractTextFromHwp(fileObj){
+    const ab = await fileObj.arrayBuffer();
+    try{
+      const td = new TextDecoder('utf-16le');
+      return td.decode(ab).replace(/\0/g,' ');
+    }catch(e){ return ''; }
+  }
+  async function extractTextFromHwpx(fileObj){
+    const ab = await fileObj.arrayBuffer();
+    const zip = await JSZip.loadAsync(ab);
+    const names = Object.keys(zip.files);
+    let out = '';
+
+    const previewKey = names.find(n => n.toLowerCase() === 'preview/prvtext.txt');
+    if(previewKey){
+      const pv = await zip.files[previewKey].async('string');
+      out += ' ' + pv;
+    }
+
+    const contentKeys = names.filter(n => n.toLowerCase().startsWith('contents/') && n.toLowerCase().endsWith('.xml'));
+    for(const ck of contentKeys){
+      const xml = await zip.files[ck].async('string');
+      out += ' ' + xml.replace(/<[^>]+>/g,' ');
+    }
+
+    if(!out.trim()){
+      const xmlKeys = names.filter(n => n.toLowerCase().endsWith('.xml'));
+      for(const xk of xmlKeys){
+        const xml = await zip.files[xk].async('string');
+        out += ' ' + xml.replace(/<[^>]+>/g,' ');
+      }
+    }
+    return out;
+  }
+
+  /* ===== 파일 검색 ===== */
+  function makeMatcher(query, {regex, cs}){
+    if(!regex){
+      const flags = cs ? 'g' : 'gi';
+      const safe = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return new RegExp(safe, flags);
+    } else {
+      try { return new RegExp(query, cs ? 'g' : 'gi'); }
+      catch(e){ alert('정규식 구문 오류: '+e.message); return null; }
+    }
+  }
+
+  async function searchFiles(){
+    if(!dirHandle){ alert('먼저 폴더를 선택하세요.'); return; }
+
+    const q = $('#searchQuery').value.trim();
+    const byName = $('#optName').checked;
+    const byContent = $('#optContent').checked;
+    const cs = $('#optCase').checked;
+    const regex = $('#optRegex').checked;
+    const sizeLimit = parseInt($('#sizeLimit').value,10) || 1_048_576;
+
+    if(!q){
+      searchResults = [];
+      for(const f of files){
+        if(isEncFile(f.name)) continue;
+        let size = 0;
+        try{
+          const fo = await f.handle.getFile();
+          size = fo.size || 0;
+        }catch(e){}
+        searchResults.push({
+          handle:f.handle,
+          name:f.name,
+          path:f.path,
+          size:size,
+          sample:'',
+          hasIpMac:false
+        });
+      }
+      renderSearchTable();
+      $('#pvLabel').textContent = '';
+      $('#pvMeta').textContent = '';
+      $('#pvBox').textContent = '(위 표에서 파일/로그를 선택하면 여기 뜹니다)';
+      return;
+    }
+
+    const matcher = makeMatcher(q, {regex, cs});
+    if(!matcher) return;
+
+    searchResults = [];
+    $('#ipTableBody').innerHTML = `<tr><td colspan="5" class="empty">검색 중...</td></tr>`;
+
+    for(const f of files){
+      if(isEncFile(f.name)) continue;
+
+      let hit = false;
+      let sample = '';
+
+      if(byName){
+        if(matcher.test(f.name) || matcher.test(f.path)){
+          hit = true;
+          sample = '(파일명/경로 일치)';
+        }
+      }
+
+      if(!hit && byContent){
+        try{
+          const fo = await f.handle.getFile();
+          if(fo.size <= sizeLimit){
+            let text = '';
+            if(isTextLike(f.name, fo.type)){
+              text = await fo.text();
+            } else if(isOffice(f.name) && fo.size <= 6_291_456){
+              text = await extractTextFromOffice(fo);
+            } else if(isHwp(f.name) && fo.size <= 6_291_456){
+              text = await extractTextFromHwp(fo);
+            } else if(isHwpx(f.name) && fo.size <= 6_291_456){
+              text = await extractTextFromHwpx(fo);
+            }
+            if(text && matcher.test(text)){
+              hit = true;
+              sample = text.slice(0,120);
+            }
+          }
+        }catch(e){
+          console.warn('[searchFiles] 내용 검색 실패', f.path, e);
+        }
+      }
+
+      if(hit){
+        let size = 0;
+        try{
+          const fo = await f.handle.getFile();
+          size = fo.size || 0;
+        }catch(e){}
+        searchResults.push({
+          handle:f.handle,
+          name:f.name,
+          path:f.path,
+          size:size,
+          sample:sample,
+          hasIpMac:false
+        });
+      }
+    }
+    renderSearchTable();
+    $('#pvLabel').textContent = '';
+    $('#pvMeta').textContent = `검색 결과 ${searchResults.length}개`;
+    $('#pvBox').textContent = '(위 표에서 파일을 선택해 작업하세요)';
+  }
+
+  function renderSearchTable(){
+    const tb = $('#ipTableBody');
+    tb.innerHTML = '';
+    $('#ipCount').textContent = searchResults.length + '개';
+    if(!searchResults.length){
+      tb.innerHTML = `<tr><td colspan="5" class="empty">표시할 파일이 없습니다.</td></tr>`;
+      return;
+    }
+    searchResults.sort((a,b)=>a.path.localeCompare(b.path));
+    searchResults.forEach((item, idx) => {
+      const tr = document.createElement('tr');
+      tr.dataset.idx = idx;
+      tr.innerHTML = `
+        <td><input type="checkbox" class="sel-search"></td>
+        <td>
+          <div style="font-weight:600;display:flex;align-items:center;gap:6px">
+            ${escapeHtml(item.name)}${item.hasIpMac ? '<span class="badge-ip">IP/MAC</span>' : ''}
+          </div>
+          <div class="muted">${escapeHtml(item.sample || '')}</div>
+        </td>
+        <td>${escapeHtml(item.path)}</td>
+        <td>${fmtBytes(item.size)}</td>
+        <td>
+          <div class="row-actions">
+            <button class="small-btn" data-action="enc">암호</button>
+            <button class="small-btn btn-line" data-action="view">보기</button>
+            <button class="small-btn btn-line" data-action="download">다운</button>
+          </div>
+        </td>`;
+      tr.querySelector('[data-action="enc"]').onclick = async () => {
+        selectedSearchItem = item;
+        await encryptSingleSearchItem();
+      };
+      tr.querySelector('[data-action="view"]').onclick = async () => {
+        selectedSearchItem = item;
+        await showPreviewOriginal(item);
+      };
+      tr.querySelector('[data-action="download"]').onclick = async () => {
+        await downloadFileHandle(item.handle, item.name);
+      };
+      tb.appendChild(tr);
+    });
+  }
+
+  function getSelectedSearchItems(){
+    const rows = document.querySelectorAll('#ipTableBody tr');
+    const items = [];
+    rows.forEach(tr => {
+      const cb = tr.querySelector('input.sel-search');
+      if(cb && cb.checked){
+        const idx = parseInt(tr.dataset.idx, 10);
+        if(!Number.isNaN(idx) && searchResults[idx]){
+          items.push(searchResults[idx]);
+        }
+      }
+    });
+    return items;
+  }
+
+  async function showPreviewOriginal(item){
+    $('#pvLabel').textContent = item.path;
+    $('#pvMeta').textContent = '원본 파일 미리보기';
+    try{
+      const f = await item.handle.getFile();
+      let out = '';
+      if(isTextLike(item.name, f.type)) out = (await f.text()).slice(0,2000);
+      else if(isOffice(item.name)) out = (await extractTextFromOffice(f)).slice(0,2000);
+      else if(isHwp(item.name)) out = (await extractTextFromHwp(f)).slice(0,2000);
+      else if(isHwpx(item.name)) out = (await extractTextFromHwpx(f)).slice(0,2000);
+      else out = '(이 형식은 텍스트 미리보기가 어렵습니다)';
+      $('#pvBox').textContent = out || '(내용이 없습니다)';
+    }catch(e){
+      $('#pvBox').textContent = '이 형식은 텍스트 미리보기가 어렵습니다 (예: PDF)';
+    }
+  }
+
+  async function showPreviewEnc(item){
+    $('#pvLabel').textContent = item.path;
+    $('#pvMeta').textContent = '암호화(base64) 파일';
+    try{
+      const f = await item.handle.getFile();
+      const txt = (await f.text()).trim();
+      $('#pvBox').textContent = txt.length>300 ? txt.slice(0,300)+' ...' : txt;
+    }catch(e){
+      $('#pvBox').textContent = '열 수 없습니다: ' + e.message;
+    }
+  }
+
+  /* ===== IP / MAC 검사 ===== */
+  const ipv4rx = /\b(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}\b/g;
+  const ipv6rx = /\b(?=[0-9A-F]*[A-F][0-9A-F:]*)(?:[0-9A-F]{1,4}:){2,7}[0-9A-F]{1,4}\b/ig;
+  const macrx  = /\b(?:[0-9A-Fa-f]{2}[-:]){5}[0-9A-Fa-f]{2}\b/g;
+
+  const ipv4Prefixes = ['10.2.9.', '10.180.1.', '10.17.20.', '192.168.236.'];
+
+  const IPMAC_SOFT_LIMIT = 6_291_456;
+  const IPMAC_HARD_LIMIT = 20_000_000;
+
+  function showToast(msg, type = 'success', ttl = 2600){
+    const cont = document.getElementById('toastContainer');
+    if(!cont) return;
+    const el = document.createElement('div');
+    el.className = 'toast ' + type;
+    el.textContent = msg;
+    cont.appendChild(el);
+    requestAnimationFrame(()=> el.classList.add('show'));
+    setTimeout(()=>{
+      el.classList.remove('show');
+      setTimeout(()=> cont.removeChild(el), 260);
+    }, ttl);
+  }
+
+  async function runIpMacCheck(){
+    if(!dirHandle){ alert('먼저 폴더를 선택하세요.'); return; }
+
+    ipMacResults = [];
+    ipMacExportText = '';
+
+    // 이전 검사 표시 초기화
+    if(Array.isArray(searchResults)){
+      for(const it of searchResults){
+        if(it && typeof it === 'object') it.hasIpMac = false;
+      }
+    }
+
+    // searchResults 우선, 없으면 전체 비암호화 파일
+    let candidates = (Array.isArray(searchResults) && searchResults.length)
+      ? [...searchResults]
+      : files.filter(f => !isEncFile(f.name));
+
+    if(!candidates.length){
+      showToast('검사할 파일이 없습니다.', 'warn');
+      return;
+    }
+
+    const includeLarge = $('#optLargeIp') && $('#optLargeIp').checked;
+    const hardLimit = includeLarge ? IPMAC_HARD_LIMIT : IPMAC_SOFT_LIMIT;
+
+    $('#pvLabel').textContent = 'IP/MAC 검사 결과';
+    $('#pvMeta').textContent = `대상 ${candidates.length}개 (최대 ${fmtBytes(hardLimit)}까지 검사)`;
+    $('#pvBox').textContent = '(검사 중입니다...)';
+
+    const sizeLimit = parseInt($('#sizeLimit').value,10) || 1_048_576;
+    const textLimit = Math.min(sizeLimit, hardLimit);
+    const results = [];
+    const pathSet = new Set();
+    let totalBytes = 0;
+
+    for(const item of candidates){
+      try{
+        const fo = await item.handle.getFile();
+        const fsize = fo.size || 0;
+
+        totalBytes += fsize;
+        if(totalBytes > hardLimit) break;
+
+        let text = '';
+        if(isTextLike(item.name, fo.type) && fsize <= textLimit){
+          text = await fo.text();
+        }else if(isOffice(item.name) && fsize <= 6_291_456){
+          text = await extractTextFromOffice(fo);
+        }else if(isHwp(item.name) && fsize <= 6_291_456){
+          text = await extractTextFromHwp(fo);
+        }else if(isHwpx(item.name) && fsize <= 6_291_456){
+          text = await extractTextFromHwpx(fo);
+        }
+
+        if(!text) continue;
+
+        let ipv4 = Array.from(text.matchAll(ipv4rx)).map(m=>m[0]);
+        const ipv6 = Array.from(text.matchAll(ipv6rx)).map(m=>m[0]);
+        const mac  = Array.from(text.matchAll(macrx)).map(m=>m[0]);
+
+        const ipFilterOpt = $('#optIpFilter');
+        const useIpFilter = ipFilterOpt && ipFilterOpt.checked;
+        if(useIpFilter && ipv4Prefixes && ipv4Prefixes.length){
+          ipv4 = ipv4.filter(ip => ipv4Prefixes.some(p => ip.startsWith(p)));
+        }
+
+        if(ipv4.length || ipv6.length || mac.length){
+          const uniq = arr => Array.from(new Set(arr));
+          const entry = {
+            handle: item.handle,
+            name: item.name,
+            path: item.path,
+            size: fsize,
+            ipv4: uniq(ipv4).slice(0,5),
+            ipv6: uniq(ipv6).slice(0,3),
+            mac:  uniq(mac).slice(0,5)
+          };
+          results.push(entry);
+          pathSet.add(item.path);
+        }
+      }catch(e){
+        console.warn('[runIpMacCheck] 실패', item.path, e);
+      }
+    }
+
+    // 기존 searchResults에도 배지 플래그 남겨두기
+    if(pathSet.size && Array.isArray(searchResults)){
+      for(const it of searchResults){
+        if(pathSet.has(it.path)) it.hasIpMac = true;
+      }
+    }
+
+    ipMacResults = results;
+
+    // "IP/MAC 검출된 파일만"으로 검색 결과 재구성
+    if(results.length){
+      searchResults = results.map(r => ({
+        handle: r.handle,
+        name: r.name,
+        path: r.path,
+        size: r.size,
+        sample: r.ipv4[0] || r.ipv6[0] || r.mac[0] || '',
+        hasIpMac: true
+      }));
+      renderSearchTable();
+    }else{
+      renderSearchTable();
+      $('#pvMeta').textContent = 'IP / MAC 주소가 발견되지 않았습니다.';
+      $('#pvBox').textContent = '(검색 대상에서 IP/MAC 패턴이 발견되지 않았습니다)';
+      showToast('검사 완료 — IP/MAC 없음', 'success');
+      return;
+    }
+
+    let lines = [];
+    results.forEach((r, idx)=>{
+      lines.push(`${idx+1}. 파일: ${r.name}`);
+      lines.push(`   경로: ${r.path}`);
+      lines.push(`   크기: ${fmtBytes(r.size)}`);
+      if(r.ipv4.length) lines.push(`   IPv4 예: ${r.ipv4.join(', ')}`);
+      if(r.ipv6.length) lines.push(`   IPv6 예: ${r.ipv6.join(', ')}`);
+      if(r.mac.length)  lines.push(`   MAC 예: ${r.mac.join(', ')}`);
+      lines.push('');
+    });
+
+    ipMacExportText = lines.join('\n').trim();
+    $('#pvMeta').textContent = `발견 ${results.length}개 (IP/MAC 포함 파일)`;
+    $('#pvBox').textContent = ipMacExportText || '(결과 텍스트가 없습니다)';
+    if(ipMacExportText){
+      autoDownloadIpMac(ipMacExportText);
+    }
+    showToast(`검사 완료 — 발견 ${results.length}개`, 'warn');
+  }
+
+  function autoDownloadIpMac(text){
+    if(!text) return;
+    const now = new Date();
+    const pad = n => String(n).padStart(2,'0');
+    const fname = `IPMAC_검사결과_${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}.txt`;
+    const blob = new Blob([text], {type:'text/plain;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fname;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(()=>{
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 100);
+  }
+
+  /* ===== crypto ===== */
+  function toBase64(buf){
+    const bytes = new Uint8Array(buf);
+    let binary = '';
+    const len = bytes.length;
+    for(let i = 0; i < len; i++){
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
+  }
+  function fromBase64(b64){
+    const bin=atob(b64);
+    const arr=new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
+    return arr.buffer;
+  }
+
+  // ArrayBuffer → hex 문자열
+  function bufferToHex(buf){
+    const bytes = new Uint8Array(buf);
+    let out = '';
+    for(const b of bytes){
+      out += b.toString(16).padStart(2,'0');
+    }
+    return out;
+  }
+
+  async function deriveKeyFromPassword(password, salt, iter=150000){
+    const pw = new TextEncoder().encode(password);
+    const baseKey = await crypto.subtle.importKey('raw', pw, 'PBKDF2', false, ['deriveKey']);
+    return crypto.subtle.deriveKey(
+      {name:'PBKDF2', salt, iterations:iter, hash:'SHA-256'},
+      baseKey,
+      {name:'AES-GCM', length:256},
+      false,
+      ['encrypt','decrypt']
+    );
+  }
+
+  // LOCALENCv2: meta(ctLen, ptSize, ptSha256) 포함
+  async function encryptArrayBuffer(ab, password){
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const iv   = crypto.getRandomValues(new Uint8Array(12));
+    const key  = await deriveKeyFromPassword(password, salt);
+
+    const ctBuf = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, ab);
+    const ct    = new Uint8Array(ctBuf);
+
+    const plain = new Uint8Array(ab);
+    const hashBuf = await crypto.subtle.digest('SHA-256', plain);
+    const hashHex = bufferToHex(hashBuf);
+
+    return {
+      magic:'LOCALENCv2',
+      salt:toBase64(salt.buffer),
+      iv:toBase64(iv.buffer),
+      name:'',
+      ciphertext:toBase64(ct.buffer),
+      meta:{
+        ctLen: ct.length,
+        ptSize: plain.length,
+        ptSha256: hashHex
+      }
+    };
+  }
+
+  function parseEncryptedText(txt){
+    const t = txt.trim();
+    if(t.startsWith('{')) return JSON.parse(t);
+    return JSON.parse(base64ToUtf8(t));
+  }
+
+  // LOCALENCv1, LOCALENCv2 모두 지원 + v2는 길이/해시 검증
+  async function decryptContainerText(encText, password){
+    const obj = parseEncryptedText(encText);
+    if(!obj || !obj.magic) throw new Error('지원하지 않는 포맷');
+
+    if(obj.magic !== 'LOCALENCv1' && obj.magic !== 'LOCALENCv2'){
+      throw new Error('지원하지 않는 포맷(magic=' + obj.magic + ')');
+    }
+
+    const saltBuf = fromBase64(obj.salt);
+    const ivBuf   = fromBase64(obj.iv);
+    const ctBuf   = fromBase64(obj.ciphertext);
+
+    const salt = new Uint8Array(saltBuf);
+    const iv   = new Uint8Array(ivBuf);
+    const ct   = new Uint8Array(ctBuf);
+
+    // v2: 암호문 길이 사전검증
+    if(obj.magic === 'LOCALENCv2' && obj.meta && typeof obj.meta.ctLen === 'number'){
+      if(obj.meta.ctLen !== ct.length){
+        throw new Error(
+          `ciphertext 길이 불일치 (기대=${obj.meta.ctLen}, 실제=${ct.length}) → 저장/전송 중 암호 파일이 손상되었을 가능성이 큼`
+        );
+      }
+    }
+
+    const key  = await deriveKeyFromPassword(password, salt);
+
+    let plain;
+    try{
+      plain = await crypto.subtle.decrypt({name:'AES-GCM', iv}, key, ct);
+    }catch(e){
+      if(obj.magic === 'LOCALENCv2'){
+        throw new Error('AES-GCM 복호화 실패 (비밀번호 오류 또는 암호 파일 손상 가능)');
+      }
+      throw e;
+    }
+
+    // v2: 평문 길이/해시 검증
+    if(obj.magic === 'LOCALENCv2' && obj.meta){
+      const meta = obj.meta;
+      const plainArr = new Uint8Array(plain);
+
+      if(typeof meta.ptSize === 'number' && meta.ptSize !== plainArr.length){
+        throw new Error(
+          `복호화 평문 길이 불일치 (기대=${meta.ptSize}, 실제=${plainArr.length}) → 암호 파일이 부분적으로 손상되었을 수 있습니다`
+        );
+      }
+
+      if(meta.ptSha256){
+        const hashBuf2 = await crypto.subtle.digest('SHA-256', plainArr);
+        const hashHex2 = bufferToHex(hashBuf2);
+        if(hashHex2 !== meta.ptSha256){
+          throw new Error(
+            '복호화된 평문의 해시가 저장된 해시와 일치하지 않습니다. (파일 손상 또는 잘못된 비밀번호 가능성이 매우 큼)'
+          );
+        }
+      }
+    }
+
+    return {plain, meta:obj};
+  }
+
+  async function writeFileAtPath(root, relPath, fileName, contents){
+    const parts = relPath.split('/').filter(Boolean);
+    const dirs  = parts.slice(0,-1);
+    let cur = root;
+    for(const d of dirs){
+      cur = await cur.getDirectoryHandle(d, {create:true});
+    }
+    const fh = await cur.getFileHandle(fileName, {create:true});
+    const w  = await fh.createWritable();
+    await w.write(contents);
+    await w.close();
+    return fh;
+  }
+
+  /* ===== 암호화 1개 (선택) ===== */
+  async function encryptSingleSearchItem(){
+    const pw = $('#encPassword').value;
+    if(!pw){ alert('암호를 입력하세요.'); return; }
+
+    const targets = getSelectedSearchItems();
+    if(!targets.length){
+      alert('암호화할 파일을 검색 결과에서 체크박스로 선택하세요.');
+      return;
+    }
+
+    for(const item of targets){
+      try{
+        const f  = await item.handle.getFile();
+        const ab = await f.arrayBuffer();
+        const cont = await encryptArrayBuffer(ab, pw);
+        cont.name  = f.name;
+        const encStr = utf8ToBase64(JSON.stringify(cont));
+        const encName= makeEncName(f.name);
+        await writeFileAtPath(dirHandle, item.path, encName, encStr);
+
+        await addEncLog(
+          'encrypt',
+          f.name + ' → ' + encName,
+          item.path.replace(/[^/]+$/, encName),
+          pw
+        );
+
+        try{ await deleteFileAtPath(dirHandle, item.path); }catch(e){}
+
+        files = files.filter(ff => ff.path !== item.path);
+
+        const encPath = item.path.replace(/[^/]+$/, encName);
+        const parts = encPath.split('/').filter(Boolean);
+        let cur = dirHandle;
+        for(let i=0;i<parts.length-1;i++){
+          cur = await cur.getDirectoryHandle(parts[i], {create:false});
+        }
+        const encHandle = await cur.getFileHandle(parts[parts.length-1], {create:false});
+        upsertFileInList(encPath, encHandle, encName);
+      }catch(e){
+        console.warn('암호화 실패', item.path, e);
+      }
+    }
+    await updateLogCount();
+    await refreshEncList();
+    alert('선택한 파일 암호화 완료');
+    await searchFiles();
+  }
+
+  /* ===== 검색 결과 전체 암호화 ===== */
+  async function encryptAllSearchItems(){
+    const pw = $('#encPassword').value;
+    if(!pw){ alert('암호를 입력하세요.'); return; }
+    if(!searchResults.length){ alert('암호화할 검색 결과가 없습니다.'); return; }
+    if(!confirm('검색 결과 '+searchResults.length+'개를 모두 암호화하고 원본을 삭제할까요?')) return;
+
+    for(const item of searchResults){
+      try{
+        const f  = await item.handle.getFile();
+        const ab = await f.arrayBuffer();
+        const cont = await encryptArrayBuffer(ab, pw);
+        cont.name  = f.name;
+        const encStr = utf8ToBase64(JSON.stringify(cont));
+        const encName= makeEncName(f.name);
+        await writeFileAtPath(dirHandle, item.path, encName, encStr);
+
+        await addEncLog(
+          'encrypt',
+          f.name + ' → ' + encName,
+          item.path.replace(/[^/]+$/, encName),
+          pw
+        );
+
+        try{ await deleteFileAtPath(dirHandle, item.path); }catch(e){}
+
+        files = files.filter(ff => ff.path !== item.path);
+
+        const encPath = item.path.replace(/[^/]+$/, encName);
+        const parts = encPath.split('/').filter(Boolean);
+        let cur = dirHandle;
+        for(let i=0;i<parts.length-1;i++){
+          cur = await cur.getDirectoryHandle(parts[i], {create:false});
+        }
+        const encHandle = await cur.getFileHandle(parts[parts.length-1], {create:false});
+        upsertFileInList(encPath, encHandle, encName);
+      }catch(e){
+        console.warn('암호화 실패', item.path, e);
+      }
+    }
+    await updateLogCount();
+    await refreshEncList();
+    alert('검색 결과 전체 암호화 완료');
+    await searchFiles();
+  }
+
+  /* ===== 암호화 목록 ===== */
+  async function refreshEncList(){
+    const seen = new Set();
+    files = files.filter(f => {
+      if(seen.has(f.path)) return false;
+      seen.add(f.path);
+      return true;
+    });
+
+    encFound = files.filter(f => isEncFile(f.name));
+    const tb = $('#encTableBody');
+    tb.innerHTML = '';
+    $('#encCount').textContent = encFound.length + '개';
+    if(!encFound.length){
+      tb.innerHTML = `<tr><td colspan="4" class="empty">암호화된 파일이 없습니다.</td></tr>`;
+      return;
+    }
+    encFound.sort((a,b)=>a.path.localeCompare(b.path));
+    encFound.forEach((item, idx)=>{
+      const tr = document.createElement('tr');
+      tr.dataset.idx = idx;
+      tr.innerHTML = `
+        <td><input type="checkbox" class="sel-enc"></td>
+        <td>${escapeHtml(item.name)}</td>
+        <td>${escapeHtml(item.path)}</td>
+        <td>
+          <div class="row-actions">
+            <button class="small-btn" data-action="view">보기</button>
+          </div>
+        </td>`;
+      tr.querySelector('[data-action="view"]').onclick = async () => {
+        selectedEncItem = item;
+        markEncSelected(idx);
+        await showPreviewEnc(item);
+      };
+      tb.appendChild(tr);
+    });
+  }
+  function markEncSelected(idx){
+    document.querySelectorAll('#encTableBody tr').forEach(tr=>tr.classList.remove('selected'));
+    const row = document.querySelector(`#encTableBody tr[data-idx="${idx}"]`);
+    if(row) row.classList.add('selected');
+  }
+
+  function getSelectedEncItems(){
+    const rows = document.querySelectorAll('#encTableBody tr');
+    const items = [];
+    rows.forEach(tr => {
+      const cb = tr.querySelector('input.sel-enc');
+      if(cb && cb.checked){
+        const idx = parseInt(tr.dataset.idx, 10);
+        if(!Number.isNaN(idx) && encFound[idx]){
+          items.push(encFound[idx]);
+        }
+      }
+    });
+    return items;
+  }
+
+  /* ===== 복호화 1개(선택) ===== */
+  async function decryptSelectedEnc(){
+    const pw = $('#decPassword').value;
+    if(!pw){ alert('복호화 암호를 입력하세요.'); return; }
+
+    const targets = getSelectedEncItems();
+    if(!targets.length){
+      alert('복호화할 암호화 파일을 체크박스로 선택하세요.');
+      return;
+    }
+
+    const failed = [];
+    for(const item of targets){
+      try{
+        const f   = await item.handle.getFile();
+        const txt = await f.text();
+        const {plain, meta} = await decryptContainerText(txt, pw);
+        const origName = meta && meta.name ? meta.name : removeEncFromName(item.name);
+
+        await writeFileAtPath(dirHandle, item.path, origName, plain);
+
+        await addEncLog(
+          'decrypt',
+          item.name + ' → ' + origName,
+          item.path.replace(/[^/]+$/, origName),
+          pw
+        );
+        await updateLogCount();
+
+        const origPath = item.path.replace(/[^/]+$/, origName);
+        const parts = origPath.split('/').filter(Boolean);
+        let cur = dirHandle;
+        for(let i=0;i<parts.length-1;i++){
+          cur = await cur.getDirectoryHandle(parts[i], {create:false});
+        }
+        const origHandle = await cur.getFileHandle(parts[parts.length-1], {create:false});
+        upsertFileInList(origPath, origHandle, origName);
+
+        try{
+          await deleteFileAtPath(dirHandle, item.path);
+        }catch(e){ console.warn('ENC 삭제 실패', e); }
+        files = files.filter(ff => ff.path !== item.path);
+      }catch(e){
+        failed.push(item.path + ' : ' + e.message);
+      }
+    }
+
+    await refreshEncList();
+    if(failed.length){
+      alert('일부 파일은 복호화하지 못했습니다:\n' + failed.join('\n'));
+    }else{
+      alert('선택한 파일 복호화 완료');
+    }
+    await searchFiles();
+  }
+
+  /* ===== 복호화 전체 ===== */
+  async function decryptAllEnc(){
+    const pw = $('#decPassword').value;
+    if(!pw){ alert('복호화 암호를 입력하세요.'); return; }
+    if(!encFound.length){ alert('복호화할 암호화 파일이 없습니다.'); return; }
+    if(!confirm('암호화된 파일 '+encFound.length+'개를 모두 복호화할까요?')) return;
+
+    const failed = [];
+    for(const item of encFound){
+      try{
+        const f   = await item.handle.getFile();
+        const txt = await f.text();
+        const {plain, meta} = await decryptContainerText(txt, pw);
+        const origName = meta && meta.name ? meta.name : removeEncFromName(item.name);
+
+        await writeFileAtPath(dirHandle, item.path, origName, plain);
+
+        await addEncLog(
+          'decrypt',
+          item.name + ' → ' + origName,
+          item.path.replace(/[^/]+$/, origName),
+          pw
+        );
+
+        const origPath = item.path.replace(/[^/]+$/, origName);
+        const parts = origPath.split('/').filter(Boolean);
+        let cur = dirHandle;
+        for(let i=0;i<parts.length-1;i++){
+          cur = await cur.getDirectoryHandle(parts[i], {create:false});
+        }
+        const origHandle = await cur.getFileHandle(parts[parts.length-1], {create:false});
+        upsertFileInList(origPath, origHandle, origName);
+
+        try{ await deleteFileAtPath(dirHandle, item.path); }catch(e){}
+        files = files.filter(ff => ff.path !== item.path);
+
+      }catch(e){
+        failed.push(item.path + ' : ' + e.message);
+      }
+    }
+
+    await refreshEncList();
+
+    if(failed.length){
+      alert('일부 파일은 복호화하지 못했습니다:\n' + failed.join('\n'));
+    }else{
+      alert('암호화 문서 전체 복호화 완료');
+    }
+    await searchFiles();
+  }
+
+  async function downloadFileHandle(handle, filename){
+    try{
+      const f = await handle.getFile();
+      const blob = f;
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename || f.name || 'download';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+    }catch(e){
+      alert('파일을 다운로드할 수 없습니다.');
+      console.warn('[downloadFileHandle] 실패', e);
+    }
+  }
+
+  /* ===== CSV ===== */
+  async function exportLogsToCSV(){
+    const logs = await getAllLogs();
+    if(!logs.length){
+      alert('저장된 로그가 없습니다.');
+      return;
+    }
+    const header = ['id','op','fileName','filePath','password','ts'];
+    const rows = [header.join(',')];
+    for(const row of logs){
+      const vals = header.map(h=>{
+        const v = row[h] !== undefined ? String(row[h]) : '';
+        if(v.includes(',') || v.includes('"') || v.includes('\n')){
+          return `"${v.replace(/"/g,'""')}"`;
+        }
+        return v;
+      });
+      rows.push(vals.join(','));
+    }
+    const csv = '\uFEFF' + rows.join('\r\n');
+    const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'enc_logs.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  /* ===== 이벤트 ===== */
+  $('#pickDirBtn').onclick = async () => {
+    try{
+      dirHandle = await window.showDirectoryPicker();
+      $('#currentPath').textContent = dirHandle.name || '(로컬 폴더)';
+      await indexDirectory();
+    }catch(e){}
+  };
+  $('#scanIpBtn').onclick = () => { searchFiles(); };
+  $('#checkIpMacBtn').onclick = () => { runIpMacCheck(); };
+  $('#encryptSelectedBtn').onclick = () => { encryptSingleSearchItem(); };
+  $('#encryptAllIpBtn').onclick = () => { encryptAllSearchItems(); };
+  $('#decryptSelectedBtn').onclick = () => { decryptSelectedEnc(); };
+  $('#decryptAllBtn').onclick = () => { decryptAllEnc(); };
+  $('#refreshEncBtn').onclick = async (e) => {
+    if(!dirHandle){ alert('먼저 폴더를 선택하세요.'); return; }
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    btn.textContent = '새로고침 중...';
+    await indexDirectory();
+    btn.disabled = false;
+    btn.textContent = '암호화 목록 새로고침';
+  };
+  $('#showLogsBtn').onclick = async () => {
+    const logs = await getAllLogs();
+    await updateLogCount();
+    $('#pvLabel').textContent = '암호 로그';
+    $('#pvMeta').textContent = 'IndexedDB에 저장된 로그 ('+logs.length+'건)';
+    $('#pvBox').textContent = logs.map(l=>`${l.id}. [${l.op}] ${l.fileName} | ${l.filePath} | ${l.password} | ${l.ts}`).join('\n') || '(로그가 없습니다)';
+  };
+  $('#exportLogsBtn').onclick = () => { exportLogsToCSV(); };
+  $('#clearLogsBtn').onclick = async () => {
+    if(!confirm('로그를 모두 삭제할까요?')) return;
+    await clearAllLogs();
+    await updateLogCount();
+    if($('#pvLabel').textContent.includes('로그')) $('#pvBox').textContent = '(로그가 없습니다)';
+  };
+
+  openEncDB().then(updateLogCount);
+</script>
+</body>
+</html>

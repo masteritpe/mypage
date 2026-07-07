@@ -1,0 +1,1319 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Diagram Maker</title>
+  
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Nanum+Pen+Script&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  
+  <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  
+  <style>
+    /* === 웹 폰트 적용 === */
+    @font-face {
+        font-family: 'KoPubWorldDotum';
+        font-weight: 500;
+        font-style: normal;
+        src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_2201-2@1.0/KoPubWorldDotumMedium.woff') format('woff');
+    }
+
+    /* === 1. Reset & Variables === */
+    :root {
+      --bg-body: #F9FAFB;
+      --bg-surface: #FFFFFF;
+      --border-light: #F3F4F6;
+      --border-base: #E5E7EB;
+      --text-main: #111827;
+      --text-muted: #6B7280;
+      --primary: #111827;       
+      --primary-hover: #374151;
+      --accent: #2563EB;
+      --accent-hover: #1D4ED8;
+      --secondary: #FFFFFF;
+      --secondary-hover: #F9FAFB;
+      --danger: #EF4444;
+      --danger-hover: #DC2626;
+      --warning-bg: #FEF3C7;
+      --warning-text: #92400E;
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      
+      --font-ui: 'Pretendard', system-ui, -apple-system, sans-serif;
+      /* 폰트 깨짐(ㅁㅁㅁㅁ) 방지를 위해 윈도우/맥 기본 폰트 추가 */
+      --font-canvas: 'KoPubWorldDotum', 'Pretendard', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+    }
+
+    * { box-sizing: border-box; outline: none; margin: 0; padding: 0; transition: border-color 0.2s, background-color 0.2s, color 0.2s; }
+    body {
+      background: var(--bg-body); color: var(--text-main);
+      font-family: var(--font-ui); font-size: 14px;
+      height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* =========================================
+       🎨 스케치 모드 (Sketch Mode) 핵심 CSS 🎨
+       ========================================= */
+    body.sketch-mode { --bg-body: #E5E7EB; }
+    body.sketch-mode #canvas-wrapper .ppt-slide { background-color: #fdfbf7 !important; box-shadow: 2px 4px 15px rgba(0,0,0,0.1); }
+    body.sketch-mode #canvas-wrapper .content-area { font-family: 'Nanum Pen Script', cursive !important; font-size: 1.3em; letter-spacing: 1px; filter: url(#pencil-texture); }
+    body.sketch-mode #canvas-wrapper .shape-svg { filter: url(#pencil-texture); }
+    body.sketch-mode #canvas-wrapper .widget:not(.has-svg):not(.w-line):not(.w-line_arrow):not(.w-line_arrow_both):not(.w-line_elbow) .content-area { border-radius: 2px 255px 3px 25px / 255px 5px 225px 3px !important; }
+    body.sketch-mode #canvas-wrapper .widget.w-line .content-area,
+    body.sketch-mode #canvas-wrapper .widget.w-line_arrow .content-area,
+    body.sketch-mode #canvas-wrapper .widget.w-line_arrow_both .content-area,
+    body.sketch-mode #canvas-wrapper .widget.w-line_elbow .content-area { filter: url(#pencil-texture); border-top-width: calc(var(--line-width, 2px) * 1.5) !important; }
+
+    /* === 2. Header === */
+    header { 
+      background: var(--bg-surface); border-bottom: 1px solid var(--border-base); 
+      padding: 0 20px 0 32px; position: sticky; top: 0; z-index: 50; 
+      display: flex; justify-content: space-between; align-items: center; 
+      height: 72px; flex-shrink: 0; box-shadow: var(--shadow-sm);
+    }
+    .logo { 
+      font-weight: 800; font-size: 20px; color: var(--primary); 
+      display: flex; align-items: center; gap: 10px; letter-spacing: -0.02em; 
+    }
+    .logo i { color: var(--accent); font-size: 28px; }
+    
+    .header-actions { display: flex; gap: 8px; align-items: center; }
+    .divider { width: 1px; height: 24px; background: var(--border-base); margin: 0 6px; }
+    
+    .project-name-input {
+      padding: 8px 12px; border: 1px solid transparent; border-radius: var(--radius-sm);
+      font-size: 16px; font-weight: 600; font-family: var(--font-ui); outline: none;
+      width: 200px; background: transparent; transition: all 0.2s;
+    }
+    .project-name-input:hover { border-color: var(--border-base); background: var(--bg-body); }
+    .project-name-input:focus { border-color: var(--accent); background: var(--bg-surface); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+
+    .zoom-controls { display: flex; align-items: center; gap: 6px; }
+    .zoom-controls span { font-weight: 600; width: 45px; text-align: center; color: var(--text-main); font-size: 13px; }
+
+    /* === Buttons === */
+    .btn { 
+      padding: 10px 16px; border-radius: var(--radius-md); font-weight: 600; cursor: pointer; border: none; 
+      display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-family: inherit;
+    }
+    .btn i { font-size: 16px; }
+    .btn-icon-only { padding: 8px; justify-content: center; background: transparent; border: 1px solid transparent; color: var(--text-muted); border-radius: var(--radius-sm); }
+    .btn-icon-only:hover { background: var(--border-light); color: var(--primary); }
+    .btn-primary { background: var(--primary); color: white; box-shadow: var(--shadow-sm); }
+    .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
+    .btn-secondary { background: var(--secondary); border: 1px solid var(--border-base); color: var(--text-main); box-shadow: var(--shadow-sm); }
+    .btn-secondary:hover { background: var(--secondary-hover); border-color: #D1D5DB; }
+    .btn-accent { background: var(--secondary); border: 1px solid var(--accent); color: var(--accent); box-shadow: var(--shadow-sm); }
+    .btn-accent:hover { background: #EFF6FF; }
+
+    /* === 3. Main Layout === */
+    main { flex: 1; display: flex; overflow: hidden; }
+
+    #sidebar {
+      width: 330px; background: var(--bg-surface); border-right: 1px solid var(--border-base);
+      padding: 20px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; z-index: 10;
+    }
+    .sidebar-title { font-size: 13px; font-weight: 700; color: var(--text-muted); margin-top: 16px; margin-bottom: 4px; padding-bottom: 6px; border-bottom: 1px solid var(--border-light); }
+    .sidebar-title:first-child { margin-top: 0; }
+    .widget-btn { padding: 10px 12px; border: 1px solid var(--border-base); border-radius: var(--radius-md); background: var(--bg-surface); cursor: pointer; display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 13px; color: var(--text-main); }
+    .widget-btn i { font-size: 18px; color: var(--text-muted); }
+    .widget-btn:hover { border-color: var(--accent); background: #EFF6FF; color: var(--accent); box-shadow: var(--shadow-sm); }
+    .widget-btn:hover i { color: var(--accent); }
+    .style-row { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+    .style-row input[type="color"] { width: 36px; height: 36px; border: 1px solid var(--border-base); border-radius: var(--radius-md); cursor: pointer; padding: 2px; background: #fff;}
+    .style-row select, .style-row input[type="number"] { flex: 1; min-width: 0; height: 36px; padding: 0 10px; border: 1px solid var(--border-base); border-radius: var(--radius-md); font-family: inherit; font-size: 13px; color: var(--text-main); outline: none; }
+    .style-row select:focus, .style-row input[type="number"]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+    
+    /* === 4. Slide Management === */
+    #slide-manager { width: 180px; background: #FAFAFA; border-right: 1px solid var(--border-base); display: flex; flex-direction: column; }
+    .slide-list { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    .slide-thumb { height: 90px; background: #fff; border: 1px solid var(--border-base); border-radius: var(--radius-md); cursor: pointer; position: relative; display: flex; align-items: center; justify-content: center; font-weight: bold; color: var(--text-muted); }
+    .slide-thumb.active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); color: var(--accent); }
+    .slide-thumb .btn-del-slide { position: absolute; top: -6px; right: -6px; background: var(--danger); color: white; border: none; border-radius: 50%; width: 22px; height: 22px; font-size: 12px; cursor: pointer; display: none; z-index: 50; align-items: center; justify-content: center; box-shadow: var(--shadow-sm); }
+    .slide-thumb:hover .btn-del-slide { display: flex; }
+    .add-slide-btn { margin: 16px; padding: 12px; text-align: center; border: 2px dashed var(--border-base); cursor: pointer; border-radius: var(--radius-md); color: var(--text-muted); font-weight: 600; font-size: 13px; }
+    .add-slide-btn:hover { border-color: var(--accent); color: var(--accent); background: #EFF6FF; }
+
+    /* === 5. Canvas (16:9) === */
+    /* 화면 치우침 문제(Flexbox overflow 버그) 해결을 위해 display: grid로 변경 */
+    #canvas-wrapper { flex: 1; overflow: auto; padding: 40px; display: grid; place-items: center; background: var(--bg-body); }
+    .ppt-slide { width: 960px; height: 540px; background: #ffffff; position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.08); display: none; overflow: hidden; transform-origin: center center; transition: transform 0.2s ease-out; background-size: cover; background-position: center; font-family: var(--font-canvas); }
+    .ppt-slide.active { display: block; }
+
+    /* 불필요한 유령 레이어 숨김 */
+    #a4-canvas, #connection-layer { display: none !important; pointer-events: none; }
+
+    /* === 6. Widgets === */
+    /* 노드 드래그 대신 텍스트 선택되는 문제 해결을 위해 user-select: none 추가 */
+    .widget { position: absolute; border: 1px dashed transparent; z-index: 10; cursor: move; display: flex; flex-direction: column; transform-origin: center center; user-select: none; -webkit-user-select: none; }
+    .widget:hover { border-color: #9CA3AF; }
+    .widget.selected { border-style: solid; border-color: var(--accent); z-index: 100 !important; }
+    .content-area { width: 100%; height: 100%; outline: none; word-break: break-all; overflow: hidden; }
+    /* 더블클릭해서 편집할 때만 텍스트 선택 허용 */
+    .content-area[contenteditable="true"] { cursor: text; outline: 2px solid var(--accent); z-index: 15; position: relative; user-select: text; -webkit-user-select: text; }
+    .has-svg .content-area { background: transparent !important; border: none !important; z-index: 2; }
+    
+    .resize-handle { position: absolute; width: 10px; height: 10px; background: #ffffff; border: 2px solid var(--accent); border-radius: 50%; display: none; z-index: 20; }
+    .widget.selected .resize-handle { display: block; }
+    .resize-handle.nw { top: -6px; left: -6px; cursor: nwse-resize; } .resize-handle.n  { top: -6px; left: calc(50% - 6px); cursor: ns-resize; } .resize-handle.ne { top: -6px; right: -6px; cursor: nesw-resize; } .resize-handle.e  { top: calc(50% - 6px); right: -6px; cursor: ew-resize; } .resize-handle.se { bottom: -6px; right: -6px; cursor: nwse-resize; } .resize-handle.s  { bottom: -6px; left: calc(50% - 6px); cursor: ns-resize; } .resize-handle.sw { bottom: -6px; left: -6px; cursor: nesw-resize; } .resize-handle.w  { top: calc(50% - 6px); left: -6px; cursor: ew-resize; }
+    
+    .rotate-handle { position: absolute; width: 12px; height: 12px; background: #ffffff; border: 2px solid var(--accent); border-radius: 50%; top: -30px; left: calc(50% - 6px); cursor: grab; display: none; z-index: 20; }
+    .rotate-handle::after { content: ''; position: absolute; width: 2px; height: 16px; background: var(--accent); top: 10px; left: 3px; z-index: -1; }
+    .widget.selected .rotate-handle { display: block; }
+    .rotate-handle:active { cursor: grabbing; }
+
+    /* Typography & Shapes */
+    .w-title .content-area, .w-text .content-area { padding: 4px; }
+    .w-title .content-area { font-size: 40px; font-weight: bold; text-align: center; }
+    .w-text .content-area { font-size: 18px; line-height: 1.5; }
+    .w-list .content-area { font-size: 18px; line-height: 1.6; padding: 4px; }
+    .w-list ul { margin: 0; padding-left: 24px; }
+    .w-list li { margin-bottom: 4px; }
+    .w-rect .content-area, .w-roundrect .content-area, .w-circle .content-area, .w-pill .content-area { display: flex; align-items: center; justify-content: center; text-align: center; flex-direction: column; padding: 6px; }
+    .has-svg .content-area { display: flex; align-items: center; justify-content: center; text-align: center; flex-direction: column; padding: 10px; }
+    .w-roundrect .content-area { border-radius: 16px; } .w-circle .content-area { border-radius: 50%; } .w-pill .content-area { border-radius: 999px; }
+
+    /* 특수 요소 & 선 */
+    .w-line_elbow .content-area { background: transparent !important; border-left-width: 3px; border-left-style: solid; border-left-color: #64748b; border-bottom-width: 3px; border-bottom-style: solid; border-bottom-color: #64748b; border-top: none !important; border-right: none !important; height: 100% !important; margin-top: 0 !important; transform: none; top: 0; position: relative; overflow: visible !important; }
+    .w-line_elbow .content-area::after { content: ''; position: absolute; right: calc(-12px * var(--arrow-scale, 1)); bottom: calc( (var(--line-width, 2px) / 2) - (6px * var(--arrow-scale, 1)) ); border-left: calc(12px * var(--arrow-scale, 1)) solid currentcolor; border-top: calc(6px * var(--arrow-scale, 1)) solid transparent; border-bottom: calc(6px * var(--arrow-scale, 1)) solid transparent; }
+    
+    .w-boundary { z-index: 5 !important; }
+    .w-boundary .content-area { vertical-align: top; text-align: left; }
+    .w-box .content-area h3 { margin: 0 0 10px 0; font-size: 1.15em; border-bottom: 1px solid var(--border-base); padding-bottom: 6px; }
+    .w-box .content-area ul { margin: 4px 0; padding-left: 24px; }
+    .w-line .content-area, .w-line_arrow .content-area, .w-line_arrow_both .content-area { background: transparent !important; border-top-width: 3px; border-top-style: solid; border-top-color: #64748b; border-left: none !important; border-right: none !important; border-bottom: none !important; height: 0 !important; position: absolute; top: 50%; width: 100%; margin-top: 0 !important; transform: translateY(-50%); overflow: visible !important; }
+    
+    .w-line_arrow .content-area::after, .w-line_arrow_both .content-area::after { content: ''; position: absolute; right: calc(-2px * var(--arrow-scale, 1)); top: calc(-1 * var(--line-width, 2px) / 2); transform: translateY(-50%); border-left: calc(12px * var(--arrow-scale, 1)) solid currentcolor; border-top: calc(6px * var(--arrow-scale, 1)) solid transparent; border-bottom: calc(6px * var(--arrow-scale, 1)) solid transparent; }
+    .w-line_arrow_both .content-area::before { content: ''; position: absolute; left: calc(-2px * var(--arrow-scale, 1)); top: calc(-1 * var(--line-width, 2px) / 2); transform: translateY(-50%); border-right: calc(12px * var(--arrow-scale, 1)) solid currentcolor; border-top: calc(6px * var(--arrow-scale, 1)) solid transparent; border-bottom: calc(6px * var(--arrow-scale, 1)) solid transparent; }
+    
+    .w-image .content-area { background: transparent; display: flex; align-items: center; justify-content: center; }
+    .w-image img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+
+    /* === 🔴 플레이스홀더(Placeholder) 처리 === */
+    [contenteditable]:empty:before {
+        content: attr(placeholder);
+        color: #9CA3AF;
+        pointer-events: none;
+        display: inline-block;
+    }
+    
+    /* 구조적 위젯 내부의 빈 요소 Placeholder 처리 */
+    .w-box h3:empty:before { content: "주제"; color: #9CA3AF; pointer-events: none; display: inline-block; }
+    .w-list ul li:empty:before { content: "항목"; color: #9CA3AF; pointer-events: none; display: inline-block; }
+    .w-box ul li:empty:before { content: "내용 1"; color: #9CA3AF; pointer-events: none; display: inline-block; }
+
+    /* === 🖨️ 인쇄(이미지저장/PPTX) 모드 보정 === */
+    .printing .widget { border: none !important; resize: none !important; box-shadow: none !important; }
+    .printing .resize-handle, .printing .rotate-handle { display: none !important; }
+    
+    /* 캡쳐 시 비어있는 요소(플레이스홀더) 숨김 처리 */
+    .printing [contenteditable]:empty:before,
+    .printing .w-box h3:empty:before,
+    .printing .w-list ul li:empty:before,
+    .printing .w-box ul li:empty:before {
+        display: none !important;
+    }
+
+    /* === 모달 CSS === */
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.5); z-index: 1000;
+      display: none; align-items: center; justify-content: center;
+      backdrop-filter: blur(2px);
+    }
+    .modal-content {
+      background: var(--bg-surface); width: 500px; max-width: 90%;
+      border-radius: var(--radius-lg); box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .modal-header {
+      padding: 16px 24px; border-bottom: 1px solid var(--border-base);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .modal-header h2 { font-size: 18px; margin: 0; color: var(--primary); }
+    .modal-close { cursor: pointer; background: transparent; border: none; font-size: 20px; color: var(--text-muted); }
+    .modal-body { padding: 0; max-height: 400px; overflow-y: auto; }
+    .project-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 16px 24px; border-bottom: 1px solid var(--border-light); cursor: pointer;
+    }
+    .project-item:hover { background: #F9FAFB; }
+    .project-item-info strong { display: block; font-size: 15px; margin-bottom: 4px; }
+    .project-item-info span { font-size: 12px; color: var(--text-muted); }
+    .project-item-actions { display: flex; gap: 8px; }
+    .empty-state { padding: 40px; text-align: center; color: var(--text-muted); }
+
+    /* === 토스트 CSS === */
+    #toast-container {
+      position: fixed;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.85);
+      color: #ffffff;
+      padding: 12px 24px;
+      border-radius: var(--radius-md);
+      font-size: 14px;
+      font-weight: 500;
+      z-index: 9999;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.3s ease, visibility 0.3s ease;
+      box-shadow: var(--shadow-md);
+      pointer-events: none;
+    }
+    #toast-container.show {
+      opacity: 1;
+      visibility: visible;
+    }
+  </style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute; z-index:-1;">
+  <defs>
+    <filter id="pencil-texture" x="-10%" y="-10%" width="120%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="3" result="noise" />
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="3" xChannelSelector="R" yChannelSelector="G" />
+    </filter>
+  </defs>
+</svg>
+
+<header>
+  <div class="logo"><i class="ph ph-shapes"></i> DIAGRAM MAKER</div>
+  
+  <div class="header-actions">
+    <input type="text" id="project-name" class="project-name-input" placeholder="제목 없는 다이어그램" spellcheck="false">
+    <div class="divider"></div>
+    <button class="btn btn-secondary" onclick="createNewProject()" title="단축키: Ctrl+Alt+N"><i class="ph ph-file-plus"></i> 새 파일</button>
+    <button class="btn btn-secondary" onclick="openLoadModal()"><i class="ph ph-folder-open"></i> 불러오기</button>
+    <button class="btn btn-secondary" onclick="saveProject()" title="단축키: Ctrl+S"><i class="ph ph-floppy-disk"></i> 저장</button>
+    
+    <div class="divider"></div>
+    <button class="btn btn-accent" id="btn-sketch-toggle"><i class="ph ph-pencil-simple"></i> 스케치 모드</button>
+    <div class="zoom-controls">
+      <button class="btn btn-icon-only" onclick="setZoom(currentScale - 0.1)" title="축소"><i class="ph ph-magnifying-glass-minus"></i></button>
+      <span id="zoom-level">120%</span>
+      <button class="btn btn-icon-only" onclick="setZoom(currentScale + 0.1)" title="확대"><i class="ph ph-magnifying-glass-plus"></i></button>
+    </div>
+    <div class="divider"></div>
+    <button class="btn btn-secondary" id="btn-export-png"><i class="ph ph-image" style="color:var(--success); font-size: 18px;"></i> 이미지 저장</button>
+    <button class="btn btn-primary" id="btn-export"><i class="ph ph-download-simple"></i> PPTX</button>
+  </div>
+</header>
+
+<main>
+  <div id="slide-manager">
+    <div class="slide-list" id="slide-list"></div>
+    <div class="add-slide-btn" onclick="addSlide()"><i class="ph ph-plus"></i> 새 슬라이드</div>
+  </div>
+
+  <aside id="sidebar">
+    <div class="sidebar-title">기본 요소 추가</div>
+    <div class="widget-btn" onclick="addWidget('title')"><i class="ph ph-text-t"></i> 텍스트 상자 (제목)</div>
+    <div class="widget-btn" onclick="addWidget('text')"><i class="ph ph-text-align-left"></i> 텍스트 상자 (본문)</div>
+    
+    <div class="sidebar-title">특수 그룹 & 노드 추가</div>
+    <div class="widget-btn" onclick="addWidget('boundary')"><i class="ph ph-bounding-box"></i> 그룹 경계선</div>
+    <div class="widget-btn" onclick="addWidget('box')"><i class="ph ph-list-bullets"></i> 요약 박스</div>
+    <div class="widget-btn" onclick="addWidget('node')"><i class="ph-fill ph-circle" style="color:var(--accent);"></i> 메인 노드</div>
+    <div class="widget-btn" onclick="addWidget('node_sub')"><i class="ph ph-circle" style="color:var(--accent);"></i> 서브 노드</div>
+    <div class="widget-btn" onclick="addWidget('keyword')"><i class="ph ph-key" style="color:var(--danger);"></i> 강조 키워드</div>
+
+    <div class="sidebar-title">도형 및 선 추가</div>
+    <div class="style-row">
+      <select id="shape-select" style="font-weight: 500;">
+        <option value="rect">■ 사각형 (그룹핑/VPC)</option>
+        <option value="roundrect">🔲 둥근 사각형</option>
+        <option value="circle">● 원형</option>
+        <option value="cylinder">🛢 원기둥 (데이터베이스)</option>
+        <option value="cloud">☁ 구름 (클라우드/인터넷)</option>
+        <option value="triangle">▲ 삼각형</option>
+        <option value="diamond">◆ 마름모</option>
+        <option value="hexagon">⬡ 육각형</option>
+        <option value="parallelogram">▱ 평행사변형</option>
+        <option value="trapezoid">⏢ 사다리꼴</option>
+        <option value="chevron">▶ 블록 화살표 (오각형)</option>
+        <option value="line">▬ 일반 선</option>
+        <option value="line_arrow">➔ 화살표 선 (단방향)</option>
+        <option value="line_arrow_both">↔ 화살표 선 (양방향)</option>
+        <option value="pill">💊 캡슐형 (알약/타원 모양)</option>
+        <option value="line_elbow">↳ 꺾은선 화살표 (L자형)</option>
+      </select>
+      <button class="btn btn-secondary" style="padding: 0 12px; height: 36px;" onclick="addShapeFromSelect()">추가</button>
+    </div>
+    
+    <div class="widget-btn" style="margin-top:4px;" onclick="document.getElementById('img-upload').click()">
+        <i class="ph ph-image"></i> 이미지(아이콘) 추가
+    </div>
+    <input type="file" id="img-upload" accept="image/*" style="display:none;">
+
+    <div class="sidebar-title">슬라이드 배경 설정</div>
+    <div class="style-row">
+      <label style="font-size:12px; width:65px; font-weight:600;">배경색 :</label>
+      <input type="color" id="slide-bg-color" value="#ffffff" onchange="changeSlideBgColor(this.value)">
+    </div>
+    <div class="style-row" style="align-items: stretch; gap: 8px;">
+      <div class="widget-btn" style="flex:1; justify-content:center; margin-bottom:0;" onclick="document.getElementById('bg-img-upload').click()">
+        <i class="ph ph-image"></i> 이미지 불러오기
+      </div>
+      <div class="widget-btn" style="width: 42px; justify-content:center; padding: 0; margin-bottom:0;" onclick="clearSlideBgImage()" title="배경 이미지 초기화">
+        <i class="ph ph-trash" style="color:var(--danger);"></i>
+      </div>
+    </div>
+    <input type="file" id="bg-img-upload" accept="image/*" style="display:none;">
+
+    <div class="sidebar-title">크기 및 회전 설정</div>
+    <div class="style-row">
+      <label style="font-size:12px; width:65px; font-weight:600; white-space:nowrap; flex-shrink:0;">가로/세로 :</label>
+      <input type="number" id="elem-width" value="0" min="10" onchange="changeElemSize('width', this.value)" title="가로 크기 (Width)" style="flex: none; width: 75px; padding: 0 8px;">
+      <input type="number" id="elem-height" value="0" min="10" onchange="changeElemSize('height', this.value)" title="세로 크기 (Height)" style="flex: none; width: 75px; padding: 0 8px;">
+      <span style="font-size:12px; flex-shrink:0;">px</span>
+    </div>
+    <div class="style-row">
+      <label style="font-size:12px; width:65px; font-weight:600; white-space:nowrap; flex-shrink:0;">회전 각도 :</label>
+      <input type="number" id="elem-angle" value="0" min="-360" max="360" step="15" onchange="changeAngle(this.value)">
+      <span style="font-size:12px; flex-shrink:0;">도(°)</span>
+    </div>
+
+    <div class="sidebar-title">채우기 및 글자 설정</div>
+    <div class="style-row">
+      <label style="font-size:12px; width:65px; font-weight:600;">채우기 :</label>
+      <input type="color" id="elem-color" value="#000000" title="도형/배경 채우기 색상" onchange="changeElemColor(this.value)">
+      <label style="font-size:12px; display:flex; align-items:center; gap:4px; margin-left:8px; cursor:pointer; color:var(--text-main);">
+        <input type="checkbox" id="transparent-bg" onchange="toggleTransparent(this.checked)"> 투명
+      </label>
+    </div>
+    <div class="style-row">
+      <label style="font-size:12px; width:65px; font-weight:600;">글자색 :</label>
+      <input type="color" id="text-color" value="#111827" title="글자 색상" onchange="changeTextColor(this.value)">
+      <button class="btn btn-icon-only" style="margin-left: 8px;" onclick="toggleTextFormat('bold')" title="텍스트 굵게"><i class="ph ph-text-b"></i></button>
+      <button class="btn btn-icon-only" style="margin-left: 4px;" onclick="toggleTextFormat('underline')" title="텍스트 밑줄"><i class="ph ph-text-underline"></i></button>
+    </div>
+    <div class="style-row">
+        <label style="font-size:12px; width:65px; font-weight:600;">글자크기 :</label>
+        <select id="font-size" onchange="changeFontSize(this.value)">
+          <option value="12px">12px</option>
+          <option value="14px">14px</option>
+          <option value="18px">18px</option>
+          <option value="24px">24px</option>
+          <option value="32px">32px</option>
+          <option value="40px">40px</option>
+        </select>
+    </div>
+
+    <div class="sidebar-title">테두리 및 선 설정</div>
+    <div class="style-row">
+      <label style="font-size:12px; width:65px; font-weight:600;">선 색상 :</label>
+      <input type="color" id="border-color" value="#000000" title="테두리 및 선 색상" onchange="changeBorderColor(this.value)">
+    </div>
+    <div class="style-row">
+      <label style="font-size:12px; width:65px; font-weight:600;">선 스타일 :</label>
+      <select id="border-style" onchange="changeBorderStyle(this.value)">
+        <option value="solid">실선 (Solid)</option>
+        <option value="dashed">긴 점선 (Dashed)</option>
+        <option value="dotted">짧은 점선 (Dotted)</option>
+        <option value="none">선 없음</option>
+      </select>
+    </div>
+    <div class="style-row">
+      <label style="font-size:12px; width:65px; font-weight:600;">선 굵기 :</label>
+      <select id="border-width" onchange="changeBorderWidth(this.value)">
+        <option value="0px">0px</option>
+        <option value="1px">1px</option>
+        <option value="2px">2px</option>
+        <option value="3px">3px</option>
+        <option value="4px">4px</option>
+        <option value="5px">5px</option>
+      </select>
+    </div>
+    <div class="style-row">
+      <label style="font-size:12px; width:65px; font-weight:600;">화살표 크기 :</label>
+      <select id="arrow-size" onchange="changeArrowSize(this.value)">
+        <option value="0.5">작게</option>
+        <option value="1" selected>기본</option>
+        <option value="1.5">크게</option>
+        <option value="2">매우 크게</option>
+      </select>
+    </div>
+    
+    <div style="margin-top:auto; font-size:12px; color:var(--text-muted); line-height:1.6; border-top:1px solid var(--border-light); padding-top:12px;">
+      <i class="ph ph-info" style="font-size: 14px; vertical-align: middle;"></i> <b style="color:var(--text-main);">서식 단축키 안내:</b> <br>
+      • 새 파일: <b>Ctrl+Alt+N</b><br>
+      • 저장: <b>Ctrl+S</b><br>
+      • 취소선: <b>Ctrl+0</b><br>
+      • 서식지우기: <b>Ctrl+Shift+X</b><br>
+      • 글자색: <b>Ctrl+Alt+R</b>(빨), <b>G</b>(초), <b>B</b>(파)<br>
+      • 형광펜: <b>Ctrl+1~7</b><br>
+      • 글자크기: <b>Ctrl + / -</b> (편집 중 1px 조절)<br>
+      • 객체제어: <b>Ctrl+C/X/V</b> (복사/잘라내기/붙여넣기)
+    </div>
+  </aside>
+
+  <div id="canvas-wrapper">
+    </div>
+
+</main>
+
+<div class="modal-overlay" id="loadModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>저장된 다이어그램 불러오기</h2>
+      <button class="modal-close" onclick="closeLoadModal()"><i class="ph ph-x"></i></button>
+    </div>
+    <div class="modal-body" id="project-list">
+      </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script>
+  let toastTimer;
+  function showToast(message) {
+    const toast = document.getElementById('toast-container');
+    toast.innerText = message;
+    toast.classList.add('show');
+    
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      toast.classList.remove('show');
+    }, 1000); 
+  }
+
+  const DB_NAME = "DiagramMakerDB";
+  const STORE_NAME = "projects";
+  let currentProjectId = null;
+
+  function initDB() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = (e) => {
+        let db = e.target.result;
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+          db.createObjectStore(STORE_NAME, { keyPath: "id" });
+        }
+      };
+      req.onsuccess = (e) => resolve(e.target.result);
+      req.onerror = (e) => reject(e.target.error);
+    });
+  }
+
+  function createNewProject() {
+      if (confirm('새 다이어그램을 만드시겠습니까?\n저장되지 않은 현재 작업 내용은 모두 사라집니다.')) {
+          currentProjectId = null;
+          document.getElementById('project-name').value = '';
+          slideCount = 0;
+          zIndexCounter = 10;
+          
+          canvasWrapper.innerHTML = '';
+          slideList.innerHTML = '';
+          
+          addSlide();
+      }
+  }
+
+  async function saveProject() {
+    try {
+      clearSelection(); 
+      const db = await initDB();
+      const projectName = document.getElementById('project-name').value || '제목 없는 다이어그램';
+      
+      const slidesData = [];
+      document.querySelectorAll('.ppt-slide').forEach(slide => {
+        slidesData.push({
+          id: slide.id,
+          bg: slide.dataset.bg || '#ffffff',
+          bgImg: slide.dataset.bgImg || null,
+          html: slide.innerHTML, 
+          thumbHtml: document.getElementById('thumb-' + slide.id).innerHTML
+        });
+      });
+
+      const projectData = {
+        id: currentProjectId || Date.now().toString(),
+        name: projectName,
+        updatedAt: new Date().toISOString(),
+        slideCount: slideCount,
+        maxZ: zIndexCounter,
+        slidesData: slidesData
+      };
+
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      tx.objectStore(STORE_NAME).put(projectData);
+      tx.oncomplete = () => {
+        currentProjectId = projectData.id;
+        showToast(`'${projectName}' 저장 완료!`); 
+      };
+    } catch (e) {
+      showToast("저장 중 오류가 발생했습니다."); 
+    }
+  }
+
+  async function loadProjectList() {
+    const db = await initDB();
+    const tx = db.transaction(STORE_NAME, "readonly");
+    const store = tx.objectStore(STORE_NAME);
+    const req = store.getAll();
+
+    return new Promise((resolve) => {
+      req.onsuccess = () => {
+        let list = req.result;
+        list.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+        resolve(list);
+      };
+    });
+  }
+
+  async function openLoadModal() {
+    const listContainer = document.getElementById('project-list');
+    listContainer.innerHTML = '';
+    const projects = await loadProjectList();
+
+    if (projects.length === 0) {
+      listContainer.innerHTML = '<div class="empty-state">저장된 다이어그램이 없습니다.</div>';
+    } else {
+      projects.forEach(p => {
+        const div = document.createElement('div');
+        div.className = 'project-item';
+        
+        const date = new Date(p.updatedAt);
+        const dateStr = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
+
+        div.innerHTML = `
+          <div class="project-item-info" onclick="loadProject('${p.id}')">
+            <strong>${p.name}</strong>
+            <span>마지막 수정: ${dateStr} | 슬라이드: ${p.slidesData.length}장</span>
+          </div>
+          <div class="project-item-actions">
+            <button class="btn btn-icon-only" onclick="deleteProject('${p.id}')" title="삭제"><i class="ph ph-trash" style="color:var(--danger)"></i></button>
+          </div>
+        `;
+        listContainer.appendChild(div);
+      });
+    }
+    document.getElementById('loadModal').style.display = 'flex';
+  }
+
+  function closeLoadModal() {
+    document.getElementById('loadModal').style.display = 'none';
+  }
+
+  async function loadProject(id) {
+    const db = await initDB();
+    const tx = db.transaction(STORE_NAME, "readonly");
+    const req = tx.objectStore(STORE_NAME).get(id);
+
+    req.onsuccess = () => {
+      const p = req.result;
+      if(!p) return;
+
+      currentProjectId = p.id;
+      document.getElementById('project-name').value = p.name;
+      slideCount = p.slideCount;
+      zIndexCounter = p.maxZ;
+
+      canvasWrapper.innerHTML = '';
+      slideList.innerHTML = '';
+
+      p.slidesData.forEach((sd, index) => {
+        const slideDiv = document.createElement('div');
+        slideDiv.className = 'ppt-slide';
+        slideDiv.id = sd.id;
+        if(sd.bg) { slideDiv.dataset.bg = sd.bg; slideDiv.style.backgroundColor = sd.bg; }
+        if(sd.bgImg) { slideDiv.dataset.bgImg = sd.bgImg; slideDiv.style.backgroundImage = `url('${sd.bgImg}')`; }
+        slideDiv.style.transform = `scale(${currentScale})`;
+        slideDiv.innerHTML = sd.html;
+        canvasWrapper.appendChild(slideDiv);
+
+        const thumbDiv = document.createElement('div');
+        thumbDiv.className = 'slide-thumb';
+        thumbDiv.id = 'thumb-' + sd.id;
+        thumbDiv.innerHTML = sd.thumbHtml || (index + 1);
+        thumbDiv.onclick = () => selectSlide(sd.id);
+
+        const delBtn = thumbDiv.querySelector('.btn-del-slide');
+        if (delBtn) {
+            delBtn.onclick = (e) => { e.stopPropagation(); deleteSlide(sd.id); };
+        }
+        slideList.appendChild(thumbDiv);
+      });
+
+      if(p.slidesData.length > 0) selectSlide(p.slidesData[0].id);
+      closeLoadModal();
+    };
+  }
+
+  async function deleteProject(id) {
+    if(!confirm('이 다이어그램을 삭제하시겠습니까?')) return;
+    const db = await initDB();
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    tx.objectStore(STORE_NAME).delete(id);
+    tx.oncomplete = () => {
+      if(currentProjectId === id) currentProjectId = null;
+      openLoadModal();
+    };
+  }
+
+  let isSketchMode = false;
+  document.getElementById('btn-sketch-toggle').addEventListener('click', function() {
+      isSketchMode = !isSketchMode;
+      if(isSketchMode) {
+          document.body.classList.add('sketch-mode');
+          this.innerHTML = '<i class="ph ph-ruler"></i> 정밀 모드로 돌아가기';
+          this.classList.remove('btn-accent');
+          this.classList.add('btn-primary');
+      } else {
+          document.body.classList.remove('sketch-mode');
+          this.innerHTML = '<i class="ph ph-pencil-simple"></i> 스케치 모드';
+          this.classList.add('btn-accent');
+          this.classList.remove('btn-primary');
+      }
+  });
+
+  document.getElementById('btn-export-png').addEventListener('click', async () => {
+      if(!activeSlideId) return showToast('슬라이드를 선택해주세요.'); 
+      const slide = document.getElementById(activeSlideId);
+      
+      const originalScale = slide.style.transform;
+      slide.style.transform = 'scale(1)'; 
+      slide.classList.add('printing');
+      clearSelection();
+      
+      await new Promise(r => setTimeout(r, 100)); 
+      try {
+        const canvasEl = await html2canvas(slide, { scale: 3, useCORS: true, backgroundColor: slide.dataset.bg || '#ffffff' });
+        const link = document.createElement('a');
+        const pName = document.getElementById('project-name').value || 'diagram';
+        link.download = isSketchMode ? `sketch_${pName}.png` : `${pName}.png`;
+        link.href = canvasEl.toDataURL('image/png');
+        link.click();
+        showToast('이미지가 성공적으로 저장되었습니다.');
+      } catch (e) {
+        showToast('이미지 저장 실패'); 
+        console.error(e);
+      } finally {
+        slide.classList.remove('printing');
+        slide.style.transform = originalScale;
+      }
+  });
+
+  let slideCount = 0; let activeSlideId = null; 
+  let selectedWidgets = []; 
+  let copiedWidgetsData = []; 
+  let activeActionWidget = null; 
+  let dragOffsets = new Map(); 
+
+  let zIndexCounter = 10; let currentScale = 1.2;
+  const canvasWrapper = document.getElementById('canvas-wrapper'); const slideList = document.getElementById('slide-list');
+
+  const SHAPE_TYPES = ['rect', 'roundrect', 'circle', 'triangle', 'diamond', 'rightarrow', 'leftarrow', 'uparrow', 'downarrow', 'line', 'cylinder', 'cloud', 'line_arrow', 'line_arrow_both', 'chevron', 'pill', 'line_elbow', 'hexagon', 'parallelogram', 'trapezoid'];
+
+  const SVG_PATHS = {
+      triangle: '<polygon vector-effect="non-scaling-stroke" points="50,0 0,100 100,100" />',
+      diamond: '<polygon vector-effect="non-scaling-stroke" points="50,0 100,50 50,100 0,50" />',
+      rightarrow: '<polygon vector-effect="non-scaling-stroke" points="0,25 60,25 60,0 100,50 60,100 60,75 0,75" />',
+      leftarrow: '<polygon vector-effect="non-scaling-stroke" points="40,0 40,25 100,25 100,75 40,75 40,100 0,50" />',
+      uparrow: '<polygon vector-effect="non-scaling-stroke" points="50,0 100,40 75,40 75,100 25,100 25,40 0,40" />',
+      downarrow: '<polygon vector-effect="non-scaling-stroke" points="25,0 75,0 75,60 100,60 50,100 0,60 25,60" />',
+      chevron: '<polygon vector-effect="non-scaling-stroke" points="0,0 75,0 100,50 75,100 0,100" />',
+      cylinder: '<path vector-effect="non-scaling-stroke" d="M0,15 v70 a50,15 0 0,0 100,0 v-70" /><ellipse vector-effect="non-scaling-stroke" cx="50" cy="15" rx="50" ry="15" />',
+      cloud: '<path vector-effect="non-scaling-stroke" d="M 25 40 C 25 15, 60 15, 65 30 C 85 25, 100 45, 90 65 C 100 85, 75 100, 55 90 C 45 100, 15 95, 15 75 C 0 70, 0 45, 25 40 Z" />',
+      hexagon: '<polygon vector-effect="non-scaling-stroke" points="25,0 75,0 100,50 75,100 25,100 0,50" />',
+      parallelogram: '<polygon vector-effect="non-scaling-stroke" points="20,0 100,0 80,100 0,100" />',
+      trapezoid: '<polygon vector-effect="non-scaling-stroke" points="20,0 80,0 100,100 0,100" />'
+  };
+
+  function setZoom(scale) {
+    currentScale = Math.max(0.5, Math.min(2.0, scale)); 
+    document.getElementById('zoom-level').innerText = Math.round(currentScale * 100) + '%';
+    document.querySelectorAll('.ppt-slide').forEach(slide => { 
+        slide.style.transform = `scale(${currentScale})`; 
+    });
+  }
+
+  function addSlide() {
+    slideCount++; const slideId = 'slide-' + Date.now() + '-' + slideCount;
+    const slideDiv = document.createElement('div'); slideDiv.className = 'ppt-slide'; slideDiv.id = slideId; slideDiv.dataset.bg = '#ffffff'; slideDiv.style.transform = `scale(${currentScale})`; canvasWrapper.appendChild(slideDiv);
+    const thumbDiv = document.createElement('div'); thumbDiv.className = 'slide-thumb'; thumbDiv.id = 'thumb-' + slideId; thumbDiv.innerText = slideCount; thumbDiv.onclick = () => selectSlide(slideId);
+    const delBtn = document.createElement('button'); delBtn.className = 'btn-del-slide'; delBtn.innerHTML = '<i class="ph ph-x"></i>'; delBtn.onclick = (e) => { e.stopPropagation(); deleteSlide(slideId); };
+    thumbDiv.appendChild(delBtn); slideList.appendChild(thumbDiv); selectSlide(slideId);
+  }
+
+  function selectSlide(id) {
+    document.querySelectorAll('.ppt-slide').forEach(s => s.classList.remove('active')); document.querySelectorAll('.slide-thumb').forEach(t => t.classList.remove('active'));
+    const slide = document.getElementById(id);
+    if(slide) { 
+        slide.classList.add('active'); 
+        document.getElementById('thumb-' + id).classList.add('active'); 
+        activeSlideId = id; 
+        document.getElementById('slide-bg-color').value = slide.dataset.bg || '#ffffff';
+        clearSelection(); 
+    }
+  }
+
+  function deleteSlide(id) {
+    if(document.querySelectorAll('.ppt-slide').length <= 1) return showToast('최소 1개의 슬라이드가 필요합니다.'); 
+    document.getElementById(id).remove(); document.getElementById('thumb-' + id).remove();
+    if(activeSlideId === id) selectSlide(document.querySelector('.ppt-slide').id);
+  }
+
+  function changeSlideBgColor(color) {
+      if(!activeSlideId) return; const slide = document.getElementById(activeSlideId);
+      slide.style.backgroundColor = color; slide.dataset.bg = color;
+  }
+
+  document.getElementById('bg-img-upload').addEventListener('change', function(e) {
+      const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); 
+      reader.onload = function(event) { 
+          if(!activeSlideId) return; const slide = document.getElementById(activeSlideId);
+          const bgDataUrl = event.target.result; slide.style.backgroundImage = `url('${bgDataUrl}')`; slide.dataset.bgImg = bgDataUrl; 
+      }; 
+      reader.readAsDataURL(file); e.target.value = ''; 
+  });
+
+  function clearSlideBgImage() {
+      if(!activeSlideId) return; const slide = document.getElementById(activeSlideId);
+      slide.style.backgroundImage = ''; delete slide.dataset.bgImg;
+  }
+
+  function generateId() { return 'el_' + Math.random().toString(36).substr(2, 9); }
+  function addShapeFromSelect() { addWidget(document.getElementById('shape-select').value); }
+
+  function addWidget(type, src = null) {
+    if(!activeSlideId) return; const slide = document.getElementById(activeSlideId); const widget = document.createElement('div');
+    widget.className = `widget w-${type}`; widget.id = generateId(); widget.dataset.type = type; widget.dataset.angle = 0; widget.style.transform = `rotate(0deg)`;
+    widget.style.zIndex = type === 'boundary' ? 5 : ++zIndexCounter;
+    
+    // 겹침 현상(엎어치기) 방지: 노드가 추가될 때마다 우측 하단으로 살짝씩 어긋나게 배치
+    const currentCount = slide.querySelectorAll('.widget').length || 0;
+    const offsetPos = 50 + ((currentCount * 25) % 250);
+    widget.style.left = `${offsetPos}px`; 
+    widget.style.top = `${offsetPos}px`; 
+    
+    let contentHTML = ''; let defaultWidth = 200, defaultHeight = 100; let svgHtml = ''; let isSvgShape = !!SVG_PATHS[type];
+    let placeholder = '';
+
+    if(type === 'title') { contentHTML = ''; placeholder = '제목'; defaultWidth = 600; defaultHeight = 60; } 
+    else if (type === 'text') { contentHTML = ''; placeholder = '텍스트를 입력하세요.'; defaultWidth = 300; defaultHeight = 100; } 
+    else if (type === 'list') { contentHTML = '<ul><li></li></ul>'; defaultWidth = 300; defaultHeight = 100; } 
+    else if (type === 'boundary') { contentHTML = ''; placeholder = '그룹 영역'; defaultWidth = 400; defaultHeight = 250; }
+    else if (type === 'box') { contentHTML = '<h3></h3><ul><li></li></ul>'; defaultWidth = 250; defaultHeight = 150; }
+    else if (type === 'node') { contentHTML = ''; placeholder = '메인 주제'; defaultWidth = 150; defaultHeight = 50; }
+    else if (type === 'node_sub') { contentHTML = ''; placeholder = '세부 내용'; defaultWidth = 120; defaultHeight = 40; }
+    else if (type === 'keyword') { contentHTML = ''; placeholder = '강조 키워드'; defaultWidth = 240; defaultHeight = 50; }
+    else if (SHAPE_TYPES.includes(type) && !type.includes('line')) { contentHTML = ''; placeholder = '도형 내용'; defaultWidth = 150; defaultHeight = 150; } 
+    else if (type === 'line_elbow') { defaultWidth = 150; defaultHeight = 100; } 
+    else if (type.includes('line')) { defaultWidth = 300; defaultHeight = 20; } 
+    else if (type === 'image') { contentHTML = `<img src="${src}" data-src="${src}"/>`; defaultWidth = 200; defaultHeight = 200; }
+
+    if (isSvgShape) {
+        widget.classList.add('has-svg');
+        svgHtml = `<svg class="shape-svg" preserveAspectRatio="none" viewBox="0 0 100 100" style="position:absolute; top:0; left:0; width:100%; height:100%; z-index:-1; overflow:visible; fill:#ffffff; stroke:#94a3b8; stroke-width:2px; stroke-dasharray:none;">${SVG_PATHS[type]}</svg>`;
+    }
+
+    widget.style.width = `${defaultWidth}px`; widget.style.height = `${defaultHeight}px`; const isEditable = !type.includes('line') && type !== 'image';
+    
+    widget.innerHTML = `
+      ${svgHtml}
+      <div class="rotate-handle"></div>
+      <div class="content-area" ${isEditable ? 'ondblclick="this.contentEditable=true; this.focus();" onblur="this.contentEditable=false;"' : ''} placeholder="${placeholder}" style="width: 100%; height: 100%;">${contentHTML}</div>
+      <div class="resize-handle nw" data-dir="nw"></div><div class="resize-handle n" data-dir="n"></div><div class="resize-handle ne" data-dir="ne"></div><div class="resize-handle e" data-dir="e"></div><div class="resize-handle se" data-dir="se"></div><div class="resize-handle s" data-dir="s"></div><div class="resize-handle sw" data-dir="sw"></div><div class="resize-handle w" data-dir="w"></div>
+    `;
+    slide.appendChild(widget);
+
+    const content = widget.querySelector('.content-area');
+    const THEME_BLUE = '#2563EB'; const THEME_RED = '#EF4444';
+    
+    if (type === 'title' || type === 'text' || type === 'list') { content.style.backgroundColor = 'transparent'; content.style.color = '#111827'; } 
+    else if (type === 'boundary') { content.style.backgroundColor = 'rgba(249, 250, 251, 0.6)'; content.style.borderStyle = 'dashed'; content.style.borderWidth = '2px'; content.style.borderColor = '#9CA3AF'; content.style.color = '#6B7280'; content.style.padding = '20px'; content.style.fontSize = '18px'; content.style.fontWeight = 'bold'; }
+    else if (type === 'box') { content.style.backgroundColor = '#ffffff'; content.style.borderStyle = 'solid'; content.style.borderWidth = '1px'; content.style.borderColor = '#D1D5DB'; content.style.color = '#111827'; content.style.padding = '14px'; }
+    else if (type === 'node') { content.style.backgroundColor = THEME_BLUE; content.style.color = '#ffffff'; content.style.borderStyle = 'none'; content.style.borderWidth = '0px'; content.style.borderColor = THEME_BLUE; content.style.borderRadius = '99px'; content.style.display = 'flex'; content.style.alignItems = 'center'; content.style.justifyContent = 'center'; content.style.fontWeight = 'bold'; content.style.fontSize = '14px'; }
+    else if (type === 'node_sub') { content.style.backgroundColor = '#ffffff'; content.style.color = THEME_BLUE; content.style.borderStyle = 'solid'; content.style.borderWidth = '2px'; content.style.borderColor = THEME_BLUE; content.style.borderRadius = '99px'; content.style.display = 'flex'; content.style.alignItems = 'center'; content.style.justifyContent = 'center'; content.style.fontWeight = 'bold'; content.style.fontSize = '12px'; }
+    else if (type === 'keyword') { content.style.backgroundColor = 'transparent'; content.style.color = THEME_RED; content.style.borderStyle = 'solid'; content.style.borderWidth = '4px'; content.style.borderColor = THEME_RED; content.style.display = 'flex'; content.style.alignItems = 'center'; content.style.justifyContent = 'center'; content.style.fontWeight = 'bold'; content.style.fontSize = '24px'; }
+    else if (isSvgShape) { content.style.color = '#111827'; } 
+    else if (SHAPE_TYPES.includes(type) && !type.includes('line')) { content.style.backgroundColor = '#ffffff'; content.style.color = '#111827'; content.style.borderStyle = 'solid'; content.style.borderWidth = '2px'; content.style.borderColor = '#9CA3AF'; } 
+    else if (type === 'line_elbow') { content.style.borderLeftStyle = 'solid'; content.style.borderLeftWidth = '2px'; content.style.borderLeftColor = '#6B7280'; content.style.borderBottomStyle = 'solid'; content.style.borderBottomWidth = '2px'; content.style.borderBottomColor = '#6B7280'; content.style.setProperty('--line-width', '2px'); content.style.color = '#6B7280'; }
+    else if (type.includes('line')) { content.style.borderTopStyle = 'solid'; content.style.borderTopWidth = '2px'; content.style.setProperty('--line-width', '2px'); content.style.borderTopColor = '#6B7280'; content.style.color = '#6B7280'; }
+    
+    setTimeout(() => selectWidget(widget, false), 10);
+  }
+
+  document.getElementById('img-upload').addEventListener('change', function(e) {
+    const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = function(event) { addWidget('image', event.target.result); }; reader.readAsDataURL(file); e.target.value = ''; 
+  });
+
+  function selectWidget(widget, isMulti = false) {
+    if (isMulti) {
+        const index = selectedWidgets.indexOf(widget);
+        if (index > -1) {
+            selectedWidgets.splice(index, 1);
+            widget.classList.remove('selected');
+            if (selectedWidgets.length > 0) updateSidebarUI(selectedWidgets[selectedWidgets.length - 1]);
+        } else {
+            selectedWidgets.push(widget);
+            widget.classList.add('selected');
+            updateSidebarUI(widget);
+        }
+    } else {
+        clearSelection();
+        selectedWidgets = [widget];
+        widget.classList.add('selected');
+        updateSidebarUI(widget);
+    }
+  }
+
+  function updateSidebarUI(widget) {
+    if (!widget) return;
+    const content = widget.querySelector('.content-area'); const svg = widget.querySelector('.shape-svg'); const style = window.getComputedStyle(content);
+    document.getElementById('elem-angle').value = widget.dataset.angle || 0;
+    
+    document.getElementById('elem-width').value = Math.round(widget.offsetWidth);
+    document.getElementById('elem-height').value = Math.round(widget.offsetHeight);
+
+    if (svg) {
+        const fill = svg.style.fill;
+        if (fill === 'transparent' || fill === 'rgba(0, 0, 0, 0)') document.getElementById('transparent-bg').checked = true;
+        else { document.getElementById('transparent-bg').checked = false; document.getElementById('elem-color').value = rgbToHex(fill); }
+        document.getElementById('text-color').value = rgbToHex(style.color); const size = style.fontSize; const fsDropdown = document.getElementById('font-size'); if([...fsDropdown.options].some(o => o.value === size)) fsDropdown.value = size;
+        document.getElementById('border-color').value = rgbToHex(svg.style.stroke); const bStyleStr = svg.dataset.borderStyle || (svg.style.strokeDasharray !== 'none' && svg.style.strokeDasharray ? 'dashed' : 'solid'); document.getElementById('border-style').value = ['solid', 'dashed', 'dotted', 'none'].includes(bStyleStr) ? bStyleStr : 'solid';
+        const bWidthPx = svg.style.strokeWidth || '2px'; const widthOpts = ['0px', '1px', '2px', '3px', '4px', '5px']; document.getElementById('border-width').value = widthOpts.includes(bWidthPx) ? bWidthPx : '1px';
+    } else {
+        const bg = style.backgroundColor;
+        if (bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent' || bg.startsWith('rgba(249, 250')) { document.getElementById('transparent-bg').checked = true; } 
+        else { document.getElementById('transparent-bg').checked = false; document.getElementById('elem-color').value = rgbToHex(bg); }
+        
+        document.getElementById('text-color').value = rgbToHex(style.color); const size = style.fontSize; const fsDropdown = document.getElementById('font-size'); if([...fsDropdown.options].some(o => o.value === size)) fsDropdown.value = size;
+        let borderColor = style.borderColor; let borderStyle = style.borderStyle; let borderWidth = style.borderWidth;
+        
+        if (widget.dataset.type === 'line_elbow') { 
+            borderColor = style.borderLeftColor; borderStyle = style.borderLeftStyle; borderWidth = style.borderLeftWidth; 
+        } else if (widget.dataset.type.includes('line')) { 
+            borderColor = style.borderTopColor; borderStyle = style.borderTopStyle; borderWidth = style.borderTopWidth; 
+        }
+        
+        document.getElementById('border-color').value = rgbToHex(borderColor); const bStyleStr = borderStyle.split(' ')[0]; document.getElementById('border-style').value = ['solid', 'dashed', 'dotted', 'none'].includes(bStyleStr) ? bStyleStr : 'solid';
+        const bWidthPx = borderWidth.split(' ')[0]; const widthOpts = ['0px', '1px', '2px', '3px', '4px', '5px']; document.getElementById('border-width').value = widthOpts.includes(bWidthPx) ? bWidthPx : '1px';
+    }
+
+    document.getElementById('arrow-size').value = widget.dataset.arrowScale || '1';
+  }
+
+  function clearSelection() { 
+      document.querySelectorAll('.widget').forEach(w => w.classList.remove('selected')); 
+      selectedWidgets = []; 
+  }
+
+  function changeAngle(deg) { selectedWidgets.forEach(w => { w.dataset.angle = deg; w.style.transform = `rotate(${deg}deg)`; }); }
+  
+  function changeElemSize(prop, value) {
+      const val = Math.max(10, parseInt(value) || 10);
+      selectedWidgets.forEach(w => {
+          if (prop === 'width') w.style.width = val + 'px';
+          if (prop === 'height') w.style.height = val + 'px';
+      });
+  }
+
+  function toggleTextFormat(command) { document.execCommand(command, false, null); }
+  function changeElemColor(color) { 
+      selectedWidgets.forEach(w => {
+          const svg = w.querySelector('.shape-svg'); 
+          if (svg) svg.style.fill = color; 
+          else w.querySelector('.content-area').style.backgroundColor = color; 
+      });
+      document.getElementById('transparent-bg').checked = false; 
+  }
+  function toggleTransparent(isTransparent) { 
+      selectedWidgets.forEach(w => {
+          const content = w.querySelector('.content-area'); const svg = w.querySelector('.shape-svg'); 
+          if(isTransparent) { 
+              if (svg) { svg.dataset.oldFill = svg.style.fill; svg.style.fill = 'transparent'; } 
+              else { content.dataset.oldBg = content.style.backgroundColor; content.style.backgroundColor = 'transparent'; } 
+          } else { 
+              if (svg) svg.style.fill = svg.dataset.oldFill || document.getElementById('elem-color').value; 
+              else content.style.backgroundColor = content.dataset.oldBg || document.getElementById('elem-color').value; 
+          } 
+      });
+  }
+  function changeTextColor(color) { selectedWidgets.forEach(w => { w.querySelector('.content-area').style.color = color; }); }
+  function changeFontSize(size) { selectedWidgets.forEach(w => { w.querySelector('.content-area').style.fontSize = size; }); }
+  
+  function changeBorderColor(color) { 
+      selectedWidgets.forEach(w => {
+          const content = w.querySelector('.content-area'); const svg = w.querySelector('.shape-svg'); 
+          if (w.dataset.type === 'line_elbow') { content.style.borderLeftColor = color; content.style.borderBottomColor = color; content.style.color = color; } 
+          else if (w.dataset.type.includes('line')) { content.style.borderTopColor = color; content.style.color = color; } 
+          else if (svg) { svg.style.stroke = color; } 
+          else { content.style.borderColor = color; } 
+      });
+  }
+
+  function changeBorderStyle(style) { 
+      selectedWidgets.forEach(w => {
+          const content = w.querySelector('.content-area'); const svg = w.querySelector('.shape-svg'); 
+          if (w.dataset.type === 'line_elbow') { content.style.borderLeftStyle = style; content.style.borderBottomStyle = style; } 
+          else if (w.dataset.type.includes('line')) { content.style.borderTopStyle = style; } 
+          else if (svg) { if(style === 'dashed') svg.style.strokeDasharray = "8,6"; else if(style === 'dotted') svg.style.strokeDasharray = "3,3"; else svg.style.strokeDasharray = "none"; svg.dataset.borderStyle = style; } 
+          else { content.style.borderStyle = style; } 
+      });
+  }
+
+  function changeBorderWidth(width) { 
+      selectedWidgets.forEach(w => {
+          const content = w.querySelector('.content-area'); const svg = w.querySelector('.shape-svg'); 
+          if (w.dataset.type === 'line_elbow') { content.style.borderLeftWidth = width; content.style.borderBottomWidth = width; content.style.setProperty('--line-width', width); if(width !== '0px' && content.style.borderLeftStyle === 'none') { content.style.borderLeftStyle = 'solid'; content.style.borderBottomStyle = 'solid'; } } 
+          else if (w.dataset.type.includes('line')) { content.style.borderTopWidth = width; content.style.setProperty('--line-width', width); if(width !== '0px' && content.style.borderTopStyle === 'none') content.style.borderTopStyle = 'solid'; } 
+          else if (svg) { svg.style.strokeWidth = width; } 
+          else { content.style.borderWidth = width; if(width !== '0px' && content.style.borderStyle === 'none') content.style.borderStyle = 'solid'; } 
+      });
+  }
+
+  function changeArrowSize(scale) { 
+      selectedWidgets.forEach(w => {
+          const content = w.querySelector('.content-area'); 
+          if (w.dataset.type.includes('line') || w.dataset.type === 'line_elbow') { 
+              content.style.setProperty('--arrow-scale', scale); 
+              w.dataset.arrowScale = scale; 
+          } 
+      });
+  }
+
+  function rgbToHex(rgb) { if (!rgb || rgb === 'transparent' || rgb.includes('rgba(0, 0, 0, 0)')) return '#ffffff'; let res = rgb.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/); if (!res) return rgb; return "#" + ("0" + parseInt(res[1]).toString(16)).slice(-2) + ("0" + parseInt(res[2]).toString(16)).slice(-2) + ("0" + parseInt(res[3]).toString(16)).slice(-2); }
+
+  let isDragging = false; let isResizing = false; let isRotating = false; let resizeDir = ''; let startW, startH, startX, startY, startL, startT; let centerX = 0, centerY = 0;
+
+  canvasWrapper.addEventListener('mousedown', (e) => {
+    if(e.target.classList.contains('rotate-handle')) { 
+        isRotating = true; const widget = e.target.closest('.widget'); 
+        if(!selectedWidgets.includes(widget)) selectWidget(widget, false);
+        activeActionWidget = widget;
+        const rect = widget.getBoundingClientRect(); centerX = rect.left + rect.width / 2; centerY = rect.top + rect.height / 2; e.stopPropagation(); return; 
+    }
+    if(e.target.classList.contains('resize-handle')) { 
+        isResizing = true; resizeDir = e.target.dataset.dir; const widget = e.target.closest('.widget'); 
+        if(!selectedWidgets.includes(widget)) selectWidget(widget, false);
+        activeActionWidget = widget;
+        startX = e.clientX; startY = e.clientY; startW = widget.offsetWidth; startH = widget.offsetHeight; startL = parseFloat(widget.style.left) || 0; startT = parseFloat(widget.style.top) || 0; e.stopPropagation(); return; 
+    }
+    
+    const widget = e.target.closest('.widget');
+
+    if (widget) { 
+        if(e.target.isContentEditable) return;
+        
+        const isMultiSelect = e.shiftKey || e.ctrlKey || e.metaKey;
+
+        if (isMultiSelect) {
+            widget.classList.toggle('selected');
+            if (widget.classList.contains('selected')) {
+                selectedWidgets.push(widget);
+                widget.style.zIndex = ++zIndexCounter; 
+            } else {
+                selectedWidgets = selectedWidgets.filter(w => w !== widget);
+            }
+            if(selectedWidgets.length > 0) updateSidebarUI(selectedWidgets[selectedWidgets.length - 1]);
+        } else {
+            if (!widget.classList.contains('selected') || selectedWidgets.length <= 1) {
+                clearSelection();
+                widget.classList.add('selected');
+                selectedWidgets = [widget];
+            }
+            
+            widget.style.zIndex = ++zIndexCounter; 
+            updateSidebarUI(widget);
+        }
+
+        isDragging = true;
+        const canvasEl = document.getElementById(activeSlideId); 
+        const canvasRect = canvasEl.getBoundingClientRect(); 
+        const mouseXCanvas = (e.clientX - canvasRect.left) / currentScale; 
+        const mouseYCanvas = (e.clientY - canvasRect.top) / currentScale; 
+
+        dragOffsets.clear();
+        selectedWidgets.forEach(w => {
+            const widgetLeft = parseFloat(w.style.left) || 0; 
+            const widgetTop = parseFloat(w.style.top) || 0; 
+            dragOffsets.set(w, {
+                x: mouseXCanvas - widgetLeft,
+                y: mouseYCanvas - widgetTop
+            });
+        });
+    } 
+    else {
+        const isMultiSelect = e.shiftKey || e.ctrlKey || e.metaKey;
+        if (!isMultiSelect) {
+            clearSelection();
+        }
+    }
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (isRotating && activeActionWidget) { const dx = e.clientX - centerX; const dy = e.clientY - centerY; let angle = Math.atan2(dy, dx) * (180 / Math.PI) + 90; if (angle < 0) angle += 360; if (e.shiftKey) angle = Math.round(angle / 15) * 15; else angle = Math.round(angle); activeActionWidget.dataset.angle = angle; activeActionWidget.style.transform = `rotate(${angle}deg)`; const angleInput = document.getElementById('elem-angle'); if(angleInput) angleInput.value = angle; return; }
+    
+    if (isResizing && activeActionWidget) { 
+        const dx = (e.clientX - startX) / currentScale; const dy = (e.clientY - startY) / currentScale; 
+        let newW = startW, newH = startH, newL = startL, newT = startT; 
+        if (resizeDir.includes('e')) newW = startW + dx; 
+        if (resizeDir.includes('w')) { newW = startW - dx; newL = startL + dx; } 
+        if (resizeDir.includes('s')) newH = startH + dy; 
+        if (resizeDir.includes('n')) { newH = startH - dy; newT = startT + dy; } 
+        if (newW < 20) { newW = 20; if (resizeDir.includes('w')) newL = startL + startW - 20; } 
+        if (newH < 20) { newH = 20; if (resizeDir.includes('n')) newT = startT + startH - 20; } 
+        activeActionWidget.style.width = `${newW}px`; 
+        activeActionWidget.style.height = `${newH}px`; 
+        activeActionWidget.style.left = `${newL}px`; 
+        activeActionWidget.style.top = `${newT}px`; 
+        
+        const wInput = document.getElementById('elem-width');
+        if (wInput) wInput.value = Math.round(newW);
+        const hInput = document.getElementById('elem-height');
+        if (hInput) hInput.value = Math.round(newH);
+        return; 
+    }
+    
+    if(isDragging && selectedWidgets.length > 0 && activeSlideId) { 
+        const canvasEl = document.getElementById(activeSlideId); 
+        const canvasRect = canvasEl.getBoundingClientRect(); 
+        const mouseXCanvas = (e.clientX - canvasRect.left) / currentScale; 
+        const mouseYCanvas = (e.clientY - canvasRect.top) / currentScale; 
+        
+        selectedWidgets.forEach(w => {
+            const offset = dragOffsets.get(w);
+            if (offset) {
+                w.style.left = `${mouseXCanvas - offset.x}px`; 
+                w.style.top = `${mouseYCanvas - offset.y}px`;
+            }
+        });
+    }
+  });
+
+  document.addEventListener('mouseup', () => { 
+      isDragging = false; 
+      isResizing = false; 
+      isRotating = false; 
+      activeActionWidget = null; 
+  });
+  
+  document.addEventListener('keydown', (e) => {
+      const isCtrl = e.ctrlKey || e.metaKey;
+      const isAlt = e.altKey;
+      const isShift = e.shiftKey;
+      const key = e.key.toLowerCase();
+      
+      const isInputOrEditor = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable || (document.activeElement && document.activeElement.isContentEditable);
+
+      if (isCtrl && !isAlt && (key === '=' || key === '+' || key === '-' || key === '_')) {
+          e.preventDefault(); 
+          
+          let targetEditor = document.activeElement && document.activeElement.hasAttribute('contenteditable') ? document.activeElement : null;
+          
+          if (targetEditor) {
+              const delta = (key === '-' || key === '_') ? -1 : 1;
+              const sel = window.getSelection();
+
+              if (sel.rangeCount > 0 && !sel.isCollapsed) {
+                  const tempFontName = 'TempFont_' + Date.now();
+                  document.execCommand('styleWithCSS', false, false);
+                  document.execCommand('fontName', false, tempFontName); 
+                  
+                  let elems = targetEditor.querySelectorAll(`font[face="${tempFontName}"], span[style*="${tempFontName}"]`);
+                  
+                  elems.forEach(el => {
+                      let parentSize = parseFloat(window.getComputedStyle(el.parentNode).fontSize) || 14;
+                      let currentSize = el.style.fontSize ? parseFloat(el.style.fontSize) : parentSize;
+                      let newSize = Math.max(8, currentSize + delta); 
+                      if (el.tagName.toLowerCase() === 'font') {
+                          let span = document.createElement('span'); span.style.fontSize = newSize + 'px'; span.innerHTML = el.innerHTML; el.replaceWith(span);
+                      } else { el.style.fontFamily = ''; if (el.getAttribute('style') === '') el.removeAttribute('style'); el.style.fontSize = newSize + 'px'; }
+                  });
+              } else {
+                  let currentSize = parseFloat(window.getComputedStyle(targetEditor).fontSize) || 14;
+                  targetEditor.style.fontSize = Math.max(8, currentSize + delta) + 'px';
+              }
+          }
+          return;
+      }
+      
+      if (isCtrl && !isAlt && !isShift && key === 's') { e.preventDefault(); saveProject(); return; }
+      if (isCtrl && isAlt && !isShift && key === 'n') { e.preventDefault(); createNewProject(); return; }
+
+      if (!isInputOrEditor && selectedWidgets.length > 0) {
+          const moveAmount = isShift ? 10 : 1; let dx = 0, dy = 0;
+          if (e.key === 'ArrowUp') dy = -moveAmount; if (e.key === 'ArrowDown') dy = moveAmount; if (e.key === 'ArrowLeft') dx = -moveAmount; if (e.key === 'ArrowRight') dx = moveAmount;
+          if (dx !== 0 || dy !== 0) { e.preventDefault(); selectedWidgets.forEach(w => { let currentLeft = parseFloat(w.style.left) || 0; let currentTop = parseFloat(w.style.top) || 0; w.style.left = (currentLeft + dx) + 'px'; w.style.top = (currentTop + dy) + 'px'; }); return; }
+      }
+
+      if((e.key === 'Delete' || e.key === 'Backspace') && selectedWidgets.length > 0 && !isInputOrEditor) { 
+          selectedWidgets.forEach(w => {
+              const wId = w.id; w.remove();
+          }); 
+          clearSelection(); return; 
+      }
+      
+      if (!isInputOrEditor) {
+          if (isCtrl && !isAlt && !isShift && key === 'c') { if (selectedWidgets.length > 0) { e.preventDefault(); copiedWidgetsData = selectedWidgets.map(w => w.cloneNode(true)); } return; }
+          if (isCtrl && !isAlt && !isShift && key === 'x') { 
+              if (selectedWidgets.length > 0) { 
+                  e.preventDefault(); copiedWidgetsData = selectedWidgets.map(w => w.cloneNode(true)); 
+                  selectedWidgets.forEach(w => {
+                      const wId = w.id; w.remove();
+                  }); clearSelection(); 
+              } return; 
+          }
+          if (isCtrl && !isAlt && !isShift && key === 'v') {
+              if (copiedWidgetsData.length > 0 && activeSlideId) {
+                  e.preventDefault(); const slide = document.getElementById(activeSlideId); clearSelection();
+                  copiedWidgetsData.forEach(copiedData => {
+                      const newWidget = copiedData.cloneNode(true); newWidget.id = generateId();
+                      let currentLeft = parseFloat(newWidget.style.left) || 0; let currentTop = parseFloat(newWidget.style.top) || 0;
+                      newWidget.style.left = (currentLeft + 20) + 'px'; newWidget.style.top = (currentTop + 20) + 'px';
+                      copiedData.style.left = newWidget.style.left; copiedData.style.top = newWidget.style.top;
+                      newWidget.style.zIndex = ++zIndexCounter; newWidget.classList.remove('selected');
+                      slide.appendChild(newWidget); selectedWidgets.push(newWidget); newWidget.classList.add('selected');
+                  });
+                  if (selectedWidgets.length > 0) updateSidebarUI(selectedWidgets[0]);
+              } return;
+          }
+      }
+
+      let targetEditor = document.activeElement && document.activeElement.hasAttribute('contenteditable') ? document.activeElement : null;
+      if (targetEditor) {
+          if (isCtrl && isShift && key === 'x') { e.preventDefault(); document.execCommand('removeFormat', false, null); document.execCommand('styleWithCSS', false, false); document.execCommand('hiliteColor', false, 'transparent'); document.execCommand('backColor', false, 'transparent'); return; }
+          if (isCtrl && !isAlt && !isShift && key === '0') { e.preventDefault(); document.execCommand('strikeThrough', false, null); return; }
+          if (isCtrl && isAlt && !isShift && key === 'r') { e.preventDefault(); document.execCommand('styleWithCSS', false, true); document.execCommand('foreColor', false, '#ef4444'); return; }
+          if (isCtrl && isAlt && !isShift && key === 'b') { e.preventDefault(); document.execCommand('styleWithCSS', false, true); document.execCommand('foreColor', false, '#2563EB'); return; }
+          if (isCtrl && isAlt && !isShift && key === 'g') { e.preventDefault(); document.execCommand('styleWithCSS', false, true); document.execCommand('foreColor', false, '#16a34a'); return; }
+          if (isCtrl && !isAlt && !isShift && ['1','2','3','4','5','6','7'].includes(key)) {
+              e.preventDefault(); document.execCommand('styleWithCSS', false, true);
+              let bgColor = 'transparent';
+              switch(key) { case '1': bgColor = '#fdba74'; break; case '2': bgColor = '#93c5fd'; break; case '3': bgColor = '#fde047'; break; case '4': bgColor = '#86efac'; break; case '5': bgColor = '#f9a8d4'; break; case '6': bgColor = '#d4a373'; break; case '7': bgColor = '#cbd5e1'; break; }
+              if (!document.execCommand('hiliteColor', false, bgColor)) { document.execCommand('backColor', false, bgColor); }
+              return;
+          }
+      }
+  });
+
+  document.addEventListener('paste', function(e) {
+      const isInputOrEditor = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable || (document.activeElement && document.activeElement.isContentEditable);
+      if (isInputOrEditor) return;
+      const items = (e.clipboardData || window.clipboardData).items;
+      if (!items) return;
+      for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          if (item.type.indexOf('image') !== -1) {
+              const file = item.getAsFile();
+              const reader = new FileReader();
+              reader.onload = function(event) { addWidget('image', event.target.result); };
+              reader.readAsDataURL(file); e.preventDefault(); break;
+          }
+      }
+  });
+
+  document.getElementById('btn-export').addEventListener('click', () => {
+    let pres = new PptxGenJS(); pres.layout = 'LAYOUT_16x9'; 
+    const PX_TO_INCH = 96; const slides = document.querySelectorAll('.ppt-slide');
+    
+    slides.forEach(slideEl => {
+        let slide = pres.addSlide(); 
+        if (slideEl.dataset.bgImg) { slide.background = { data: slideEl.dataset.bgImg }; } else { slide.background = { color: slideEl.dataset.bg.replace('#', '') }; }
+        const widgets = slideEl.querySelectorAll('.widget');
+        
+        widgets.forEach(w => {
+            const content = w.querySelector('.content-area'); const svg = w.querySelector('.shape-svg'); const type = w.dataset.type; const style = window.getComputedStyle(content);
+            const x = parseFloat(w.style.left || 0) / PX_TO_INCH; const y = parseFloat(w.style.top || 0) / PX_TO_INCH;
+            const width = w.offsetWidth / PX_TO_INCH; const height = w.offsetHeight / PX_TO_INCH;
+            const angle = parseFloat(w.dataset.angle) || 0; 
+
+            const baseProps = { x: x, y: y, w: width, h: height };
+            if (angle !== 0) baseProps.rotate = angle; 
+            
+            let bStyle, bWidthPx, borderColorHex, isTransparent, fillColorHex;
+            if (svg) {
+                bStyle = svg.dataset.borderStyle || 'solid'; bWidthPx = parseFloat(svg.style.strokeWidth) || 0; borderColorHex = rgbToHex(svg.style.stroke).replace('#', '');
+                isTransparent = svg.style.fill === 'transparent' || svg.style.fill.includes('rgba(0, 0, 0, 0)'); fillColorHex = isTransparent ? null : rgbToHex(svg.style.fill).replace('#', '');
+            } else {
+                bStyle = style.borderStyle.split(' ')[0]; bWidthPx = parseFloat(style.borderWidth) || 0; borderColorHex = rgbToHex(style.borderColor).replace('#', '');
+                if (type === 'line_elbow') { bStyle = style.borderLeftStyle.split(' ')[0]; bWidthPx = parseFloat(style.borderLeftWidth) || 0; borderColorHex = rgbToHex(style.borderLeftColor).replace('#', ''); }
+                else if(type.includes('line')) { bStyle = style.borderTopStyle.split(' ')[0]; bWidthPx = parseFloat(style.borderTopWidth) || 0; borderColorHex = rgbToHex(style.borderTopColor).replace('#', ''); }
+                isTransparent = style.backgroundColor === 'rgba(0, 0, 0, 0)' || style.backgroundColor === 'transparent' || style.backgroundColor.startsWith('rgba(249, 250');
+                fillColorHex = isTransparent ? null : rgbToHex(style.backgroundColor).replace('#', '');
+            }
+
+            let lineProps = null;
+            if (bWidthPx > 0 || type.includes('line')) { let dashType = 'solid'; if (bStyle === 'dashed') dashType = 'dash'; if (bStyle === 'dotted') dashType = 'sysDot'; lineProps = { color: borderColorHex, width: bWidthPx * 0.75 || 1, dashType: dashType }; }
+
+            const textColorHex = rgbToHex(style.color).replace('#',''); const fontSizePt = parseFloat(style.fontSize) * 0.75 || 12;
+            let shapeOptions = { ...baseProps };
+            if (fillColorHex && !type.includes('line')) shapeOptions.fill = { color: fillColorHex }; else if (!type.includes('line')) shapeOptions.fill = { transparency: 100 };
+            if (lineProps) shapeOptions.line = lineProps;
+
+            let plainText = content.innerHTML.replace(/<br>/g, "\n").replace(/<(?!u|\/u|b|\/b|strong|\/strong|i|\/i)[^>]+>/g, "");
+
+            if (['title', 'text', 'boundary', 'box', 'node', 'node_sub', 'keyword'].includes(type)) {
+                let align = 'left'; let valign = 'top';
+                if(type === 'title' || type === 'node' || type === 'node_sub' || type === 'keyword') { align = 'center'; valign = 'middle'; }
+                if (type === 'boundary') { shapeOptions.shape = pres.ShapeType.roundRect; shapeOptions.rectRadius = 0.05; } 
+                else if (type === 'node' || type === 'node_sub') { shapeOptions.shape = pres.ShapeType.roundRect; shapeOptions.rectRadius = 0.5; }
+                else if (type === 'box' || type === 'keyword') { shapeOptions.shape = pres.ShapeType.rect; }
+                slide.addText(plainText, { ...shapeOptions, fontSize: fontSizePt, color: textColorHex, bold: type === 'title' || type === 'node' || type === 'node_sub' || type === 'keyword', align: align, valign: valign });
+            } else if (type === 'list') {
+                const listItems = content.querySelectorAll('li'); let textArray = [];
+                if (listItems.length > 0) listItems.forEach(li => textArray.push({ text: li.innerText, options: { bullet: true, color: textColorHex, fontSize: fontSizePt } }));
+                else textArray.push({ text: content.innerText, options: { bullet: true, color: textColorHex, fontSize: fontSizePt } });
+                slide.addText(textArray, { ...shapeOptions, valign: 'top' });
+            } else if (type.includes('line')) {
+                let hw = 'med', hl = 'med';
+                const arrowScale = w.dataset.arrowScale || '1';
+                if (arrowScale === '0.5') { hw = 'sm'; hl = 'sm'; }
+                else if (arrowScale === '1.5' || arrowScale === '2') { hw = 'lg'; hl = 'lg'; }
+
+                if (type === 'line_elbow') {
+                    shapeOptions.line.beginArrowType = 'none'; shapeOptions.line.endArrowType = 'triangle';
+                    shapeOptions.line.headWidth = hw; shapeOptions.line.headLength = hl;
+                    slide.addShape(pres.ShapeType.bentConnector3 || pres.ShapeType.line, shapeOptions);
+                } else {
+                    if (type === 'line_arrow') { 
+                        shapeOptions.line.beginArrowType = 'none'; shapeOptions.line.endArrowType = 'triangle'; 
+                        shapeOptions.line.headWidth = hw; shapeOptions.line.headLength = hl;
+                    } 
+                    else if (type === 'line_arrow_both') { 
+                        shapeOptions.line.beginArrowType = 'triangle'; shapeOptions.line.endArrowType = 'triangle'; 
+                        shapeOptions.line.headWidth = hw; shapeOptions.line.headLength = hl;
+                        shapeOptions.line.tailWidth = hw; shapeOptions.line.tailLength = hl;
+                    }
+                    shapeOptions.h = 0; shapeOptions.y += height / 2; slide.addShape(pres.ShapeType.line, shapeOptions);
+                }
+            } else if (SHAPE_TYPES.includes(type)) {
+                let shapeType = pres.ShapeType.rect;
+                if (type === 'roundrect' || type === 'pill') shapeType = pres.ShapeType.roundRect; 
+                if (type === 'circle') shapeType = pres.ShapeType.ellipse; if (type === 'triangle') shapeType = pres.ShapeType.triangle; if (type === 'diamond') shapeType = pres.ShapeType.diamond; if (type === 'rightarrow') shapeType = pres.ShapeType.rightArrow; if (type === 'leftarrow') shapeType = pres.ShapeType.leftArrow; if (type === 'uparrow') shapeType = pres.ShapeType.upArrow; if (type === 'downarrow') shapeType = pres.ShapeType.downArrow; if (type === 'cylinder') shapeType = pres.ShapeType.can; if (type === 'cloud') shapeType = pres.ShapeType.cloud; if (type === 'chevron') shapeType = pres.ShapeType.pentagon;
+                if (type === 'hexagon') shapeType = pres.ShapeType.hexagon;
+                if (type === 'parallelogram') shapeType = pres.ShapeType.parallelogram;
+                if (type === 'trapezoid') shapeType = pres.ShapeType.trapezoid;
+                
+                let radius = type === 'roundrect' ? 0.2 : (type === 'pill' ? 0.5 : 0);
+                shapeOptions.rectRadius = radius;
+
+                if(content.innerText.trim() !== '') { 
+                    slide.addText(plainText, { ...shapeOptions, shape: shapeType, color: textColorHex, fontSize: fontSizePt, align: 'center', valign: 'middle' }); 
+                } 
+                else slide.addShape(shapeType, shapeOptions);
+            } else if (type === 'image') { const img = content.querySelector('img'); if(img && img.dataset.src) slide.addImage({ data: img.dataset.src, ...baseProps }); }
+        });
+    });
+
+    const pName = document.getElementById('project-name').value || 'MyPresentation';
+    pres.writeFile({ fileName: isSketchMode ? `Sketch_${pName}.pptx` : `${pName}.pptx` }).then(() => console.log("Exported!")).catch(err => showToast("오류가 발생했습니다."));
+  });
+
+  window.onload = () => { addSlide(); };
+</script>
+</body>
+</html>

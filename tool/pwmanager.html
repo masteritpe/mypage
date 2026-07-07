@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Vault Keeper</title>
+  
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+
+  <style>
+    /* === 1. Design System (Premium) === */
+    :root {
+      --bg-app: #f0f2f5;
+      --bg-panel: #ffffff;
+      --bg-input: #f8fafc;
+      --text-main: #1e293b;
+      --text-sub: #64748b;
+      --border: #e2e8f0;
+      --primary: #0f172a;
+      --primary-hover: #334155;
+      --accent: #3b82f6;
+      --danger: #ef4444;
+      --success: #10b981;
+      --font-ui: "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
+    }
+
+    * { box-sizing: border-box; outline: none; }
+    
+    body {
+      margin: 0; 
+      background: var(--bg-app); 
+      color: var(--text-main);
+      font-family: var(--font-ui); 
+      font-size: 15px;
+      line-height: 1.6;
+      height: 100vh; 
+      display: flex; 
+      flex-direction: column; 
+      overflow: hidden;
+    }
+
+    /* === 2. Header === */
+    header {
+      background: var(--bg-panel); 
+      height: 64px; 
+      padding: 0 30px;
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid var(--border); 
+      z-index: 50; flex-shrink: 0;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+    }
+    
+    .logo { 
+        font-size: 20px; font-weight: 700; color: var(--primary); 
+        display: flex; align-items: center; gap: 12px; margin: 0; 
+        letter-spacing: -0.5px;
+    }
+    
+    .status-badge {
+        padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 600;
+        display: flex; align-items: center; gap: 8px; 
+        transition: 0.3s;
+    }
+    .status-badge.locked { background: #fee2e2; color: #991b1b; }
+    .status-badge.unlocked { background: #dcfce7; color: #166534; }
+
+    .toolbar { display: flex; gap: 10px; }
+    
+    .btn {
+      height: 40px; padding: 0 18px; border-radius: 8px; 
+      border: 1px solid var(--border);
+      background: #fff; cursor: pointer; 
+      display: inline-flex; align-items: center; gap: 8px;
+      font-family: var(--font-ui); font-weight: 600; font-size: 14px; 
+      color: var(--text-main); transition: all 0.2s ease;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+    .btn:hover { background: #f8fafc; border-color: #cbd5e1; transform: translateY(-1px); }
+    
+    .btn-primary { 
+        background: var(--primary); color: #fff; border-color: var(--primary); 
+        box-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.2);
+    }
+    .btn-primary:hover { background: var(--primary-hover); color: #fff; }
+    
+    .btn-danger { color: #dc2626; border-color: #fecaca; background: #fff; }
+    .btn-danger:hover { background: #fef2f2; border-color: #f87171; }
+
+    /* === 3. Main Layout === */
+    main { flex: 1; display: flex; height: calc(100vh - 64px); overflow: hidden; position: relative; }
+
+    /* Sidebar */
+    #sidebar {
+      width: 340px; background: var(--bg-panel); border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; flex-shrink: 0;
+    }
+    
+    /* 사이드바 헤더 (검색창 + 필터) */
+    .sidebar-header { 
+        padding: 20px; border-bottom: 1px solid var(--border); 
+        display: flex; flex-direction: column; gap: 12px; background: #fff; 
+    }
+    .search-row { display: flex; gap: 10px; width: 100%; }
+    
+    .search-input { 
+        flex: 1; padding: 0 14px; height: 40px;
+        border: 1px solid var(--border); border-radius: 8px; 
+        font-size: 14px; background: var(--bg-input); color: var(--text-main);
+        font-family: var(--font-ui);
+    }
+    .search-input:focus { border-color: var(--accent); background: #fff; }
+
+    /* 카테고리 필터 드롭다운 스타일 */
+    .filter-select {
+        width: 100%; height: 38px; padding: 0 14px;
+        border: 1px solid var(--border); border-radius: 8px;
+        font-size: 13px; background-color: var(--bg-input); color: var(--text-main);
+        font-family: var(--font-ui); font-weight: 600; cursor: pointer;
+        appearance: none; 
+        background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2364748b%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+        background-repeat: no-repeat; background-position: right 14px top 50%; background-size: 10px auto;
+        transition: 0.2s;
+    }
+    .filter-select:focus { border-color: var(--accent); background-color: #fff; }
+    .filter-select:disabled { opacity: 0.6; cursor: not-allowed; }
+    
+    .btn-icon-sq {
+        width: 40px; height: 40px; border-radius: 8px; border: 1px solid var(--border); flex-shrink: 0;
+        background: #fff; color: var(--text-sub); cursor: pointer;
+        display: flex; justify-content: center; align-items: center; transition: 0.2s;
+    }
+    .btn-icon-sq:hover { border-color: var(--accent); color: var(--accent); }
+
+    .list-scroll { flex: 1; overflow-y: auto; }
+    
+    .list-item {
+      padding: 18px 24px; border-bottom: 1px solid #f1f5f9; cursor: pointer;
+      display: flex; flex-direction: column; gap: 6px; transition: 0.2s; 
+      border-left: 3px solid transparent;
+    }
+    .list-item:hover { background: #f8fafc; }
+    .list-item.active { background: #eff6ff; border-left-color: var(--accent); }
+    
+    .item-title { font-weight: 700; font-size: 15px; color: var(--text-main); display: flex; justify-content: space-between; }
+    .item-sub { font-size: 13px; color: var(--text-sub); display: flex; align-items: center; gap: 8px; }
+    .category-tag { background: #e2e8f0; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; color: #475569; }
+
+    /* Editor Area */
+    #editor-area { flex: 1; display: flex; flex-direction: column; background: var(--bg-app); position: relative; }
+    
+    /* Lock Screen Overlay */
+    #lock-overlay {
+        position: absolute; inset: 0; background: rgba(241, 245, 249, 0.7); backdrop-filter: blur(8px);
+        z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center;
+    }
+    .lock-card {
+        background: #fff; padding: 50px 40px; border-radius: 16px; 
+        box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
+        width: 100%; max-width: 420px; text-align: center; border: 1px solid rgba(255,255,255,0.5);
+    }
+    .lock-icon { font-size: 56px; color: var(--primary); margin-bottom: 24px; background: #f1f5f9; width: 100px; height: 100px; line-height: 100px; border-radius: 50%; display:inline-block; }
+    .master-input { width: 100%; padding: 14px; font-size: 16px; border: 1px solid var(--border); border-radius: 10px; margin-bottom: 20px; text-align: center; background: var(--bg-input); letter-spacing: 2px; }
+    .master-input:focus { border-color: var(--primary); background: #fff; box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.1); }
+
+    /* Detail View Scroll Area */
+    .editor-scroller { flex: 1; overflow-y: auto; padding: 40px; display: flex; justify-content: center; align-items: flex-start; }
+    
+    /* The Paper (Card) */
+    .paper {
+        width: 100%; max-width: 760px; background: #fff; padding: 50px; border-radius: 16px; 
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+        border: 1px solid var(--border); display: flex; flex-direction: column; gap: 28px;
+        margin-bottom: 40px; 
+    }
+
+    .paper-header { display: flex; justify-content: space-between; align-items: flex-end; padding-bottom: 20px; border-bottom: 2px solid #f1f5f9; margin-bottom: 10px; }
+    .paper-title { font-size: 24px; font-weight: 800; color: var(--primary); letter-spacing: -0.5px; margin: 0; }
+    .paper-date { font-size: 12px; color: #94a3b8; font-weight: 500; }
+
+    /* Forms */
+    .form-group { display: flex; flex-direction: column; gap: 8px; position: relative; }
+    .form-label { font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.8px; margin-left: 2px; }
+    
+    .form-input {
+        width: 100%; padding: 14px 16px; border: 1px solid var(--border); border-radius: 10px;
+        font-size: 15px; color: var(--text-main); background: var(--bg-input); font-family: var(--font-ui); transition: 0.2s;
+    }
+    .form-input:focus { border-color: var(--accent); background: #fff; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+    .form-input-lg { font-size: 18px; font-weight: 700; background: #fff; border-color: #cbd5e1; }
+
+    /* Password / Action Input Wrapper */
+    .password-wrapper { position: relative; width: 100%; }
+    .password-wrapper input { padding-right: 120px; font-family: "Pretendard", monospace; letter-spacing: 0.5px; }
+    .pw-actions { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); display: flex; gap: 4px; }
+    .btn-icon { width: 34px; height: 34px; border: none; background: transparent; border-radius: 6px; color: var(--text-sub); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
+    .btn-icon:hover { background: #e2e8f0; color: var(--primary); }
+
+    textarea.form-input { min-height: 120px; resize: vertical; line-height: 1.6; }
+    .toolbar-footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 12px; }
+
+    .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #94a3b8; gap: 16px; opacity: 0.8; text-align: center; }
+    
+    #toast-area { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); z-index: 3000; display:flex; flex-direction:column; gap:10px; align-items:center; }
+    .toast { background: rgba(15, 23, 42, 0.95); color: #fff; padding: 14px 28px; border-radius: 50px; font-size: 14px; font-weight: 500; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3); animation: fadeUp 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28); backdrop-filter: blur(4px); }
+    @keyframes fadeUp { from { opacity:0; transform:translateY(20px) scale(0.9); } to { opacity:1; transform:translateY(0) scale(1); } }
+
+    @media (max-width: 800px) { #sidebar { display: none; } .paper { padding: 30px 20px; } }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><i class="fas fa-shield-halved"></i> Vault Keeper</div>
+  <div style="display:flex; align-items:center; gap:16px;">
+      <div id="status-badge" class="status-badge locked"><i class="fas fa-lock"></i> 잠금 상태</div>
+      <div class="toolbar">
+        <input type="file" id="inp-import" accept=".json" style="display: none;">
+        <button class="btn" id="btn-lock"><i class="fas fa-lock"></i> 잠금</button>
+        <button class="btn" id="btn-export"><i class="fas fa-download"></i> 백업</button>
+        <button class="btn" id="btn-import"><i class="fas fa-upload"></i> 복구</button>
+      </div>
+  </div>
+</header>
+
+<main>
+  <aside id="sidebar">
+    <div class="sidebar-header">
+      <div class="search-row">
+          <input type="text" id="searchInput" class="search-input" placeholder="검색어를 입력하세요..." disabled>
+          <button class="btn-icon-sq" id="btn-add-new" title="새 항목 추가 (Ctrl+Alt+N)"><i class="fas fa-plus"></i></button>
+      </div>
+      <select id="categoryFilter" class="filter-select" disabled>
+          <option value="">📁 전체 카테고리</option>
+      </select>
+    </div>
+    <div class="list-scroll" id="listBody"></div>
+  </aside>
+
+  <section id="editor-area">
+    <div id="lock-overlay">
+        <div class="lock-card">
+            <div class="lock-icon"><i class="fas fa-user-lock"></i></div>
+            <h2 style="margin:0 0 12px 0; color:var(--primary); font-weight:800;">보안 접근 확인</h2>
+            <p style="color:#64748b; font-size:14px; margin-bottom:30px; line-height:1.5;">마스터 패스워드를 입력하여<br>암호화된 금고를 해제하세요.</p>
+            <input type="password" id="inpMasterPassword" class="master-input" placeholder="Master Password" autocomplete="off">
+            <button id="btn-unlock" class="btn btn-primary" style="width:100%; justify-content:center; height:48px; font-size:16px;">
+                <i class="fas fa-key"></i> 볼트 잠금 해제
+            </button>
+            <div id="login-msg" style="color:var(--danger); font-size:13px; margin-top:16px; min-height:20px; font-weight:600;"></div>
+        </div>
+    </div>
+
+    <div class="editor-scroller" id="detail-view" style="display:none;">
+        <div class="paper">
+            <div class="paper-header">
+                <h2 class="paper-title">상세 정보</h2>
+                <span id="last-updated" class="paper-date"></span>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">사이트 이름(Site Name)</label>
+                <input type="text" id="inpSite" class="form-input form-input-lg" placeholder="예: Google, Netflix">
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 2fr; gap:20px;">
+                <div class="form-group">
+                    <label class="form-label">카테고리</label>
+                    <input type="text" id="inpCategory" class="form-input" list="categoryList" placeholder="선택 또는 입력">
+                    <datalist id="categoryList">
+                        <option value="학습">
+                        <option value="업무">						
+                        <option value="개인">
+                        <option value="정보">						
+                        <option value="금융">
+                        <option value="소셜">
+                        <option value="쇼핑">
+                        <option value="기타">						
+                    </datalist>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">URL(로그인 주소)</label>
+                    <div class="password-wrapper">
+                        <input type="text" id="inpUrl" class="form-input" placeholder="https://..." style="font-family: var(--font-ui); letter-spacing: normal; padding-right: 80px;">
+                        <div class="pw-actions">
+                            <button class="btn-icon" id="btn-open-url" title="새 창으로 열기"><i class="fas fa-external-link-alt"></i></button>
+                            <button class="btn-icon btn-copy" data-target="inpUrl" title="복사"><i class="far fa-copy"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">아이디(Username)</label>
+                <div class="password-wrapper">
+                    <input type="text" id="inpUsername" class="form-input" placeholder="user@example.com">
+                    <div class="pw-actions">
+                        <button class="btn-icon btn-copy" data-target="inpUsername" title="복사"><i class="far fa-copy"></i></button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">비밀번호(Password)</label>
+                <div class="password-wrapper">
+                    <input type="password" id="inpPassword" class="form-input" placeholder="Password">
+                    <div class="pw-actions">
+                        <button class="btn-icon" id="btn-gen-pw" title="랜덤 생성"><i class="fas fa-magic"></i></button>
+                        <button class="btn-icon" id="btn-toggle-pw" title="보이기/숨기기"><i class="far fa-eye"></i></button>
+                        <button class="btn-icon btn-copy" data-target="inpPassword" title="복사"><i class="far fa-copy"></i></button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">메모(Notes)</label>
+                <textarea id="inpNotes" class="form-input" placeholder="추가 정보를 입력하세요..."></textarea>
+            </div>
+
+            <div class="toolbar-footer">
+                <button class="btn btn-danger" id="btn-delete"><i class="far fa-trash-alt"></i> 삭제</button>
+                <button class="btn btn-primary" id="btn-save" title="저장하기 (Ctrl+S)"><i class="fas fa-check"></i> 저장하기</button>
+            </div>
+        </div>
+    </div>
+  </section>
+</main>
+
+<div id="toast-area"></div>
+
+<script>
+const Security = {
+    salt: null, key: null, enc: new TextEncoder(), dec: new TextDecoder(),
+    
+    // [수정됨] salt가 브라우저 DB에서 깨져서 나올 경우를 대비한 타입 복구 로직 추가
+    deriveKey: async function(password, salt) {
+        let validSalt = salt;
+        if (!(salt instanceof Uint8Array)) {
+            validSalt = new Uint8Array(salt instanceof ArrayBuffer ? salt : Object.values(salt));
+        }
+
+        const keyMaterial = await window.crypto.subtle.importKey("raw", this.enc.encode(password), { name: "PBKDF2" }, false, ["deriveKey"]);
+        return window.crypto.subtle.deriveKey({ name: "PBKDF2", salt: validSalt, iterations: 100000, hash: "SHA-256" }, keyMaterial, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+    },
+    
+    encrypt: async function(text) {
+        if(!this.key) throw new Error("Key not loaded");
+        const iv = window.crypto.getRandomValues(new Uint8Array(12));
+        const cipher = await window.crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, this.key, this.enc.encode(text));
+        const buffer = new Uint8Array(iv.byteLength + cipher.byteLength);
+        buffer.set(iv); buffer.set(new Uint8Array(cipher), iv.byteLength);
+        return buffer;
+    },
+    
+    // [수정됨] 복호화 과정에서도 데이터가 깨질 수 있으므로 타입 복구 로직 추가
+    decrypt: async function(buffer) {
+        if(!this.key) throw new Error("Key not loaded");
+        
+        let arr = buffer;
+        if (!(buffer instanceof Uint8Array)) {
+            arr = new Uint8Array(buffer instanceof ArrayBuffer ? buffer : Object.values(buffer));
+        }
+
+        const iv = arr.slice(0, 12); const data = arr.slice(12);
+        try { return this.dec.decode(await window.crypto.subtle.decrypt({ name: "AES-GCM", iv: iv }, this.key, data)); } 
+        catch(e) { console.error(e); return null; }
+    }
+};
+
+const DB_NAME = "VaultKeeperDB";
+const App = {
+    db: null, items: [], currentId: null,
+    openDB: function() {
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(DB_NAME, 1);
+            req.onupgradeneeded = e => {
+                const d = e.target.result;
+                if(!d.objectStoreNames.contains("vault")) d.createObjectStore("vault", { keyPath: "id" });
+                if(!d.objectStoreNames.contains("settings")) d.createObjectStore("settings", { keyPath: "key" });
+            };
+            req.onsuccess = e => { this.db = e.target.result; resolve(this.db); };
+            req.onerror = () => reject(req.error);
+        });
+    },
+    tx: function(store, mode="readonly") { return this.db.transaction(store, mode).objectStore(store); },
+    getSetting: function(key) { return new Promise(r => { const q=this.tx("settings").get(key); q.onsuccess=()=>r(q.result?q.result.value:null); q.onerror=()=>r(null); }); },
+    saveSetting: function(key, value) { return new Promise(r => { this.tx("settings","readwrite").put({key,value}); r(); }); },
+    saveItem: async function(item) {
+        const blob = await Security.encrypt(JSON.stringify(item));
+        return new Promise(r => { this.tx("vault","readwrite").put({ id: item.id, data: blob, updatedAt: item.updatedAt }); r(true); });
+    },
+    loadAll: async function() {
+        return new Promise(r => {
+            const q = this.tx("vault").getAll();
+            q.onsuccess = async () => {
+                const arr = [];
+                for(let rec of (q.result||[])) {
+                    const json = await Security.decrypt(rec.data);
+                    if(json) {
+                        const parsed = JSON.parse(json);
+                        parsed.updatedAt = rec.updatedAt;
+                        arr.push(parsed);
+                    }
+                }
+                this.items = arr; r(this.items);
+            };
+        });
+    },
+    deleteItem: function(id) { return new Promise(r => { this.tx("vault","readwrite").delete(id); r(); }); },
+    uid: () => "V_" + Math.random().toString(36).slice(2, 10).toUpperCase(),
+    toast: (msg) => {
+        const area = document.getElementById("toast-area");
+        const el = document.createElement("div"); el.className = "toast"; el.textContent = msg;
+        area.appendChild(el); setTimeout(() => el.remove(), 2500);
+    }
+};
+
+document.addEventListener("DOMContentLoaded", async () => {
+    await App.openDB();
+    
+    const els = {
+        lockOverlay: document.getElementById("lock-overlay"),
+        inpMaster: document.getElementById("inpMasterPassword"),
+        listBody: document.getElementById("listBody"),
+        detailView: document.getElementById("detail-view"),
+        statusBadge: document.getElementById("status-badge"),
+        searchInput: document.getElementById("searchInput"),
+        categoryFilter: document.getElementById("categoryFilter"), // 필터
+        site: document.getElementById("inpSite"),
+        category: document.getElementById("inpCategory"),
+        url: document.getElementById("inpUrl"),
+        username: document.getElementById("inpUsername"),
+        password: document.getElementById("inpPassword"),
+        notes: document.getElementById("inpNotes"),
+        updated: document.getElementById("last-updated")
+    };
+
+    let storedSalt = await App.getSetting("salt");
+    let storedHash = await App.getSetting("verifier");
+
+    if(!storedSalt) {
+        document.querySelector(".lock-card h2").textContent = "Vault 초기 설정";
+        document.querySelector(".lock-card p").innerHTML = "새로운 마스터 패스워드를 설정하세요.<br>분실 시 복구가 <b>절대 불가능</b>합니다.";
+    }
+
+    async function unlockVault() {
+        const pwd = els.inpMaster.value;
+        if(!pwd) return;
+        const msg = document.getElementById("login-msg");
+        msg.textContent = "암호화 키 연산 중...";
+
+        if(!storedSalt) {
+            const salt = window.crypto.getRandomValues(new Uint8Array(16));
+            storedSalt = salt;
+            await App.saveSetting("salt", salt);
+            Security.key = await Security.deriveKey(pwd, salt);
+            const verifier = await Security.encrypt("VERIFY_ME");
+            await App.saveSetting("verifier", verifier);
+            storedHash = verifier;
+            proceedLogin();
+        } else {
+            Security.key = await Security.deriveKey(pwd, storedSalt);
+            const check = await Security.decrypt(storedHash);
+            if(check === "VERIFY_ME") proceedLogin();
+            else { msg.textContent = "패스워드가 일치하지 않습니다."; Security.key = null; }
+        }
+    }
+
+    async function proceedLogin() {
+        els.lockOverlay.style.display = "none";
+        els.statusBadge.className = "status-badge unlocked";
+        els.statusBadge.innerHTML = '<i class="fas fa-lock-open"></i> 접근 허용됨';
+        
+        // 검색 및 필터 활성화
+        els.searchInput.disabled = false;
+        els.categoryFilter.disabled = false;
+        
+        await App.loadAll();
+        updateCategoryDropdown();
+        renderList();
+        App.toast("안전하게 잠금 해제되었습니다.");
+    }
+
+    document.getElementById("btn-unlock").onclick = unlockVault;
+    els.inpMaster.addEventListener("keyup", (e) => { if(e.key==="Enter") unlockVault(); });
+
+    // 동적 카테고리 업데이트
+    function updateCategoryDropdown() {
+        const currentSelected = els.categoryFilter.value;
+        const categories = [...new Set(App.items.map(item => item.category).filter(Boolean))].sort();
+        
+        els.categoryFilter.innerHTML = '<option value="">📁 전체 카테고리</option>';
+        categories.forEach(cat => {
+            const opt = document.createElement('option');
+            opt.value = cat;
+            opt.textContent = cat;
+            els.categoryFilter.appendChild(opt);
+        });
+        
+        if (categories.includes(currentSelected)) {
+            els.categoryFilter.value = currentSelected;
+        }
+    }
+
+    function renderList() {
+        const searchKeyword = els.searchInput.value.toLowerCase();
+        const selectedCategory = els.categoryFilter.value;
+
+        els.listBody.innerHTML = "";
+        
+        const filtered = App.items.filter(item => {
+            const matchSearch = ((item.site||"") + (item.username||"") + (item.category||"") + (item.notes||"")).toLowerCase().includes(searchKeyword);
+            const matchCategory = selectedCategory === "" || item.category === selectedCategory;
+            return matchSearch && matchCategory;
+        }).sort((a,b) => (a.site||"").localeCompare(b.site||""));
+
+        if(!filtered.length) {
+            let emptyMsg = "항목이 없습니다";
+            if (searchKeyword || selectedCategory) emptyMsg = "조건에 맞는 항목이 없습니다";
+            els.listBody.innerHTML = `<div class="empty-state"><i class="fas fa-inbox fa-3x"></i><span>${emptyMsg}</span></div>`;
+            return;
+        }
+
+        filtered.forEach(item => {
+            const div = document.createElement("div");
+            div.className = `list-item ${App.currentId === item.id ? 'active' : ''}`;
+            div.innerHTML = `
+                <div class="item-title"><span>${item.site}</span></div>
+                <div class="item-sub">
+                    ${item.category ? `<span class="category-tag">${item.category}</span>` : ''}
+                    <span>${item.username || "No ID"}</span>
+                </div>`;
+            div.onclick = () => loadDetail(item);
+            els.listBody.appendChild(div);
+        });
+    }
+
+    function loadDetail(item) {
+        App.currentId = item.id;
+        els.detailView.style.display = "flex";
+        els.site.value = item.site || "";
+        els.category.value = item.category || "";
+        els.url.value = item.url || "";
+        els.username.value = item.username || "";
+        els.password.value = item.password || "";
+        els.notes.value = item.notes || "";
+        
+        if (item.updatedAt) {
+            const d = new Date(item.updatedAt);
+            els.updated.textContent = "Last update: " + d.toLocaleDateString() + " " + d.toLocaleTimeString();
+        } else {
+            els.updated.textContent = "Last update: Unknown";
+        }
+        
+        els.password.type = "password";
+        renderList();
+    }
+
+    document.getElementById("btn-save").onclick = async () => {
+        if(!els.site.value) return App.toast("사이트 이름을 입력하세요.");
+        const isNew = !App.currentId;
+        const id = isNew ? App.uid() : App.currentId;
+        const now = new Date().toISOString();
+        const newItem = {
+            id: id, site: els.site.value, category: els.category.value,
+            url: els.url.value, username: els.username.value,
+            password: els.password.value, notes: els.notes.value,
+            updatedAt: now 
+        };
+        await App.saveItem(newItem);
+        if(isNew) App.items.push(newItem);
+        else App.items[App.items.findIndex(x=>x.id===id)] = newItem;
+        App.currentId = id;
+        
+        const d = new Date(now);
+        els.updated.textContent = "Last update: " + d.toLocaleDateString() + " " + d.toLocaleTimeString();
+        
+        updateCategoryDropdown();
+        renderList();
+        App.toast("정보가 암호화되어 저장되었습니다.");
+    };
+
+    document.getElementById("btn-delete").onclick = async () => {
+        if(!App.currentId || !confirm("정말 삭제하시겠습니까?")) return;
+        await App.deleteItem(App.currentId);
+        App.items = App.items.filter(x => x.id !== App.currentId);
+        App.currentId = null;
+        els.detailView.style.display = "none";
+        
+        updateCategoryDropdown();
+        renderList();
+        App.toast("삭제되었습니다.");
+    };
+
+    document.getElementById("btn-add-new").onclick = () => {
+        App.currentId = null;
+        els.detailView.style.display = "flex";
+        [els.site, els.category, els.url, els.username, els.password, els.notes].forEach(el => el.value = "");
+        els.updated.textContent = "New Entry";
+        els.site.focus();
+        renderList();
+    };
+
+    document.querySelectorAll(".btn-copy").forEach(btn => {
+        btn.onclick = () => {
+            const el = document.getElementById(btn.dataset.target);
+            if(el && el.value) { navigator.clipboard.writeText(el.value); App.toast("클립보드에 복사되었습니다."); }
+        };
+    });
+    
+    document.getElementById("btn-open-url").onclick = () => {
+        let url = els.url.value.trim();
+        if(url) {
+            if(!url.startsWith("http://") && !url.startsWith("https://")) {
+                url = "https://" + url;
+            }
+            window.open(url, "_blank");
+        } else {
+            App.toast("URL을 입력해주세요.");
+        }
+    };
+
+    document.getElementById("btn-toggle-pw").onclick = () => els.password.type = els.password.type === "password" ? "text" : "password";
+    document.getElementById("btn-gen-pw").onclick = () => {
+        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
+        let pw = ""; for(let i=0;i<16;i++) pw+=chars.charAt(Math.floor(Math.random()*chars.length));
+        els.password.value = pw; els.password.type = "text"; App.toast("강력한 비밀번호 생성됨");
+    };
+
+    document.getElementById("btn-lock").onclick = () => location.reload();
+    
+    // 필터 이벤트 리스너
+    els.searchInput.oninput = renderList;
+    els.categoryFilter.onchange = renderList;
+    
+    document.getElementById("btn-export").onclick = () => {
+        if(!App.items.length) return App.toast("데이터가 없습니다.");
+        if(!confirm("주의: JSON 파일은 암호화되지 않습니다.\n안전한 곳에 보관하세요.")) return;
+        const blob = new Blob([JSON.stringify(App.items,null,2)], {type:"application/json"});
+        const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+        a.download = `Vault_Backup_${new Date().toISOString().slice(0,10)}.json`; a.click();
+    };
+
+    // 복구(Import) 기능 추가
+    const btnImport = document.getElementById("btn-import");
+    const inpImport = document.getElementById("inp-import");
+
+    btnImport.onclick = () => {
+        // 암호화 키가 로드되지 않았다면(잠금 상태라면) 진행 불가
+        if (!Security.key) {
+            return App.toast("먼저 마스터 패스워드로 금고 잠금을 해제해주세요.");
+        }
+        if(confirm("기존 데이터에 복구할 데이터를 병합합니다. 진행하시겠습니까?")) {
+            inpImport.click();
+        }
+    };
+
+    inpImport.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            try {
+                const data = JSON.parse(event.target.result);
+                if (!Array.isArray(data)) throw new Error("JSON 형식이 올바르지 않습니다.");
+
+                let count = 0;
+                for (const item of data) {
+                    // 최소한의 유효성 검사 (ID, 사이트 이름이 있는지)
+                    if (item.id && item.site) {
+                        // 저장 시 Security.encrypt를 통해 안전하게 암호화됨
+                        await App.saveItem(item);
+                        
+                        const existingIndex = App.items.findIndex(x => x.id === item.id);
+                        if (existingIndex >= 0) {
+                            App.items[existingIndex] = item;
+                        } else {
+                            App.items.push(item);
+                        }
+                        count++;
+                    }
+                }
+                
+                updateCategoryDropdown();
+                renderList();
+                App.toast(`${count}개의 항목이 성공적으로 암호화되어 복구(병합)되었습니다.`);
+                
+            } catch (error) {
+                console.error("복구 실패:", error);
+                App.toast("복구 실패: 올바른 백업 파일(JSON)이 아닙니다.");
+            }
+            inpImport.value = ""; // 초기화
+        };
+        reader.readAsText(file);
+    };
+
+    // 단축키 이벤트 리스너 (Ctrl+S, Ctrl+Alt+N)
+    document.addEventListener("keydown", (e) => {
+        const isCtrl = e.ctrlKey || e.metaKey;
+        
+        if (isCtrl && e.altKey && e.key.toLowerCase() === "n") {
+            e.preventDefault();
+            if (!els.searchInput.disabled) {
+                document.getElementById("btn-add-new").click();
+            }
+        }
+        
+        if (isCtrl && e.key.toLowerCase() === "s") {
+            e.preventDefault(); 
+            if (els.detailView.style.display !== "none") {
+                document.getElementById("btn-save").click();
+            }
+        }
+    });
+});
+</script>
+</body>
+</html>

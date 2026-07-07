@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>클라우드 리소스 모니터링 보드</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* --- 최신 모던 UI 테마 변수 (B2B SaaS 스타일) --- */
+:root {
+  --bg: #f9fafb; 
+  --card: #ffffff; 
+  --text-main: #111827; 
+  --text-muted: #6b7280;
+  --border: #e5e7eb;
+  --accent: #0f172a; 
+  --accent-hover: #1e293b; 
+  --up: #ef4444; 
+  --down: #3b82f6; 
+  --focus-ring: rgba(15, 23, 42, 0.1);
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+}
+
+* { box-sizing: border-box; }
+html, body { width: 100%; overflow-x: hidden; }
+body {
+  margin: 0; 
+  background: var(--bg); 
+  color: var(--text-main);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.5;
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+
+/* --- 상단 헤더 --- */
+header { 
+  position: sticky; top: 0; 
+  background: rgba(255, 255, 255, 0.85); 
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border); 
+  z-index: 50; 
+}
+header .wrap { 
+  max-width: 1400px; margin: 0 auto; 
+  display: flex; gap: 12px; align-items: center; justify-content: space-between;
+  padding: 16px 20px; 
+}
+header h1 { 
+  font-size: 20px; margin: 0; font-weight: 700; letter-spacing: -0.02em; 
+  display: flex; align-items: center; gap: 8px;
+}
+header .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* --- 버튼 스타일 --- */
+.btn {
+  appearance: none; background: #fff; color: var(--text-main);
+  border: 1px solid var(--border); padding: 8px 16px; border-radius: var(--radius-sm); 
+  cursor: pointer; font-weight: 500; font-size: 14px;
+  transition: all 0.2s ease;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+}
+.btn:hover { background: #f3f4f6; border-color: #d1d5db; }
+.btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+.btn-refresh { background: #fff; color: #047857; border-color: #10b981; }
+.btn-refresh:hover { background: #ecfdf5; border-color: #047857; }
+.btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.btn-refresh.spin svg { animation: spin 1s linear infinite; }
+@keyframes spin { 100% { transform: rotate(360deg); } }
+
+/* --- 레이아웃 --- */
+main { 
+  max-width: 1400px; margin: 32px auto; padding: 0 20px; 
+  display: grid; grid-template-columns: 380px 1fr; gap: 24px; 
+  align-items: start;
+}
+@media (max-width: 1024px) { main { grid-template-columns: 1fr; } }
+
+/* --- 카드 디자인 --- */
+.card { 
+  background: var(--card); 
+  border: 1px solid var(--border); 
+  border-radius: var(--radius-md); 
+  box-shadow: 0 1px 3px rgba(0,0,0,0.02), 0 4px 12px rgba(0,0,0,0.02); 
+  overflow: hidden;
+}
+.card h2 { 
+  margin: 0; padding: 20px 24px 16px; 
+  font-size: 16px; font-weight: 600; letter-spacing: -0.01em;
+}
+.card .body { padding: 0 24px 24px; display: flex; flex-direction: column; gap: 20px; }
+
+/* --- 입력 폼 --- */
+label { 
+  font-size: 12px; color: var(--text-muted); font-weight: 600; 
+  display: block; margin-bottom: 6px; letter-spacing: 0.02em;
+}
+input[type="text"], input[type="number"] {
+  width: 100%; padding: 10px 14px; 
+  background: #f9fafb; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  font-size: 14px; color: var(--text-main); font-family: inherit;
+  transition: all 0.2s ease;
+}
+input:hover { border-color: #d1d5db; }
+input:focus { 
+  outline: none; background: #fff; border-color: var(--accent); 
+  box-shadow: 0 0 0 3px var(--focus-ring); 
+}
+input::placeholder { color: #9ca3af; }
+
+.row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+.summary-box { 
+  background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: var(--radius-sm); 
+  padding: 16px; display: flex; justify-content: space-between; align-items: center; 
+}
+.summary-val { font-size: 18px; font-weight: 700; color: var(--accent); }
+
+/* --- 대시보드 위젯 --- */
+.dashboard-metrics {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px;
+  background: #fff; padding: 20px; border-radius: var(--radius-sm); 
+  border: 1px solid var(--border); margin-bottom: 24px;
+}
+.metric { display: flex; flex-direction: column; gap: 4px; }
+.metric-label { font-size: 13px; color: var(--text-muted); font-weight: 500; }
+.metric-value { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
+
+/* --- 테이블 --- */
+.table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+table { width: 100%; border-collapse: collapse; min-width: 800px; text-align: right; }
+th, td { padding: 14px 16px; border-bottom: 1px solid var(--border); font-size: 14px; vertical-align: middle; }
+th { 
+  background: #f9fafb; font-weight: 600; color: var(--text-muted); 
+  font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; 
+}
+th:first-child, td:first-child { text-align: left; }
+tbody tr { transition: background 0.1s ease; }
+tbody tr:hover { background: #f8fafc; }
+tbody tr:last-child td { border-bottom: none; }
+
+.up { color: var(--up); font-weight: 600; }
+.down { color: var(--down); font-weight: 600; }
+.item-title { font-weight: 600; color: var(--text-main); font-size: 15px; }
+.item-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+/* --- 뱃지 --- */
+.badge { 
+  padding: 4px 10px; border-radius: 9999px; font-size: 11px; font-weight: 600; 
+  display: inline-flex; align-items: center; justify-content: center; 
+  line-height: 1.2; margin-bottom: 4px; width: fit-content;
+}
+.badge-alert { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; animation: blink 2s infinite; }
+.badge-ok { background: #f3f4f6; color: #4b5563; border: 1px solid #d1d5db; }
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+
+/* --- 토스트 알림 --- */
+#toast-area { position: fixed; right: 24px; bottom: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; }
+.toast { 
+  background: #111827; color: #fff; padding: 14px 20px; border-radius: var(--radius-sm); 
+  font-size: 14px; font-weight: 500; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); 
+  animation: toast-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; 
+}
+@keyframes toast-in { 
+  from { transform: translateY(20px) scale(0.95); opacity: 0; } 
+  to { transform: translateY(0) scale(1); opacity: 1; } 
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <h1><span style="font-size:24px;">☁️</span> 리소스 예산/비용 관리 보드</h1>
+    <div class="btns">
+      <button class="btn btn-refresh" id="btn-fetch-prices">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"/></svg>
+        실시간 단가 및 최고가 갱신
+      </button>
+      <button class="btn" id="btn-new">새 리소스 등록</button>
+      <button class="btn btn-primary" id="btn-save">저장 (Ctrl+S)</button>
+      <button class="btn" id="btn-export">엑셀 리포트</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="card">
+    <h2>리소스 정보 입력</h2>
+    <div class="body">
+      <div class="grid-2">
+        <div style="grid-column: span 2;">
+          <label>서비스명 / 리소스명</label>
+          <input id="subject" type="text" placeholder="예: EC2 m5.large, S3 Standard" />
+        </div>
+        <div style="grid-column: span 2;">
+          <label>식별 코드 (Ticker / ID)</label>
+          <div class="row" style="gap:8px;">
+            <input id="ticker" type="text" placeholder="외부 API 연동용 식별자" style="flex:1;" />
+            <a href="https://finance.yahoo.com/" target="_blank" class="btn" style="padding: 10px 12px; text-decoration: none; color: var(--text-muted); background: #f8fafc;" title="외부 API 단가 식별자 검색">🔍 검색</a>
+          </div>
+        </div>
+      </div>
+      
+      <div class="grid-2">
+        <div>
+          <label>기준 예산 단가 ($/₩)</label>
+          <input id="buyPrice" type="text" class="currency-input" inputmode="numeric" placeholder="0" />
+        </div>
+        <div>
+          <label>월 예상 사용량</label>
+          <input id="quantity" type="number" placeholder="0" step="0.0001" />
+        </div>
+      </div>
+      
+      <div class="summary-box">
+        <span style="font-size:13px; color:var(--text-muted); font-weight:600;">월 기본 예상 비용 (총액)</span>
+        <span class="summary-val" id="totalAmount">0</span>
+      </div>
+
+      <div class="grid-2">
+        <div>
+          <label>실시간 단가 (현재 청구기준)</label>
+          <input id="currentPrice" type="text" class="currency-input" inputmode="numeric" placeholder="자동갱신/직접입력" />
+        </div>
+        <div>
+          <label>관측 최고 단가 (52주 기준)</label>
+          <input id="peakPrice" type="text" class="currency-input" inputmode="numeric" placeholder="자동반영" />
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div>
+          <label>목표 최저 단가 (도달 시 알림)</label>
+          <input id="stopLossPrice" type="text" class="currency-input" inputmode="numeric" placeholder="예: 타겟가 입력" />
+        </div>
+        <div>
+          <label>단가 하락 모니터링 (%)</label>
+          <input id="trailPercent" type="number" value="10" placeholder="기본 10" />
+        </div>
+      </div>
+
+      <div>
+        <label>용도 및 메모</label>
+        <input id="memo" type="text" placeholder="프로젝트명, 할당 부서, 비용 최적화 방안 등" />
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>전체 리소스 비용/예산 대시보드</h2>
+    <div class="body">
+      <div class="dashboard-metrics">
+        <div class="metric">
+          <div class="metric-label">총 기준 예산 (월)</div>
+          <div id="sum-invest" class="metric-value">0</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">총 실시간 예상 청구액</div>
+          <div id="sum-eval" class="metric-value">0</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">총 비용 변동률</div>
+          <div id="sum-return" class="metric-value">0.00%</div>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table id="list">
+          <thead>
+            <tr>
+              <th>리소스 정보</th>
+              <th>기준 단가 / 사용량</th>
+              <th>실시간 단가 / 최고점</th>
+              <th>비용 변동률 / 차액</th>
+              <th>비용 최적화 알림</th>
+              <th style="width:100px; text-align:center;">관리</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="toast-area"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/exceljs/dist/exceljs.min.js"></script>
+
+<script>
+(function(){
+  const DB_NAME = 'CloudCostDB'; 
+  const DB_VER = 1;
+  let db = null;
+  let editingId = null;
+  let cache = [];
+
+  function $(s) { return document.querySelector(s); }
+  
+  function num(val) { 
+    return Number(String(val).replace(/,/g, '')) || 0; 
+  }
+  
+  function fmtAmt(val) { 
+    return Number.isInteger(val) ? val.toLocaleString('ko-KR') : val.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); 
+  }
+  function fmtPct(val) { return (val > 0 ? '+' : '') + val.toFixed(2) + '%'; }
+  function uid() { return 'RES' + Math.random().toString(36).slice(2,8).toUpperCase(); }
+  function nowISO() { return new Date().toISOString(); }
+
+  function formatInputCurrency(e) {
+    let value = e.target.value;
+    let numericValue = value.replace(/[^\d.-]/g, '');
+    if (!numericValue) {
+      e.target.value = '';
+      return;
+    }
+    let parts = numericValue.split('.');
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    e.target.value = parts.join('.');
+    updateFormCalc();
+  }
+
+  document.querySelectorAll('.currency-input').forEach(input => {
+    input.addEventListener('input', formatInputCurrency);
+  });
+
+  function toast(msg) {
+    const area = $('#toast-area');
+    const el = document.createElement('div');
+    el.className = 'toast'; el.textContent = msg;
+    area.appendChild(el);
+    setTimeout(() => {
+      el.style.opacity = '0'; 
+      el.style.transform = 'translateY(10px)';
+      el.style.transition = 'all 0.3s ease';
+      setTimeout(() => area.removeChild(el), 300);
+    }, 3000);
+  }
+
+  // --- DB Operations ---
+  function openDB() {
+    return new Promise((res, rej) => {
+      const rq = indexedDB.open(DB_NAME, DB_VER);
+      rq.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('resources')) db.createObjectStore('resources', { keyPath: 'id' });
+      };
+      rq.onsuccess = () => { db = rq.result; res(db); };
+      rq.onerror = () => rej(rq.error);
+    });
+  }
+  function tx(store, mode='readonly') { return db.transaction(store, mode).objectStore(store); }
+  function putRec(rec) { return new Promise((res) => { tx('resources','readwrite').put(rec).onsuccess = ()=>res(true); }); }
+  function delRec(id) { return new Promise((res) => { tx('resources','readwrite').delete(id).onsuccess = ()=>res(true); }); }
+  function getAll() { return new Promise((res) => { tx('resources').getAll().onsuccess = (e)=>res(e.target.result||[]); }); }
+
+  // --- Auto Calculations ---
+  function updateFormCalc() {
+    const bp = num($('#buyPrice').value);
+    const qty = num($('#quantity').value);
+    $('#totalAmount').textContent = fmtAmt(bp * qty);
+  }
+  $('#buyPrice').addEventListener('input', updateFormCalc);
+  $('#quantity').addEventListener('input', updateFormCalc);
+
+  $('#currentPrice').addEventListener('input', (e) => {
+    const cp = num(e.target.value);
+    const pp = num($('#peakPrice').value);
+    if (cp > pp) {
+      $('#peakPrice').value = String(cp).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    }
+  });
+
+  // --- 🛡️ 3중 프록시 자동 전환(Fallback) 함수 (업데이트) ---
+  async function fetchWithProxy(targetUrl) {
+    const encodedUrl = encodeURIComponent(targetUrl);
+    const proxies = [
+      { url: `https://api.allorigins.win/raw?url=${encodedUrl}` },
+      { url: `https://api.codetabs.com/v1/proxy?quest=${encodedUrl}` },
+      { url: `https://corsproxy.io/?${encodedUrl}` }
+    ];
+
+    for (let p of proxies) {
+      try {
+        const response = await fetch(p.url);
+        if (!response.ok) continue;
+
+        const text = await response.text();
+        if (text.startsWith('Edge: Too') || text.includes('Too Many Requests') || text.startsWith('<html>') || text.includes('Unauthorized')) continue;
+        
+        return JSON.parse(text);
+      } catch (err) {
+        console.warn(`Proxy failed (${p.url}):`, err);
+        continue;
+      }
+    }
+    throw new Error("API 통신이 일시적으로 제한되었습니다.");
+  }
+
+  // --- I/O & UI ---
+  function clearInputs() {
+    editingId = null;
+    $('#subject').value = ''; $('#ticker').value = ''; 
+    $('#buyPrice').value = ''; $('#quantity').value = '';
+    $('#currentPrice').value = ''; $('#peakPrice').value = '';
+    $('#stopLossPrice').value = ''; $('#trailPercent').value = '10'; $('#memo').value = '';
+    updateFormCalc();
+    $('#subject').focus();
+  }
+
+  function readInputs() {
+    return {
+      subject: $('#subject').value.trim(),
+      ticker: $('#ticker').value.trim(),
+      buyPrice: num($('#buyPrice').value),
+      quantity: num($('#quantity').value),
+      currentPrice: num($('#currentPrice').value),
+      peakPrice: num($('#peakPrice').value),
+      stopLossPrice: num($('#stopLossPrice').value),
+      trailPercent: num($('#trailPercent').value) || 10,
+      memo: $('#memo').value.trim()
+    };
+  }
+
+  function writeInputs(rec) {
+    editingId = rec.id;
+    $('#subject').value = rec.subject || '';
+    $('#ticker').value = rec.ticker || '';
+    $('#buyPrice').value = rec.buyPrice ? String(rec.buyPrice).replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '';
+    $('#quantity').value = rec.quantity || '';
+    $('#currentPrice').value = rec.currentPrice ? String(rec.currentPrice).replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '';
+    $('#peakPrice').value = rec.peakPrice ? String(rec.peakPrice).replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '';
+    $('#stopLossPrice').value = rec.stopLossPrice ? String(rec.stopLossPrice).replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '';
+    $('#trailPercent').value = rec.trailPercent || '10';
+    $('#memo').value = rec.memo || '';
+    updateFormCalc();
+  }
+
+  async function save() {
+    const d = readInputs();
+    if (!d.subject) { toast('⚠️ 리소스명을 입력하세요.'); return; }
+    if (d.buyPrice <= 0 || d.quantity <= 0) { toast('⚠️ 기준 단가와 사용량을 정확히 입력하세요.'); return; }
+    
+    if (!d.peakPrice) d.peakPrice = Math.max(d.buyPrice, d.currentPrice);
+
+    const rec = { id: editingId || uid(), ts: nowISO(), ...d };
+    await putRec(rec);
+    toast('💾 데이터가 성공적으로 저장되었습니다.');
+    await sync();
+    clearInputs();
+  }
+
+  function renderList() {
+    const tb = $('#list tbody'); tb.innerHTML = '';
+    let totalInvest = 0, totalEval = 0;
+
+    cache.sort((a,b) => b.ts.localeCompare(a.ts)).forEach(rec => {
+      const invest = rec.buyPrice * rec.quantity;
+      const current = (rec.currentPrice || rec.buyPrice) * rec.quantity;
+      const profit = current - invest; 
+      const returnPct = invest > 0 ? (profit / invest) * 100 : 0; 
+      
+      totalInvest += invest;
+      totalEval += current;
+
+      let alerts = [];
+      const cp = rec.currentPrice || 0;
+      
+      if (rec.stopLossPrice > 0 && cp > 0 && cp <= rec.stopLossPrice) {
+        alerts.push('<div class="badge badge-alert">🎯 목표 단가 도달</div>');
+      }
+      if (rec.peakPrice > 0 && rec.trailPercent > 0 && cp > 0) {
+        const trailTarget = rec.peakPrice * (1 - rec.trailPercent / 100);
+        if (cp <= trailTarget) {
+          alerts.push(`<div class="badge badge-alert">📉 고점대비 ${rec.trailPercent}% 단가 하락</div>`);
+        }
+      }
+      if (alerts.length === 0) alerts.push('<div class="badge badge-ok">예산 범위 내</div>');
+
+      const colorClass = returnPct > 0 ? 'up' : (returnPct < 0 ? 'down' : '');
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="text-align:left">
+          <div class="item-title">${rec.subject} <span style="font-weight:400; color:#9ca3af; font-size:12px;">${rec.ticker || ''}</span></div>
+          <div class="item-sub">${rec.memo || '-'}</div>
+        </td>
+        <td>
+          <div style="font-weight:500;">${fmtAmt(rec.buyPrice)}</div>
+          <div class="item-sub">${fmtAmt(rec.quantity)} Unit</div>
+        </td>
+        <td>
+          <div style="font-weight:500;">${cp > 0 ? fmtAmt(cp) : '-'}</div>
+          <div class="item-sub">최고: ${fmtAmt(rec.peakPrice)}</div>
+        </td>
+        <td class="${colorClass}">
+          <div>${fmtPct(returnPct)}</div>
+          <div class="item-sub" style="color:inherit; opacity:0.8;">${fmtAmt(profit)}</div>
+        </td>
+        <td style="text-align:right;">
+          <div style="display:flex; flex-direction:column; align-items:flex-end;">${alerts.join('')}</div>
+        </td>
+        <td style="text-align:center;">
+          <button class="btn" style="padding:4px 8px; font-size:12px; border:none; background:transparent; color:var(--accent);" data-act="load" data-id="${rec.id}">수정</button>
+          <button class="btn" style="padding:4px 8px; font-size:12px; border:none; background:transparent; color:var(--up);" data-act="del" data-id="${rec.id}">삭제</button>
+        </td>
+      `;
+      
+      tr.querySelector('[data-act="load"]').addEventListener('click', () => {
+        writeInputs(rec); window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+      tr.querySelector('[data-act="del"]').addEventListener('click', async () => {
+        if (confirm(`'${rec.subject}' 데이터를 삭제하시겠습니까?`)) {
+          await delRec(rec.id); await sync(); toast('🗑️ 삭제되었습니다.');
+        }
+      });
+      tb.appendChild(tr);
+    });
+
+    $('#sum-invest').textContent = fmtAmt(totalInvest);
+    $('#sum-eval').textContent = fmtAmt(totalEval);
+    const totReturn = totalInvest > 0 ? ((totalEval - totalInvest) / totalInvest) * 100 : 0;
+    const returnEl = $('#sum-return');
+    returnEl.textContent = fmtPct(totReturn);
+    returnEl.className = 'metric-value ' + (totReturn > 0 ? 'up' : (totReturn < 0 ? 'down' : ''));
+  }
+
+  async function sync() { cache = await getAll(); renderList(); }
+
+  // --- API Fetch Current Rates (v8 차트 데이터로 52주 최고가 직접 계산 업데이트) ---
+  async function fetchLivePrices() {
+    const btn = $('#btn-fetch-prices');
+    btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"/></svg> 갱신 중...`;
+    btn.disabled = true;
+    btn.classList.add('spin');
+
+    let updatedCount = 0; let errorCount = 0;
+    
+    for (let rec of cache) {
+      if (!rec.ticker) continue;
+      try {
+        const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${rec.ticker}?range=1y&interval=1d`;
+        const data = await fetchWithProxy(targetUrl);
+
+        if (data.chart && data.chart.result && data.chart.result.length > 0) {
+          const result = data.chart.result[0];
+          const livePrice = result.meta.regularMarketPrice;
+
+          let high52 = 0;
+          if (result.indicators && result.indicators.quote && result.indicators.quote[0].high) {
+            const highArr = result.indicators.quote[0].high.filter(h => h !== null); 
+            if (highArr.length > 0) {
+              high52 = Math.max(...highArr);
+            }
+          }
+
+          if (livePrice && livePrice > 0) {
+            rec.currentPrice = livePrice;
+            
+            if (high52 && high52 > 0) {
+              rec.peakPrice = Math.max((rec.peakPrice || 0), high52, livePrice);
+            } else if (livePrice > rec.peakPrice) {
+              rec.peakPrice = livePrice;
+            }
+
+            await putRec(rec);
+            updatedCount++;
+          }
+        }
+      } catch (error) { errorCount++; console.warn(`${rec.ticker} 갱신 에러:`, error); }
+    }
+
+    await sync();
+    btn.classList.remove('spin');
+    btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"/></svg> 실시간 단가 및 최고가 갱신`;
+    btn.disabled = false;
+    
+    if (updatedCount > 0) toast(`✅ ${updatedCount}개 리소스의 데이터(실시간/최고단가)를 갱신했습니다.`);
+    else if (errorCount > 0) toast(`⚠️ 갱신 실패. 서버 응답이 지연되고 있습니다.`);
+    else toast('ℹ️ 갱신할 항목이 없습니다. (식별 코드 확인)');
+  }
+
+  // --- Excel Export ---
+  async function exportXLSX() {
+    if(cache.length === 0) { toast('⚠️ 내보낼 데이터가 없습니다.'); return; }
+    try {
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('리소스_예산현황');
+      ws.addRow(['리소스명','식별코드','기준단가','사용량','기준총액','실시간단가','최고단가','변동액(초과/절감)','변동률(%)','목표단가','모니터링(%)','메모']);
+      
+      cache.forEach(r => {
+        const invest = r.buyPrice * r.quantity;
+        const current = (r.currentPrice || r.buyPrice) * r.quantity;
+        const profit = current - invest;
+        const returnPct = invest > 0 ? (profit / invest) * 100 : 0;
+        
+        ws.addRow([
+          r.subject, r.ticker || '', r.buyPrice, r.quantity, invest, r.currentPrice || '', 
+          r.peakPrice, profit, returnPct.toFixed(2), r.stopLossPrice, r.trailPercent, r.memo
+        ]);
+      });
+
+      const buf = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); 
+      a.download = `리소스비용리포트_${new Date().toISOString().slice(0,10)}.xlsx`;
+      a.click(); URL.revokeObjectURL(a.href);
+      toast('📄 엑셀 리포트가 다운로드 되었습니다.');
+    } catch(e) { console.error(e); toast('❌ 엑셀 내보내기 중 오류가 발생했습니다.'); }
+  }
+
+  // --- Initialize & Events ---
+  $('#btn-new').addEventListener('click', clearInputs);
+  $('#btn-save').addEventListener('click', save);
+  $('#btn-export').addEventListener('click', exportXLSX);
+  $('#btn-fetch-prices').addEventListener('click', fetchLivePrices);
+
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && String(e.key).toLowerCase() === 's') {
+      e.preventDefault(); save();
+    }
+  });
+
+  async function init() {
+    await openDB();
+    await sync();
+  }
+  
+  init();
+})();
+</script>
+</body>
+</html>

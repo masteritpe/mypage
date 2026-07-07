@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>배치 매니저</title>
+    <style>
+        @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+
+        /* === Premium UI Design Variables === */
+        :root {
+            --bg-body: #f3f4f6;
+            --bg-surface: #ffffff;
+            --bg-sidebar: #f8fafc;
+            
+            --text-main: #111827;
+            --text-muted: #6b7280;
+            --text-light: #9ca3af;
+            
+            --border-color: #e5e7eb;
+            
+            --primary: #4f46e5;      /* Indigo */
+            --primary-hover: #4338ca;
+            --success: #10b981;      /* Emerald */
+            --success-hover: #059669;
+            --danger: #ef4444;       /* Red */
+            --danger-hover: #dc2626;
+
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            
+            --radius-md: 8px;
+            --radius-lg: 12px;
+            --sidebar-width: 280px;
+        }
+
+        * { box-sizing: border-box; }
+        body { 
+            margin: 0; font-family: "Pretendard", -apple-system, sans-serif; 
+            background: var(--bg-body); color: var(--text-main); font-size: 14px; 
+            height: 100vh; display: flex; flex-direction: column; overflow: hidden; 
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* 스크롤바 커스텀 */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        /* Header */
+        header { 
+            background: var(--bg-surface); border-bottom: 1px solid var(--border-color); 
+            height: 60px; display: flex; align-items: center; justify-content: space-between; 
+            padding: 0 24px; flex-shrink: 0; z-index: 20;
+            box-shadow: var(--shadow-sm);
+        }
+        .app-title { font-size: 18px; font-weight: 800; color: var(--text-main); display: flex; align-items: center; gap: 8px; letter-spacing: -0.5px; }
+        .app-title-icon { background: var(--primary); color: white; border-radius: 6px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+
+        /* Layout */
+        .container { flex: 1; display: flex; overflow: hidden; }
+        aside { width: var(--sidebar-width); background: var(--bg-surface); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; flex-shrink: 0; z-index: 10; }
+        
+        .sidebar-header { padding: 20px 20px 10px 20px; font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+        .script-list { list-style: none; padding: 0 10px; margin: 0; overflow-y: auto; flex: 1; }
+        
+        /* Sidebar Items - Modernized */
+        .script-item { 
+            padding: 12px 14px; margin-bottom: 4px; cursor: pointer; border-radius: var(--radius-md);
+            display: flex; justify-content: space-between; align-items: center; 
+            transition: all 0.2s ease; font-size: 14px; font-weight: 500; color: var(--text-muted); border: 1px solid transparent;
+        }
+        .script-item:hover { background: var(--bg-sidebar); color: var(--text-main); }
+        .script-item.active { 
+            background: #eef2ff; color: var(--primary); font-weight: 600; 
+            border: 1px solid #c7d2fe; box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+        }
+        
+        /* Pill Badges */
+        .badge { 
+            background: #f1f5f9; padding: 4px 10px; border-radius: 9999px; font-size: 11px; 
+            color: var(--text-muted); font-weight: 600; letter-spacing: -0.2px;
+        }
+        .script-item.active .badge { background: #e0e7ff; color: var(--primary); }
+        .badge.success { background: #d1fae5; color: #047857; }
+        .badge.danger { background: #fee2e2; color: #b91c1c; }
+        .badge.waiting { background: #fef3c7; color: #b45309; }
+
+        /* Main Area */
+        main { flex: 1; display: flex; flex-direction: column; padding: 24px 32px; overflow: hidden; background: var(--bg-body); }
+        .toolbar { display: flex; gap: 10px; margin-bottom: 24px; align-items: center; }
+        .current-title { font-size: 22px; font-weight: 700; color: var(--text-main); letter-spacing: -0.5px; }
+        
+        .content-split { display: flex; flex-direction: column; gap: 24px; flex: 1; overflow: hidden; }
+        
+        /* Section Cards */
+        .section-card {
+            background: var(--bg-surface); border-radius: var(--radius-lg); padding: 20px;
+            box-shadow: var(--shadow-sm); border: 1px solid var(--border-color);
+            display: flex; flex-direction: column; gap: 12px;
+        }
+        .section-card.flex-1 { flex: 1; overflow: hidden; }
+        .section-title { font-size: 14px; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 6px; }
+
+        /* Code Editor - Mac OS Dark Style */
+        .editor-container {
+            background: #1e1e1e; border-radius: var(--radius-md); overflow: hidden;
+            border: 1px solid #333; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .editor-header {
+            background: #2d2d2d; height: 32px; display: flex; align-items: center; padding: 0 12px; gap: 6px;
+        }
+        .mac-dot { width: 10px; height: 10px; border-radius: 50%; }
+        .mac-dot.r { background: #ff5f56; } .mac-dot.y { background: #ffbd2e; } .mac-dot.g { background: #27c93f; }
+        
+        .code-editor { 
+            width: 100%; height: 160px; border: none; font-family: "D2Coding", "Consolas", monospace; 
+            padding: 16px; resize: none; background: transparent; color: #d4d4d4; font-size: 14px; 
+            line-height: 1.6; outline: none;
+        }
+
+        /* Modern Table */
+        .table-wrapper { flex: 1; overflow: auto; border-radius: var(--radius-md); border: 1px solid var(--border-color); }
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th, td { padding: 12px 16px; border-bottom: 1px solid var(--border-color); }
+        th { background: #f8fafc; font-weight: 600; color: var(--text-muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; position: sticky; top: 0; backdrop-filter: blur(4px); }
+        td { color: var(--text-main); font-size: 13px; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background-color: #f8fafc; }
+
+        /* Buttons */
+        .btn { 
+            padding: 0 16px; border-radius: var(--radius-md); border: 1px solid transparent; 
+            background: var(--bg-surface); color: var(--text-main); font-weight: 600; 
+            cursor: pointer; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; 
+            height: 38px; transition: all 0.2s; box-shadow: var(--shadow-sm); border-color: var(--border-color);
+        }
+        .btn:hover { background: #f9fafb; transform: translateY(-1px); box-shadow: var(--shadow-md); }
+        .btn:active { transform: translateY(0); }
+        
+        .btn-primary { background: var(--primary); color: #fff; border: none; box-shadow: 0 4px 6px rgba(79, 70, 229, 0.2); }
+        .btn-primary:hover { background: var(--primary-hover); color: #fff; }
+        .btn-success { background: var(--success); color: #fff; border: none; }
+        .btn-success:hover { background: var(--success-hover); color: #fff; }
+        .btn-danger { color: var(--danger); border-color: #fecaca; background: #fff5f5; box-shadow: none; }
+        .btn-danger:hover { background: #fee2e2; border-color: #fca5a5; }
+
+        .status-success { color: var(--success); font-weight: 600; display:flex; align-items:center; gap:4px;}
+        .status-fail { color: var(--danger); font-weight: 600; display:flex; align-items:center; gap:4px;}
+        
+        .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--text-light); gap: 16px; }
+        .empty-icon { font-size: 48px; opacity: 0.5; background: #f1f5f9; width: 100px; height: 100px; display:flex; align-items:center; justify-content:center; border-radius:50%; }
+
+        /* Modal */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(17, 24, 39, 0.6); z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+        .modal-box { background: var(--bg-surface); border-radius: var(--radius-lg); width: 420px; display: flex; flex-direction: column; box-shadow: var(--shadow-lg); overflow: hidden; transform: scale(0.95); animation: modalIn 0.2s forwards ease-out; }
+        @keyframes modalIn { to { transform: scale(1); } }
+        .modal-header { padding: 20px 24px; font-size: 16px; font-weight: 700; display:flex; justify-content:space-between; align-items: center; border-bottom: 1px solid var(--border-color); color: var(--text-main); }
+        .modal-body { padding: 24px; display: flex; flex-direction: column; gap: 8px; }
+        .input-text { width: 100%; padding: 12px 16px; border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: 14px; outline: none; transition: 0.2s; background: #f9fafb; }
+        .input-text:focus { border-color: var(--primary); background: #fff; box-shadow: 0 0 0 3px rgba(79,70,229,0.1); }
+        .modal-footer { padding: 16px 24px; text-align: right; display: flex; justify-content: flex-end; gap: 10px; background: #f9fafb; border-top: 1px solid var(--border-color); }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="app-title">
+            <div class="app-title-icon">⚡</div>
+            Batch Scheduler
+        </div>
+        <div>
+            <button class="btn btn-primary" onclick="openAddModal()">
+                <span>＋ 새 스크립트 등록</span>
+            </button>
+        </div>
+    </header>
+
+    <div class="container">
+        <aside>
+            <div class="sidebar-header">Registered Scripts</div>
+            <div class="script-list" id="scriptList">
+                <div style="padding:40px 20px; color:var(--text-light); text-align:center; font-size:13px;">등록된 배치가 없습니다.</div>
+            </div>
+        </aside>
+
+        <main>
+            <div id="mainEmpty" class="empty-state">
+                <div class="empty-icon">📂</div>
+                <div style="font-weight: 500;">좌측 목록에서 스크립트를 선택하세요.</div>
+            </div>
+
+            <div id="mainContent" style="display:none; height:100%; flex-direction:column;">
+                <div class="toolbar">
+                    <div class="current-title" id="currentScriptName">스크립트명</div>
+                    <span style="flex:1"></span>
+                    <button class="btn btn-success" onclick="runCurrentScript('수동(Manual)')">▶ 수동 실행</button>
+                    <button class="btn" onclick="saveCurrentScript()">💾 저장</button>
+                    <button class="btn btn-danger" onclick="deleteCurrentScript()">🗑️ 삭제</button>
+                </div>
+
+                <div class="content-split">
+                    <div class="section-card">
+                        <div class="section-title">✨ JS Script Editor</div>
+                        <div class="editor-container">
+                            <div class="editor-header">
+                                <div class="mac-dot r"></div><div class="mac-dot y"></div><div class="mac-dot g"></div>
+                                <span style="color:#6b7280; font-size:11px; margin-left:8px; font-family:monospace;">script.js</span>
+                            </div>
+                            <textarea id="scriptEditor" class="code-editor" placeholder="console.log('Hello World!');"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="section-card flex-1">
+                        <div class="section-title" style="margin-bottom: 4px;">📊 최근 실행 로그</div>
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th style="width:160px;">실행 일시</th>
+                                        <th style="width:100px;">구분</th>
+                                        <th style="width:100px;">상태</th>
+                                        <th>메시지</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="logTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="addModal" class="modal-overlay">
+        <div class="modal-box">
+            <div class="modal-header">
+                <span>새 배치 스크립트 등록</span>
+                <button style="border:none; background:transparent; font-size:20px; color:#9ca3af; cursor:pointer;" onclick="closeModal('addModal')">×</button>
+            </div>
+            <div class="modal-body">
+                <div>
+                    <label style="font-size:13px; font-weight:600; color:var(--text-main); display:block; margin-bottom:8px;">배치 이름</label>
+                    <input type="text" id="newScriptName" class="input-text" placeholder="예: 매일 자정 데이터 백업">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="closeModal('addModal')">취소</button>
+                <button class="btn btn-primary" id="btnAddConfirm" onclick="addNewScript()">등록하기</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const DB_NAME = 'LocalBatchDB'; 
+        const DB_VERSION = 1;
+        let db;
+        let currentScriptId = null;
+
+        function initDB() {
+            return new Promise((resolve, reject) => {
+                const req = indexedDB.open(DB_NAME, DB_VERSION);
+                req.onupgradeneeded = (e) => {
+                    const database = e.target.result;
+                    if (!database.objectStoreNames.contains('scripts')) {
+                        database.createObjectStore('scripts', { keyPath: 'id' });
+                    }
+                    if (!database.objectStoreNames.contains('logs')) {
+                        const logStore = database.createObjectStore('logs', { keyPath: 'id', autoIncrement: true });
+                        logStore.createIndex('scriptId', 'scriptId', { unique: false });
+                    }
+                };
+                req.onsuccess = (e) => { db = e.target.result; resolve(); };
+                req.onerror = (e) => reject(e.target.error);
+            });
+        }
+
+        window.onload = async () => {
+            await initDB();
+            await loadScripts();
+            await checkDailyBatches();
+        };
+
+        function getTodayDateStr() {
+            const now = new Date();
+            return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+        }
+        function getNowTimeStr() {
+            return new Date().toLocaleString('ko-KR');
+        }
+
+        async function checkDailyBatches() {
+            const tx = db.transaction('scripts', 'readwrite');
+            const store = tx.objectStore('scripts');
+            const req = store.getAll();
+
+            req.onsuccess = async (e) => {
+                const scripts = e.target.result;
+                const today = getTodayDateStr();
+
+                for (let script of scripts) {
+                    if (script.lastRunDate !== today) {
+                        await executeScriptLogic(script, '자동(Daily)');
+                        script.lastRunDate = today;
+                        db.transaction('scripts', 'readwrite').objectStore('scripts').put(script);
+                    }
+                }
+                loadScripts();
+                if(currentScriptId) loadLogs(currentScriptId);
+            };
+        }
+
+        function loadScripts() {
+            const list = document.getElementById('scriptList');
+            const tx = db.transaction('scripts', 'readonly');
+            
+            tx.objectStore('scripts').getAll().onsuccess = (e) => {
+                list.innerHTML = ''; // 중복 렌더링 방지 (매번 초기화)
+                const scripts = e.target.result;
+                
+                if (scripts.length === 0) {
+                    list.innerHTML = '<div style="padding:40px 20px; color:var(--text-light); text-align:center; font-size:13px;">등록된 배치가 없습니다.</div>';
+                    return;
+                }
+                
+                scripts.forEach(s => {
+                    const item = document.createElement('li');
+                    item.className = `script-item ${currentScriptId === s.id ? 'active' : ''}`;
+                    const isRunToday = s.lastRunDate === getTodayDateStr();
+                    
+                    // 배지 스타일 분기
+                    const badgeClass = isRunToday ? 'success' : 'waiting';
+                    const badgeText = isRunToday ? '오늘완료' : '대기중';
+
+                    item.innerHTML = `
+                        <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-right:10px;">${s.name}</span> 
+                        <span class="badge ${badgeClass}">${badgeText}</span>
+                    `;
+                    item.onclick = () => selectScript(s.id);
+                    list.appendChild(item);
+                });
+            };
+        }
+
+        function selectScript(id) {
+            currentScriptId = id;
+            loadScripts(); // active 상태 갱신
+            document.getElementById('mainEmpty').style.display = 'none';
+            document.getElementById('mainContent').style.display = 'flex';
+
+            db.transaction('scripts').objectStore('scripts').get(id).onsuccess = (e) => {
+                const script = e.target.result;
+                document.getElementById('currentScriptName').innerText = script.name;
+                document.getElementById('scriptEditor').value = script.code || '';
+                loadLogs(id);
+            };
+        }
+
+        function openAddModal() {
+            document.getElementById('newScriptName').value = '';
+            document.getElementById('addModal').style.display = 'flex';
+            document.getElementById('newScriptName').focus();
+        }
+        function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+        function addNewScript() {
+            const nameInput = document.getElementById('newScriptName');
+            const name = nameInput.value.trim();
+            if (!name) return alert('배치 이름을 입력하세요.');
+            
+            const btn = document.getElementById('btnAddConfirm');
+            btn.disabled = true; // 중복 클릭 방지
+
+            // 중복 이름 체크
+            const tx = db.transaction('scripts', 'readonly');
+            tx.objectStore('scripts').getAll().onsuccess = (e) => {
+                const scripts = e.target.result;
+                if (scripts.some(s => s.name === name)) {
+                    alert('이미 동일한 이름의 배치가 존재합니다.');
+                    btn.disabled = false;
+                    return;
+                }
+
+                const newScript = {
+                    id: 'script_' + Date.now(), // 고유 ID 부여
+                    name: name,
+                    code: '// 실행할 자바스크립트 코드를 작성하세요.\n// 예: alert("데이터 정리가 완료되었습니다.");\n',
+                    lastRunDate: '' 
+                };
+
+                const writeTx = db.transaction('scripts', 'readwrite');
+                writeTx.objectStore('scripts').add(newScript).onsuccess = () => {
+                    closeModal('addModal');
+                    loadScripts();
+                    selectScript(newScript.id);
+                    btn.disabled = false;
+                };
+            };
+        }
+
+        function saveCurrentScript() {
+            if(!currentScriptId) return;
+            const code = document.getElementById('scriptEditor').value;
+            const tx = db.transaction('scripts', 'readwrite');
+            const store = tx.objectStore('scripts');
+            store.get(currentScriptId).onsuccess = (e) => {
+                const script = e.target.result;
+                script.code = code;
+                store.put(script).onsuccess = () => {
+                    // 저장 완료 시각적 피드백 (버튼 텍스트 깜빡임)
+                    const btn = document.querySelector('button[onclick="saveCurrentScript()"]');
+                    const originHtml = btn.innerHTML;
+                    btn.innerHTML = '✅ 저장됨';
+                    btn.style.background = '#f0fdf4';
+                    setTimeout(() => { btn.innerHTML = originHtml; btn.style.background = ''; }, 1000);
+                };
+            };
+        }
+
+        function deleteCurrentScript() {
+            if(!currentScriptId || !confirm('이 배치를 삭제하시겠습니까?\n관련 로그도 모두 삭제됩니다.')) return;
+            
+            db.transaction('scripts', 'readwrite').objectStore('scripts').delete(currentScriptId).onsuccess = () => {
+                const logTx = db.transaction('logs', 'readwrite');
+                const index = logTx.objectStore('logs').index('scriptId');
+                index.openCursor(IDBKeyRange.only(currentScriptId)).onsuccess = (e) => {
+                    const cursor = e.target.result;
+                    if(cursor) { cursor.delete(); cursor.continue(); }
+                };
+                
+                currentScriptId = null;
+                document.getElementById('mainContent').style.display = 'none';
+                document.getElementById('mainEmpty').style.display = 'flex';
+                loadScripts();
+            };
+        }
+
+        async function runCurrentScript(type) {
+            if(!currentScriptId) return;
+            const tx = db.transaction('scripts', 'readonly');
+            tx.objectStore('scripts').get(currentScriptId).onsuccess = async (e) => {
+                const script = e.target.result;
+                script.code = document.getElementById('scriptEditor').value; 
+                await executeScriptLogic(script, type);
+                
+                const updateTx = db.transaction('scripts', 'readwrite');
+                script.lastRunDate = getTodayDateStr();
+                updateTx.objectStore('scripts').put(script);
+                
+                loadScripts();
+                loadLogs(currentScriptId);
+            };
+        }
+
+        async function executeScriptLogic(script, type) {
+            let status = '성공';
+            let message = '스크립트 정상 실행 완료';
+            
+            try {
+                const task = new Function(script.code);
+                const result = task(); 
+                if (result instanceof Promise) await result; 
+            } catch (err) {
+                status = '실패';
+                message = err.toString();
+            }
+
+            const logEntry = {
+                scriptId: script.id,
+                time: getNowTimeStr(),
+                type: type,
+                status: status,
+                message: message
+            };
+
+            return new Promise((resolve) => {
+                db.transaction('logs', 'readwrite').objectStore('logs').add(logEntry).onsuccess = resolve;
+            });
+        }
+
+        function loadLogs(scriptId) {
+            const tbody = document.getElementById('logTableBody');
+            tbody.innerHTML = '';
+            
+            const tx = db.transaction('logs', 'readonly');
+            const index = tx.objectStore('logs').index('scriptId');
+            const req = index.getAll(IDBKeyRange.only(scriptId));
+            
+            req.onsuccess = (e) => {
+                let logs = e.target.result;
+                logs.sort((a, b) => b.id - a.id); 
+                
+                if(logs.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--text-light); padding:30px;">실행 이력이 없습니다.</td></tr>';
+                    return;
+                }
+
+                logs.forEach(log => {
+                    const tr = document.createElement('tr');
+                    const statusHtml = log.status === '성공' 
+                        ? '<span class="status-success">● 성공</span>' 
+                        : '<span class="status-fail">● 실패</span>';
+                        
+                    tr.innerHTML = `
+                        <td style="color:var(--text-muted);">${log.time}</td>
+                        <td><span class="badge" style="background:#f1f5f9; color:#475569;">${log.type}</span></td>
+                        <td>${statusHtml}</td>
+                        <td style="max-width:300px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${log.message}">${log.message}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            };
+        }
+    </script>
+</body>
+</html>

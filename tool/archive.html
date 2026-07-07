@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kakao Archive</title>
+  
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+  <style>
+    :root {
+      --bg-body: #F9FAFB;
+      --bg-surface: #FFFFFF;
+      --bg-sidebar: #F3F4F6;
+      --border-light: #F3F4F6;
+      --border-base: #E5E7EB;
+      --border-dark: #D1D5DB;
+      --text-main: #111827;
+      --text-muted: #6B7280;
+      --primary: #FEE500;
+      --primary-hover: #FADA0A;
+      --primary-text: #374151;
+      --secondary: #FFFFFF;
+      --secondary-hover: #F9FAFB;
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+      --radius-md: 8px;
+      --radius-lg: 12px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background: var(--bg-body); color: var(--text-main); margin: 0; padding: 0;
+      height: 100vh; display: flex; overflow: hidden;
+    }
+
+    /* 사이드바 */
+    .sidebar { width: 320px; background: var(--bg-surface); border-right: 1px solid var(--border-base); display: flex; flex-direction: column; z-index: 10; }
+    .sidebar-header { 
+      height: 64px; min-height: 64px; padding: 0 20px; border-bottom: 1px solid var(--border-base); 
+      display: flex; align-items: center; background: var(--primary); color: var(--primary-text);
+    }
+    .app-title { font-size: 18px; font-weight: 800; display: flex; align-items: center; gap: 8px; width: 100%; letter-spacing: -0.5px;}
+
+    /* ⭐ 사이드바 검색 및 리스트 폰트 증가 */
+    .sidebar-search { padding: 16px 20px; border-bottom: 1px solid var(--border-light); background: var(--bg-surface); }
+    .search-box { width: 100%; padding: 10px 12px; border-radius: var(--radius-md); border: 1px solid var(--border-base); font-size: 14px; background: var(--bg-body); outline: none; transition: 0.2s; }
+    .search-box:focus { border-color: #A1A1AA; }
+    
+    .note-list { flex: 1; overflow-y: auto; padding: 10px; margin: 0; list-style: none; }
+    .note-item { padding: 12px 14px; border-radius: var(--radius-md); cursor: pointer; margin-bottom: 4px; transition: background 0.2s; display: flex; flex-direction: column; gap: 6px; border: 1px solid transparent; }
+    .note-item:hover { background: var(--bg-sidebar); border-color: var(--border-base); }
+    .note-item.active { background: #FFFBEB; border-color: #FDE68A; }
+    .note-title { font-weight: 700; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-main); }
+    .note-meta { font-size: 12px; color: #9CA3AF; display: flex; justify-content: space-between; }
+
+    /* 메인 영역 */
+    .main-content { flex: 1; display: flex; flex-direction: column; background: var(--bg-body); position: relative; }
+    .top-bar { 
+      height: 64px; min-height: 64px; padding: 0 30px; border-bottom: 1px solid var(--border-base); 
+      display: flex; justify-content: space-between; align-items: center; background: var(--bg-surface); z-index: 5;
+    }
+    .title-input { font-size: 20px; font-weight: 700; border: none; background: transparent; outline: none; width: 100%; max-width: 350px; color: var(--text-main); }
+    
+    /* 본문 검색기 UI */
+    .in-page-search {
+      display: flex; align-items: center; gap: 4px; background: var(--bg-body); border-radius: var(--radius-md); padding: 4px 10px; border: 1px solid var(--border-base); transition: 0.2s;
+    }
+    .in-page-search:focus-within { border-color: #A1A1AA; }
+    .in-page-search input {
+      border: none; background: transparent; outline: none; font-size: 14px; width: 100px; transition: width 0.2s; color: var(--text-main);
+    }
+    .in-page-search input:focus { width: 140px; }
+    #searchMatchCount { font-size: 12px; color: var(--text-muted); width: 34px; text-align: center; }
+
+    /* ⭐ 공통 버튼 폰트 증가 */
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 14px; border-radius: var(--radius-md); font-size: 14.5px; font-weight: 600; cursor: pointer; transition: 0.2s; border: 1px solid transparent; outline: none; }
+    .btn i { font-size: 16px; } /* 아이콘 크기도 약간 키움 */
+    .btn-primary { background: var(--primary); color: var(--primary-text); box-shadow: var(--shadow-sm); }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-outline { background: var(--secondary); color: var(--text-main); border-color: var(--border-base); }
+    .btn-outline:hover { background: var(--secondary-hover); }
+    .btn-danger { color: #DC2626; background: #FEF2F2; border-color: #FECACA; }
+    .btn-danger:hover { background: #FEE2E2; }
+
+    /* 대화 블록 (카드 형식) */
+    .form-wrapper { padding: 30px; display: flex; flex-direction: column; flex: 1; overflow-y: auto; gap: 20px; }
+    .chat-card { background: var(--bg-surface); border: 1px solid var(--border-base); border-radius: var(--radius-lg); padding: 20px; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; gap: 12px; transition: 0.2s; }
+    .chat-card:focus-within { border-color: #A1A1AA; box-shadow: var(--shadow-md); }
+    
+    /* ⭐ 카드 헤더 (작성자, 일자) 폰트 증가 */
+    .card-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-light); padding-bottom: 12px; }
+    .card-meta { display: flex; gap: 10px; align-items: center; }
+    .author-input { font-size: 15px; font-weight: 700; border: 1px solid transparent; padding: 4px 8px; border-radius: 4px; outline: none; background: var(--bg-body); width: 130px; transition: 0.2s; }
+    .author-input:focus { border-color: var(--border-dark); background: #FFF; }
+    .date-input { font-size: 14px; color: var(--text-muted); border: 1px solid transparent; padding: 4px; border-radius: 4px; outline: none; cursor: pointer; }
+    .date-input:focus { border-color: var(--border-dark); }
+    
+    /* 카드 바디 (텍스트 원문) */
+    .content-area { width: 100%; border: none; background: transparent; resize: none; outline: none; font-size: 17px; line-height: 1.6; color: var(--text-main); min-height: 40px; padding: 4px 0; font-family: inherit; border-radius: 4px; }
+    
+    /* 답장 기록 영역 */
+    .replies-container { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; margin-bottom: 4px; }
+    .reply-wrapper { display: flex; flex-direction: column; gap: 8px; background: #F8F9FA; border-left: 3px solid #3B82F6; padding: 12px 14px; border-radius: 4px; position: relative; }
+    .reply-header-row { display: flex; justify-content: space-between; align-items: center; }
+    /* ⭐ 답장자 이름 폰트 증가 */
+    .reply-target-input { font-size: 14.5px; font-weight: 700; border: 1px solid transparent; background: transparent; outline: none; width: 150px; padding: 2px 4px; border-radius: 4px; color: #3B82F6; }
+    .reply-target-input:focus { border-color: var(--border-dark); background: #FFF; }
+    .reply-content-area { width: 100%; border: 1px solid transparent; border-radius: 4px; background: transparent; resize: none; outline: none; font-size: 16px; color: var(--text-main); line-height: 1.6; min-height: 24px; padding: 4px; font-family: inherit; }
+    .reply-content-area:focus { border-color: var(--border-dark); background: #FFF; }
+    .remove-reply-btn { color: #9CA3AF; background: none; border: none; cursor: pointer; padding: 4px; border-radius: 4px; display: flex; align-items: center; justify-content: center; transition: 0.1s;}
+    .remove-reply-btn:hover { color: #4B5563; background: #E5E7EB; }
+    
+    /* 계층형(대댓글) 들여쓰기 컨테이너 */
+    .nested-replies-container { margin-left: 14px; border-left: 1px dashed #D1D5DB; padding-left: 10px; display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+
+    /* 카드 푸터 (첨부파일) */
+    .card-footer { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px dashed var(--border-base); }
+    .file-actions { display: flex; gap: 8px; align-items: center; }
+    .file-list { display: flex; flex-wrap: wrap; gap: 8px; }
+    .file-item { display: flex; align-items: center; gap: 6px; padding: 4px 10px; background: var(--bg-body); border: 1px solid var(--border-base); border-radius: 20px; font-size: 13px; font-weight: 500; }
+    .file-btn { background: transparent; border: none; cursor: pointer; padding: 2px; display: inline-flex; align-items: center; justify-content: center; transition: 0.1s; }
+    .file-btn.download { color: #3B82F6; }
+    .file-btn.download:hover { color: #1D4ED8; }
+    .file-btn.delete { color: #EF4444; }
+    .file-btn.delete:hover { color: #B91C1C; }
+
+    /* ⭐ 추가 버튼 영역 크기 증가 */
+    .add-btn-wrapper { text-align: center; padding: 20px 0; }
+    .add-btn-wrapper .btn { font-size: 15.5px; padding: 12px 24px; border-radius: 24px; }
+    .add-btn-wrapper .btn i { font-size: 18px; }
+    
+    .toast { visibility: hidden; background: rgba(17, 24, 39, 0.9); color: #fff; text-align: center; border-radius: var(--radius-md); padding: 12px 24px; position: fixed; z-index: 1000; left: 50%; bottom: 20px; transform: translateX(-50%); font-size: 14px; opacity: 0; transition: 0.3s; }
+    .toast.show { visibility: visible; opacity: 1; bottom: 40px; }
+  </style>
+</head>
+<body>
+
+  <datalist id="nameList"></datalist>
+
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="app-title"><i class="ph-fill ph-book-bookmark" style="font-size: 24px;"></i> Kakao Archive</div>
+    </div>
+    <div class="sidebar-search">
+      <div style="position: relative;">
+        <i class="ph ph-magnifying-glass" style="position: absolute; left: 10px; top: 10px; color: var(--text-muted); font-size: 16px;"></i>
+        <input type="text" id="searchInput" class="search-box" style="padding-left: 32px;" placeholder="방 이름 및 내용 검색..." oninput="renderRoomList()">
+      </div>
+    </div>
+    <ul class="note-list" id="roomList"></ul>
+  </aside>
+
+  <main class="main-content">
+    <div class="top-bar">
+      <input type="text" id="roomTitle" class="title-input" placeholder="아카이브 제목 (단체방 이름)" spellcheck="false">
+      
+      <div style="display: flex; gap: 16px; align-items: center;">
+        
+        <div class="in-page-search" title="문서 내 텍스트 검색">
+          <i class="ph ph-magnifying-glass" style="color: var(--text-muted); font-size: 15px;"></i>
+          <input type="text" id="localSearchInput" placeholder="본문 내 검색" onkeydown="handleLocalSearchKeyDown(event)" oninput="lastSearchTerm = ''">
+          <span id="searchMatchCount">0/0</span>
+          <div style="display: flex; gap: 2px;">
+            <button class="btn btn-outline" style="padding: 2px 4px;" onclick="navigateLocalSearch(-1)" title="이전 (Shift+Enter)"><i class="ph-bold ph-caret-up"></i></button>
+            <button class="btn btn-outline" style="padding: 2px 4px;" onclick="navigateLocalSearch(1)" title="다음 (Enter)"><i class="ph-bold ph-caret-down"></i></button>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-outline" onclick="createNewRoom()" title="Ctrl+Alt+N"><i class="ph ph-plus"></i> 신규생성</button>
+          <button class="btn btn-primary" onclick="saveRoom()" title="Ctrl+S"><i class="ph ph-floppy-disk"></i> 저장</button>
+          <button class="btn btn-danger" onclick="deleteRoom()"><i class="ph ph-trash"></i> 삭제</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-wrapper" id="formWrapper">
+      <div id="cardContainer" style="display: flex; flex-direction: column; gap: 20px;"></div>
+      
+      <div class="add-btn-wrapper">
+        <button class="btn btn-outline" onclick="addCard()">
+          <i class="ph-bold ph-plus"></i> 새 대화 블록 추가
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <div id="toast" class="toast"><i class="ph-bold ph-check"></i> <span>메시지</span></div>
+
+  <script>
+    let db;
+    let currentRoomId = null;
+    let filesMap = new Map(); 
+
+    // 본문 검색용 전역 변수
+    let localSearchMatches = [];
+    let currentMatchIndex = -1;
+    let lastSearchTerm = "";
+
+    const initDB = () => {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open('KakaoArchiveDB', 1);
+        request.onupgradeneeded = (e) => { 
+          const database = e.target.result; 
+          if (!database.objectStoreNames.contains('rooms')) {
+            database.createObjectStore('rooms', { keyPath: 'id' });
+          }
+        };
+        request.onsupgradeneeded = e => db = e.target.result;
+        request.onsuccess = (e) => { db = e.target.result; resolve(); };
+        request.onerror = () => reject('DB Error');
+      });
+    };
+
+    window.onload = async () => { 
+      await initDB(); 
+      await renderRoomList(); 
+      updateDatalists(); 
+      createNewRoom(); 
+    };
+
+    function executeLocalSearch(term) {
+      lastSearchTerm = term;
+      localSearchMatches = [];
+      currentMatchIndex = -1;
+      const countDisplay = document.getElementById('searchMatchCount');
+
+      if (!term.trim()) {
+        countDisplay.innerText = '0/0';
+        return;
+      }
+
+      const lowerTerm = term.toLowerCase();
+      const inputs = document.querySelectorAll('.chat-card input[type="text"], .chat-card textarea');
+      
+      inputs.forEach(input => {
+        const text = input.value.toLowerCase();
+        let startIndex = 0;
+        let index;
+        while ((index = text.indexOf(lowerTerm, startIndex)) > -1) {
+          localSearchMatches.push({ el: input, start: index, end: index + term.length });
+          startIndex = index + term.length;
+        }
+      });
+
+      if (localSearchMatches.length > 0) {
+        currentMatchIndex = 0;
+        highlightMatch();
+      } else {
+        countDisplay.innerText = '0/0';
+      }
+    }
+
+    function highlightMatch() {
+      if (localSearchMatches.length === 0) return;
+      const match = localSearchMatches[currentMatchIndex];
+      document.getElementById('searchMatchCount').innerText = `${currentMatchIndex + 1}/${localSearchMatches.length}`;
+      
+      match.el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      
+      setTimeout(() => {
+        match.el.focus();
+        match.el.setSelectionRange(match.start, match.end);
+
+        match.el.style.transition = 'background-color 0.2s';
+        match.el.style.backgroundColor = '#FEF08A';
+        
+        setTimeout(() => {
+          match.el.style.backgroundColor = 'transparent';
+        }, 800);
+
+        document.getElementById('localSearchInput').focus();
+      }, 50);
+    }
+
+    function navigateLocalSearch(dir) {
+      if (localSearchMatches.length === 0) {
+        executeLocalSearch(document.getElementById('localSearchInput').value);
+        return;
+      }
+      currentMatchIndex = (currentMatchIndex + dir + localSearchMatches.length) % localSearchMatches.length;
+      highlightMatch();
+    }
+
+    function handleLocalSearchKeyDown(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault(); 
+        const term = e.target.value;
+        if (term !== lastSearchTerm || localSearchMatches.length === 0) {
+          executeLocalSearch(term);
+        } else {
+          navigateLocalSearch(e.shiftKey ? -1 : 1);
+        }
+      }
+    }
+
+    // 작성자 및 답장자 히스토리 통합
+    function updateDatalists() {
+      const tx = db.transaction(['rooms'], 'readonly');
+      tx.objectStore('rooms').getAll().onsuccess = (e) => {
+        const rooms = e.target.result;
+        const allNames = new Set(); 
+
+        const extractNames = (replies) => {
+          if (!replies) return;
+          replies.forEach(r => {
+            if (r.replierName) allNames.add(r.replierName.trim());
+            if (r.replies) extractNames(r.replies);
+          });
+        };
+
+        rooms.forEach(room => {
+          if(room.messages) {
+            room.messages.forEach(m => {
+              if(m.author) allNames.add(m.author.trim());
+              if(m.replierName || m.replyTarget) allNames.add((m.replierName || m.replyTarget).trim());
+              extractNames(m.replies);
+            });
+          }
+        });
+
+        const nameList = document.getElementById('nameList');
+        nameList.innerHTML = '';
+
+        allNames.forEach(name => { 
+          if(name) nameList.appendChild(new Option(name, name)); 
+        });
+      };
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.querySelector('span').innerText = msg;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 2000);
+    }
+
+    function generateId() { return 'id_' + Math.random().toString(36).substr(2, 9); }
+
+    function createNewRoom() {
+      currentRoomId = null;
+      document.getElementById('roomTitle').value = '';
+      document.getElementById('cardContainer').innerHTML = '';
+      document.getElementById('localSearchInput').value = '';
+      executeLocalSearch(''); 
+      filesMap.clear(); 
+      document.querySelectorAll('.note-item').forEach(el => el.classList.remove('active'));
+      addCard();
+      document.getElementById('roomTitle').focus();
+    }
+
+    function createReplyHTML(data = null) {
+      const replyId = data && data.id ? data.id : generateId();
+      const replierName = data && data.replierName ? data.replierName : '';
+      const replyContent = data && data.replyContent ? data.replyContent : '';
+
+      const div = document.createElement('div');
+      div.className = 'reply-wrapper';
+      div.id = replyId;
+      div.innerHTML = `
+        <div class="reply-header-row">
+          <div style="display: flex; align-items: center; gap: 6px; font-size: 13px;">
+            <i class="ph-bold ph-arrow-bend-down-right" style="color: #3B82F6; font-size: 16px;"></i>
+            <input type="text" class="reply-target-input" placeholder="답장자명" value="${replierName}" list="nameList">
+          </div>
+          <div style="display: flex; gap: 2px;">
+            <button class="remove-reply-btn" onclick="addNestedReply('${replyId}')" title="이 답장에 답장 추가"><i class="ph-bold ph-arrow-bend-down-right" style="font-size: 16px;"></i></button>
+            <button class="remove-reply-btn" onclick="removeReply('${replyId}')" title="답장 삭제"><i class="ph-bold ph-x" style="font-size: 16px;"></i></button>
+          </div>
+        </div>
+        <textarea class="reply-content-area" placeholder="답장 내용을 입력하세요..." oninput="autoResize(this)" spellcheck="false">${replyContent}</textarea>
+        <div class="nested-replies-container" id="nested_${replyId}"></div>
+      `;
+
+      if (data && data.replies && data.replies.length > 0) {
+        const nestedContainer = div.querySelector('.nested-replies-container');
+        data.replies.forEach(r => nestedContainer.appendChild(createReplyHTML(r)));
+      }
+      return div;
+    }
+
+    function addCardReply(cardId) {
+      const container = document.getElementById('replies_' + cardId);
+      const replyEl = createReplyHTML();
+      container.appendChild(replyEl);
+      setTimeout(() => { autoResize(replyEl.querySelector('.reply-content-area')); replyEl.querySelector('.reply-target-input').focus(); }, 10);
+    }
+
+    function addNestedReply(replyId) {
+      const container = document.getElementById('nested_' + replyId);
+      const replyEl = createReplyHTML();
+      container.appendChild(replyEl);
+      setTimeout(() => { autoResize(replyEl.querySelector('.reply-content-area')); replyEl.querySelector('.reply-target-input').focus(); }, 10);
+    }
+
+    function removeReply(replyId) {
+      if (confirm('해당 답장과 하위 답장을 모두 삭제하시겠습니까?')) { document.getElementById(replyId).remove(); }
+    }
+
+    function addCard(data = null) {
+      const container = document.getElementById('cardContainer');
+      const cardId = data && data.cardId ? data.cardId : generateId();
+      
+      filesMap.set(cardId, data && data.files ? data.files : []);
+
+      const today = new Date().toISOString().split('T')[0];
+      const author = data ? data.author : '';
+      const date = data ? data.date : today;
+      const content = data ? data.content : '';
+
+      const card = document.createElement('div');
+      card.className = 'chat-card';
+      card.id = cardId;
+
+      card.innerHTML = `
+        <div class="card-header">
+          <div class="card-meta">
+            <input type="text" class="author-input" placeholder="작성자명" value="${author}" list="nameList">
+            <input type="date" class="date-input" value="${date}">
+          </div>
+          <div style="display: flex; gap: 4px;">
+            <button class="btn btn-outline" style="padding: 4px 8px;" onclick="addCardReply('${cardId}')" title="새 답장 추가">
+              <i class="ph-bold ph-arrow-bend-down-right"></i> 답장 추가
+            </button>
+            <button class="btn" style="color: #6B7280; padding: 4px;" onclick="removeCard('${cardId}')" title="블록 삭제">
+              <i class="ph ph-x"></i>
+            </button>
+          </div>
+        </div>
+        
+        <textarea class="content-area" placeholder="원문 대화 내용을 입력하세요..." oninput="autoResize(this)" spellcheck="false">${content}</textarea>
+        
+        <div class="replies-container" id="replies_${cardId}"></div>
+
+        <div class="card-footer">
+          <div class="file-actions">
+            <button class="btn btn-outline" style="padding: 4px 8px;" onclick="document.getElementById('file_${cardId}').click()">
+              <i class="ph ph-paperclip"></i> 파일 첨부
+            </button>
+            <input type="file" id="file_${cardId}" style="display:none" multiple onchange="handleFileSelect(event, '${cardId}')">
+          </div>
+          <div class="file-list" id="file_list_${cardId}"></div>
+        </div>
+      `;
+
+      container.appendChild(card);
+      renderFileList(cardId);
+      
+      const repliesContainer = card.querySelector('#replies_' + cardId);
+      if (data && data.replies && data.replies.length > 0) {
+        data.replies.forEach(r => repliesContainer.appendChild(createReplyHTML(r)));
+      } else if (data && (data.replierName || data.replyContent || data.replyTarget)) {
+        repliesContainer.appendChild(createReplyHTML({ replierName: data.replierName || data.replyTarget, replyContent: data.replyContent }));
+      }
+
+      setTimeout(() => { card.querySelectorAll('textarea').forEach(el => autoResize(el)); }, 10);
+    }
+
+    function autoResize(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }
+
+    function removeCard(cardId) {
+      if(confirm('이 대화 블록을 삭제하시겠습니까?')) { document.getElementById(cardId).remove(); filesMap.delete(cardId); }
+    }
+
+    function handleFileSelect(event, cardId) {
+      const selectedFiles = Array.from(event.target.files);
+      const currentFiles = filesMap.get(cardId);
+      selectedFiles.forEach(file => currentFiles.push(file));
+      filesMap.set(cardId, currentFiles);
+      renderFileList(cardId);
+      event.target.value = ''; 
+    }
+
+    function renderFileList(cardId) {
+      const container = document.getElementById('file_list_' + cardId);
+      container.innerHTML = '';
+      const currentFiles = filesMap.get(cardId) || [];
+      currentFiles.forEach((file, index) => {
+        const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+        const item = document.createElement('div');
+        item.className = 'file-item';
+        item.innerHTML = `
+          <i class="ph-fill ph-file" style="color: #9CA3AF; font-size: 15px;"></i>
+          <span style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${file.name}">${file.name}</span>
+          <span style="color: #9CA3AF; font-size: 12px;">(${sizeMB}MB)</span>
+          <button class="file-btn download" onclick="downloadFile('${cardId}', ${index})" title="다운로드"><i class="ph-bold ph-download-simple" style="font-size: 15px;"></i></button>
+          <button class="file-btn delete" onclick="deleteFile('${cardId}', ${index})" title="삭제"><i class="ph-bold ph-x" style="font-size: 15px;"></i></button>
+        `;
+        container.appendChild(item);
+      });
+    }
+
+    function downloadFile(cardId, index) {
+      const file = filesMap.get(cardId)[index];
+      if(!file) return alert('파일을 찾을 수 없습니다.');
+      const url = URL.createObjectURL(file);
+      const a = document.createElement('a'); a.style.display = 'none'; a.href = url; a.download = file.name;
+      document.body.appendChild(a); a.click();
+      setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+    }
+
+    function deleteFile(cardId, index) {
+      const currentFiles = filesMap.get(cardId);
+      currentFiles.splice(index, 1); filesMap.set(cardId, currentFiles); renderFileList(cardId);
+    }
+
+    function extractReplies(containerId) {
+      const container = document.getElementById(containerId);
+      if (!container) return [];
+      const wrappers = Array.from(container.children).filter(el => el.classList.contains('reply-wrapper'));
+      return wrappers.map(w => {
+        return {
+          id: w.id,
+          replierName: w.querySelector('.reply-target-input').value,
+          replyContent: w.querySelector('.reply-content-area').value,
+          replies: extractReplies('nested_' + w.id)
+        };
+      });
+    }
+
+    function saveRoom() {
+      const title = document.getElementById('roomTitle').value.trim() || '이름 없는 아카이브';
+      const cards = Array.from(document.querySelectorAll('.chat-card'));
+      const messages = cards.map(c => {
+        return {
+          cardId: c.id,
+          author: c.querySelector('.author-input').value,
+          date: c.querySelector('.date-input').value,
+          content: c.querySelector('.content-area').value,
+          replies: extractReplies('replies_' + c.id),
+          files: filesMap.get(c.id) || [] 
+        };
+      });
+
+      const id = currentRoomId || Date.now().toString();
+      const tx = db.transaction(['rooms'], 'readwrite');
+      tx.objectStore('rooms').put({ id, title, messages, date: new Date().toISOString() });
+      tx.oncomplete = () => {
+        currentRoomId = id; 
+        renderRoomList(); 
+        updateDatalists(); 
+        showToast('아카이브가 저장되었습니다.');
+      };
+    }
+
+    function renderRoomList() {
+      const filter = document.getElementById('searchInput').value.toLowerCase().trim();
+      const tx = db.transaction(['rooms'], 'readonly');
+      tx.objectStore('rooms').getAll().onsuccess = (e) => {
+        const list = document.getElementById('roomList');
+        list.innerHTML = '';
+        let rooms = e.target.result;
+        
+        // 이름(오름차순) 및 숫자 자연정렬
+        rooms.sort((a, b) => {
+          const titleA = a.title || '';
+          const titleB = b.title || '';
+          return titleA.localeCompare(titleB, undefined, { numeric: true, sensitivity: 'base' });
+        });
+
+        const searchInReplies = (replies) => {
+          if(!replies) return false;
+          return replies.some(r => 
+            (r.replyContent && r.replyContent.toLowerCase().includes(filter)) ||
+            (r.replierName && r.replierName.toLowerCase().includes(filter)) || searchInReplies(r.replies)
+          );
+        };
+
+        rooms.forEach(room => {
+          let match = room.title.toLowerCase().includes(filter);
+          if (!match && room.messages) {
+            match = room.messages.some(m => 
+              m.content.toLowerCase().includes(filter) || m.author.toLowerCase().includes(filter) ||
+              searchInReplies(m.replies)
+            );
+          }
+
+          if (match) {
+            const li = document.createElement('li');
+            li.className = `note-item ${room.id === currentRoomId ? 'active' : ''}`;
+            const dateStr = new Date(room.date).toLocaleDateString('ko-KR');
+            const totalFiles = room.messages.reduce((acc, curr) => acc + (curr.files ? curr.files.length : 0), 0);
+            const fileIcon = totalFiles > 0 ? `<i class="ph-fill ph-paperclip"></i> ${totalFiles}` : '';
+
+            li.innerHTML = `
+              <div class="note-title">${room.title}</div>
+              <div class="note-meta"><span>블록 ${room.messages.length}개 · ${dateStr}</span><span>${fileIcon}</span></div>
+            `;
+            li.onclick = () => loadRoom(room.id);
+            list.appendChild(li);
+          }
+        });
+      };
+    }
+
+    function loadRoom(id) {
+      const tx = db.transaction(['rooms'], 'readonly');
+      tx.objectStore('rooms').get(id).onsuccess = (e) => {
+        if(e.target.result) {
+          const room = e.target.result;
+          currentRoomId = room.id;
+          document.getElementById('roomTitle').value = room.title;
+          
+          document.getElementById('cardContainer').innerHTML = '';
+          filesMap.clear();
+
+          if(room.messages && room.messages.length > 0) {
+            room.messages.forEach(m => addCard(m));
+          } else { addCard(); }
+          
+          renderRoomList();
+
+          setTimeout(() => {
+            const sidebarTerm = document.getElementById('searchInput').value.trim();
+            const localInput = document.getElementById('localSearchInput');
+            if (sidebarTerm) {
+              localInput.value = sidebarTerm;
+              executeLocalSearch(sidebarTerm);
+            } else {
+              localInput.value = '';
+              executeLocalSearch('');
+            }
+          }, 100);
+        }
+      };
+    }
+
+    function deleteRoom() {
+      if (!currentRoomId) return alert('저장된 문서가 없습니다.');
+      if (confirm('이 아카이브를 영구적으로 삭제하시겠습니까? (첨부파일 모두 삭제됨)')) {
+        const tx = db.transaction(['rooms'], 'readwrite');
+        tx.objectStore('rooms').delete(currentRoomId);
+        tx.oncomplete = () => {
+          showToast('삭제되었습니다.'); createNewRoom(); renderRoomList(); updateDatalists();
+        };
+      }
+    }
+
+    document.addEventListener('keydown', function(e) {
+      const isCtrl = e.ctrlKey || e.metaKey; const isAlt = e.altKey;
+      if (isCtrl && !isAlt && (e.key === 's' || e.key === 'S')) { e.preventDefault(); saveRoom(); }
+      if (isCtrl && isAlt && (e.key === 'n' || e.key === 'N')) { e.preventDefault(); createNewRoom(); }
+    });
+  </script>
+</body>
+</html>

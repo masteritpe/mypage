@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Visual Map</title>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+    
+    <style>
+        :root {
+            --bg-app: #f8fafc; --bg-panel: #ffffff; --border: #e2e8f0;
+            --primary: #0ea5e9; --primary-hover: #0284c7;
+            --text-main: #1e293b; --text-sub: #64748b;
+            --font-ui: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+        }
+
+        * { box-sizing: border-box; outline: none; margin: 0; padding: 0; }
+        body { background: var(--bg-app); font-family: var(--font-ui); height: 100vh; display: flex; flex-direction: column; overflow: hidden; letter-spacing: -0.02em; }
+        
+        /* Header */
+        header { height: 60px; background: #fff; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 24px; justify-content: space-between; flex-shrink: 0; z-index: 10; box-shadow: 0 1px 2px rgba(0,0,0,0.02); }
+        .logo { font-weight: 800; font-size: 18px; color: var(--primary); display: flex; align-items: center; gap: 10px; min-width: 150px; }
+        
+        .header-right { display: flex; align-items: center; gap: 8px; min-width: 150px; justify-content: flex-end; }
+
+        /* Hover 영역 처리를 위해 높이를 100%로 채움 */
+        .header-center { display: flex; align-items: center; justify-content: center; flex: 1; height: 100%; cursor: default; }
+        
+        /* 맵 컨트롤 숨김 및 Hover 시 나타남 효과 적용 */
+        .map-controls { display: flex; align-items: center; gap: 6px; opacity: 0; pointer-events: none; transition: opacity 0.3s ease-in-out; }
+        .header-center:hover .map-controls { opacity: 1; pointer-events: auto; }
+
+        /* Buttons */
+        .btn { padding: 0 16px; height: 36px; border-radius: 6px; cursor: pointer; font-weight: 600; border: 1px solid transparent; transition: 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 13px; font-family: var(--font-ui); }
+        .btn-sm { height: 30px; padding: 0 12px; font-size: 13px; border-radius: 4px; }
+        .btn-icon { width: 30px; height: 30px; padding: 0; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; }
+        
+        .btn-primary { background: var(--primary); color: #fff; border: none; }
+        .btn-primary:hover { background: var(--primary-hover); }
+        
+        .btn-secondary { background: #f8fafc; border-color: var(--border); color: var(--text-main); }
+        .btn-secondary:hover { background: #e2e8f0; }
+        
+        .btn-danger { color: #ef4444; border-color: #fecaca; background: #fff; }
+        .btn-danger:hover { background: #fef2f2; }
+
+        /* Icon Outline Buttons */
+        .btn-outline { background: #fff; border: 1px solid var(--border); color: var(--text-main); }
+        .btn-outline:hover { background: #f1f5f9; border-color: #cbd5e1; }
+        .btn-outline-danger { background: #fff; border: 1px solid #fecaca; color: #ef4444; }
+        .btn-outline-danger:hover { background: #fef2f2; }
+
+        /* Map Selector */
+        #map-select { height: 30px; font-size: 13px; font-weight: 600; font-family: inherit; color: var(--text-main); background: #f8fafc; border: 1px solid var(--border); border-radius: 4px; padding: 0 10px; cursor: pointer; outline: none; min-width: 140px; }
+        #map-select:focus { border-color: var(--primary); }
+
+        /* Workspace & Canvas */
+        .workspace { position: relative; flex: 1; overflow: hidden; background: #f1f5f9 radial-gradient(#cbd5e1 1px, transparent 1px); background-size: 20px 20px; }
+        #canvas-area { position: absolute; inset: 0; cursor: crosshair; }
+        
+        /* SVG Layer for lines */
+        #link-layer { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+        .connection-line { stroke: #94a3b8; stroke-width: 2; fill: none; transition: stroke 0.2s; }
+        .connection-line:hover { stroke: var(--primary); stroke-width: 3; cursor: pointer; pointer-events: auto; }
+        
+        /* Link Labels */
+        #label-layer { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+        .link-label { position: absolute; transform: translate(-50%, -50%); background: #fff; padding: 4px 10px; border: 1px solid var(--border); border-radius: 20px; font-size: 12px; font-weight: 600; color: var(--text-sub); cursor: pointer; pointer-events: auto; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: 0.2s; }
+        .link-label:hover { border-color: var(--primary); color: var(--primary); z-index: 10; }
+        .link-label input { border: none; text-align: center; font-size: 12px; font-family: inherit; font-weight: 600; color: var(--primary); width: 80px; background: transparent; }
+
+        /* Nodes */
+        #node-layer { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+        .node { position: absolute; background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); cursor: grab; display: flex; align-items: center; gap: 12px; pointer-events: auto; user-select: none; transition: box-shadow 0.2s, border-color 0.2s; min-width: 140px; transform: translate(-50%, -50%); }
+        .node:active { cursor: grabbing; box-shadow: 0 8px 15px -3px rgba(0,0,0,0.15); }
+        .node.active { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(14,165,233,0.15); z-index: 10; }
+        
+        .node-icon { width: 32px; height: 32px; border-radius: 8px; background: #f0f9ff; color: var(--primary); display: flex; align-items: center; justify-content: center; font-size: 16px; cursor: pointer; transition: 0.2s; }
+        .node-icon:hover { background: #e0f2fe; transform: scale(1.05); box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .node-info { display: flex; flex-direction: column; flex: 1; }
+        .node-title { font-size: 14px; font-weight: 700; color: var(--text-main); }
+        .node-desc { font-size: 11px; color: var(--text-sub); margin-top: 2px; max-width: 140px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        /* Connection Anchor */
+        .anchor { position: absolute; right: -8px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; background: #fff; border: 2px solid var(--border); border-radius: 50%; cursor: pointer; transition: 0.2s; opacity: 0; }
+        .node:hover .anchor, .node.active .anchor { opacity: 1; }
+        .anchor:hover { border-color: var(--primary); background: #e0f2fe; transform: translateY(-50%) scale(1.2); }
+
+        /* Side Editor Panel */
+        .side-editor { position: absolute; top: 0; right: -420px; width: 420px; height: 100%; background: #fff; border-left: 1px solid var(--border); box-shadow: -4px 0 15px rgba(0,0,0,0.05); transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1); display: flex; flex-direction: column; z-index: 20; }
+        .side-editor.open { right: 0; }
+        
+        .editor-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+        .header-input { font-size: 18px; font-weight: 800; color: var(--text-main); border: none; background: transparent; flex: 1; margin-right: 12px; font-family: inherit; border-bottom: 2px solid transparent; padding: 4px 0; transition: border-color 0.2s; }
+        .header-input:focus { outline: none; border-color: var(--primary); }
+        .header-input::placeholder { color: #cbd5e1; font-weight: 600; }
+        
+        .btn-close { background: none; border: none; font-size: 18px; color: var(--text-sub); cursor: pointer; padding: 4px; border-radius: 4px; transition: 0.2s; }
+        .btn-close:hover { background: #f1f5f9; color: var(--text-main); }
+        
+        .editor-body { padding: 20px; flex: 1; display: flex; flex-direction: column; gap: 16px; overflow: hidden; }
+        .input-group { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+        .input-group.desc-group { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+        .ql-toolbar { display: none !important; }
+        .ql-container { flex: 1; border: 1px solid var(--border) !important; border-radius: 6px; font-family: inherit !important; font-size: 14px !important; overflow-y: auto; }
+        .ql-container.ql-snow:focus-within { border-color: var(--primary) !important; box-shadow: 0 0 0 3px rgba(14,165,233,0.1); }
+        .ql-editor { padding: 12px !important; word-break: keep-all; }
+        
+        .input-group label { font-size: 12px; font-weight: 700; color: var(--text-sub); display: flex; justify-content: space-between; align-items: center;}
+        
+        /* 첨부파일 영역 */
+        .attachment-container { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+        .attachment-item { position: relative; width: 36px; height: 36px; background: #f1f5f9; border: 1px solid var(--border); border-radius: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--primary); transition: 0.2s; }
+        .attachment-item:hover { background: #e2e8f0; border-color: var(--primary); }
+        .attachment-delete { position: absolute; top: -6px; right: -6px; background: #ef4444; color: white; border-radius: 50%; width: 16px; height: 16px; font-size: 10px; display: flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0; transition: 0.2s; }
+        .attachment-item:hover .attachment-delete { opacity: 1; }
+
+        .editor-footer { padding: 16px 20px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; background: #f8fafc; flex-shrink: 0; }
+
+        #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #1e293b; color: #fff; padding: 12px 24px; border-radius: 50px; font-size: 13px; font-weight: 600; opacity: 0; pointer-events: none; transition: opacity 0.3s; z-index: 10000; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+		#toast.show { opacity: 1; }
+
+        .dueum-highlight { background-color: #0d3a9e !important; color: #ffffff !important; padding: 1px 4px; border-radius: 3px; font-weight: 700; }
+
+        /* 이미지 모달 & 팝오버 */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.85); z-index: 9999; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.2s; backdrop-filter: blur(2px); }
+        .modal-overlay.show { opacity: 1; pointer-events: auto; }
+        .modal-content { background: #fff; padding: 16px; border-radius: 12px; display: flex; flex-direction: column; gap: 16px; max-width: 90%; max-height: 90%; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); }
+        .modal-content img { max-width: 100%; max-height: 70vh; object-fit: contain; border-radius: 8px; border: 1px solid var(--border); }
+        .modal-actions { display: flex; gap: 8px; justify-content: center; }
+
+        #icon-picker-popover { position: fixed; background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 8px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05); gap: 6px; z-index: 10000; }
+        .icon-opt { width: 36px; height: 36px; border: 1px solid var(--border); border-radius: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-sub); transition: 0.2s; }
+        .icon-opt:hover { background: #f1f5f9; }
+        .icon-opt.selected { background: var(--primary); color: #fff; border-color: var(--primary); }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="logo">
+        <i class="fas fa-project-diagram"></i> 비주얼 맵
+    </div>
+    
+    <div class="header-center">
+        <div class="map-controls">
+            <select id="map-select" onchange="switchMap(this.value)"></select>
+            <button class="btn btn-icon btn-outline" onclick="renameCurrentMap()" title="맵 이름 변경"><i class="fas fa-edit"></i></button>
+            <button class="btn btn-primary btn-sm" onclick="createNewMap()"><i class="fas fa-plus"></i> 새 맵</button>
+            <button class="btn btn-icon btn-outline-danger" onclick="deleteCurrentMap()" title="현재 맵 삭제"><i class="fas fa-trash-alt"></i></button>
+        </div>
+    </div>
+
+    <div class="header-right">
+        <button class="btn btn-secondary" onclick="clearMap()"><i class="fas fa-eraser"></i> 맵 비우기</button>
+        <button class="btn btn-primary" onclick="createNodeInCenter()"><i class="fas fa-plus"></i> 중앙에 추가</button>
+    </div>
+</header>
+
+<div class="workspace">
+    <div id="canvas-area"></div>
+    <svg id="link-layer"></svg>
+    <div id="label-layer"></div>
+    <div id="node-layer"></div>
+
+    <div class="side-editor" id="side-editor">
+        <div class="editor-header">
+            <input type="text" id="node-title-input" class="header-input" placeholder="노드 이름을 입력하세요" spellcheck="false">
+            <button class="btn-close" onclick="closeEditor()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="editor-body">
+            <div class="input-group desc-group">
+                <div id="editor-container"></div>
+            </div>
+            <div class="input-group">
+                <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px; font-weight:700; color:var(--text-sub);">
+                    <span>첨부파일 (최대 5개)</span>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('file-upload').click()">
+                        <i class="fas fa-paperclip"></i> 첨부
+                    </button>
+                </div>
+                <input type="file" id="file-upload" multiple style="display: none;">
+                <div class="attachment-container" id="attachment-list"></div>
+            </div>
+        </div>
+        <div class="editor-footer">
+            <button class="btn btn-danger" onclick="deleteActiveNode()"><i class="fas fa-trash"></i> 삭제</button>
+            <button class="btn btn-primary" onclick="saveActiveNode()"><i class="fas fa-save"></i> 저장</button>
+        </div>
+    </div>
+</div>
+
+<div id="icon-picker-popover" style="display: none;">
+    <div class="icon-opt" data-icon="fa-file-alt"><i class="fas fa-file-alt"></i></div>
+    <div class="icon-opt" data-icon="fa-lightbulb"><i class="fas fa-lightbulb"></i></div>
+    <div class="icon-opt" data-icon="fa-code"><i class="fas fa-code"></i></div>
+    <div class="icon-opt" data-icon="fa-database"><i class="fas fa-database"></i></div>
+    <div class="icon-opt" data-icon="fa-server"><i class="fas fa-server"></i></div>
+    <div class="icon-opt" data-icon="fa-user"><i class="fas fa-user"></i></div>
+    <div class="icon-opt" data-icon="fa-check-circle"><i class="fas fa-check-circle"></i></div>
+</div>
+
+<div id="toast"><i class="fas fa-check-circle"></i> <span id="toast-msg"></span></div>
+
+<div class="modal-overlay" id="image-modal">
+    <div class="modal-content">
+        <img id="modal-image" src="" alt="첨부 이미지 뷰어">
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="copyModalImage()"><i class="fas fa-copy"></i> 복사</button>
+            <button class="btn btn-primary" onclick="downloadModalImage()"><i class="fas fa-download"></i> 저장</button>
+            <button class="btn btn-danger" onclick="closeImageModal()"><i class="fas fa-times"></i> 닫기</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- Quill Editor Setup ---
+    const Inline = Quill.import('blots/inline');
+    class DueumFormat extends Inline { }
+    DueumFormat.blotName = 'dueum'; DueumFormat.tagName = 'span'; DueumFormat.className = 'dueum-highlight';
+    Quill.register(DueumFormat, true);
+
+    const SizeStyle = Quill.import('attributors/style/size');
+    const allowedSizes = [];
+    for (let i = 10; i <= 72; i++) allowedSizes.push(i + 'px'); 
+    SizeStyle.whitelist = allowedSizes;
+    Quill.register(SizeStyle, true);
+
+    let quill;
+    document.addEventListener("DOMContentLoaded", () => {
+        quill = new Quill('#editor-container', { theme: 'snow', placeholder: '상세 내용을 작성하세요...' });
+        quill.root.setAttribute('spellcheck', false); 
+    });
+
+    // --- IndexedDB & Multi-Map Setup ---
+    const DB_NAME = 'VisualMapDB';
+    const STORE_NAME = 'map_data';
+    let db;
+    
+    let currentMapId = null;
+    let currentMapName = '새 프로젝트';
+    let nodes = [];
+    let links = [];
+    let activeNodeId = null;
+    let targetIconNodeId = null; 
+    let isDraggingNode = false, dragNodeId = null, offsetX = 0, offsetY = 0;
+    let isCreatingLink = false, linkSourceId = null;
+    let copiedNode = null; 
+
+    const canvasArea = document.getElementById('canvas-area');
+    const nodeLayer = document.getElementById('node-layer');
+    const linkLayer = document.getElementById('link-layer');
+    const labelLayer = document.getElementById('label-layer');
+    const editor = document.getElementById('side-editor');
+
+    function initDB() {
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(DB_NAME, 1);
+            req.onupgradeneeded = (e) => {
+                const database = e.target.result;
+                if (!database.objectStoreNames.contains(STORE_NAME)) {
+                    database.createObjectStore(STORE_NAME, { keyPath: 'id' });
+                }
+            };
+            req.onsuccess = (e) => { db = e.target.result; resolve(); };
+            req.onerror = (e) => reject(e);
+        });
+    }
+
+    function saveCurrentMap() {
+        if (!db || !currentMapId) return;
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        tx.objectStore(STORE_NAME).put({
+            id: currentMapId,
+            name: currentMapName,
+            nodes: nodes,
+            links: links,
+            updatedAt: Date.now()
+        });
+    }
+
+    function getAllMaps() {
+        return new Promise((resolve) => {
+            if (!db) return resolve([]);
+            const tx = db.transaction(STORE_NAME, 'readonly');
+            const req = tx.objectStore(STORE_NAME).getAll();
+            req.onsuccess = () => resolve(req.result || []);
+        });
+    }
+
+    function deleteMapFromDB(id) {
+        return new Promise((resolve) => {
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            const req = tx.objectStore(STORE_NAME).delete(id);
+            req.onsuccess = () => resolve();
+        });
+    }
+
+    // --- Map Management ---
+    async function loadMapList(idToSelect = null) {
+        const maps = await getAllMaps();
+        const select = document.getElementById('map-select');
+        select.innerHTML = '';
+        
+        if (maps.length === 0) return false;
+        
+        // 정렬: 최근 수정된 순
+        maps.sort((a,b) => (b.updatedAt || 0) - (a.updatedAt || 0)); 
+        
+        maps.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m.id;
+            opt.textContent = m.name || '이름 없는 맵';
+            select.appendChild(opt);
+        });
+
+        // 열어야 할 타겟 ID 결정
+        let targetId = idToSelect || localStorage.getItem('lastVisualMapId') || maps[0].id;
+        if (!maps.find(m => m.id === targetId)) targetId = maps[0].id;
+        
+        select.value = targetId;
+        await switchMap(targetId, true);
+        return true;
+    }
+
+    async function switchMap(id, skipSave = false) {
+        if (!skipSave && currentMapId) saveCurrentMap();
+        
+        currentMapId = id;
+        localStorage.setItem('lastVisualMapId', id);
+        
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const req = tx.objectStore(STORE_NAME).get(id);
+        
+        req.onsuccess = () => {
+            const data = req.result;
+            if (data) {
+                currentMapName = data.name || '새 프로젝트';
+                nodes = data.nodes || [];
+                links = data.links || [];
+                nodes.forEach(n => { if (!n.attachments) n.attachments = []; });
+                
+                activeNodeId = null;
+                closeEditor();
+                renderAll();
+            }
+        };
+    }
+
+    async function createNewMap(defaultName = '새 프로젝트') {
+        const newName = prompt('새 맵의 이름을 입력하세요:', defaultName);
+        if (!newName) return; 
+
+        if (currentMapId) saveCurrentMap();
+
+        currentMapId = 'map_' + Date.now();
+        currentMapName = newName.trim();
+        nodes = []; 
+        links = [];
+        
+        saveCurrentMap();
+        await loadMapList(currentMapId);
+        showToast('새 맵이 생성되었습니다.');
+    }
+
+    function renameCurrentMap() {
+        if (!currentMapId) return;
+        const newName = prompt('맵 이름을 변경하세요:', currentMapName);
+        if (newName && newName.trim() !== '') {
+            currentMapName = newName.trim();
+            saveCurrentMap();
+            loadMapList(currentMapId); 
+            showToast('맵 이름이 변경되었습니다.');
+        }
+    }
+
+    async function deleteCurrentMap() {
+        if (!currentMapId) return;
+        const maps = await getAllMaps();
+        
+        if (maps.length <= 1) {
+            alert('최소 1개의 맵은 존재해야 합니다. 삭제 대신 비우기 기능을 사용해주세요.');
+            return;
+        }
+
+        if (confirm(`현재 '${currentMapName}' 맵을 정말 삭제하시겠습니까?\n복구할 수 없습니다.`)) {
+            await deleteMapFromDB(currentMapId);
+            currentMapId = null; 
+            showToast('맵이 삭제되었습니다.');
+            await loadMapList(); 
+        }
+    }
+
+    // --- App Init ---
+    async function init() {
+        await initDB();
+        const hasMaps = await loadMapList();
+        
+        if (!hasMaps) {
+            // 저장된 맵이 아예 없을 경우 빈 맵을 조용히 생성
+            currentMapId = 'map_' + Date.now();
+            currentMapName = '새 프로젝트';
+            nodes = [];
+            links = [];
+            saveCurrentMap();
+            await loadMapList(currentMapId);
+        }
+    }
+
+    function renderAll() {
+        renderNodes();
+        renderLinks();
+        saveCurrentMap();
+    }
+
+    // --- Canvas Events ---
+    canvasArea.addEventListener('dblclick', (e) => {
+        const rect = canvasArea.getBoundingClientRect();
+        createNewNode(e.clientX - rect.left, e.clientY - rect.top);
+    });
+
+    function createNodeInCenter() {
+        const rect = canvasArea.getBoundingClientRect();
+        createNewNode(rect.width / 2, rect.height / 2);
+    }
+
+    function createNewNode(x, y) {
+        const newNode = {
+            id: 'n_' + Date.now(),
+            x: x, y: y,
+            title: '새 노드', descHtml: '', descText: '', icon: 'fa-file-alt', attachments: []
+        };
+        nodes.push(newNode);
+        renderAll();
+        openEditor(newNode.id);
+        showToast('새 노드가 생성되었습니다.');
+    }
+
+    function renderNodes() {
+        nodeLayer.innerHTML = '';
+        nodes.forEach(node => {
+            const el = document.createElement('div');
+            el.className = `node ${activeNodeId === node.id ? 'active' : ''}`;
+            el.style.left = `${node.x}px`; el.style.top = `${node.y}px`; el.dataset.id = node.id;
+            
+            el.innerHTML = `
+                <div class="node-icon" title="클릭하여 아이콘 변경"><i class="fas ${node.icon}"></i></div>
+                <div class="node-info">
+                    <div class="node-title">${node.title}</div>
+                    <div class="node-desc">${node.descText || '내용 없음'}</div>
+                </div>
+                <div class="anchor" title="드래그하여 선 연결"></div>
+            `;
+            
+            el.addEventListener('mousedown', (e) => handleNodeMouseDown(e, node.id));
+            el.querySelector('.anchor').addEventListener('mousedown', (e) => handleAnchorMouseDown(e, node.id));
+            el.querySelector('.node-icon').addEventListener('mousedown', (e) => {
+                e.stopPropagation(); 
+                showIconPicker(e, node.id);
+            });
+
+            nodeLayer.appendChild(el);
+        });
+    }
+
+    function renderLinks() {
+        linkLayer.innerHTML = ''; labelLayer.innerHTML = '';
+        links.forEach(link => {
+            const sourceNode = nodes.find(n => n.id === link.source);
+            const targetNode = nodes.find(n => n.id === link.target);
+            if (!sourceNode || !targetNode) return;
+
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', sourceNode.x); line.setAttribute('y1', sourceNode.y);
+            line.setAttribute('x2', targetNode.x); line.setAttribute('y2', targetNode.y);
+            line.setAttribute('class', 'connection-line');
+            line.addEventListener('dblclick', () => {
+                if(confirm('연결선을 삭제하시겠습니까?')) { links = links.filter(l => l.id !== link.id); renderAll(); }
+            });
+            linkLayer.appendChild(line);
+
+            if (link.text) {
+                const label = document.createElement('div');
+                label.className = 'link-label';
+                label.style.left = `${(sourceNode.x + targetNode.x) / 2}px`;
+                label.style.top = `${(sourceNode.y + targetNode.y) / 2}px`;
+                label.innerText = link.text;
+                
+                label.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const input = document.createElement('input');
+                    input.type = 'text'; input.value = link.text; input.spellcheck = false;
+                    label.innerText = ''; label.appendChild(input); input.focus();
+                    input.addEventListener('blur', () => { link.text = input.value || '연결'; renderAll(); });
+                    input.addEventListener('keydown', (e2) => { if (e2.key === 'Enter') input.blur(); });
+                });
+                labelLayer.appendChild(label);
+            }
+        });
+    }
+
+    function handleNodeMouseDown(e, id) {
+        if (e.target.classList.contains('anchor') || e.button !== 0) return;
+        e.stopPropagation();
+        isDraggingNode = true; dragNodeId = id;
+        const node = nodes.find(n => n.id === id);
+        const rect = canvasArea.getBoundingClientRect();
+        offsetX = e.clientX - rect.left - node.x; offsetY = e.clientY - rect.top - node.y;
+        openEditor(id);
+    }
+
+    function handleAnchorMouseDown(e, id) {
+        e.stopPropagation(); isCreatingLink = true; linkSourceId = id;
+        const tempLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        tempLine.setAttribute('id', 'temp-line'); tempLine.setAttribute('class', 'connection-line');
+        tempLine.style.strokeDasharray = "4 4"; tempLine.style.stroke = "var(--primary)";
+        linkLayer.appendChild(tempLine);
+    }
+
+    document.addEventListener('mousemove', (e) => {
+        const rect = canvasArea.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left, mouseY = e.clientY - rect.top;
+
+        if (isDraggingNode && dragNodeId) {
+            const node = nodes.find(n => n.id === dragNodeId);
+            node.x = mouseX - offsetX; node.y = mouseY - offsetY;
+            renderAll();
+        }
+        if (isCreatingLink && linkSourceId) {
+            const sourceNode = nodes.find(n => n.id === linkSourceId);
+            const tempLine = document.getElementById('temp-line');
+            if (tempLine) {
+                tempLine.setAttribute('x1', sourceNode.x); tempLine.setAttribute('y1', sourceNode.y);
+                tempLine.setAttribute('x2', mouseX); tempLine.setAttribute('y2', mouseY);
+            }
+        }
+    });
+
+    document.addEventListener('mouseup', (e) => {
+        if (isDraggingNode) { isDraggingNode = false; dragNodeId = null; saveCurrentMap(); }
+        if (isCreatingLink) {
+            const tempLine = document.getElementById('temp-line'); if (tempLine) tempLine.remove();
+            const targetEl = document.elementFromPoint(e.clientX, e.clientY);
+            const nodeEl = targetEl ? targetEl.closest('.node') : null;
+
+            if (nodeEl) {
+                const targetId = nodeEl.dataset.id;
+                if (targetId !== linkSourceId && !links.find(l => l.source === linkSourceId && l.target === targetId)) {
+                    links.push({ id: 'l_' + Date.now(), source: linkSourceId, target: targetId, text: '관계 정의' });
+                    showToast('노드가 연결되었습니다.');
+                }
+            }
+            isCreatingLink = false; linkSourceId = null; renderAll();
+        }
+    });
+
+    canvasArea.addEventListener('mousedown', (e) => {
+        if (e.target === canvasArea) { activeNodeId = null; renderNodes(); closeEditor(); }
+    });
+
+    // --- Side Editor ---
+    function openEditor(id) {
+        activeNodeId = id; renderNodes();
+        const node = nodes.find(n => n.id === id);
+        
+        document.getElementById('node-title-input').value = node.title;
+        quill.root.innerHTML = node.descHtml || ''; 
+        
+        renderAttachments();
+        editor.classList.add('open');
+    }
+
+    function closeEditor() {
+        if (activeNodeId) saveActiveNode(true); 
+        editor.classList.remove('open'); activeNodeId = null; renderNodes();
+    }
+
+    function saveActiveNode(silent = false) {
+        if (!activeNodeId) return;
+        const node = nodes.find(n => n.id === activeNodeId);
+        node.title = document.getElementById('node-title-input').value || '새 노드';
+        node.descHtml = quill.root.innerHTML; 
+        node.descText = quill.getText().trim(); 
+        
+        renderAll();
+        if (!silent) showToast('저장되었습니다.');
+    }
+
+    function deleteActiveNode() {
+        if (!activeNodeId) return;
+        if(confirm('이 노드와 관련된 연결선도 모두 삭제됩니다. 삭제하시겠습니까?')) {
+            nodes = nodes.filter(n => n.id !== activeNodeId);
+            links = links.filter(l => l.source !== activeNodeId && l.target !== activeNodeId);
+            editor.classList.remove('open'); activeNodeId = null; renderAll(); showToast('삭제되었습니다.');
+        }
+    }
+
+    function clearMap() {
+        if(confirm('정말 현재 맵의 모든 데이터를 초기화하시겠습니까?')) {
+            nodes = []; links = [];
+            editor.classList.remove('open'); activeNodeId = null; renderAll(); showToast('맵이 초기화되었습니다.');
+        }
+    }
+
+    function showToast(msg) {
+        const toast = document.getElementById('toast');
+        document.getElementById('toast-msg').innerText = msg;
+        toast.classList.add('show');
+        setTimeout(() => toast.classList.remove('show'), 2000);
+    }
+
+    // --- Icon Picker Popover ---
+    function showIconPicker(e, nodeId) {
+        targetIconNodeId = nodeId;
+        const picker = document.getElementById('icon-picker-popover');
+        const node = nodes.find(n => n.id === nodeId);
+        
+        picker.querySelectorAll('.icon-opt').forEach(opt => {
+            opt.classList.toggle('selected', opt.dataset.icon === node.icon);
+        });
+
+        picker.style.display = 'flex';
+        const rect = e.currentTarget.getBoundingClientRect();
+        picker.style.left = `${rect.left}px`;
+        picker.style.top = `${rect.bottom + 8}px`;
+    }
+
+    document.querySelectorAll('#icon-picker-popover .icon-opt').forEach(el => {
+        el.addEventListener('mousedown', function(e) {
+            e.stopPropagation();
+            if (targetIconNodeId) {
+                const node = nodes.find(n => n.id === targetIconNodeId);
+                if (node) { node.icon = this.dataset.icon; renderAll(); }
+            }
+            document.getElementById('icon-picker-popover').style.display = 'none';
+            targetIconNodeId = null;
+        });
+    });
+
+    document.addEventListener('mousedown', (e) => {
+        const picker = document.getElementById('icon-picker-popover');
+        if (picker && picker.style.display !== 'none' && !picker.contains(e.target) && !e.target.closest('.node-icon')) {
+            picker.style.display = 'none'; targetIconNodeId = null;
+        }
+    });
+
+    document.getElementById('editor-container').addEventListener('click', (e) => {
+        if (e.target.tagName === 'IMG') {
+            openImageModal({ data: e.target.src, name: '본문_삽입_이미지.png' });
+        }
+    });
+
+    // --- Attachments ---
+    document.getElementById('file-upload').addEventListener('change', function(e) {
+        if (!activeNodeId) return;
+        const node = nodes.find(n => n.id === activeNodeId);
+        if (!node.attachments) node.attachments = [];
+        
+        const files = Array.from(e.target.files);
+        const remainingSpace = 5 - node.attachments.length;
+        if (files.length > remainingSpace) showToast('첨부파일은 최대 5개까지만 가능합니다.');
+
+        const filesToAdd = files.slice(0, remainingSpace);
+        filesToAdd.forEach(file => {
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                node.attachments.push({ id: 'att_' + Date.now() + Math.floor(Math.random() * 1000), name: file.name, type: file.type || '', data: event.target.result });
+                renderAttachments(); saveActiveNode(true); 
+            };
+            reader.readAsDataURL(file);
+        });
+        this.value = ''; 
+    });
+
+    function isImageFile(att) {
+        if (att.type && att.type.toLowerCase().includes('image')) return true;
+        const ext = att.name.split('.').pop().toLowerCase();
+        return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext);
+    }
+
+    function renderAttachments() {
+        const container = document.getElementById('attachment-list'); container.innerHTML = '';
+        if (!activeNodeId) return;
+        const node = nodes.find(n => n.id === activeNodeId);
+        if (!node.attachments) node.attachments = [];
+
+        node.attachments.forEach(att => {
+            let iconClass = 'fa-file';
+            const isImage = isImageFile(att);
+            if (isImage) iconClass = 'fa-image';
+            else if (att.type === 'application/pdf' || att.name.toLowerCase().endsWith('.pdf')) iconClass = 'fa-file-pdf';
+            
+            const el = document.createElement('div');
+            el.className = 'attachment-item'; el.title = att.name; 
+            el.innerHTML = `<i class="fas ${iconClass}"></i><div class="attachment-delete" onclick="deleteAttachment(event, '${att.id}')"><i class="fas fa-times"></i></div>`;
+            el.addEventListener('click', (e) => {
+                if(e.target.closest('.attachment-delete')) return; 
+                if (isImage) openImageModal(att); else downloadAttachment(att);
+            });
+            container.appendChild(el);
+        });
+    }
+
+    function deleteAttachment(e, attachmentId) {
+        e.stopPropagation(); if (!activeNodeId) return;
+        const node = nodes.find(n => n.id === activeNodeId);
+        node.attachments = node.attachments.filter(a => a.id !== attachmentId);
+        renderAttachments(); saveActiveNode(true);
+    }
+
+    function downloadAttachment(att) {
+        const a = document.createElement('a'); a.href = att.data; a.download = att.name; a.click(); showToast('다운로드 시작');
+    }
+
+    // --- Image Modal ---
+    function openImageModal(att) {
+        const modal = document.getElementById('image-modal'); const modalImg = document.getElementById('modal-image');
+        modalImg.src = att.data; modalImg.dataset.filename = att.name; modal.classList.add('show');
+    }
+
+    function closeImageModal() {
+        document.getElementById('image-modal').classList.remove('show');
+        setTimeout(() => { document.getElementById('modal-image').src = ''; }, 200);
+    }
+
+    function downloadModalImage() {
+        const modalImg = document.getElementById('modal-image');
+        const src = modalImg.src; const filename = modalImg.dataset.filename || 'image.png';
+        try {
+            if (src.startsWith('data:')) {
+                const arr = src.split(','); const mime = arr[0].match(/:(.*?);/)[1]; const bstr = atob(arr[1]);
+                let n = bstr.length; const u8arr = new Uint8Array(n); while(n--){ u8arr[n] = bstr.charCodeAt(n); }
+                const blob = new Blob([u8arr], {type:mime}); const blobUrl = window.URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href = blobUrl; a.download = filename; document.body.appendChild(a);
+                a.click(); document.body.removeChild(a); setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1000);
+            } else {
+                const a = document.createElement('a'); a.href = src; a.download = filename; a.target = '_blank';
+                document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            }
+            showToast('다운로드 시작');
+        } catch (e) { showToast('다운로드 오류'); }
+    }
+
+    async function copyModalImage() {
+        const modalImg = document.getElementById('modal-image'); const src = modalImg.src;
+        try {
+            if (navigator.clipboard && window.ClipboardItem) {
+                const blob = await new Promise((resolve, reject) => {
+                    const canvas = document.createElement('canvas'); canvas.width = modalImg.naturalWidth; canvas.height = modalImg.naturalHeight;
+                    const ctx = canvas.getContext('2d'); ctx.drawImage(modalImg, 0, 0);
+                    canvas.toBlob(b => b ? resolve(b) : reject(new Error('error')), 'image/png');
+                });
+                await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); showToast('복사 완료');
+            } else throw new Error();
+        } catch (err) {
+            try {
+                const div = document.createElement('div'); div.contentEditable = true; div.style.position = 'fixed'; div.style.left = '-9999px';
+                const img = document.createElement('img'); img.src = src; div.appendChild(img); document.body.appendChild(div);
+                const sel = window.getSelection(); const range = document.createRange(); range.selectNodeContents(div);
+                sel.removeAllRanges(); sel.addRange(range);
+                document.execCommand('copy') ? showToast('복사 완료') : showToast('우클릭 복사를 이용해주세요.');
+                document.body.removeChild(div);
+            } catch (e) { showToast('우클릭 복사를 이용해주세요.'); }
+        }
+    }
+
+    document.getElementById('image-modal').addEventListener('click', (e) => { if(e.target === e.currentTarget) closeImageModal(); });
+
+    // --- Keyboard Shortcuts ---
+    window.addEventListener('keydown', (e) => {
+        const isCtrl = e.ctrlKey || e.metaKey, isAlt = e.altKey, isShift = e.shiftKey, key = e.key.toLowerCase();
+        const active = document.activeElement;
+        const isInput = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT' || active.isContentEditable || (active.closest && active.closest('.ql-editor')));
+
+        if (e.key === 'Escape' && document.getElementById('image-modal').classList.contains('show')) { closeImageModal(); return; }
+        if (e.key === '`' && !isCtrl && !isAlt && !isShift && !isInput) { e.preventDefault(); window.location.href = 'about:blank'; return; }
+
+        if (isCtrl && !isAlt && !isShift && key === 'c' && !isInput && activeNodeId) {
+            copiedNode = JSON.parse(JSON.stringify(nodes.find(n => n.id === activeNodeId))); showToast('노드가 복사되었습니다.'); e.preventDefault(); return;
+        }
+
+        if (isCtrl && !isAlt && !isShift && key === 'v' && !isInput && copiedNode) {
+            e.preventDefault(); const newNode = JSON.parse(JSON.stringify(copiedNode));
+            newNode.id = 'n_' + Date.now() + Math.floor(Math.random() * 1000); newNode.x += 30; newNode.y += 30;
+            if (newNode.attachments) newNode.attachments.forEach(att => { att.id = 'att_' + Date.now() + Math.floor(Math.random() * 1000); });
+            nodes.push(newNode); copiedNode.x += 30; copiedNode.y += 30;
+            renderAll(); openEditor(newNode.id); showToast('노드가 붙여넣기 되었습니다.'); return;
+        }
+
+        if (isCtrl && !isAlt && !isShift && key === 's') {
+            e.preventDefault(); if (activeNodeId) saveActiveNode(); else { saveCurrentMap(); showToast('현재 맵 상태가 저장되었습니다.'); } return;
+        }
+        
+        if (isCtrl && isAlt && !isShift && key === 'n') { e.preventDefault(); createNodeInCenter(); return; }
+
+        if (quill && quill.hasFocus()) {
+            if (isCtrl && !isAlt && !isShift && key === 'b') { e.preventDefault(); quill.format('bold', !quill.getFormat().bold); return; }
+            if (isCtrl && !isAlt && !isShift && key === 'i') { e.preventDefault(); quill.format('italic', !quill.getFormat().italic); return; }
+            if (isCtrl && !isAlt && !isShift && key === 'u') { e.preventDefault(); quill.format('underline', !quill.getFormat().underline); return; }
+            if (isCtrl && !isAlt && !isShift && key === '0') { e.preventDefault(); quill.format('strike', !quill.getFormat().strike); return; }
+            if (isCtrl && isShift && !isAlt && key === 'x') { e.preventDefault(); const r = quill.getSelection(); if (r) r.length > 0 ? quill.removeFormat(r.index, r.length) : Object.keys(quill.getFormat(r)).forEach(k => quill.format(k, false)); return; }
+            if (isCtrl && !isAlt && !isShift && ['1','2','3','4','5','6','7'].includes(key)) { e.preventDefault(); const colors = { '1': '#ffedd5', '2': '#e0f2fe', '3': '#fef08a', '4': '#dcfce7', '5': '#fce7f3', '6': '#e6d5c3', '7': '#e5e7eb' }; quill.format('background', quill.getFormat().background === colors[key] ? false : colors[key]); return; }
+        }
+    });
+
+    init();
+</script>
+</body>
+</html>

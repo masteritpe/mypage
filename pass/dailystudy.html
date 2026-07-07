@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>학습 매니저</title>
+  
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  
+  <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+  <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+  <script src="https://unpkg.com/quill-image-resize@3.0.9/image-resize.min.js"></script>
+
+  <style>
+    :root {
+      --bg-body: #F3F4F6;
+      --bg-surface: #FFFFFF;
+      --bg-sidebar: #FFFFFF;
+      --border-base: #E5E7EB;
+      --border-dark: #2D3748;
+      --text-main: #2D3748;
+      --text-muted: #6B7280;
+      --primary: #FF6B6B;
+      --primary-hover: #FA5252;
+      
+      /* 트렌디 카드 컬러 기본값 */
+      --card-pink: #FFE5EC;
+      --card-blue: #E1F0FF;
+      --card-yellow: #FFF3C4;
+      --card-green: #E2F4E1;
+      --card-purple: #E9D8FD;
+      --card-orange: #FEEBC8;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Pretendard', sans-serif;
+      background: var(--bg-body); color: var(--text-main); margin: 0; padding: 0;
+      display: flex; height: 100vh; overflow: hidden;
+    }
+
+    /* 사이드바 */
+    .sidebar { width: 300px; background: var(--bg-sidebar); border-right: 1px solid var(--border-base); display: flex; flex-direction: column; z-index: 10; flex-shrink: 0;}
+    .sidebar-header { height: 64px; padding: 0 20px; border-bottom: 1px solid var(--border-base); display: flex; align-items: center; }
+    .app-title { font-size: 18px; font-weight: 700; font-family: 'Jua', sans-serif; display: flex; align-items: center; gap: 8px; color: var(--primary); }
+    .sidebar-search { padding: 12px 20px; border-bottom: 1px solid var(--border-base); }
+    .search-box { width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-base); font-size: 13px; outline: none; }
+    .note-list { flex: 1; overflow-y: auto; padding: 10px; margin: 0; list-style: none; }
+    
+    .note-item { padding: 12px 14px; border-radius: 8px; cursor: pointer; margin-bottom: 4px; display: flex; justify-content: space-between; align-items: center; }
+    .note-item:hover { background: #F9FAFB; }
+    .note-item.active { background: var(--card-pink); border: 1px solid #FFA8A8; }
+    .note-text-group { display: flex; flex-direction: column; gap: 4px; overflow: hidden; flex: 1; }
+    .note-title { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .note-date { font-size: 12px; color: var(--text-muted); }
+    
+    .note-delete-btn { background: transparent; border: none; color: var(--text-muted); cursor: pointer; padding: 6px; border-radius: 6px; display: none; align-items: center; justify-content: center; transition: 0.2s; margin-left: 8px; }
+    .note-item:hover .note-delete-btn { display: flex; }
+    .note-delete-btn:hover { color: #FA5252; background: #FFE5EC; }
+
+    /* 메인 콘텐츠 및 상단바 */
+    .main-content { flex: 1; display: flex; flex-direction: column; overflow-y: auto; position: relative;}
+    .top-bar { position: sticky; top: 0; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(8px); height: 64px; min-height: 64px; padding: 0 30px; border-bottom: 1px solid var(--border-base); display: flex; justify-content: space-between; align-items: center; z-index: 5; }
+    .title-input { font-size: 20px; font-weight: 700; border: none; background: transparent; outline: none; width: 300px; color: var(--text-main); }
+    
+    /* 탭 메뉴 스타일 */
+    .tab-container { display: flex; gap: 10px; }
+    .tab-btn {
+      padding: 8px 16px; border: 2px solid transparent; border-radius: 8px; background: transparent;
+      font-size: 15px; font-weight: 700; cursor: pointer; color: var(--text-muted); transition: all 0.2s;
+    }
+    .tab-btn:hover { background: #F9FAFB; }
+    .tab-btn.active { color: var(--primary); background: var(--card-pink); border-color: #FFA8A8; }
+
+    .actions { display: flex; gap: 8px; align-items: center; }
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border: 1px solid transparent; background: #FFF; color: var(--text-main); border-color: var(--border-base); transition: 0.2s; }
+    .btn:hover { background: #F9FAFB; }
+    .btn-primary { background: var(--primary); color: white; border: none; }
+    .btn-primary:hover { background: var(--primary-hover); }
+
+    /* 화면 영역 및 컨테이너 */
+    .form-wrapper { padding: 40px 20px; display: flex; justify-content: center; width: 100%; }
+    .view-section { width: 100%; max-width: 1100px; display: none; }
+    .view-section.active { display: block; }
+    
+    .study-sheet {
+      width: 100%; background: #FFFFFF;
+      border: 3px solid var(--border-dark); border-radius: 24px;
+      padding: 40px 35px; box-shadow: 8px 8px 0px rgba(45, 55, 72, 0.1);
+    }
+
+    /* 공통 헤더 스타일 */
+    .sheet-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid var(--border-dark); padding-bottom: 20px; margin-bottom: 30px; }
+    .sheet-title h1 { font-family: 'Jua', sans-serif; font-size: 42px; margin: 0; color: var(--primary); text-shadow: 2px 2px 0px var(--card-pink); letter-spacing: 2px; display: flex; align-items: center; gap: 10px;}
+    .sheet-title p { margin: 5px 0 0 0; font-weight: 600; color: var(--text-muted); }
+    
+    /* 일일공부 전용 헤더 요소 */
+    .sheet-info { display: flex; flex-direction: column; gap: 10px; font-weight: bold; font-size: 16px; }
+    .sheet-info input { border: none; border-bottom: 2px dashed var(--border-dark); font-size: 16px; font-weight: bold; font-family: inherit; width: 140px; outline: none; color: var(--text-main); text-align: center; }
+
+    /* 일일공부: 2단 그리드 */
+    .grid-container { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    .card { border: 3px solid var(--border-dark); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; min-height: 280px; }
+    .card-title { font-family: 'Jua', sans-serif; font-size: 22px; margin-top: 0; margin-bottom: 15px; display: flex; align-items: center; gap: 8px; }
+
+    .section-math { background-color: var(--card-blue); } .section-math .card-title { color: #3182CE; }
+    .section-story { background-color: var(--card-pink); } .section-story .card-title { color: #D53F8C; }
+    .section-draw { background-color: var(--card-green); } .section-draw .card-title { color: #38A169; }
+    .section-read { background-color: var(--card-yellow); } .section-read .card-title { color: #D69E2E; }
+
+    /* Quill 에디터 스타일 */
+    .trendy-editor { flex: 1; display: flex; flex-direction: column; }
+    .ql-container.ql-snow { border: none !important; background: transparent; flex: 1; font-family: inherit !important; font-size: 16px; }
+    .ql-editor { padding: 0 !important; line-height: 1.6; min-height: 200px; }
+    .ql-editor.ql-blank::before { font-style: normal; color: rgba(45, 55, 72, 0.4); }
+    .ql-editor img { max-width: 100%; border-radius: 8px; cursor: pointer; transition: opacity 0.2s, outline 0.1s; }
+    .ql-editor img:hover { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+    /* 회독 기록장 테이블 스타일 */
+    .header-actions { display: flex; gap: 10px; }
+    .tracker-table { width: 100%; border-collapse: separate; border-spacing: 0; border: 3px solid var(--border-dark); border-radius: 16px; overflow: hidden; }
+    .tracker-table th { background-color: var(--card-blue); font-family: 'Jua', sans-serif; font-size: 20px; color: var(--text-main); padding: 16px; border-bottom: 3px solid var(--border-dark); text-align: center; }
+    .tracker-table th:not(:last-child), .tracker-table td:not(:last-child) { border-right: 2px solid var(--border-dark); }
+    .tracker-table td { padding: 14px; border-bottom: 1px solid var(--border-base); text-align: center; vertical-align: middle; }
+    .tracker-table tr:last-child td { border-bottom: none; }
+    .tracker-table tr:hover td { background-color: #F9FAFB; }
+
+    .input-cell { width: 100%; border: none; background: transparent; font-size: 16px; font-family: inherit; color: var(--text-main); outline: none; text-align: center; }
+    .input-left { text-align: left; padding-left: 10px; font-weight: 600;}
+    .domain-select { border: 2px dashed var(--border-dark); border-radius: 8px; padding: 6px 10px; font-family: 'Jua', sans-serif; font-size: 16px; background: #FFF; outline: none; cursor: pointer; width: 100%; }
+    .domain-select:focus { border-style: solid; }
+
+    /* 체크박스 1줄 정렬 고정 */
+    .check-container { display: flex; justify-content: center; gap: 4px; flex-wrap: nowrap; }
+    .check-wrapper { display: flex; flex-direction: column; align-items: center; gap: 4px; flex-shrink: 0; }
+    .check-label { font-size: 12px; font-weight: 700; color: var(--text-muted); }
+    .custom-checkbox { appearance: none; width: 24px; height: 24px; border: 2px solid var(--border-dark); border-radius: 50%; cursor: pointer; background-color: #FFF; position: relative; transition: all 0.2s ease; }
+    .custom-checkbox:hover { background-color: var(--card-pink); }
+    .custom-checkbox:checked { background-color: var(--primary); border-color: var(--primary); }
+    .custom-checkbox:checked::after { content: '\2714'; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 14px; font-weight: bold; }
+    
+    .row-delete-btn { background: transparent; border: none; color: #FA5252; cursor: pointer; font-size: 18px; padding: 4px; border-radius: 6px; transition: 0.2s; }
+    .row-delete-btn:hover { background: #FFE5EC; }
+
+    /* 모달 스타일 */
+    .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 50; }
+    .modal-content { background: #FFF; width: 450px; padding: 24px; border-radius: 20px; border: 3px solid var(--border-dark); box-shadow: 8px 8px 0px rgba(45, 55, 72, 0.1); }
+    .modal-header { display: flex; justify-content: space-between; margin-bottom: 20px; font-family: 'Jua', sans-serif; font-size: 24px; color: var(--text-main); }
+    
+    /* 도메인 모달 내부 스타일 */
+    .domain-list { margin-bottom: 20px; max-height: 200px; overflow-y: auto; padding-right: 5px; }
+    .domain-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border: 2px solid var(--border-base); border-radius: 12px; margin-bottom: 8px; }
+    .domain-item-left { display: flex; align-items: center; gap: 10px; font-weight: bold; }
+    .color-dot { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--border-dark); }
+    .btn-delete-domain { background: transparent; border: none; color: #FA5252; cursor: pointer; font-size: 18px; padding: 4px; border-radius: 6px; transition: 0.2s; }
+    .btn-delete-domain:hover { background: #FFE5EC; }
+    .add-domain-area { display: flex; gap: 8px; align-items: center; padding: 12px; background: #F9FAFB; border-radius: 12px; border: 2px dashed var(--border-base); }
+    .color-picker { display: flex; gap: 4px; flex-shrink: 0; }
+    .color-option { width: 20px; height: 20px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: 0.2s; }
+    .color-option.selected { border-color: var(--border-dark); transform: scale(1.1); }
+    .new-domain-input { flex: 1; min-width: 0; padding: 8px; border: 2px solid var(--border-base); border-radius: 8px; font-size: 14px; outline: none; font-family: inherit; font-weight: 600; }
+    .new-domain-input:focus { border-color: var(--border-dark); }
+
+    /* 토스트 메시지 스타일 */
+    .toast-msg {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: rgba(0, 0, 0, 0.85);
+      color: #FFF;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      z-index: 9999;
+      opacity: 0;
+      transition: opacity 0.3s ease-in-out;
+      pointer-events: none;
+    }
+    .toast-msg.show { opacity: 1; }
+
+    /* 인쇄 모드 */
+    @media print {
+      @page { size: A4 landscape; margin: 8mm; } 
+      html, body { height: 100vh; margin: 0; padding: 0; overflow: hidden; background: white; }
+      .sidebar, .top-bar { display: none !important; }
+      .main-content { overflow: visible; padding: 0; height: 100%; display: block; }
+      .form-wrapper { padding: 0; max-width: 100%; height: 100%; margin: 0; display: block; }
+      
+      .view-section { display: none !important; }
+      .view-section.active { display: block !important; height: 100%; }
+
+      .study-sheet { box-shadow: none; border: 2px solid #000; padding: 8mm 10mm; border-radius: 0; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; }
+      .sheet-header { flex-direction: row; align-items: flex-end; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 12px; }
+      .sheet-title { display: flex; align-items: baseline; gap: 15px; }
+      .sheet-title h1 { font-size: 30px; margin: 0; text-shadow: none; }
+      .sheet-title p { margin: 0; font-size: 14px; }
+      
+      .sheet-info { flex-direction: row; gap: 20px; align-items: center; font-size: 14px; }
+      .sheet-info > div { margin-top: 0 !important; }
+      .sheet-info input { width: 130px; font-size: 14px; }
+      .grid-container { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 12px; flex: 1; min-height: 0; }
+      .card { border: 2px solid #000; border-radius: 12px; padding: 15px; min-height: 0 !important; display: flex; flex-direction: column; break-inside: avoid; }
+      .card-title { font-size: 18px; margin-bottom: 8px; }
+      .trendy-editor { flex: 1; min-height: 0; overflow: hidden; }
+      .ql-editor { padding: 0 !important; min-height: 0 !important; }
+
+      .tracker-table th, .tracker-table td { border-color: #000 !important; padding: 8px; }
+      .tracker-table { border-color: #000 !important; border-radius: 0; }
+      .header-actions { display: none !important; }
+
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    }
+  </style>
+</head>
+<body>
+
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="app-title"><i class="ph-fill ph-notebook"></i> 학습 매니저</div>
+    </div>
+    <div class="sidebar-search">
+      <input type="text" id="searchInput" class="search-box" placeholder="문서 검색..." onkeyup="renderNoteList()">
+    </div>
+    <ul class="note-list" id="noteList"></ul>
+    <div style="padding: 20px; border-top: 1px solid var(--border-base);">
+      <button class="btn" style="width: 100%; justify-content: center; color: var(--primary); border-color: var(--primary);" onclick="createNewNote()">
+        <i class="ph-bold ph-plus"></i> 새 문서 만들기
+      </button>
+    </div>
+  </aside>
+
+  <main class="main-content" id="mainContent">
+    <div class="top-bar">
+      <input type="text" id="docTitle" class="title-input" placeholder="문서 제목을 입력하세요" oninput="syncTitles()">
+      
+      <div class="tab-container">
+        <button class="tab-btn active" onclick="switchTab('study')" id="btn-tab-study">일일공부</button>
+        <button class="tab-btn" onclick="switchTab('tracker')" id="btn-tab-tracker">회독 기록장</button>
+      </div>
+
+      <div class="actions">
+        <button class="btn" onclick="openShortcuts()" title="단축키 안내"><i class="ph-bold ph-keyboard"></i></button>
+        <button class="btn" onclick="openDomainSettings()" title="도메인 설정"><i class="ph-bold ph-faders"></i></button>
+        
+        <input type="file" id="importInput" accept=".json" style="display: none;" onchange="importJSON(event)">
+        <button class="btn" onclick="document.getElementById('importInput').click()"><i class="ph ph-upload-simple"></i> 복원</button>
+        <button class="btn" onclick="exportJSON()"><i class="ph ph-download-simple"></i> 백업</button>
+        <button class="btn btn-primary" onclick="saveCurrentNote()"><i class="ph ph-floppy-disk"></i> 저장</button>
+        <button class="btn" onclick="window.print()"><i class="ph ph-printer"></i> 인쇄(PDF)</button>
+        <button class="btn" onclick="deleteCurrentNote()" style="color: #FA5252; border-color: #FFE3E3;" title="현재 문서 삭제"><i class="ph ph-trash"></i></button>
+      </div>
+    </div>
+
+    <div class="form-wrapper">
+      
+      <div id="view-study" class="view-section active">
+        <div class="study-sheet">
+          <header class="sheet-header">
+            <div class="sheet-title">
+              <h1>일일공부</h1>
+              <p>기초 1단계 · 즐거운 자기주도 학습</p>
+            </div>
+            <div class="sheet-info">
+              <div style="display: flex; gap: 10px; align-items: center;">
+                <span>날짜:</span> <input type="text" id="sheetDate" placeholder="2026년 4월 13일">
+              </div>
+              
+              <div style="display: flex; gap: 10px; align-items: center; margin-top: 5px;">
+                <span>번호:</span> <input type="text" id="sheetName" placeholder="02000818">
+              </div>
+              
+            </div>
+          </header>
+
+          <div class="grid-container">
+            <div class="card section-math">
+              <h2 class="card-title"><i class="ph-fill ph-calculator"></i> 소근육 운동(글씨)</h2>
+              <div class="trendy-editor" id="editor-math"></div>
+            </div>
+            <div class="card section-story">
+              <h2 class="card-title"><i class="ph-fill ph-chat-centered-text"></i> 구사력(개념)</h2>
+              <div class="trendy-editor" id="editor-story"></div>
+            </div>
+            <div class="card section-draw">
+              <h2 class="card-title"><i class="ph-fill ph-palette"></i> 작업력(도식)</h2>
+              <div class="trendy-editor" id="editor-draw"></div>
+            </div>
+            <div class="card section-read">
+              <h2 class="card-title"><i class="ph-fill ph-book-open"></i> 작문력(목차)</h2>
+              <div class="trendy-editor" id="editor-read"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="view-tracker" class="view-section">
+        <div class="study-sheet">
+          <header class="sheet-header">
+            <div class="sheet-title">
+              <h1><i class="ph-fill ph-check-circle"></i> 회독 기록장</h1>
+              <p>복습은 성공의 어머니! 10번 읽기에 도전해보세요.</p>
+            </div>
+            <div class="header-actions">
+              <button class="btn" onclick="addRow()"><i class="ph-bold ph-plus"></i> 새 학습 추가</button>
+            </div>
+          </header>
+
+          <table class="tracker-table" id="trackerTable">
+            <thead>
+              <tr>
+                <th style="width: 20%;">학습 도메인</th>
+                <th style="width: 30%;">학습명 (주제)</th>
+                <th style="width: 45%;">회독수 (1~10)</th>
+                <th style="width: 5%;"></th>
+              </tr>
+            </thead>
+            <tbody id="trackerBody">
+              </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <div id="shortcutsModal" class="modal-overlay" onclick="closeShortcuts()">
+    <div class="modal-content" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <span style="font-family: Pretendard; font-weight: bold;"><i class="ph-bold ph-keyboard"></i> 단축키 및 사용법</span>
+        <i class="ph-bold ph-x" style="cursor: pointer;" onclick="closeShortcuts()"></i>
+      </div>
+      <ul style="font-size: 14px; line-height: 1.8; padding-left: 20px; color: var(--text-main);">
+        <li><b>저장하기:</b> Ctrl + S</li>
+        <li><b>글자 굵게:</b> Ctrl + B</li>
+        <li><b>글자 밑줄:</b> Ctrl + U</li>
+        <li><b>글자 색상 (빨강/파랑):</b> Ctrl + Alt + R / B</li>
+        <li><b>형광펜 칠하기:</b> Ctrl + 숫자(1~5)</li>
+        <li><b>서식 지우기:</b> Ctrl + Shift + X</li>
+        <li><b>이미지 넣기:</b> 이미지 파일 복사(Ctrl+C) 후 에디터에 붙여넣기(Ctrl+V)</li>
+      </ul>
+      <div style="text-align: right; margin-top: 15px;">
+        <button class="btn btn-primary" onclick="closeShortcuts()">확인</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="domainModal" class="modal-overlay" onclick="closeDomainSettings()">
+    <div class="modal-content" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <span><i class="ph-fill ph-faders"></i> 도메인 설정</span>
+        <i class="ph-bold ph-x" style="cursor: pointer;" onclick="closeDomainSettings()"></i>
+      </div>
+      
+      <div class="domain-list" id="domainList"></div>
+
+      <div class="add-domain-area">
+        <div class="color-picker" id="colorPicker"></div>
+        <input type="text" id="newDomainName" class="new-domain-input" placeholder="새 도메인 이름">
+        <button class="btn" style="padding: 6px 12px; flex-shrink: 0;" onclick="addDomain()">추가</button>
+      </div>
+
+      <div style="text-align: right; margin-top: 20px;">
+        <button class="btn btn-primary" style="width: 100%; justify-content: center;" onclick="closeDomainSettings()">확인 및 적용</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toastMsg" class="toast-msg">저장되었습니다!</div>
+
+  <script>
+    // ===== 공통 상태 및 DB 관리 =====
+    let db;
+    let currentNoteId = null;
+    let editors = {}; 
+    let currentTab = 'study'; // 현재 탭 상태 관리 변수
+
+    // 도메인 데이터
+    let domains = [
+      { id: 'dom-1', name: '수학 / 논리', color: 'var(--card-blue)' },
+      { id: 'dom-2', name: '개념 / 암기', color: 'var(--card-pink)' },
+      { id: 'dom-3', name: '도식 / 작업', color: 'var(--card-green)' },
+      { id: 'dom-4', name: '국어 / 작문', color: 'var(--card-yellow)' }
+    ];
+    const palette = ['var(--card-blue)', 'var(--card-pink)', 'var(--card-green)', 'var(--card-yellow)', 'var(--card-purple)', 'var(--card-orange)', '#E5E7EB'];
+    let selectedColorForNew = palette[0];
+
+    // ===== 토스트 알림 함수 =====
+    function showToast(message) {
+      const toast = document.getElementById('toastMsg');
+      toast.textContent = message;
+      toast.classList.add('show');
+      setTimeout(() => { toast.classList.remove('show'); }, 1000);
+    }
+
+    // ===== 탭 전환 로직 (엎어치기 방지 추가) =====
+    function switchTab(tabName) {
+      if (currentTab === tabName) return; // 동일한 탭이면 무시
+
+      currentTab = tabName; // 현재 탭 상태 업데이트
+
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.view-section').forEach(sec => sec.classList.remove('active'));
+      
+      document.getElementById(`btn-tab-${tabName}`).classList.add('active');
+      document.getElementById(`view-${tabName}`).classList.add('active');
+
+      // 탭을 전환하면, 다른 문서를 덮어쓰지 않도록 강제로 새 문서 상태로 만듦
+      createNewNote();
+    }
+
+    // ===== Quill 에디터 초기화 (일일공부) =====
+    const customBindings = {
+      customRed: { key: 'R', shortKey: true, altKey: true, handler: function(r, c) { this.quill.format('color', c.format.color === 'red' ? false : 'red'); } },
+      customBlue: { key: 'B', shortKey: true, altKey: true, handler: function(r, c) { this.quill.format('color', c.format.color === 'blue' ? false : 'blue'); } },
+      customClear: { key: 'X', shortKey: true, shiftKey: true, handler: function(r) { if (r.length > 0) this.quill.removeFormat(r.index, r.length); } },
+      customHighlight1: { key: '1', shortKey: true, handler: function(r, c) { this.quill.format('background', c.format.background === '#FFE5EC' ? false : '#FFE5EC'); } },
+      customHighlight2: { key: '2', shortKey: true, handler: function(r, c) { this.quill.format('background', c.format.background === '#E1F0FF' ? false : '#E1F0FF'); } },
+      customHighlight3: { key: '3', shortKey: true, handler: function(r, c) { this.quill.format('background', c.format.background === '#FFF3C4' ? false : '#FFF3C4'); } },
+      customHighlight4: { key: '4', shortKey: true, handler: function(r, c) { this.quill.format('background', c.format.background === '#E2F4E1' ? false : '#E2F4E1'); } },
+      customHighlight5: { key: '5', shortKey: true, handler: function(r, c) { this.quill.format('background', c.format.background === '#E5E7EB' ? false : '#E5E7EB'); } }
+    };
+
+    function initEditors() {
+      const categories = ['math', 'story', 'draw', 'read'];
+      categories.forEach(cat => {
+        editors[cat] = new Quill(`#editor-${cat}`, {
+          theme: 'snow',
+          placeholder: '여기를 클릭하여 내용을 입력하거나 사진을 붙여넣으세요...',
+          modules: { toolbar: false, keyboard: { bindings: customBindings }, imageResize: { displaySize: true } }
+        });
+      });
+    }
+
+    // ===== IndexedDB 설정 =====
+    const initDB = () => {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open('DailyStudyDB', 1);
+        request.onupgradeneeded = (e) => {
+          const database = e.target.result;
+          if (!database.objectStoreNames.contains('notes')) database.createObjectStore('notes', { keyPath: 'id' });
+          if (!database.objectStoreNames.contains('settings')) database.createObjectStore('settings', { keyPath: 'id' });
+        };
+        request.onsuccess = (e) => { db = e.target.result; resolve(); };
+        request.onerror = (e) => reject(e);
+      });
+    };
+
+    const generateId = () => '_' + Math.random().toString(36).substr(2, 9);
+
+    // ===== 데이터 저장 및 불러오기 =====
+    function getTrackerDataFromDOM() {
+      const rows = document.querySelectorAll('#trackerBody tr');
+      const data = [];
+      rows.forEach(tr => {
+        const checks = Array.from(tr.querySelectorAll('.custom-checkbox')).map(cb => cb.checked);
+        data.push({
+          domain: tr.querySelector('.domain-select').value,
+          subject: tr.querySelector('.cell-subject').value,
+          checks: checks
+        });
+      });
+      return data;
+    }
+
+    function saveCurrentNote() {
+      const note = { 
+        id: currentNoteId || generateId(), 
+        type: currentTab, // 현재 보고 있는 탭의 타입으로 저장 (독립 보장)
+        title: document.getElementById('docTitle').value.trim() || '제목 없는 문서', 
+        date: new Date().toISOString(),
+        studentName: document.getElementById('sheetName').value,
+        sheetDate: document.getElementById('sheetDate').value,
+        content: {
+          math: editors['math'].root.innerHTML,
+          story: editors['story'].root.innerHTML,
+          draw: editors['draw'].root.innerHTML,
+          read: editors['read'].root.innerHTML
+        },
+        trackerData: getTrackerDataFromDOM()
+      };
+      
+      const tx = db.transaction(['notes'], 'readwrite');
+      tx.objectStore('notes').put(note);
+      tx.oncomplete = () => { 
+        currentNoteId = note.id; 
+        renderNoteList(); 
+        showToast('저장되었습니다!'); 
+      };
+    }
+
+    function renderNoteList() {
+      const search = document.getElementById('searchInput').value.toLowerCase();
+      db.transaction(['notes'], 'readonly').objectStore('notes').getAll().onsuccess = (e) => {
+        const list = document.getElementById('noteList'); list.innerHTML = '';
+        const notes = e.target.result.sort((a, b) => new Date(b.date) - new Date(a.date));
+        
+        notes.forEach(note => {
+          const noteType = note.type || 'study'; 
+          
+          // 핵심: 현재 활성화된 탭의 문서만 리스트에 띄워줌
+          if (noteType !== currentTab) return; 
+
+          if (note.title.toLowerCase().includes(search)) {
+            const li = document.createElement('li');
+            li.className = `note-item ${note.id === currentNoteId ? 'active' : ''}`;
+            const dateStr = new Date(note.date).toLocaleDateString('ko-KR');
+            
+            const iconHtml = noteType === 'tracker' 
+              ? '<i class="ph-fill ph-check-circle" style="color: #3182CE; font-size: 22px;"></i>' 
+              : '<i class="ph-fill ph-notebook" style="color: var(--primary); font-size: 22px;"></i>';
+
+            li.innerHTML = `
+              <div style="display: flex; align-items: center; gap: 10px; overflow: hidden; flex: 1;">
+                ${iconHtml}
+                <div class="note-text-group">
+                  <span class="note-title">${note.title}</span>
+                  <span class="note-date">${dateStr}</span>
+                </div>
+              </div>
+              <button class="note-delete-btn" onclick="deleteListItem(event, '${note.id}')" title="삭제"><i class="ph ph-trash"></i></button>
+            `;
+            li.onclick = (event) => { if (!event.target.closest('.note-delete-btn')) loadNote(note); };
+            list.appendChild(li);
+          }
+        });
+      };
+    }
+
+    function loadNote(note) {
+      currentNoteId = note.id; 
+
+      document.getElementById('docTitle').value = note.title;
+      document.getElementById('sheetName').value = note.studentName || '';
+      document.getElementById('sheetDate').value = note.sheetDate || note.title;
+
+      // 에디터 데이터 복원
+      editors['math'].root.innerHTML = note.content?.math || '';
+      editors['story'].root.innerHTML = note.content?.story || '';
+      editors['draw'].root.innerHTML = note.content?.draw || '';
+      editors['read'].root.innerHTML = note.content?.read || '';
+      
+      // 트래커 데이터 복원
+      const tbody = document.getElementById('trackerBody');
+      tbody.innerHTML = '';
+      if (note.trackerData && note.trackerData.length > 0) {
+        note.trackerData.forEach(rowData => addRow(rowData));
+      } else {
+        addRow();
+      }
+
+      renderNoteList();
+    }
+
+    function createNewNote() { 
+      currentNoteId = null; 
+      const today = new Date();
+      const formatStr = `${today.getFullYear()}년 ${today.getMonth() + 1}월 ${today.getDate()}일`;
+      
+      // 핵심 변경: 현재 탭(일일공부 vs 회독기록장)의 성격에 따라 기본 제목을 다르게 설정
+      if (currentTab === 'study') {
+        document.getElementById('docTitle').value = formatStr; 
+      } else {
+        document.getElementById('docTitle').value = '새 회독 기록장 (주제 입력)'; 
+      }
+      
+      document.getElementById('sheetDate').value = formatStr; 
+      document.getElementById('sheetName').value = ''; 
+      
+      Object.values(editors).forEach(editor => editor.setText(''));
+      
+      document.getElementById('trackerBody').innerHTML = '';
+      addRow();
+      
+      renderNoteList(); 
+    }
+
+    function deleteListItem(event, id) {
+      event.stopPropagation();
+      if (confirm('이 문서를 목록에서 완전히 삭제하시겠습니까?')) {
+        db.transaction(['notes'], 'readwrite').objectStore('notes').delete(id).onsuccess = () => {
+          if (currentNoteId === id) createNewNote();
+          else renderNoteList();
+        };
+      }
+    }
+
+    function deleteCurrentNote() {
+      if (!currentNoteId) return;
+      if (confirm('현재 문서를 삭제하시겠습니까?')) {
+        db.transaction(['notes'], 'readwrite').objectStore('notes').delete(currentNoteId).onsuccess = () => createNewNote();
+      }
+    }
+
+    // ===== 백업 및 복원 =====
+    function exportJSON() {
+      const data = {
+        id: currentNoteId || generateId(), 
+        title: document.getElementById('docTitle').value,
+        type: currentTab,
+        studentName: document.getElementById('sheetName').value, 
+        sheetDate: document.getElementById('sheetDate').value,
+        content: { math: editors['math'].root.innerHTML, story: editors['story'].root.innerHTML, draw: editors['draw'].root.innerHTML, read: editors['read'].root.innerHTML },
+        trackerData: getTrackerDataFromDOM()
+      };
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2));
+      const a = document.createElement('a'); a.href = dataStr; a.download = 'study_manager_backup.json'; a.click();
+    }
+
+    function importJSON(event) {
+      const file = event.target.files[0]; if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const note = JSON.parse(e.target.result); note.id = generateId(); note.date = new Date().toISOString();
+          if(!note.type) note.type = 'study'; // 호환성 유지
+          
+          db.transaction(['notes'], 'readwrite').objectStore('notes').put(note).onsuccess = () => { 
+            switchTab(note.type); // 복원된 파일의 타입에 맞춰 탭 전환
+            loadNote(note); 
+          };
+        } catch (err) { alert("파일 파싱 오류"); } event.target.value = ''; 
+      }; reader.readAsText(file);
+    }
+
+    // ===== 회독 기록장 전용 로직 =====
+    function loadDomainsFromDB() {
+      return new Promise((resolve) => {
+        const req = db.transaction(['settings'], 'readonly').objectStore('settings').get('domains');
+        req.onsuccess = (e) => {
+          if(e.target.result) domains = e.target.result.data;
+          resolve();
+        };
+        req.onerror = () => resolve();
+      });
+    }
+
+    function saveDomainsToDB() {
+      db.transaction(['settings'], 'readwrite').objectStore('settings').put({id: 'domains', data: domains});
+    }
+
+    function generateSelectOptions(selectedValue = '') {
+      if (domains.length === 0) return `<option value="" data-color="#FFF">도메인 없음</option>`;
+      return domains.map(d => 
+        `<option value="${d.id}" data-color="${d.color}" style="background:${d.color};" ${d.id === selectedValue ? 'selected' : ''}>${d.name}</option>`
+      ).join('');
+    }
+
+    function changeBadgeColor(selectElement) {
+      const selectedOption = selectElement.options[selectElement.selectedIndex];
+      selectElement.style.backgroundColor = selectedOption ? selectedOption.getAttribute('data-color') : '#FFF';
+    }
+
+    function addRow(rowData = null) {
+      const tbody = document.getElementById('trackerBody');
+      const tr = document.createElement('tr');
+      
+      let checkboxesHtml = '';
+      for(let i=1; i<=10; i++) {
+        const isChecked = rowData && rowData.checks && rowData.checks[i-1] ? 'checked' : '';
+        checkboxesHtml += `
+          <div class="check-wrapper">
+            <span class="check-label">${i}</span>
+            <input type="checkbox" class="custom-checkbox" title="${i}회독" ${isChecked}>
+          </div>
+        `;
+      }
+
+      const subjVal = rowData && rowData.subject ? rowData.subject : '';
+      const domainVal = rowData && rowData.domain ? rowData.domain : '';
+
+      tr.innerHTML = `
+        <td>
+          <select class="domain-select" onchange="changeBadgeColor(this)">
+            ${generateSelectOptions(domainVal)}
+          </select>
+        </td>
+        <td><input type="text" class="input-cell input-left cell-subject" placeholder="학습 주제 입력" value="${subjVal}"></td>
+        <td><div class="check-container">${checkboxesHtml}</div></td>
+        <td><button class="row-delete-btn" onclick="deleteRow(this)"><i class="ph-bold ph-minus"></i></button></td>
+      `;
+      tbody.appendChild(tr);
+      changeBadgeColor(tr.querySelector('.domain-select'));
+    }
+
+    function deleteRow(btn) {
+      btn.closest('tr').remove();
+    }
+
+    // ===== 모달 관련 (단축키 & 도메인) =====
+    function openShortcuts() { document.getElementById('shortcutsModal').style.display = 'flex'; }
+    function closeShortcuts() { document.getElementById('shortcutsModal').style.display = 'none'; }
+    
+    function openDomainSettings() {
+      renderColorPicker();
+      renderDomainList();
+      document.getElementById('domainModal').style.display = 'flex';
+    }
+    
+    function closeDomainSettings() {
+      document.getElementById('domainModal').style.display = 'none';
+      saveDomainsToDB();
+      updateTableDropdowns();
+    }
+
+    function renderDomainList() {
+      const list = document.getElementById('domainList');
+      list.innerHTML = '';
+      domains.forEach(d => {
+        list.innerHTML += `
+          <div class="domain-item">
+            <div class="domain-item-left"><div class="color-dot" style="background-color: ${d.color}"></div><span>${d.name}</span></div>
+            <button class="btn-delete-domain" onclick="deleteDomain('${d.id}')"><i class="ph-bold ph-trash"></i></button>
+          </div>
+        `;
+      });
+    }
+
+    function renderColorPicker() {
+      const picker = document.getElementById('colorPicker');
+      picker.innerHTML = palette.map(color => `
+        <div class="color-option ${color === selectedColorForNew ? 'selected' : ''}" style="background-color: ${color};" onclick="selectColor('${color}')"></div>
+      `).join('');
+    }
+
+    function selectColor(color) { selectedColorForNew = color; renderColorPicker(); }
+
+    function addDomain() {
+      const input = document.getElementById('newDomainName');
+      const name = input.value.trim();
+      if (!name) return alert('도메인 이름을 입력해주세요.');
+      
+      const newId = 'dom-' + Math.random().toString(36).substr(2, 9);
+      domains.push({ id: newId, name: name, color: selectedColorForNew });
+      
+      input.value = '';
+      renderDomainList();
+    }
+
+    function deleteDomain(id) {
+      if(domains.length <= 1) return alert('최소 1개의 도메인은 있어야 합니다.');
+      domains = domains.filter(d => d.id !== id);
+      renderDomainList();
+    }
+
+    function updateTableDropdowns() {
+      const selects = document.querySelectorAll('.domain-select');
+      selects.forEach(select => {
+        const currentValue = select.value;
+        select.innerHTML = generateSelectOptions(currentValue);
+        if(!domains.find(d => d.id === currentValue)) select.value = domains.length > 0 ? domains[0].id : '';
+        changeBadgeColor(select);
+      });
+    }
+
+    // 제목 연동 및 단축키 기능 (저장)
+    function syncTitles() { 
+      if(currentTab === 'study') {
+        document.getElementById('sheetDate').value = document.getElementById('docTitle').value; 
+      }
+    }
+    
+    document.addEventListener('keydown', function(e) {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) { 
+        e.preventDefault(); 
+        saveCurrentNote(); 
+      }
+    });
+
+    // ===== 초기화 실행 =====
+    window.onload = async () => { 
+      initEditors(); 
+      await initDB(); 
+      await loadDomainsFromDB();
+      await renderNoteList(); 
+      createNewNote(); 
+    };
+  </script>
+</body>
+</html>

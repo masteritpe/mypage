@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>에미나이</title>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;700&family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+    <script src="https://unpkg.com/quill-image-resize@3.0.9/image-resize.min.js"></script>
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
+    <style>
+        :root {
+            --bg-app: #f1f5f9; --bg-panel: #ffffff; --border: #e2e8f0;
+            --primary: #0ea5e9; --primary-hover: #0284c7;
+            --text-main: #1e293b; --text-sub: #64748b;
+            --font-ui: 'Pretendard', 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+            --editor-font-size: 15px; 
+        }
+
+        * { box-sizing: border-box; outline: none; }
+        body { margin: 0; background: var(--bg-app); font-family: var(--font-ui); height: 100vh; display: flex; flex-direction: column; overflow: hidden; letter-spacing: -0.02em; }
+        
+        header { height: 60px; background: #fff; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 24px; justify-content: space-between; flex-shrink: 0; transition: margin-top 0.3s ease; }
+        .workspace { display: flex; flex: 1; overflow: hidden; }
+        .pane-list { width: 340px; background: #fff; border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; transition: width 0.3s ease, opacity 0.3s ease; }
+        .search-area { height: 60px; padding: 0 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; background: #fff; }
+        .list-scroll { flex: 1; overflow-y: auto; background: #f8fafc; }
+        
+        .item-card { padding: 16px; border-bottom: 1px solid var(--border); cursor: pointer; transition: 0.1s; background: #fff; border-left: 4px solid transparent; }
+        .item-card:hover { background: #f1f5f9; }
+        .item-card.active { background: #f0f9ff; border-left-color: var(--primary); }
+
+        .pane-editor { flex: 1; background: #fff; display: flex; flex-direction: column; position: relative; transition: margin-left 0.3s ease; }
+        .toolbar { height: 60px; padding: 0 32px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: #fff; flex-shrink: 0; }
+        .editor-scroll { flex: 1; overflow-y: auto; padding: 32px 40px; }
+        
+        .ql-container.ql-snow { 
+            height: auto !important; 
+            border: 1px solid var(--border) !important; 
+            border-radius: 8px !important; 
+            font-family: var(--font-ui) !important; 
+            background: #fff; 
+            transition: 0.2s; 
+        }
+        .ql-container.ql-snow:focus-within { 
+            border-color: var(--primary) !important; 
+            box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1); 
+        }
+        .ql-editor { 
+            min-height: 300px; 
+            overflow-y: visible !important; 
+            font-size: var(--editor-font-size) !important; 
+            line-height: 1.7; 
+            color: var(--text-main); 
+            padding: 24px !important; 
+            word-break: keep-all; 
+        }
+        .ql-editor p { margin-bottom: 6px; } 
+
+        .ql-editor img { cursor: pointer; transition: opacity 0.2s, outline 0.1s; border-radius: 4px; }
+        .ql-editor img:hover { opacity: 0.85; outline: 2px solid var(--primary); outline-offset: 2px; }
+        .ql-editor img.img-highlight { outline: 4px solid #f6ad55 !important; outline-offset: 2px !important; }
+        .custom-img-toolbar { position: absolute; display: flex; align-items: center; gap: 4px; background: #fff; border: 1px solid var(--border); padding: 4px; border-radius: 6px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); z-index: 1000; transition: opacity 0.2s; }
+
+        .quill-raw-table { margin: 1.5rem 0; width: 100%; overflow-x: auto; border-radius: 8px; box-shadow: 0 0 0 1px var(--border); background: #fff; }
+        .quill-raw-table table { border-collapse: collapse !important; width: 100%; margin: 0; font-size: 14px; color: var(--text-main); text-align: left; }
+        .quill-raw-table th, .quill-raw-table td { border: 1px solid var(--border); padding: 10px 14px; }
+        .quill-raw-table thead th, .quill-raw-table th { background-color: #f8fafc; font-weight: 600; }
+
+        .input-field { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 15px; font-size: 14px; font-family: var(--font-ui); }
+        
+        .btn { padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; border: 1px solid transparent; transition: 0.2s; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-family: var(--font-ui); }
+        .btn-primary { background: var(--primary); color: #fff; border: none; }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-secondary { background: #f8fafc; border-color: var(--border); color: var(--text-main); }
+        .btn-secondary:hover { background: #e2e8f0; }
+        .btn-pdf { background: #f8fafc; border-color: var(--border); color: var(--text-sub); }
+        .btn-danger { color: #ef4444; border-color: #fecaca; background: #fff; }
+
+        .attach-section { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--border); }
+        .section-title { font-size: 14px; font-weight: 700; color: var(--text-main); margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+        .attach-box { background: #f8fafc; padding: 16px; border-radius: 8px; border: 1px dashed var(--border); transition: 0.2s; }
+        
+        .img-grid { display: flex; gap: 12px; flex-wrap: wrap; }
+        .img-slot { position: relative; width: 80px; height: 80px; border-radius: 6px; border: 1px solid var(--border); background: #fff; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        .img-thumb { width: 100%; height: 100%; object-fit: cover; cursor: zoom-in; }
+        .file-thumb { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-sub); cursor: pointer; width: 100%; height: 100%; }
+        .btn-img-del { position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; border-radius: 50%; background: rgba(0,0,0,0.6); color: #fff; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 10px; }
+        .btn-add-img { width: 80px; height: 80px; border-radius: 6px; border: 2px dashed var(--border); background: #fff; color: #94a3b8; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 11px; text-align: center; }
+
+        #empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #fff; }
+        .empty-icon { font-size: 48px; color: #e2e8f0; margin-bottom: 16px; }
+        .empty-text { color: var(--text-sub); margin-bottom: 20px; font-size: 14px; }
+
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 2000; display: none; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+        .modal-box { background: #fff; width: 500px; padding: 32px; border-radius: 16px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+        
+        .image-viewer-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(4px); display: none; justify-content: center; align-items: center; z-index: 3000; opacity: 0; transition: opacity 0.2s ease-in-out; }
+        .image-viewer-overlay.show { display: flex; opacity: 1; }
+        .image-viewer-content { position: relative; max-width: 90%; max-height: 90%; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+        .image-viewer-content img { max-width: 100%; max-height: 80vh; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); object-fit: contain; background: white; }
+        .image-viewer-close { position: absolute; top: -40px; right: 0; background: none; border: none; color: white; font-size: 32px; cursor: pointer; padding: 8px; transition: color 0.2s; }
+        .image-viewer-close:hover { color: #D1D5DB; }
+        .image-viewer-actions { display: flex; gap: 12px; }
+
+        #toast-container { position: fixed; bottom: 24px; right: 24px; display: flex; flex-direction: column; gap: 10px; z-index: 9999; }
+        .toast-chip { background: #1e293b; color: #fff; padding: 10px 20px; border-radius: 50px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        
+        .header-actions { display: flex; gap: 8px; }
+        .paste-hint { font-size: 12px; color: var(--text-sub); margin-left: auto; font-weight: normal; }
+
+        .dueum-highlight { background-color: #0d3a9e !important; color: #ffffff !important; padding: 1px 4px; border-radius: 3px; font-weight: 700; }
+        
+        .guide-section { margin-bottom: 16px; }
+        .guide-section h4 { margin: 0 0 6px 0; color: #334155; font-size: 14px; display: flex; align-items: center; gap: 6px; }
+        .guide-section ul { margin: 0; padding-left: 20px; color: #475569; font-size: 13px; line-height: 1.8; }
+
+        body.immersion-mode header { display: none !important; }
+        body.immersion-mode .pane-list { display: none !important; }
+        body.immersion-mode .editor-scroll { padding-top: 40px; padding-bottom: 60px; max-width: 1200px; margin: 0 auto; width: 100%; }
+        body.immersion-mode .pane-editor { background: var(--bg-app); }
+        body.immersion-mode .ql-container.ql-snow { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03); border-color: transparent !important; }
+    </style>
+</head>
+<body>
+
+<header>
+    <div style="font-weight: 800; font-size: 18px; color: var(--primary); display: flex; align-items: center; gap: 10px;">
+        <i class="fas fa-brain"></i> 에미나이
+    </div>
+    </header>
+
+<div class="workspace">
+    <aside class="pane-list">
+        <div class="search-area"><input type="text" id="search" class="input-field" style="margin-bottom:0" placeholder="대화 주제 검색..."></div>
+        <div class="list-scroll" id="item-list"></div>
+    </aside>
+
+    <main class="pane-editor">
+        <div id="empty-state">
+            <i class="fas fa-folder-open empty-icon"></i>
+            <p class="empty-text">작업할 항목을 선택하거나 신규 작성하세요.</p>
+            <button class="btn btn-primary" onclick="showNewForm()" style="padding: 10px 20px;">
+                <i class="fas fa-plus"></i> 신규 작성
+            </button>
+        </div>
+
+        <div id="editor-content" style="display: none; flex-direction: column; flex: 1; overflow: hidden;">
+            <div class="toolbar">
+                <h2 id="editor-title" style="margin:0; font-size:16px; font-weight: 700;">대화 기록</h2>
+                <div style="display:flex; gap:8px;">
+                    <button class="btn btn-secondary" onclick="showNewForm()"><i class="fas fa-plus"></i> 신규</button>
+                    <button class="btn btn-secondary" id="btn-backup" style="display:none;" onclick="exportData()"><i class="fas fa-download"></i> 백업</button>
+                    <button class="btn btn-secondary" onclick="document.getElementById('file-restore').click()"><i class="fas fa-upload"></i> 복구</button>
+                    <input type="file" id="file-restore" hidden accept=".json" onchange="importData(this)">
+                    
+                    <button class="btn btn-danger" id="btn-delete" style="display:none;" onclick="deleteCurrent()"><i class="fas fa-trash"></i> 삭제</button>
+                    <button class="btn btn-primary" onclick="saveCurrent()"><i class="fas fa-save"></i> 저장</button>
+                    <button class="btn btn-pdf" id="btn-pdf" style="display:none;" onclick="handlePdfClick()"><i class="fas fa-file-pdf"></i> PDF</button>
+                </div>
+            </div>
+            <div class="editor-scroll">
+                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
+                    <div>
+                        <label style="font-weight: 700; display:block; margin-bottom:8px;">대화 주제(Topic)</label>
+                        <input type="text" id="inp-summary" class="input-field" placeholder="주제를 입력하세요" spellcheck="false">
+                    </div>
+                    <div>
+                        <label style="font-weight: 700; display:block; margin-bottom:8px;">분류(Category)</label>
+                        <select id="inp-cat" class="input-field">
+                            <option value="아이디어">💡 아이디어</option>
+                            <option value="코드구현">💻 코드 구현</option>
+                            <option value="트러블슈팅">🛠️ 트러블슈팅</option>
+                            <option value="문서작성">📝 문서 작성</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                    <label style="font-weight: 700; margin:0;">AI 답변 내용</label>
+                    <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px; background: #e0f2fe; color: #0284c7; border-color: #bae6fd;" onclick="document.getElementById('shortcut-modal').style.display='flex'">
+                        <i class="fas fa-keyboard"></i> 단축키 가이드
+                    </button>
+                </div>
+                
+                <div id="inp-desc"></div>
+
+                <div class="attach-section">
+                    <div class="section-title">
+                        <span><i class="fas fa-paperclip"></i> 관련 첨부 파일(최대 10개)</span>
+                        <span class="paste-hint"><i class="fas fa-keyboard"></i> 에디터 밖에서 붙여넣기 시 파일로 추가됨</span>
+                    </div>
+                    <div class="attach-box" id="drop-zone">
+                        <div id="img-grid" class="img-grid"></div>
+                        <input type="file" id="inp-file" style="display:none;">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<div id="shortcut-modal" class="modal-overlay" onclick="this.style.display='none'">
+    <div class="modal-box" onclick="event.stopPropagation()">
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #e2e8f0; padding-bottom:16px; margin-bottom: 20px;">
+            <h3 style="margin:0; font-size:18px; color:var(--primary);"><i class="fas fa-keyboard"></i> 단축키 및 편집 가이드</h3>
+            <button style="background:none; border:none; font-size:20px; cursor:pointer; color:#94a3b8;" onclick="document.getElementById('shortcut-modal').style.display='none'"><i class="fas fa-times"></i></button>
+        </div>
+        <div style="max-height: 60vh; overflow-y: auto; padding-right: 10px;">
+            <div class="guide-section">
+                <h4>📄 문서 관리 및 화면 제어</h4>
+                <ul>
+                    <li><b>새 문서 생성:</b> Ctrl + Alt + N</li>
+                    <li><b>현재 문서 저장:</b> Ctrl + S</li>
+                    <li><b>몰입 모드 (메뉴 숨김):</b> <span class="dueum-highlight" style="padding:2px 6px">Ctrl + H</span></li>
+                    <li><b>선택 글자 확대/축소:</b> 드래그 후 Ctrl + ➕ / ➖ (또는 Ctrl + 휠)</li>
+                </ul>
+            </div>
+
+            <div class="guide-section">
+                <h4>🖼️ 이미지 제어 팁</h4>
+                <ul>
+                    <li><b>이미지 크게 보기:</b> 본문 이미지 <b>더블클릭</b> (단일 클릭은 정렬/크기조절용)</li>
+                    <li><b>이미지 붙여넣기:</b> 에디터 내부 클릭 후 Ctrl+V 시 본문에 바로 삽입</li>
+                    <li><b>사이즈 조절:</b> 에디터 내 이미지 1회 클릭 시 나타나는 핸들로 조절</li>
+                    <li><b>정렬:</b> 이미지 1회 클릭 시 상단에 나타나는 툴바(좌/중/우) 활용</li>
+                </ul>
+            </div>
+            
+            <div class="guide-section">
+                <h4>✍️ 텍스트 서식 및 강조</h4>
+                <ul>
+                    <li><b>텍스트 굵게:</b> Ctrl + B</li>
+                    <li><b>취소선 적용/해제:</b> Ctrl + 0</li>
+                    <li><b>글자색 <span style="color:#e53e3e">빨강</span>:</b> Ctrl + Alt + R</li>
+                    <li><b>글자색 <span style="color:#0ea5e9">파랑</span>:</b> Ctrl + Alt + B</li>
+                    <li><b>두음 강조 (남색배경+흰글씨+굵게):</b> Ctrl + Alt + M</li>
+                    <li><b>모든 서식 지우기:</b> Ctrl + Shift + X</li>
+                </ul>
+            </div>
+
+            <div class="guide-section">
+                <h4>🖍️ 컬러 형광펜 (배경색)</h4>
+                <ul>
+                    <li><b><span style="background:#ffedd5">주황</span> / <span style="background:#e0f2fe">파랑</span> / <span style="background:#fef08a">노랑</span>:</b> Ctrl + 1 / 2 / 3</li>
+                    <li><b><span style="background:#dcfce7">녹색</span> / <span style="background:#fce7f3">분홍</span> / <span style="background:#e6d5c3">갈색</span> / <span style="background:#e5e7eb">회색</span>:</b> Ctrl + 4 / 5 / 6 / 7</li>
+                </ul>
+            </div>
+
+            <div class="guide-section" style="margin-bottom: 0;">
+                <h4>🖼️ 표(Table) 제어 팁</h4>
+                <ul>
+                    <li><b>표 지우기:</b> 표의 맨 앞이나 맨 뒤를 클릭한 후 <b>Backspace (백스페이스)</b></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="imageViewerModal" class="image-viewer-overlay" onclick="closeImageViewer()">
+    <div class="image-viewer-content" onclick="event.stopPropagation()">
+        <button class="image-viewer-close" onclick="closeImageViewer()"><i class="fas fa-times"></i></button>
+        <img id="imageViewerImg" src="" alt="확대된 이미지">
+        
+        <div class="image-viewer-actions">
+            <button class="btn btn-secondary" onclick="copyImageToClipboard()">
+                <i class="fas fa-copy"></i> 복사
+            </button>
+            <button class="btn btn-secondary" onclick="downloadImageView()">
+                <i class="fas fa-download"></i> 저장
+            </button>
+        </div>
+    </div>
+</div>
+
+<div id="img-toolbar" class="custom-img-toolbar" style="display:none;">
+    <div id="btn-hl-img" style="display:flex; align-items:center; justify-content:center; width:28px; height:28px; cursor:pointer; border-radius:4px;" title="강조 테두리"><i class="fas fa-highlighter"></i></div>
+    <div id="btn-clr-img" style="display:flex; align-items:center; justify-content:center; width:28px; height:28px; cursor:pointer; border-radius:4px;" title="테두리 제거"><i class="fas fa-eraser"></i></div>
+</div>
+<div id="toast-container"></div>
+
+<script>
+    let db;
+    const DB_NAME = 'AIChatDB', STORE_NAME = 'chats';
+    let currentId = null, currentFiles = [];
+    let isProcessing = false;
+    let quill; 
+
+    const Inline = Quill.import('blots/inline');
+    class DueumFormat extends Inline { }
+    DueumFormat.blotName = 'dueum'; DueumFormat.tagName = 'span'; DueumFormat.className = 'dueum-highlight';
+    Quill.register(DueumFormat, true);
+
+    const BlockEmbed = Quill.import('blots/block/embed');
+    class RawTableBlot extends BlockEmbed {
+        static create(value) {
+            const node = super.create();
+            node.innerHTML = value;
+            node.setAttribute('contenteditable', 'false');
+            
+            node.setAttribute('data-raw', encodeURIComponent(value));
+            
+            setTimeout(() => {
+                if (window.renderMathInElement) {
+                    renderMathInElement(node, {
+                        delimiters: [
+                            {left: '$$', right: '$$', display: true},
+                            {left: '$', right: '$', display: false},
+                            {left: '\\(', right: '\\)', display: false},
+                            {left: '\\[', right: '\\]', display: true}
+                        ],
+                        throwOnError: false
+                    });
+                }
+            }, 50);
+            
+            return node;
+        }
+        static value(node) { 
+            return decodeURIComponent(node.getAttribute('data-raw') || '') || node.innerHTML; 
+        }
+    }
+    RawTableBlot.blotName = 'rawTable'; RawTableBlot.tagName = 'div'; RawTableBlot.className = 'quill-raw-table';
+    Quill.register(RawTableBlot, true);
+
+    const SizeStyle = Quill.import('attributors/style/size');
+    const allowedSizes = [];
+    for (let i = 10; i <= 72; i++) allowedSizes.push(i + 'px'); 
+    SizeStyle.whitelist = allowedSizes;
+    Quill.register(SizeStyle, true);
+
+    const BaseImageFormat = Quill.import('formats/image');
+    class ImageFormat extends BaseImageFormat {
+        static formats(domNode) {
+            return {
+                width: domNode.getAttribute('width') || domNode.style.width,
+                height: domNode.getAttribute('height') || domNode.style.height,
+                float: domNode.style.float,
+                display: domNode.style.display,
+                margin: domNode.style.margin,
+                imghighlight: domNode.classList.contains('img-highlight')
+            };
+        }
+        format(name, value) {
+            if (['width', 'height', 'float', 'display', 'margin'].includes(name)) {
+                if (value) this.domNode.style[name] = value;
+                else this.domNode.style[name] = '';
+            } else if (name === 'imghighlight') {
+                if (value) this.domNode.classList.add('img-highlight');
+                else this.domNode.classList.remove('img-highlight');
+            } else {
+                super.format(name, value);
+            }
+        }
+    }
+    Quill.register(ImageFormat, true);
+
+    document.addEventListener("DOMContentLoaded", () => {
+        quill = new Quill('#inp-desc', {
+            theme: 'snow', placeholder: '내용을 입력하세요...',
+            modules: { 
+                toolbar: false,
+                imageResize: {
+                    displaySize: true,
+                    modules: [ 'Resize', 'DisplaySize', 'Toolbar' ]
+                }
+            }
+        });
+        quill.root.setAttribute('spellcheck', false);
+
+        const Delta = Quill.import('delta');
+        quill.clipboard.addMatcher('TABLE', (node, delta) => new Delta().insert({ rawTable: node.outerHTML }));
+    });
+
+    const request = indexedDB.open(DB_NAME, 1);
+    request.onupgradeneeded = (e) => { e.target.result.createObjectStore(STORE_NAME, { keyPath: 'uid' }); };
+    request.onsuccess = (e) => { db = e.target.result; renderList(); };
+
+    function toggleEditor(show) {
+        document.getElementById('empty-state').style.display = show ? 'none' : 'flex';
+        document.getElementById('editor-content').style.display = show ? 'flex' : 'none';
+    }
+
+    function showToast(m) {
+        const c = document.getElementById('toast-container');
+        const chip = document.createElement('div');
+        chip.className = 'toast-chip'; chip.innerHTML = `<i class="fas fa-check-circle"></i> ${m}`;
+        c.appendChild(chip); setTimeout(() => chip.remove(), 1000);
+    }
+
+    document.getElementById('inp-file').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        if (currentFiles.length >= 10) {
+            showToast('첨부파일은 최대 10개까지 가능합니다.');
+            this.value = ''; 
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            currentFiles.push({
+                name: file.name,
+                type: file.type || 'application/octet-stream',
+                data: event.target.result
+            });
+            renderAttachGrid();
+            showToast('첨부파일이 추가되었습니다.');
+            this.value = ''; 
+        };
+        reader.readAsDataURL(file);
+    });
+
+    const dropZone = document.getElementById('drop-zone');
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = 'var(--primary)';
+        dropZone.style.background = '#e0f2fe';
+    });
+    dropZone.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = 'var(--border)';
+        dropZone.style.background = '#f8fafc';
+    });
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = 'var(--border)';
+        dropZone.style.background = '#f8fafc';
+        
+        const file = e.dataTransfer.files[0];
+        if (!file) return;
+        if (currentFiles.length >= 10) return showToast('첨부파일은 최대 10개까지 가능합니다.');
+        
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            currentFiles.push({
+                name: file.name,
+                type: file.type || 'application/octet-stream',
+                data: event.target.result
+            });
+            renderAttachGrid();
+            showToast('첨부파일이 추가되었습니다.');
+        };
+        reader.readAsDataURL(file);
+    });
+
+    document.addEventListener('paste', (e) => {
+        if (document.getElementById('editor-content').style.display === 'none') return;
+
+        const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+        let blob = null;
+        
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf("image") !== -1 && items[i].kind === 'file') {
+                blob = items[i].getAsFile();
+                e.preventDefault(); 
+                e.stopImmediatePropagation();
+                break;
+            }
+        }
+
+        if (blob) {
+            const isInsideEditor = e.target.closest('.ql-editor');
+            const reader = new FileReader();
+            
+            reader.onload = (event) => {
+                const base64Data = event.target.result;
+                
+                if (isInsideEditor) {
+                    let range = quill.getSelection();
+                    if (!range) range = { index: quill.getLength() };
+                    
+                    quill.insertEmbed(range.index, 'image', base64Data, Quill.sources.USER);
+                    quill.setSelection(range.index + 1, Quill.sources.SILENT);
+                } else {
+                    if(currentFiles.length >= 10) return showToast('첨부파일은 최대 10개까지 가능합니다.');
+                    const fileName = `clipboard_${new Date().getTime()}.png`;
+                    currentFiles.push({ name: fileName, type: 'image/png', data: base64Data });
+                    renderAttachGrid(); 
+                    showToast('이미지가 첨부파일로 추가되었습니다.');
+                }
+            };
+            reader.readAsDataURL(blob);
+        }
+    }, true); 
+
+    // 개별 대화 백업으로 수정
+    async function exportData() {
+        if (!currentId) {
+            showToast('백업할 대화가 선택되지 않았습니다.');
+            return;
+        }
+        await saveCurrent(true); 
+
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        tx.objectStore(STORE_NAME).get(currentId).onsuccess = (e) => {
+            const data = e.target.result;
+            if(!data) return;
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const a = document.createElement('a'); 
+            a.href = URL.createObjectURL(blob);
+            const safeTitle = data.summary ? data.summary.replace(/[^a-z0-9가-힣]/gi, '_') : 'backup';
+            a.download = `대화기록_${safeTitle}_${new Date().toISOString().slice(0,10)}.json`; 
+            a.click();
+            URL.revokeObjectURL(a.href);
+        };
+    }
+
+    // 개별 대화 복구 및 자동 추가/업데이트 적용
+    function importData(input) {
+        const file = input.files[0]; if(!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const data = JSON.parse(e.target.result);
+                const tx = db.transaction(STORE_NAME, 'readwrite');
+                const store = tx.objectStore(STORE_NAME);
+                
+                // 기존 전체 백업 파일 호환성 처리 
+                if (Array.isArray(data)) {
+                    data.forEach(item => store.put(item));
+                    tx.oncomplete = () => { renderList(); showToast('전체 복구 완료'); };
+                } else {
+                    // 단일 파일 복구 (없으면 추가, 있으면 업데이트)
+                    store.put(data);
+                    tx.oncomplete = () => { 
+                        renderList(); 
+                        showToast('개별 대화 복구 완료'); 
+                        loadItem(data); 
+                    };
+                }
+            } catch(err) {
+                showToast('잘못된 형식의 파일입니다.');
+            }
+        };
+        reader.readAsText(file);
+        input.value = ''; // 같은 파일을 다시 선택할 수 있도록 초기화
+    }
+
+    function renderAttachGrid() {
+        const grid = document.getElementById('img-grid'); grid.innerHTML = '';
+        currentFiles.forEach((f, idx) => {
+            const slot = document.createElement('div'); slot.className = 'img-slot';
+            if (f.type.startsWith('image/')) {
+                const img = document.createElement('img'); img.className = 'img-thumb'; img.src = f.data;
+                img.onclick = (e) => { e.stopPropagation(); openImageViewer(f.data); };
+                slot.appendChild(img);
+            } else {
+                const thumb = document.createElement('div'); thumb.className = 'file-thumb';
+                thumb.innerHTML = `<i class="fas fa-file-alt"></i><span style="font-size:9px; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; width:100%; text-align:center; padding:0 4px;">${f.name}</span>`;
+                thumb.onclick = () => { const a = document.createElement('a'); a.href = f.data; a.download = f.name; a.click(); };
+                slot.appendChild(thumb);
+            }
+            const del = document.createElement('button'); del.className = 'btn-img-del'; del.innerHTML = '×';
+            del.onclick = (e) => { e.stopPropagation(); currentFiles.splice(idx, 1); renderAttachGrid(); };
+            slot.appendChild(del); grid.appendChild(slot);
+        });
+        if(currentFiles.length < 10) {
+            const add = document.createElement('label'); add.className = 'btn-add-img'; add.setAttribute('for', 'inp-file');
+            add.innerHTML = '<i class="fas fa-plus"></i>'; grid.appendChild(add);
+        }
+    }
+
+    async function handlePdfClick() { 
+        if(!isProcessing) { 
+            await saveCurrent(true); 
+            exportPDF(); 
+        } 
+    }
+    
+    async function exportPDF() {
+        const s = document.getElementById('inp-summary').value || '제목 없음';
+        const c = document.getElementById('inp-cat').value || '미분류';
+        const d = quill.root.innerHTML;
+        const dateStr = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
+
+        const el = document.createElement('div');
+        el.innerHTML = `
+            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+            <style>
+                .pdf-container {
+                    font-family: 'Noto Serif KR', serif;
+                    color: #111;
+                    padding: 10px 40px 40px 40px; 
+                    line-height: 1.8;
+                    letter-spacing: -0.03em;
+                    word-break: keep-all;
+                    text-align: justify;
+                }
+                .pdf-header {
+                    text-align: center;
+                    margin-bottom: 50px;
+                    padding-bottom: 20px;
+                    border-bottom: 1px solid #ddd;
+                }
+                .pdf-title {
+                    font-size: 32px;
+                    font-weight: 700;
+                    color: #000;
+                    margin: 0 0 15px 0;
+                    word-break: keep-all;
+                }
+                .pdf-meta {
+                    font-size: 13px;
+                    color: #666;
+                    font-family: 'Inter', sans-serif;
+                }
+                .pdf-content {
+                    font-size: 15px;
+                }
+                .pdf-content h1, .pdf-content h2, .pdf-content h3 {
+                    font-family: 'Pretendard', sans-serif;
+                    margin-top: 1.5em;
+                    margin-bottom: 0.5em;
+                    color: #222;
+                }
+                .pdf-content img {
+                    max-width: 100%; 
+                    display: block;
+                    margin: 20px auto;
+                    page-break-inside: avoid;
+                    border-radius: 4px;
+                }
+                .pdf-content table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin: 20px 0;
+                    font-family: 'Pretendard', sans-serif;
+                    font-size: 13px;
+                    page-break-inside: avoid;
+                }
+                .pdf-content th, .pdf-content td {
+                    border: 1px solid #ccc;
+                    padding: 10px 14px;
+                }
+                .pdf-content th {
+                    background-color: #f9f9f9;
+                    font-weight: bold;
+                }
+                .pdf-attachments {
+                    margin-top: 50px;
+                    padding-top: 30px;
+                    border-top: 2px dashed #eee;
+                    page-break-before: always;
+                }
+                .pdf-attachments h3 {
+                    font-family: 'Pretendard', sans-serif;
+                    font-size: 18px;
+                    margin-bottom: 20px;
+                }
+                .attach-img-wrap {
+                    display: inline-block;
+                    margin: 0 15px 15px 0;
+                    vertical-align: top;
+                    page-break-inside: avoid;
+                }
+                .attach-img-wrap img {
+                    max-width: 250px;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 6px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                }
+            </style>
+            <div class="pdf-container">
+                <div class="pdf-header">
+                    <h1 class="pdf-title">${s}</h1>
+                    <div class="pdf-meta">분류: ${c} &nbsp;&nbsp;|&nbsp;&nbsp; 작성일: ${dateStr}</div>
+                </div>
+                <div class="pdf-content">${d}</div>
+                
+                ${currentFiles.filter(f=>f.type.startsWith('image')).length > 0 ? `
+                <div class="pdf-attachments">
+                    <h3>📎 첨부 이미지 자료</h3>
+                    <div>
+                        ${currentFiles.filter(f=>f.type.startsWith('image')).map(f => `
+                            <div class="attach-img-wrap"><img src="${f.data}"></div>
+                        `).join('')}
+                    </div>
+                </div>
+                ` : ''}
+            </div>
+        `;
+
+        isProcessing = true;
+        showToast('PDF 생성을 시작합니다. 잠시만 기다려주세요...');
+
+        const imgs = el.querySelectorAll('img');
+        const loadPromises = Array.from(imgs).map(imgEl => {
+            return new Promise(resolve => {
+                const tempImg = new Image();
+                tempImg.onload = resolve;
+                tempImg.onerror = resolve; 
+                tempImg.src = imgEl.src;
+            });
+        });
+
+        await Promise.all(loadPromises);
+
+        const opt = { 
+            margin: [10, 15, 20, 15], 
+            filename: `${s}.pdf`, 
+            image: { type: 'jpeg', quality: 0.98 }, 
+            html2canvas: { scale: 2, useCORS: true }, 
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } 
+        };
+        
+        html2pdf().set(opt).from(el).save().then(() => { 
+            showToast('PDF 다운로드가 완료되었습니다.'); 
+            isProcessing = false; 
+        }).catch(err => {
+            console.error('PDF Error:', err);
+            showToast('PDF 생성 중 오류가 발생했습니다.');
+            isProcessing = false;
+        });
+    }
+
+    function saveCurrent(silent = false) {
+        return new Promise((resolve) => {
+            const s = document.getElementById('inp-summary').value.trim(); if(!s) return resolve(false);
+            
+            const tempRoot = document.createElement('div');
+            tempRoot.innerHTML = quill.root.innerHTML;
+            tempRoot.querySelectorAll('.quill-raw-table').forEach(el => {
+                if (el.dataset.raw) el.innerHTML = decodeURIComponent(el.dataset.raw);
+            });
+            const cleanDesc = tempRoot.innerHTML;
+
+            const item = { uid: currentId || Date.now().toString(), summary: s, category: document.getElementById('inp-cat').value, description: cleanDesc, attachments: currentFiles, ts: Date.now() };
+            const tx = db.transaction(STORE_NAME, 'readwrite'); tx.objectStore(STORE_NAME).put(item);
+            tx.oncomplete = () => { 
+                currentId = item.uid; 
+                renderList(); 
+                document.getElementById('btn-delete').style.display = 'inline-flex'; 
+                document.getElementById('btn-pdf').style.display = 'inline-flex'; 
+                document.getElementById('btn-backup').style.display = 'inline-flex'; // 저장 후 백업 버튼 표시
+                if(!silent) showToast('저장됨'); 
+                resolve(true); 
+            };
+        });
+    }
+
+    function renderList() {
+        const l = document.getElementById('item-list'); const keyword = document.getElementById('search').value.toLowerCase(); l.innerHTML = '';
+        db.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).getAll().onsuccess = (e) => {
+            e.target.result.sort((a,b)=>b.ts-a.ts).filter(i => i.summary.toLowerCase().includes(keyword)).forEach(i => {
+                const card = document.createElement('div'); card.className = `item-card ${currentId === i.uid ? 'active' : ''}`;
+                card.onclick = () => loadItem(i); card.innerHTML = `<b>${i.summary}</b>`; l.appendChild(card);
+            });
+        };
+    }
+
+    function loadItem(i) {
+        toggleEditor(true); currentId = i.uid; document.getElementById('inp-summary').value = i.summary; document.getElementById('inp-cat').value = i.category; 
+        quill.clipboard.dangerouslyPasteHTML(i.description || "");
+        currentFiles = i.attachments || []; 
+        document.getElementById('btn-delete').style.display = 'inline-flex'; 
+        document.getElementById('btn-pdf').style.display = 'inline-flex'; 
+        document.getElementById('btn-backup').style.display = 'inline-flex'; // 활성 아이템 로드 시 백업 버튼 표시
+        renderAttachGrid(); 
+        renderList();
+    }
+
+    // 신규 작성 시 기존 버튼 숨김 처리 보완
+    function showNewForm() { 
+        toggleEditor(true); currentId = null; currentFiles = []; 
+        document.getElementById('inp-summary').value = ''; quill.setContents([]); 
+        document.getElementById('btn-delete').style.display = 'none'; 
+        document.getElementById('btn-pdf').style.display = 'none'; 
+        document.getElementById('btn-backup').style.display = 'none'; // 아직 생성 안됐으므로 백업 숨김
+        renderAttachGrid(); 
+        renderList(); 
+    }
+    
+    function deleteCurrent() { if(confirm('삭제?')) { db.transaction(STORE_NAME, 'readwrite').objectStore(STORE_NAME).delete(currentId).oncomplete = () => { toggleEditor(false); renderList(); }; } }
+    document.getElementById('search').oninput = renderList;
+
+    let activeTargetImage = null;
+    const imgToolbar = document.getElementById('img-toolbar');
+    document.addEventListener('mousedown', (e) => {
+        if (e.target.tagName === 'IMG' && e.target.closest('.ql-editor')) {
+            activeTargetImage = e.target;
+            const rect = e.target.getBoundingClientRect();
+            imgToolbar.style.display = 'flex'; imgToolbar.style.top = `${rect.top + window.scrollY - 40}px`; imgToolbar.style.left = `${rect.left + window.scrollX}px`;
+        } else if (!e.target.closest('#img-toolbar')) { imgToolbar.style.display = 'none'; activeTargetImage = null; }
+    }, true);
+    document.getElementById('btn-hl-img').onclick = () => { if(activeTargetImage) { const blot = Quill.find(activeTargetImage); quill.formatText(quill.getIndex(blot), 1, 'imghighlight', true); } };
+    document.getElementById('btn-clr-img').onclick = () => { if(activeTargetImage) { const blot = Quill.find(activeTargetImage); quill.formatText(quill.getIndex(blot), 1, 'imghighlight', false); } };
+
+    document.addEventListener('dblclick', function(e) { 
+        if (e.target.tagName === 'IMG' && e.target.closest('.ql-editor')) { 
+            openImageViewer(e.target.src);
+            window.getSelection().removeAllRanges();
+            return;
+        }
+        
+        const elements = document.elementsFromPoint(e.clientX, e.clientY);
+        const img = elements.find(el => el.tagName === 'IMG');
+        if (img && img.closest('.ql-editor')) {
+            openImageViewer(img.src);
+            window.getSelection().removeAllRanges();
+        }
+    }, true);
+
+    function openImageViewer(src) {
+        document.getElementById('imageViewerImg').src = src;
+        document.getElementById('imageViewerModal').classList.add('show');
+    }
+    function closeImageViewer() {
+        const modal = document.getElementById('imageViewerModal');
+        modal.classList.remove('show');
+        setTimeout(() => { document.getElementById('imageViewerImg').src = ''; }, 200); 
+    }
+
+    function dataURItoBlob(dataURI) {
+        try {
+            const byteString = atob(dataURI.split(',')[1]);
+            const mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0];
+            const ab = new ArrayBuffer(byteString.length);
+            const ia = new Uint8Array(ab);
+            for (let i = 0; i < byteString.length; i++) {
+                ia[i] = byteString.charCodeAt(i);
+            }
+            return new Blob([ab], {type: mimeString});
+        } catch(e) {
+            return null;
+        }
+    }
+
+    async function copyImageToClipboard() {
+        const imgUrl = document.getElementById('imageViewerImg').src;
+        if (!imgUrl) return;
+        
+        try {
+            if (!navigator.clipboard || !window.ClipboardItem) {
+                throw new Error("Clipboard API not supported");
+            }
+
+            const blob = dataURItoBlob(imgUrl);
+            if (!blob) throw new Error("Blob conversion failed");
+
+            if (blob.type !== 'image/png') {
+                const img = new Image();
+                img.src = imgUrl;
+                await new Promise(resolve => img.onload = resolve);
+                
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                
+                canvas.toBlob(async (pngBlob) => {
+                    await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
+                    showToast('이미지가 클립보드에 복사되었습니다.');
+                }, 'image/png');
+            } else {
+                await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+                showToast('이미지가 클립보드에 복사되었습니다.');
+            }
+
+        } catch (err) {
+            console.warn('복사 API 차단됨:', err);
+            alert('현재 환경(로컬 파일)에서는 브라우저 보안 정책으로 자동 복사가 제한됩니다.\n이미지 위에서 [우클릭] -> [이미지 복사]를 선택해 주세요.');
+        }
+    }
+
+    function downloadImageView() {
+        const imgUrl = document.getElementById('imageViewerImg').src;
+        if (!imgUrl) return;
+
+        try {
+            const blob = dataURItoBlob(imgUrl);
+            if (!blob) throw new Error("Blob 변환 실패");
+
+            const objectUrl = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = objectUrl;
+            a.download = 'image_archive_' + Date.now() + '.png';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            
+            setTimeout(() => URL.revokeObjectURL(objectUrl), 100);
+            showToast('이미지가 성공적으로 저장되었습니다.');
+        } catch (err) {
+            console.error('저장 실패:', err);
+            
+            const newWindow = window.open();
+            if (newWindow) {
+                newWindow.document.write(`<img src="${imgUrl}" style="max-width:100%;">`);
+                alert('자동 다운로드에 실패했습니다. 새 창의 이미지에서 [우클릭 -> 이미지 저장]을 이용해 주세요.');
+            } else {
+                alert('이미지 저장에 실패했습니다. 팝업 차단을 해제해 주세요.');
+            }
+        }
+    }
+
+    window.addEventListener('keydown', e => {
+        const isCtrl = e.ctrlKey || e.metaKey;
+        const isAlt = e.altKey;
+        const isShift = e.shiftKey;
+
+        if (isCtrl && !isAlt && !isShift && e.key.toLowerCase() === 's') { e.preventDefault(); saveCurrent(); return; }
+        if (isCtrl && isAlt && !isShift && e.key.toLowerCase() === 'n') { e.preventDefault(); showNewForm(); return; }
+
+        if (isCtrl && !isAlt && !isShift && e.key.toLowerCase() === 'h') {
+            e.preventDefault();
+            document.body.classList.toggle('immersion-mode');
+            return;
+        }
+
+        if (quill && quill.hasFocus()) {
+            if (isCtrl && !isAlt && !isShift && (e.key === '+' || e.key === '=' || e.key === '-')) {
+                e.preventDefault();
+                const range = quill.getSelection(); if (!range) return;
+                let currentSizeStr = quill.getFormat(range).size || '14px';
+                let currentSize = parseInt(currentSizeStr.replace('px', '')) || 14;
+                let newSize = Math.max(10, Math.min(72, currentSize + (e.key === '-' ? -2 : 2)));
+                quill.format('size', newSize + 'px');
+                return;
+            }
+
+            if (isCtrl && isShift && !isAlt && e.key.toLowerCase() === 'x') {
+                e.preventDefault();
+                const range = quill.getSelection();
+                if (range) {
+                    if (range.length > 0) quill.removeFormat(range.index, range.length);
+                    else {
+                        const format = quill.getFormat(range);
+                        for (let k in format) quill.format(k, false);
+                    }
+                }
+                return;
+            }
+
+            if (isCtrl && !isAlt && !isShift && e.key === '0') {
+                e.preventDefault();
+                const format = quill.getFormat();
+                quill.format('strike', !format.strike);
+                return;
+            }
+
+            if (isCtrl && isAlt && !isShift && e.key.toLowerCase() === 'r') {
+                e.preventDefault();
+                const format = quill.getFormat();
+                quill.format('color', format.color === '#ef4444' ? false : '#ef4444');
+                return;
+            }
+
+            if (isCtrl && isAlt && !isShift && e.key.toLowerCase() === 'b') {
+                e.preventDefault();
+                const format = quill.getFormat();
+                quill.format('color', format.color === '#0ea5e9' ? false : '#0ea5e9');
+                return;
+            }
+
+            if (isCtrl && !isAlt && !isShift && ['1','2','3','4','5','6','7'].includes(e.key)) {
+                e.preventDefault();
+                const colors = {
+                    '1': '#ffedd5', '2': '#e0f2fe', '3': '#fef08a', '4': '#dcfce7',
+                    '5': '#fce7f3', '6': '#e6d5c3', '7': '#e5e7eb'
+                };
+                const targetColor = colors[e.key];
+                const format = quill.getFormat();
+                quill.format('background', format.background === targetColor ? false : targetColor);
+                return;
+            }
+
+            if (isCtrl && isAlt && !isShift && e.key.toLowerCase() === 'm') {
+                e.preventDefault();
+                const format = quill.getFormat();
+                const isActive = format.background === '#0d3a9e';
+                quill.format('background', isActive ? false : '#0d3a9e');
+                quill.format('color', isActive ? false : '#ffffff');
+                quill.format('bold', isActive ? false : true);
+                return;
+            }
+        }
+
+        if (e.key === 'Escape') {
+            closeImageViewer();
+            document.getElementById('shortcut-modal').style.display='none';
+        }
+    }, { passive: false });
+    
+    window.addEventListener('wheel', e => {
+        if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            if (quill && quill.hasFocus()) {
+                const range = quill.getSelection(); if (!range) return;
+                let delta = e.deltaY < 0 ? 2 : -2; 
+                let currentSizeStr = quill.getFormat(range).size || '14px';
+                let currentSize = parseInt(currentSizeStr.replace('px', '')) || 14;
+                let newSize = Math.max(10, Math.min(72, currentSize + delta));
+                quill.format('size', newSize + 'px');
+            }
+        }
+    }, { passive: false });
+</script>
+</body>
+</html>

@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PDF to PNG</title>
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  </script>
+
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  
+  <style>
+    :root {
+      --bg-body: #F9FAFB;
+      --bg-surface: #FFFFFF;
+      --border-light: #F3F4F6;
+      --border-base: #E5E7EB;
+      --text-main: #111827;
+      --text-muted: #6B7280;
+      --primary: #F59E0B; /* 앰버(주황) 테마 */
+      --primary-hover: #D97706;
+      --secondary: #FFFFFF;
+      --secondary-hover: #F9FAFB;
+      --danger: #EF4444;
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+      --radius-md: 8px;
+      --radius-lg: 12px;
+    }
+
+    * { box-sizing: border-box; outline: none; }
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background: var(--bg-body);
+      color: var(--text-main);
+      margin: 0;
+      padding: 40px;
+      -webkit-font-smoothing: antialiased;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Header */
+    .dashboard-header { max-width: 100%; margin: 0 auto 24px auto; flex-shrink: 0; width: 100%; }
+    .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .title-area { display: flex; align-items: center; gap: 12px; }
+    .title-area i { font-size: 28px; color: var(--primary); }
+    h2 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+    
+    .actions { display: flex; gap: 10px; align-items: center; }
+    input[type="file"] { display: none; }
+    
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 10px 18px; border-radius: var(--radius-md);
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      border: 1px solid transparent;
+      white-space: nowrap;
+    }
+    .btn-primary { background: var(--primary); color: white; box-shadow: var(--shadow-sm); }
+    .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
+    .btn-outline { background: var(--secondary); color: var(--text-main); border-color: var(--border-base); box-shadow: var(--shadow-sm); }
+    .btn-outline:hover { background: var(--secondary-hover); border-color: #D1D5DB; }
+    .btn-danger { color: var(--danger); border-color: var(--danger); background: transparent; }
+    .btn-danger:hover { background: #FEF2F2; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    /* Icon buttons for zoom toolbar */
+    .btn-icon {
+      padding: 6px; border-radius: 6px; background: transparent; border: 1px solid transparent;
+      color: var(--text-muted); cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; transition: 0.2s;
+    }
+    .btn-icon:hover:not(:disabled) { background: var(--border-light); color: var(--text-main); }
+    .btn-icon:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    .instructions {
+      display: flex; gap: 20px; align-items: center; font-size: 13px; color: var(--text-muted);
+      background: var(--bg-surface); padding: 12px 20px; border-radius: var(--radius-md); border: 1px solid var(--border-base);
+    }
+
+    /* Workspace Layout */
+    #workspace {
+      flex: 1;
+      max-width: 100%; width: 100%; margin: 0 auto;
+      display: grid; grid-template-columns: 380px 1fr; gap: 24px;
+      min-height: 0; 
+    }
+
+    /* Panels */
+    .panel {
+      background: var(--bg-surface); border: 1px solid var(--border-base);
+      border-radius: var(--radius-lg); box-shadow: var(--shadow-md);
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .panel-header {
+      display: flex; justify-content: space-between; align-items: center; 
+      padding: 16px 20px; border-bottom: 1px solid var(--border-base); background: #f9fafb; flex-shrink: 0;
+    }
+    .panel-title { font-weight: 700; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+    .panel-badge { background: #e0e7ff; color: #4338ca; padding: 2px 8px; border-radius: 99px; font-size: 12px; font-weight: 600; }
+    
+    .panel-body { flex: 1; overflow-y: auto; position: relative; display: flex; flex-direction: column; }
+
+    /* Left Panel: List */
+    .page-item {
+      display: flex; align-items: center; gap: 14px; padding: 12px 20px; 
+      border-bottom: 1px solid var(--border-light); cursor: pointer; transition: background 0.2s;
+    }
+    .page-item:hover { background: #f3f4f6; }
+    .page-item.is-active { 
+        background: #FFFBEB;
+        position: relative;
+    }
+    .page-item.is-active::before {
+        content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--primary);
+    }
+    .thumb-box { 
+        width: 70px; height: 90px; background: #fff; border: 1px solid var(--border-base); 
+        border-radius: 6px; display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; 
+        box-shadow: var(--shadow-sm);
+    }
+    .thumb-box img { max-width: 100%; max-height: 100%; object-fit: contain; }
+    .page-info-title { font-size: 14px; font-weight: 700; color: var(--text-main); margin-bottom: 4px; }
+    .page-info-sub { font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 4px;}
+
+    /* Right Panel: Preview */
+    #preview-area { 
+        background: var(--bg-body); 
+        padding: 24px; 
+        flex: 1; 
+        overflow: auto; /* 상하좌우 스크롤 허용 */
+        display: block; /* Flex 버그 방지를 위해 block 사용 */
+        text-align: center; /* 자식 요소를 중앙에 정렬 */
+    }
+    .pv-canvas-wrap { 
+        box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); 
+        border-radius: 4px; 
+        background: #fff; 
+        padding: 10px; /* 액자 효과 */
+        display: inline-block; /* text-align: center 에 반응하도록 */
+        transition: width 0.15s ease-out; /* 부드러운 줌 효과 */
+        /* JS에서 크기를 컨트롤합니다 */
+    }
+    .pv-canvas-wrap img { 
+        display: block; 
+        max-width: 100%; /* 기본: 화면 너비 맞춤 */
+        height: auto; 
+        border-radius: 3px; 
+        margin: 0 auto;
+    }
+    
+    .empty-msg-center { 
+        height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; 
+        color: var(--text-muted); gap: 12px; 
+    }
+    .empty-msg-center i { font-size: 40px; color: #D1D5DB; }
+
+    /* Loading Overlay */
+    .loading-overlay {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.9); 
+      display: none; align-items: center; justify-content: center; flex-direction: column; z-index: 50; gap: 12px;
+    }
+
+    #toast {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      background: #111827; color: white; padding: 10px 20px; border-radius: 99px; font-size: 14px;
+      box-shadow: var(--shadow-md); opacity: 0; visibility: hidden; transition: 0.3s; z-index: 3000;
+    }
+    #toast.show { opacity: 1; visibility: visible; }
+  </style>
+</head>
+<body>
+
+  <header class="dashboard-header">
+    <div class="header-top">
+      <div class="title-area">
+        <i class="ph ph-file-image"></i>
+        <h2>PDF to PNG</h2>
+      </div>
+      
+      <div class="actions">
+        <label for="pdfFile" class="btn btn-primary" id="btn-upload-label">
+          <i class="ph ph-upload-simple"></i> 원본 PDF 불러오기
+        </label>
+        <input type="file" id="pdfFile" accept=".pdf" />
+        
+        <div style="width: 1px; height: 24px; background: var(--border-base); margin: 0 8px;"></div>
+        
+        <button class="btn btn-outline" id="btn-download-cur" disabled>
+          <i class="ph ph-download-simple"></i> 현재 이미지 저장
+        </button>
+        <button class="btn btn-outline" id="btn-download-all" disabled>
+          <i class="ph ph-file-zip"></i> 전체 압축 다운로드
+        </button>
+        
+        <div style="width: 1px; height: 24px; background: var(--border-base); margin: 0 8px;"></div>
+        
+        <button class="btn btn-danger" id="btn-clear" disabled>
+          <i class="ph ph-trash"></i> 초기화
+        </button>
+      </div>
+    </div>
+
+    <div class="instructions">
+      <span><i class="ph ph-magnifying-glass-plus"></i> 해상도 3.0배(인쇄용 고화질)로 이미지가 추출됩니다.</span>
+      <span style="color: #D1D5DB;">|</span>
+      <span><i class="ph ph-hard-drives"></i> 대용량 PDF도 안정적으로 변환하기 위해 임시 저장소를 활용합니다.</span>
+    </div>
+  </header>
+
+  <div id="workspace">
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">
+          페이지 목록
+          <span class="panel-badge" id="page-count" style="background:#FEF3C7; color:#B45309;">0장</span>
+        </div>
+      </div>
+      
+      <div class="panel-body" id="list-container">
+        <div class="empty-msg-center">
+          <i class="ph ph-files"></i>
+          PDF 파일을 불러오면<br>페이지 목록이 표시됩니다.
+        </div>
+      </div>
+      
+      <div class="loading-overlay" id="list-loading">
+        <i class="ph ph-spinner ph-spin" style="font-size: 32px; color: var(--primary);"></i>
+        <div style="font-weight: 600; color: var(--text-main);" id="loading-text">고화질 변환 중...</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">미리보기</div>
+        <div style="display:flex; align-items:center; gap: 16px;">
+            <div id="pv-info" style="font-size: 13px; color: var(--text-muted); font-weight: 500;"></div>
+            <div style="display:flex; gap: 4px; border-left: 1px solid var(--border-base); padding-left: 12px;">
+                <button class="btn-icon" id="btn-zoom-out" title="축소" disabled><i class="ph ph-magnifying-glass-minus"></i></button>
+                <button class="btn-icon" id="btn-zoom-reset" title="화면에 맞춤" disabled><i class="ph ph-corners-in"></i></button>
+                <button class="btn-icon" id="btn-zoom-in" title="확대" disabled><i class="ph ph-magnifying-glass-plus"></i></button>
+            </div>
+        </div>
+      </div>
+      
+      <div class="panel-body" id="preview-area">
+        <div class="empty-msg-center">
+          <i class="ph ph-image"></i>
+          좌측 목록에서 페이지를 선택하세요.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast">메시지</div>
+
+  <script>
+    (function () {
+      const DB_NAME = "PDFImgDB";
+      const DB_VER = 1;
+      let db = null;
+      let state = { items: [], selectedId: null, fileName: "" };
+      let zoomLevel = 1; // 1 = 화면 맞춤
+      
+      const $ = (s) => document.querySelector(s);
+      
+      // 알림 메시지 (Toast)
+      let toastTimeout;
+      const showToast = (msg) => {
+        const toastEl = $("#toast");
+        toastEl.textContent = msg;
+        toastEl.classList.add("show");
+        clearTimeout(toastTimeout);
+        toastTimeout = setTimeout(() => toastEl.classList.remove("show"), 3000);
+      };
+
+      const uid = () => Math.random().toString(36).slice(2, 8);
+
+      // --- IndexedDB ---
+      function openDB() {
+        return new Promise((res, rej) => {
+          const rq = indexedDB.open(DB_NAME, DB_VER);
+          rq.onupgradeneeded = (e) => {
+            const d = e.target.result;
+            if (d.objectStoreNames.contains("pages")) d.deleteObjectStore("pages");
+            d.createObjectStore("pages", { keyPath: "id" });
+          };
+          rq.onsuccess = () => { db = rq.result; res(db); };
+          rq.onerror = () => rej(rq.error);
+        });
+      }
+      function tx(mode) { return db.transaction("pages", mode).objectStore("pages"); }
+      function putItem(item) {
+        return new Promise((res, rej) => {
+          const r = tx("readwrite").put(item);
+          r.onsuccess = () => res(true); r.onerror = () => rej(r.error);
+        });
+      }
+      function getAllItems() {
+        return new Promise((res, rej) => {
+          const r = tx("readonly").getAll();
+          r.onsuccess = () => res(r.result || []); r.onerror = () => rej(r.error);
+        });
+      }
+      function clearAll() {
+        return new Promise((res, rej) => {
+          const r = tx("readwrite").clear();
+          r.onsuccess = () => res(true); r.onerror = () => rej(r.error);
+        });
+      }
+
+      // --- PDF Image Rendering Logic ---
+      async function renderPageToBlob(page, scale = 3.0) {
+        const viewport = page.getViewport({ scale: scale });
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+
+        await page.render({ canvasContext: context, viewport: viewport }).promise;
+        
+        return new Promise(resolve => {
+            canvas.toBlob((blob) => {
+                resolve({ blob, width: canvas.width, height: canvas.height });
+            }, 'image/png');
+        });
+      }
+
+      async function importPdf(file) {
+        state.fileName = file.name.replace(".pdf", "");
+        const buf = await file.arrayBuffer();
+        const loadingTask = pdfjsLib.getDocument(buf);
+        const pdf = await loadingTask.promise;
+        const total = pdf.numPages;
+        
+        const loadingEl = $("#list-loading");
+        const loadingText = $("#loading-text");
+        loadingEl.style.display = "flex";
+        
+        // 버튼 비활성화
+        $("#btn-upload-label").style.pointerEvents = 'none';
+        $("#btn-upload-label").style.opacity = '0.7';
+        
+        await clearAll(); 
+        
+        for (let i = 1; i <= total; i++) {
+          try {
+            loadingText.textContent = `고화질 변환 중... (${i} / ${total})`;
+            const page = await pdf.getPage(i);
+            
+            const { blob, width, height } = await renderPageToBlob(page, 3.0);
+            
+            await putItem({
+              id: uid(),
+              idx: i,
+              fileName: state.fileName,
+              blob: blob,
+              width, height
+            });
+          } catch (e) { console.error(e); }
+        }
+        
+        loadingEl.style.display = "none";
+        $("#btn-upload-label").style.pointerEvents = 'auto';
+        $("#btn-upload-label").style.opacity = '1';
+        
+        return total;
+      }
+
+      // --- UI Rendering ---
+      async function refresh() {
+        const items = await getAllItems();
+        state.items = items.sort((a,b) => a.idx - b.idx);
+        $("#page-count").textContent = `${state.items.length}장`;
+        
+        // 버튼 활성화 상태 업데이트
+        const hasItems = state.items.length > 0;
+        $("#btn-download-cur").disabled = !hasItems;
+        $("#btn-download-all").disabled = !hasItems;
+        $("#btn-clear").disabled = !hasItems;
+
+        renderList();
+        
+        if(hasItems) {
+            showPreview(state.items[0]);
+        } else {
+            $("#list-container").innerHTML = `
+                <div class="empty-msg-center">
+                    <i class="ph ph-files"></i>
+                    PDF 파일을 불러오면<br>페이지 목록이 표시됩니다.
+                </div>
+            `;
+            $("#preview-area").innerHTML = `
+                <div class="empty-msg-center">
+                    <i class="ph ph-image"></i>
+                    좌측 목록에서 페이지를 선택하세요.
+                </div>
+            `;
+            $("#pv-info").textContent = "";
+            toggleZoomButtons(false);
+        }
+      }
+
+      function renderList() {
+        const con = $("#list-container");
+        if(state.items.length === 0) return;
+        con.innerHTML = "";
+        
+        state.items.forEach(it => {
+            const div = document.createElement("div");
+            div.className = `page-item ${state.selectedId === it.id ? 'is-active' : ''}`;
+            const url = URL.createObjectURL(it.blob);
+            
+            div.innerHTML = `
+                <div class="thumb-box">
+                    <img src="${url}" loading="lazy" />
+                </div>
+                <div>
+                    <div class="page-info-title">Page ${it.idx}</div>
+                    <div class="page-info-sub"><i class="ph ph-frame-corners"></i> ${it.width} x ${it.height} px</div>
+                </div>
+            `;
+            div.onclick = () => {
+                document.querySelectorAll(".page-item").forEach(el=>el.classList.remove("is-active"));
+                div.classList.add("is-active");
+                state.selectedId = it.id;
+                showPreview(it);
+            };
+            con.appendChild(div);
+        });
+      }
+
+      // --- Zooming Logic ---
+      function toggleZoomButtons(enable) {
+        $("#btn-zoom-in").disabled = !enable;
+        $("#btn-zoom-out").disabled = !enable;
+        $("#btn-zoom-reset").disabled = !enable;
+      }
+
+      function setZoom(level) {
+        if (level < 0.2 || level > 5) return;
+        zoomLevel = level;
+
+        const img = document.getElementById('current-img');
+        if (!img) return;
+
+        if (level === 1) {
+            // 1배율은 '화면 맞춤' 모드
+            img.style.width = '';
+            img.style.maxWidth = '100%';
+        } else {
+            // 고해상도 원본(naturalWidth) 기준으로 픽셀 크기 적용
+            if (img.naturalWidth > 0) {
+                img.style.maxWidth = 'none';
+                img.style.width = (img.naturalWidth * level) + 'px';
+            } else {
+                img.onload = () => {
+                    img.style.maxWidth = 'none';
+                    img.style.width = (img.naturalWidth * level) + 'px';
+                    img.onload = null;
+                };
+            }
+        }
+      }
+
+      $("#btn-zoom-in").onclick = () => setZoom(zoomLevel + 0.2);
+      $("#btn-zoom-out").onclick = () => setZoom(zoomLevel - 0.2);
+      $("#btn-zoom-reset").onclick = () => setZoom(1);
+
+      function showPreview(it) {
+        state.selectedId = it.id;
+        $("#pv-info").textContent = `${it.fileName}.pdf - Page ${it.idx} (${it.width} x ${it.height}px)`;
+        
+        const url = URL.createObjectURL(it.blob);
+        const area = $("#preview-area");
+        area.innerHTML = "";
+        
+        const wrap = document.createElement("div");
+        wrap.className = "pv-canvas-wrap";
+        wrap.innerHTML = `<img src="${url}" id="current-img" />`;
+        area.appendChild(wrap);
+        
+        // 새 이미지를 불러올 때마다 줌 리셋 및 스크롤 최상단 이동
+        toggleZoomButtons(true);
+        setZoom(1); 
+        area.scrollTop = 0;
+      }
+
+      // --- Download Functions ---
+      $("#btn-download-cur").onclick = () => {
+        const img = $("#current-img");
+        if(!img) return showToast("이미지가 선택되지 않았습니다.");
+        
+        const currentItem = state.items.find(i => i.id === state.selectedId);
+        const link = document.createElement("a");
+        link.download = `${currentItem.fileName}_page_${currentItem.idx}.png`;
+        link.href = img.src;
+        link.click();
+        showToast("다운로드가 시작되었습니다.");
+      };
+
+      $("#btn-download-all").onclick = async () => {
+        if(!state.items.length) return showToast("변환된 이미지가 없습니다.");
+        
+        const btn = $("#btn-download-all");
+        btn.disabled = true;
+        btn.innerHTML = `<i class="ph ph-spinner ph-spin"></i> 압축 중...`;
+        
+        try {
+            const zip = new JSZip();
+            const folder = zip.folder(state.items[0].fileName || "images");
+            
+            state.items.forEach(it => {
+                const fname = `page_${String(it.idx).padStart(3,'0')}.png`;
+                folder.file(fname, it.blob);
+            });
+            
+            const content = await zip.generateAsync({type:"blob"});
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(content);
+            link.download = `${state.items[0].fileName}_images.zip`;
+            link.click();
+            showToast("전체 이미지가 ZIP으로 다운로드되었습니다.");
+        } catch(e) {
+            console.error(e);
+            showToast("압축 중 오류가 발생했습니다.");
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = `<i class="ph ph-file-zip"></i> 전체 압축 다운로드`;
+        }
+      };
+
+      // --- Event Listeners ---
+      $("#pdfFile").onchange = async (e) => {
+          if(e.target.files[0]) {
+              await importPdf(e.target.files[0]);
+              refresh();
+          }
+          e.target.value = "";
+      };
+
+      $("#btn-clear").onclick = async () => {
+          if(confirm("모든 데이터를 삭제하고 초기화하시겠습니까?")) {
+              await clearAll();
+              state.items = []; state.selectedId = null;
+              refresh();
+              showToast("초기화 완료되었습니다.");
+          }
+      };
+
+      // 초기 실행
+      openDB().then(refresh);
+    })();
+  </script>
+</body>
+</html>

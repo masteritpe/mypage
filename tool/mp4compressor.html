@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <script src="coi-serviceworker.min.js"></script>   
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Compressor</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
+    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+
+        :root {
+            --primary-color: #00b894; 
+            --secondary-color: #00cec9;
+            --bg-color: #f4f7f6;
+            --card-bg: #ffffff;
+            --text-main: #2d3436;
+            --text-muted: #636e72;
+            --shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
+            --border-radius: 24px;
+        }
+
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            background-color: var(--card-bg);
+            width: 100%;
+            max-width: 520px;
+            padding: 40px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-top: 0;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        p.subtitle {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            margin-bottom: 32px;
+            line-height: 1.5;
+        }
+
+        .upload-area {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border: 2px dashed #dfe6e9;
+            border-radius: 16px;
+            padding: 40px 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 24px;
+            background-color: #fafbfc;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .upload-area:hover {
+            border-color: var(--primary-color);
+            background-color: #e8f8f5;
+        }
+
+        .upload-area input[type="file"] { display: none; }
+
+        .upload-icon {
+            color: #a4b0be;
+            margin-bottom: 12px;
+            transition: color 0.3s ease;
+        }
+
+        .upload-area:hover .upload-icon { color: var(--primary-color); }
+
+        .file-list-header {
+            font-weight: 600;
+            font-size: 1.05rem;
+            text-align: left;
+            margin-bottom: 12px;
+            display: none;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .reset-btn {
+            font-size: 0.85rem;
+            color: #e74c3c;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0;
+            text-decoration: underline;
+        }
+
+        .file-list {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 24px 0;
+            text-align: left;
+            max-height: 160px;
+            overflow-y: auto;
+        }
+
+        .file-list li {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 10px 14px;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            border: 1px solid #edf2f7;
+            word-break: break-all;
+        }
+
+        .file-list li::before {
+            content: '🎬';
+            margin-right: 10px;
+            font-size: 1.1rem;
+        }
+
+        .control-group {
+            text-align: left;
+            margin-bottom: 24px;
+            background: #fafbfc;
+            padding: 20px;
+            border-radius: 16px;
+            border: 1px solid #edf2f7;
+        }
+
+        .control-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .control-header label {
+            font-weight: 600;
+            font-size: 1.05rem;
+        }
+
+        .speed-value {
+            font-weight: 700;
+            color: var(--primary-color);
+            font-size: 1rem;
+            background: #e8f8f5;
+            padding: 4px 12px;
+            border-radius: 20px;
+            white-space: nowrap; /* 줄바꿈 방지 */
+        }
+
+        input[type="range"] {
+            width: 100%;
+            -webkit-appearance: none;
+            height: 8px;
+            background: #dfe6e9;
+            border-radius: 4px;
+            outline: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--primary-color);
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0, 184, 148, 0.4);
+            transition: transform 0.1s;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.15); }
+
+        .btn-export {
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            padding: 16px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: white;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            border: none;
+            border-radius: 16px;
+            cursor: pointer;
+            box-shadow: 0 10px 20px rgba(0, 184, 148, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .btn-export:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 25px rgba(0, 184, 148, 0.4);
+        }
+        .btn-export:disabled {
+            background: #b2bec3;
+            box-shadow: none;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .progress-text {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-top: 8px;
+            display: none;
+        }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+        
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Video Compressor</h1>
+        <p class="subtitle">브라우저 내에서 직접 동영상 용량을 압축합니다.<br>(서버로 전송하지 않아 안전합니다.)</p>
+
+        <label class="upload-area" id="drop-zone">
+            <input type="file" id="media-upload" accept="video/mp4,video/webm,video/mov" multiple>
+            <svg class="upload-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect>
+                <line x1="7" y1="2" x2="7" y2="22"></line>
+                <line x1="17" y1="2" x2="17" y2="22"></line>
+                <line x1="2" y1="12" x2="22" y2="12"></line>
+                <line x1="2" y1="7" x2="7" y2="7"></line>
+                <line x1="2" y1="17" x2="7" y2="17"></line>
+                <line x1="17" y1="17" x2="22" y2="17"></line>
+                <line x1="17" y1="7" x2="22" y2="7"></line>
+            </svg>
+            <div style="color: #636e72; font-weight: 500;">클릭 또는 비디오 파일을 드래그하여 추가</div>
+        </label>
+
+        <div class="file-list-header" id="list-header">
+            <span>압축 대기열 (<span id="file-count">0</span>)</span>
+            <button class="reset-btn" id="reset-btn">초기화</button>
+        </div>
+        <ul class="file-list" id="file-list"></ul>
+
+        <div class="control-group">
+            <div class="control-header">
+                <label for="crf-slider">압축 강도</label>
+                <span class="speed-value" id="crf-display">보통 (CRF 28)</span>
+            </div>
+            <input type="range" id="crf-slider" min="18" max="40" step="1" value="28">
+            <p style="font-size: 0.8rem; color: #b2bec3; margin-top: 8px; margin-bottom: 0;">
+                오른쪽으로 갈수록 용량은 작아지지만 화질이 저하됩니다.
+            </p>
+        </div>
+
+        <button class="btn-export" id="export-btn" disabled>동영상 압축 시작</button>
+        <div class="progress-text" id="progress-text">초기화 중...</div>
+    </div>
+
+    <script>
+        const mediaUpload = document.getElementById('media-upload');
+        const dropZone = document.getElementById('drop-zone');
+        const fileListElement = document.getElementById('file-list');
+        const listHeader = document.getElementById('list-header');
+        const fileCountDisplay = document.getElementById('file-count');
+        const resetBtn = document.getElementById('reset-btn');
+        const crfSlider = document.getElementById('crf-slider');
+        const crfDisplay = document.getElementById('crf-display');
+        const exportBtn = document.getElementById('export-btn');
+        const progressText = document.getElementById('progress-text');
+
+        let mediaFiles = [];
+        
+        // FFmpeg 초기화
+        const { createFFmpeg, fetchFile } = FFmpeg;
+        const ffmpeg = createFFmpeg({ 
+            log: true,
+            corePath: "https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js"
+        });
+
+        // 압축 강도 텍스트 업데이트
+        crfSlider.addEventListener('input', function() {
+            let val = parseInt(this.value);
+            let label = "보통";
+            if (val <= 23) label = "고화질";
+            else if (val >= 35) label = "저화질";
+            crfDisplay.textContent = `${label} (CRF ${val})`;
+        });
+
+        function handleFiles(files) {
+            for (let i = 0; i < files.length; i++) {
+                if (files[i].type.startsWith('video/')) {
+                    mediaFiles.push(files[i]);
+                }
+            }
+            updateFileList();
+        }
+
+        function updateFileList() {
+            fileListElement.innerHTML = '';
+            
+            if (mediaFiles.length > 0) {
+                listHeader.style.display = 'flex';
+                fileCountDisplay.textContent = mediaFiles.length;
+                exportBtn.disabled = false;
+                
+                mediaFiles.forEach(file => {
+                    const li = document.createElement('li');
+                    li.textContent = `${file.name} (${(file.size / (1024*1024)).toFixed(2)} MB)`;
+                    fileListElement.appendChild(li);
+                });
+            } else {
+                listHeader.style.display = 'none';
+                exportBtn.disabled = true;
+            }
+        }
+
+        resetBtn.addEventListener('click', () => {
+            mediaFiles = [];
+            mediaUpload.value = '';
+            updateFileList();
+        });
+
+        mediaUpload.addEventListener('change', (e) => handleFiles(e.target.files));
+
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.borderColor = '#00b894'; dropZone.style.backgroundColor = '#e8f8f5'; });
+        dropZone.addEventListener('dragleave', () => { dropZone.style.borderColor = '#dfe6e9'; dropZone.style.backgroundColor = '#fafbfc'; });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = '#dfe6e9';
+            dropZone.style.backgroundColor = '#fafbfc';
+            if (e.dataTransfer.files.length > 0) handleFiles(e.dataTransfer.files);
+        });
+
+        exportBtn.addEventListener('click', async function() {
+            if (mediaFiles.length === 0) return;
+
+            exportBtn.innerHTML = `
+                <svg style="animation: spin 1s linear infinite; margin-right: 8px;" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
+                </svg> 인코딩 중... (시간이 소요됩니다)
+            `;
+            exportBtn.disabled = true;
+            progressText.style.display = "block";
+
+            try {
+                if (!ffmpeg.isLoaded()) {
+                    progressText.textContent = "FFmpeg 엔진 로딩 중...";
+                    await ffmpeg.load();
+                }
+
+                // 진행률 표시
+                ffmpeg.setProgress(({ ratio }) => {
+                    progressText.textContent = `진행률: ${(ratio * 100).toFixed(1)}%`;
+                });
+
+                const crfValue = crfSlider.value;
+
+                for (let i = 0; i < mediaFiles.length; i++) {
+                    const file = mediaFiles[i];
+                    const inputName = `input_${i}.mp4`;
+                    const outputName = `compressed_${file.name}`;
+                    
+                    progressText.textContent = `[${i+1}/${mediaFiles.length}] ${file.name} 준비 중...`;
+                    
+                    // 파일을 가상 메모리에 쓰기
+                    ffmpeg.FS('writeFile', inputName, await fetchFile(file));
+
+                    // 압축 명령어 실행 (-vcodec libx264 -crf 조절)
+                    await ffmpeg.run('-i', inputName, '-vcodec', 'libx264', '-crf', crfValue, outputName);
+
+                    // 결과 파일 읽기
+                    const data = ffmpeg.FS('readFile', outputName);
+                    
+                    // 다운로드 처리
+                    const url = URL.createObjectURL(new Blob([data.buffer], { type: 'video/mp4' }));
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
+                    a.download = outputName;
+                    document.body.appendChild(a);
+                    a.click();
+                    
+                    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+                    
+                    // 메모리 정리
+                    ffmpeg.FS('unlink', inputName);
+                    ffmpeg.FS('unlink', outputName);
+                }
+
+                progressText.textContent = "모든 작업 완료!";
+                setTimeout(() => { progressText.style.display = "none"; }, 3000);
+
+            } catch (error) {
+                console.error('Compression error:', error);
+                alert("인코딩 중 오류가 발생했습니다. 파일이 너무 크거나 형식을 지원하지 않을 수 있습니다.");
+            } finally {
+                exportBtn.textContent = "동영상 압축 시작";
+                exportBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

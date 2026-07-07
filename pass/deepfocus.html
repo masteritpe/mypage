@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>🌿 딥 포커스</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+    /* --- 기본 스타일 (Green & Light Theme) --- */
+    :root {
+        --bg: #f8f9fa; --card: #ffffff; --text: #212529; --border: #e9ecef;
+        --primary: #2b8a3e; --primary-dark: #216e31;
+        --accent: #a9e34b; --accent-light: #ebfbee;
+        --dark-bg: #101113; --dark-text: #f8f9fa;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "Pretendard", "Malgun Gothic", sans-serif; background: var(--bg); color: var(--text); font-size: 14px; height: 100vh; overflow: hidden; }
+
+    /* Layout */
+    .app { display: flex; flex-direction: column; height: 100%; }
+    
+    header { 
+        background: var(--card); border-bottom: 1px solid var(--border); padding: 0 24px; height: 60px; 
+        display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; z-index: 100;
+        transition: margin-top 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    body.immersive-mode header { margin-top: -61px; }
+    
+    h1 { font-size: 18px; margin: 0; font-weight: 800; display: flex; align-items: center; gap: 8px; color: var(--primary); }
+    
+    main { flex: 1; display: flex; overflow: hidden; }
+    
+    aside { 
+        width: 260px; background: #fff; border-right: 1px solid var(--border); 
+        display: flex; flex-direction: column; padding: 20px; gap: 20px; flex-shrink: 0; overflow-y: auto;
+        transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s cubic-bezier(0.4, 0, 0.2, 1), border 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    body.immersive-mode aside { width: 0; padding: 0; border-right: none; }
+    
+    /* Toggle Button */
+    .toggle-view-btn {
+        position: fixed; top: 12px; right: 12px; z-index: 1001;
+        width: 36px; height: 36px;
+        background: rgba(255,255,255,0.9); border: 1px solid var(--border);
+        border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+        color: #868e96; transition: 0.2s; box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+    .toggle-view-btn:hover { background: #fff; color: var(--primary); }
+    body.immersive-mode .toggle-view-btn { opacity: 0.5; }
+    body.immersive-mode .toggle-view-btn:hover { opacity: 1; }
+    
+    .panel { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 15px; white-space: nowrap; }
+    .panel-title { font-weight: 700; color: #868e96; font-size: 12px; margin-bottom: 10px; text-transform: uppercase; }
+    
+    .nav-menu { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+    .nav-item { padding: 12px 14px; border-radius: 6px; cursor: pointer; font-weight: 600; color: #495057; display: flex; align-items: center; gap: 10px; transition: 0.2s; white-space: nowrap; }
+    .nav-item:hover { background: #e9ecef; }
+    .nav-item.active { background: var(--accent-light); color: var(--primary); font-weight: 800; }
+
+    .content { flex: 1; display: flex; flex-direction: column; padding: 20px; overflow: hidden; position: relative; transition: padding 0.3s; }
+    .view-section { display: none; flex-direction: column; height: 100%; animation: fadeIn 0.3s; }
+    .view-section.active { display: flex; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+    .btn { padding: 0 16px; height: 36px; border-radius: 6px; border: 1px solid #ced4da; background: #fff; color: #495057; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; transition: all 0.2s; }
+    .btn:hover:not(:disabled) { background: #f8f9fa; transform: translateY(-1px); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .btn-primary:hover:not(:disabled) { background: var(--primary-dark); border-color: var(--primary-dark); }
+    
+    .timer-widget { font-family: 'Courier New', monospace; font-size: 24px; font-weight: 800; color: var(--primary); background: var(--accent-light); padding: 4px 16px; border-radius: 6px; cursor: pointer; }
+
+    /* Sound Grid */
+    .sound-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; height: 100%; align-content: start; }
+    .sound-card { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 25px; cursor: pointer; transition: all 0.2s; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-height: 160px; }
+    .sound-card:hover { transform: translateY(-4px); box-shadow: 0 8px 20px rgba(0,0,0,0.08); }
+    .sound-card.active { border-color: var(--primary); background: #f8f9fa; box-shadow: inset 0 0 0 2px var(--primary); }
+    .sound-card .icon { font-size: 40px; }
+    .sound-card .status { font-size: 11px; color: #868e96; font-weight: 600; background: #f1f3f5; padding: 4px 10px; border-radius: 20px; }
+    .sound-card.active .status { color: #fff; background: var(--primary); }
+
+    /* Breath UI */
+    .breath-container { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; background: #fff; border-radius: 12px; border:1px solid var(--border); }
+    .circle-wrap { position: relative; width: 300px; height: 300px; display: flex; align-items: center; justify-content: center; }
+    .breath-circle { width: 100px; height: 100px; background: var(--accent-light); border-radius: 50%; position: absolute; transition: all 1s linear; opacity: 0.7; }
+    .breath-text { font-size: 28px; font-weight: 800; color: var(--primary); z-index: 10; text-align: center; }
+    .breath-sub { font-size: 16px; color: #868e96; margin-top: 5px; font-weight: 600; }
+
+    /* N-Back UI */
+    .nback-container { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#fff; border-radius:12px; border:1px solid var(--border); }
+    .nback-grid { display: grid; grid-template-columns: repeat(3, 80px); grid-template-rows: repeat(3, 80px); gap: 12px; margin-bottom: 30px; }
+    .nback-cell { background: var(--bg); border: 2px solid var(--border); border-radius: 12px; transition: 0.1s; }
+    .nback-cell.active { background: var(--primary); border-color: var(--primary-dark); transform: scale(0.95); box-shadow: 0 4px 12px rgba(43,138,62,0.3); }
+    .nback-cell.correct { background: var(--accent); border-color: var(--primary); }
+    .nback-cell.wrong { background: #ffa8a8; border-color: #f03e3e; }
+    .nback-score-board { margin-bottom: 25px; font-size: 16px; font-weight: 700; color: #495057; display: flex; gap: 20px; }
+    .nback-score-board span { color: var(--primary); font-size: 20px; }
+
+    /* NSDR (Immersive Mode) */
+    .nsdr-container { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--dark-bg); color: var(--dark-text); border-radius: 12px; padding: 40px; text-align: center; position: relative; overflow: hidden; }
+    .nsdr-setup { width: 100%; max-width: 400px; transition: opacity 0.5s; }
+    .nsdr-settings { background: rgba(255,255,255,0.1); padding: 20px; border-radius: 8px; text-align: left; margin-bottom: 20px; }
+    .nsdr-settings select, .nsdr-settings input { width: 100%; padding: 10px; border-radius: 6px; border: none; margin-top: 5px; background: #fff; color: #333; font-family: inherit; }
+    .nsdr-settings label { font-size: 12px; color: #adb5bd; display: block; margin-top: 15px; }
+    .nsdr-active { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--dark-bg); z-index: 10; opacity: 0; pointer-events: none; transition: opacity 1s; }
+    .nsdr-active.playing { opacity: 1; pointer-events: all; }
+    .nsdr-text { font-size: 28px; font-weight: 300; line-height: 1.6; max-width: 600px; opacity: 0; transform: translateY(20px); transition: all 1s ease-in-out; }
+    .nsdr-text.show { opacity: 1; transform: translateY(0); }
+    .pulse-circle { width: 120px; height: 120px; background: radial-gradient(circle, rgba(169,227,75,0.2) 0%, rgba(0,0,0,0) 70%); border-radius: 50%; margin-bottom: 40px; animation: pulse 4s infinite; }
+    @keyframes pulse { 0% { transform: scale(0.8); opacity: 0.3; } 50% { transform: scale(1.2); opacity: 0.6; } 100% { transform: scale(0.8); opacity: 0.3; } }
+    .btn-stop-nsdr { position: absolute; bottom: 30px; background: rgba(255,255,255,0.1); color: #868e96; border: 1px solid rgba(255,255,255,0.2); border-radius: 20px; padding: 8px 20px; cursor: pointer; transition: 0.2s; }
+    .btn-stop-nsdr:hover { background: rgba(255,255,255,0.2); color: #fff; }
+
+    /* Others */
+    .dump-container { flex:1; display:flex; gap: 20px; }
+    .input-area { flex: 1; display: flex; flex-direction: column; background: #fff; padding: 20px; border-radius: 12px; border: 1px solid var(--border); }
+    textarea { flex: 1; border: 1px solid var(--border); border-radius: 8px; padding: 15px; font-size: 15px; resize: none; margin-bottom: 10px; font-family: inherit; }
+    textarea:focus { outline: 2px solid var(--primary); border-color: transparent; }
+    .dump-list { flex: 1; overflow-y: auto; list-style: none; padding: 0; margin: 0; }
+    .dump-item { background: #fff; padding: 12px; border-radius: 6px; margin-bottom: 8px; border: 1px solid var(--border); font-size: 13px; color: #495057; display:flex; justify-content:space-between; align-items:center; }
+    .gaze-container { flex:1; background: #000; border-radius: 12px; display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden; }
+    .focus-dot { width: 12px; height: 12px; background: #fff; border-radius: 50%; box-shadow: 0 0 10px #fff; }
+    .ultra-container { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #fff; border: 1px solid var(--border); border-radius: 12px; }
+    .ultra-timer-display { font-size: 80px; font-weight: 800; font-family: 'Courier New', monospace; color: var(--text); letter-spacing: -2px; }
+    .progress-bar-bg { width: 80%; height: 8px; background: #e9ecef; border-radius: 4px; overflow: hidden; margin-bottom: 40px; }
+    .progress-bar-fill { height: 100%; background: var(--primary); width: 0%; transition: width 1s linear; }
+
+    /* Mobile */
+    @media (max-width: 768px) {
+        aside { position: absolute; left: 0; top: 60px; height: calc(100% - 60px); z-index: 50; box-shadow: 2px 0 10px rgba(0,0,0,0.1); transform: translateX(0); transition: transform 0.3s; }
+        body.immersive-mode aside { width: 0; padding: 0; border: none; transform: translateX(-100%); }
+        .sound-grid { grid-template-columns: 1fr; }
+        .dump-container { flex-direction: column; }
+    }
+</style>
+</head>
+<body>
+
+<button class="toggle-view-btn" onclick="toggleImmersive()" title="몰입 모드 (H)">
+    <i id="toggle-icon" class="fas fa-eye-slash"></i>
+</button>
+
+<div class="app">
+    <header>
+        <h1>🌿 딥 포커스</h1>
+        <div style="display:flex; align-items:center; gap:15px; margin-right: 40px;">
+            <div class="timer-widget" id="global-timer" onclick="toggleTimer()">10:00</div>
+            <button class="btn" onclick="resetTimer()">↺ 리셋</button>
+        </div>
+    </header>
+
+    <main>
+        <aside>
+            <div class="panel">
+                <div class="panel-title">1. Warm-Up</div>
+                <ul class="nav-menu">
+                    <li class="nav-item active" onclick="switchTab('tab-breath', this)"><span>💨</span> ① 호흡 이완</li>
+                    <li class="nav-item" onclick="switchTab('tab-dump', this)"><span>🗑️</span> ② 잡념 비우기</li>
+                    <li class="nav-item" onclick="switchTab('tab-gaze', this)"><span>👁️</span> ③ 시각 집중</li>
+                    <li class="nav-item" onclick="switchTab('tab-nback', this)"><span>🧠</span> ④ N-Back 훈련</li>
+                </ul>
+            </div>
+
+            <div class="panel">
+                <div class="panel-title">2. Study</div>
+                <ul class="nav-menu">
+                    <li class="nav-item" onclick="switchTab('tab-sound', this)"><span>🎧</span> ⑤ 사운드 존</li>
+                    <li class="nav-item" onclick="switchTab('tab-ultra', this)"><span>⏱️</span> ⑥ 울트라디안</li>
+                </ul>
+            </div>
+
+            <div class="panel">
+                <div class="panel-title">3. Rest</div>
+                <ul class="nav-menu">
+                    <li class="nav-item" onclick="switchTab('tab-nsdr', this)"><span>🛌</span> ⑦ NSDR 휴식</li>
+                </ul>
+            </div>
+        </aside>
+
+        <div class="content">
+            <div id="tab-breath" class="view-section active">
+                <div style="margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
+                    <h2 style="margin:0; font-size:18px;">박스 호흡법 (Box Breathing)</h2>
+                    <button class="btn btn-primary" id="breath-toggle" onclick="toggleBreathing()">▶ 시작</button>
+                </div>
+                <div class="breath-container">
+                    <div class="circle-wrap">
+                        <div class="breath-circle" id="breath-circle"></div>
+                        <div style="position:absolute; text-align:center;">
+                            <div class="breath-text" id="breath-text">준비</div>
+                            <div class="breath-sub" id="breath-timer"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tab-dump" class="view-section">
+                <div style="margin-bottom:15px;"><h2 style="margin:0; font-size:18px;">브레인 덤프</h2></div>
+                <div class="dump-container">
+                    <div class="input-area">
+                        <textarea id="dump-input" placeholder="머릿속을 맴도는 잡념을 모두 적어내세요."></textarea>
+                        <div style="display:flex; justify-content:flex-end;"><button class="btn btn-primary" onclick="addDumpItem()">🔒보관하기</button></div>
+                    </div>
+                    <div class="list-area" style="background:var(--bg); border:1px solid var(--border);">
+                        <div class="panel-title">보관함</div>
+                        <ul class="dump-list" id="dump-list-ui"></ul>
+                        <button class="btn" style="width:100%; margin-top:10px;" onclick="clearDumps()">🗑️비우기</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tab-gaze" class="view-section">
+                <div style="margin-bottom:10px;"><h2 style="margin:0; font-size:18px;">시각 몰입 훈련</h2></div>
+                <div class="gaze-container" id="gaze-box">
+                    <div class="focus-dot"></div>
+                </div>
+            </div>
+
+            <div id="tab-nback" class="view-section">
+                <div style="margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
+                    <h2 style="margin:0; font-size:18px;">N-Back 작업 기억력 훈련</h2>
+                    <div style="display:flex; gap:10px;">
+                        <select id="nback-level" class="btn" style="padding:0 10px;">
+                            <option value="1">1-Back</option>
+                            <option value="2" selected>2-Back</option>
+                            <option value="3">3-Back</option>
+                        </select>
+                        <button class="btn btn-primary" id="nback-toggle" onclick="toggleNBack()">▶ 시작</button>
+                    </div>
+                </div>
+                <div class="nback-container">
+                    <div class="nback-score-board">
+                        <div>매치 정답: <span id="nb-score">0</span></div>
+                        <div>진행 턴: <span id="nb-total">0</span></div>
+                    </div>
+                    <div class="nback-grid">
+                        <div class="nback-cell" id="nbc-0"></div><div class="nback-cell" id="nbc-1"></div><div class="nback-cell" id="nbc-2"></div>
+                        <div class="nback-cell" id="nbc-3"></div><div class="nback-cell" id="nbc-4"></div><div class="nback-cell" id="nbc-5"></div>
+                        <div class="nback-cell" id="nbc-6"></div><div class="nback-cell" id="nbc-7"></div><div class="nback-cell" id="nbc-8"></div>
+                    </div>
+                    <button class="btn" style="margin-top:10px; width:264px; height:46px; font-size:15px;" onclick="checkNBackMatch()" id="nback-match-btn" disabled>👆 위치 일치 (Spacebar)</button>
+                    <div style="margin-top:15px; font-size:12px; color:#adb5bd;">현재 켜진 위치가 N번 전의 위치와 같다면 스페이스바를 누르세요.</div>
+                </div>
+            </div>
+
+            <div id="tab-sound" class="view-section">
+                <div style="margin-bottom:15px;"><h2 style="margin:0; font-size:18px;">포커스 사운드(ASMR Tuned)</h2></div>
+                <div class="sound-grid">
+                    <div class="sound-card" onclick="toggleSound('rain', this)">
+                        <div class="icon">🌧️</div><div class="name">빗소리</div><div class="status">OFF</div>
+                        <audio id="audio-rain" loop src="https://actions.google.com/sounds/v1/weather/rain_heavy_loud.ogg"></audio>
+                    </div>
+                    <div class="sound-card" onclick="toggleSound('cafe', this)">
+                        <div class="icon">☕</div><div class="name">카페 소음</div><div class="status">OFF</div>
+                        <audio id="audio-cafe" loop src="https://actions.google.com/sounds/v1/ambiences/coffee_shop.ogg"></audio>
+                    </div>
+                    <div class="sound-card" onclick="toggleDarkNoise(this)">
+                        <div class="icon">📻</div><div class="name">소프트 노이즈</div><div class="status">OFF</div>
+                    </div>
+                    <div class="sound-card" onclick="toggleCozyFire(this)">
+                        <div class="icon">🔥</div><div class="name">모닥불</div><div class="status">OFF</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tab-ultra" class="view-section">
+                <div style="margin-bottom:15px;"><h2 style="margin:0; font-size:18px;">울트라디안 리듬</h2></div>
+                <div class="ultra-container">
+                    <div class="ultra-timer-display" id="ultra-display">90:00</div>
+                    <div class="progress-bar-bg"><div class="progress-bar-fill" id="ultra-progress"></div></div>
+                    <div style="display:flex; gap:10px;">
+                        <button class="btn btn-primary" onclick="startUltra()" id="btn-ultra-start">▶ 시작</button>
+                        <button class="btn" onclick="resetUltra()">⏹ 리셋</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tab-nsdr" class="view-section">
+                <div class="nsdr-container">
+                    <div id="nsdr-setup-screen" class="nsdr-setup">
+                        <div style="font-size:32px; margin-bottom:10px;">🛌</div>
+                        <h2 style="font-weight:300; margin-bottom:30px;">NSDR 깊은 휴식</h2>
+                        
+                        <div class="nsdr-settings">
+                            <label>🗣️ 가이드 목소리 선택</label>
+                            <select id="voice-select" onchange="previewVoice()"></select>
+                            
+                            <label>⚡ 말하기 속도(0.9 권장)</label>
+                            <input type="range" id="voice-rate" min="0.5" max="1.2" step="0.1" value="0.9">
+                        </div>
+
+                        <button class="btn btn-primary" style="width:100%; height:50px; font-size:16px;" onclick="startNSDR()">▶ 휴식 시작하기</button>
+                    </div>
+
+                    <div id="nsdr-active-screen" class="nsdr-active">
+                        <div class="pulse-circle"></div>
+                        <div class="nsdr-text show" id="nsdr-guide-text"></div>
+                        <button class="btn-stop-nsdr" onclick="stopNSDR()">⏹ 종료</button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+</div>
+
+<script>
+    /* ---------------- Core Audio Engine ---------------- */
+    let audioCtx; 
+    function getAudioCtx() { if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); return audioCtx; }
+
+    /* 1. Dark Noise */
+    let wnNode = null;
+    function toggleDarkNoise(el) {
+        const ctx = getAudioCtx(); ctx.resume();
+        if(el.classList.contains('active')) {
+            if(wnNode) { wnNode.stop(); wnNode = null; }
+            el.classList.remove('active'); el.querySelector('.status').innerText="OFF";
+        } else {
+            const bSize = ctx.sampleRate * 2;
+            const b = ctx.createBuffer(1, bSize, ctx.sampleRate);
+            const d = b.getChannelData(0);
+            for (let i=0; i<bSize; i++) d[i] = Math.random()*2-1;
+            const src = ctx.createBufferSource();
+            src.buffer = b; src.loop = true;
+            
+            const filter = ctx.createBiquadFilter();
+            filter.type = 'lowpass'; filter.frequency.value = 400; 
+            const gain = ctx.createGain(); gain.gain.value = 0.2;
+
+            src.connect(filter); filter.connect(gain); gain.connect(ctx.destination);
+            src.start(); wnNode = src;
+            el.classList.add('active'); el.querySelector('.status').innerText="PLAYING";
+        }
+    }
+
+    /* 2. Cozy Fire */
+    let fireNodes = [];
+    function toggleCozyFire(el) {
+        const ctx = getAudioCtx(); ctx.resume();
+        if(el.classList.contains('active')) {
+            fireNodes.forEach(n => n.stop ? n.stop() : clearInterval(n)); fireNodes=[];
+            el.classList.remove('active'); el.querySelector('.status').innerText="OFF";
+        } else {
+            const bSize = ctx.sampleRate * 2;
+            const b = ctx.createBuffer(1, bSize, ctx.sampleRate);
+            const d = b.getChannelData(0);
+            let lastOut = 0;
+            for (let i = 0; i < bSize; i++) {
+                const white = Math.random() * 2 - 1;
+                d[i] = (lastOut + (0.02 * white)) / 1.02; lastOut = d[i]; d[i] *= 3.5; 
+            }
+            const rumbleSrc = ctx.createBufferSource();
+            rumbleSrc.buffer = b; rumbleSrc.loop = true;
+            const rFilter = ctx.createBiquadFilter();
+            rFilter.type = 'lowpass'; rFilter.frequency.value = 150;
+            const rGain = ctx.createGain(); rGain.gain.value = 1.2;
+            rumbleSrc.connect(rFilter); rFilter.connect(rGain); rGain.connect(ctx.destination);
+            rumbleSrc.start(); fireNodes.push(rumbleSrc);
+
+            const crackleInt = setInterval(() => {
+                if(Math.random() > 0.15) return;
+                const osc = ctx.createOscillator(); const gain = ctx.createGain();
+                osc.frequency.value = 100 + Math.random() * 200; 
+                gain.gain.setValueAtTime(0, ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.1, ctx.currentTime + 0.005);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
+                osc.connect(gain); gain.connect(ctx.destination);
+                osc.start(); osc.stop(ctx.currentTime + 0.06);
+            }, 100);
+            fireNodes.push(crackleInt);
+            el.classList.add('active'); el.querySelector('.status').innerText="COZY FIRE";
+        }
+    }
+
+    /* 3. Breath Sounds */
+    function playBell(freq, type, dur) {
+        const ctx = getAudioCtx(); const osc = ctx.createOscillator(); const gain = ctx.createGain();
+        osc.frequency.value = freq; osc.type = type;
+        gain.gain.setValueAtTime(0, ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.15, ctx.currentTime + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+        osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + dur);
+    }
+    function playTick() {
+        const ctx = getAudioCtx(); const osc = ctx.createOscillator(); const gain = ctx.createGain();
+        osc.frequency.value=600; gain.gain.setValueAtTime(0.03,ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.05);
+        osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime+0.1);
+    }
+
+    /* ---------------- N-Back Logic (New) ---------------- */
+    let nbTimer = null, nbSequence = [], nbLevel = 2, nbScore = 0, nbTotal = 0, nbCurrentIndex = -1, nbHasGuessed = false;
+
+    function toggleNBack() {
+        if(nbTimer) stopNBack(); else startNBack();
+    }
+
+    function startNBack() {
+        nbLevel = parseInt(document.getElementById('nback-level').value);
+        document.getElementById('nback-toggle').innerText = "⏹ 정지";
+        document.getElementById('nback-match-btn').disabled = false;
+        nbSequence = []; nbScore = 0; nbTotal = 0; nbCurrentIndex = -1;
+        updateNBScoreUI();
+        nbNext();
+        nbTimer = setInterval(nbNext, 2200); // 2.2초 마다 점등
+    }
+
+    function stopNBack() {
+        clearInterval(nbTimer); nbTimer = null;
+        document.getElementById('nback-toggle').innerText = "▶ 시작";
+        document.getElementById('nback-match-btn').disabled = true;
+        clearNBGrid();
+    }
+
+    function clearNBGrid() {
+        for(let i=0; i<9; i++) {
+            let cell = document.getElementById(`nbc-${i}`);
+            if(cell) cell.className = 'nback-cell';
+        }
+    }
+
+    function nbNext() {
+        clearNBGrid();
+        nbHasGuessed = false;
+        
+        let nextPos;
+        // 30% 확률로 이전 n-back 위치와 일치하도록 생성
+        if (nbSequence.length >= nbLevel && Math.random() < 0.3) {
+            nextPos = nbSequence[nbSequence.length - nbLevel];
+        } else {
+            nextPos = Math.floor(Math.random() * 9);
+        }
+        
+        nbSequence.push(nextPos);
+        nbCurrentIndex++;
+        
+        if (nbCurrentIndex >= nbLevel) {
+            nbTotal++;
+            updateNBScoreUI();
+        }
+
+        let cell = document.getElementById(`nbc-${nextPos}`);
+        if(cell) cell.classList.add('active');
+        
+        setTimeout(() => {
+            if(cell && cell.classList.contains('active')) cell.classList.remove('active');
+        }, 1200);
+    }
+
+    function checkNBackMatch() {
+        if(nbCurrentIndex < nbLevel || nbHasGuessed || !nbTimer) return;
+        nbHasGuessed = true;
+        
+        let isMatch = (nbSequence[nbCurrentIndex] === nbSequence[nbCurrentIndex - nbLevel]);
+        let currentCell = document.getElementById(`nbc-${nbSequence[nbCurrentIndex]}`);
+
+        if(isMatch) {
+            nbScore++;
+            if(currentCell) { currentCell.classList.remove('active'); currentCell.classList.add('correct'); }
+        } else {
+            if(currentCell) { currentCell.classList.remove('active'); currentCell.classList.add('wrong'); }
+        }
+        updateNBScoreUI();
+    }
+
+    function updateNBScoreUI() {
+        document.getElementById('nb-score').innerText = nbScore;
+        document.getElementById('nb-total').innerText = nbTotal;
+    }
+
+    /* ---------------- NSDR Logic ---------------- */
+    const nsdrScripts = ["눈을 감고, 편안하게 호흡하세요.", "지금은 아무것도 할 필요가 없습니다.", "발끝에 의식을 집중합니다.", "발의 긴장을 완전히 풉니다.", "다리가 무겁게 바닥으로 가라앉습니다.", "엉덩이와 등이 바닥에 닿아있음을 느낍니다.", "어깨가 귀에서 멀어지듯 툭 떨어뜨리세요.", "손가락 끝의 미세한 감각을 느껴봅니다.", "턱과 혀의 힘을 풀고, 얼굴이 편안해집니다.", "천천히, 호흡을 이어가며 정신을 맑게 합니다."];
+    let nsdrIdx=0, nsdrInt=null, globalVoices=[];
+
+    function loadVoices() {
+        globalVoices = window.speechSynthesis.getVoices();
+        const select = document.getElementById('voice-select');
+        select.innerHTML = "";
+        const koVoices = globalVoices.filter(v => v.lang.includes('ko'));
+        const targets = koVoices.length ? koVoices : globalVoices;
+        targets.forEach(v => {
+            const o = document.createElement('option');
+            o.value = v.name; o.innerText = v.name;
+            select.appendChild(o);
+        });
+    }
+
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+    
+    function speak(text) {
+        window.speechSynthesis.cancel();
+        const msg = new SpeechSynthesisUtterance(text);
+        const voiceName = document.getElementById('voice-select').value;
+        const rate = document.getElementById('voice-rate').value;
+        const selectedVoice = globalVoices.find(v => v.name === voiceName);
+        if(selectedVoice) msg.voice = selectedVoice;
+        else if (globalVoices.length > 0) msg.voice = globalVoices[0];
+        msg.rate = rate; 
+        window.speechSynthesis.speak(msg);
+    }
+    
+    function previewVoice() { speak("목소리 확인"); }
+
+    function startNSDR() {
+        document.getElementById('nsdr-setup-screen').style.opacity = '0';
+        setTimeout(() => {
+            document.getElementById('nsdr-setup-screen').style.display = 'none';
+            const active = document.getElementById('nsdr-active-screen');
+            active.style.display = 'flex';
+            setTimeout(() => active.classList.add('playing'), 50);
+            nsdrIdx = 0; runNSDR();
+            const rate = parseFloat(document.getElementById('voice-rate').value);
+            const interval = Math.max(6000, 10000 / rate);
+            nsdrInt = setInterval(runNSDR, interval);
+        }, 500);
+    }
+
+    function stopNSDR() {
+        clearInterval(nsdrInt); nsdrInt=null; window.speechSynthesis.cancel();
+        const active = document.getElementById('nsdr-active-screen');
+        active.classList.remove('playing');
+        setTimeout(() => {
+            active.style.display = 'none';
+            const setup = document.getElementById('nsdr-setup-screen');
+            setup.style.display = 'block';
+            setTimeout(() => setup.style.opacity = '1', 50);
+        }, 500);
+    }
+
+    function runNSDR(){
+        const txt=nsdrScripts[nsdrIdx%nsdrScripts.length];
+        const el = document.getElementById('nsdr-guide-text');
+        el.classList.remove('show');
+        setTimeout(() => { el.innerText=txt; el.classList.add('show'); speak(txt); nsdrIdx++; }, 500);
+    }
+
+    /* ---------------- Normal Features ---------------- */
+    const DB_NAME='FocusDB', STORE_NAME='thoughts'; let db;
+    const initDB=()=>{const r=indexedDB.open(DB_NAME,1);r.onupgradeneeded=e=>e.target.result.createObjectStore(STORE_NAME,{keyPath:'id',autoIncrement:true});r.onsuccess=e=>{db=e.target.result;loadDumps();}};
+    
+    function switchTab(id,el){
+        if(nbTimer) stopNBack(); // N-back 도중 탭 이동 시 안전하게 중지
+        document.querySelectorAll('.view-section').forEach(d=>d.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        document.querySelectorAll('.nav-item').forEach(l=>l.classList.remove('active'));
+        el.classList.add('active');
+        stopNSDR();
+    }
+    
+    let bTimer=null, bPhase=0, bCount=4;
+    const bPhases=[{t:"들이마시기",time:4,s:2.5,c:"#74c0fc",o:0.4,p:330},{t:"멈춤",time:4,s:2.5,c:"#a5d8ff",o:0.2,p:440},{t:"내뱉기",time:4,s:1,c:"#dbe4ff",o:0.7,p:220},{t:"멈춤",time:4,s:1,c:"#dbe4ff",o:0.7,p:220}];
+    function toggleBreathing(){
+        if(bTimer){clearInterval(bTimer);bTimer=null;document.getElementById('breath-toggle').innerText="▶ 시작";document.getElementById('breath-text').innerText="준비";document.getElementById('breath-timer').innerText="";document.getElementById('breath-circle').style.transform="scale(1)";}
+        else{getAudioCtx().resume();document.getElementById('breath-toggle').innerText="⏹ 정지";bPhase=0;bCount=4;runBF();bTimer=setInterval(runBT,1000);}
+    }
+    function runBF(){const p=bPhases[bPhase];document.getElementById('breath-text').innerText=p.t;const c=document.getElementById('breath-circle');c.style.transform=`scale(${p.s})`;c.style.backgroundColor=p.c;c.style.opacity=p.o;playBell(p.p,'sine',3.0);}
+    function runBT(){if(bCount>0){document.getElementById('breath-timer').innerText=`${bCount}초`;if(bCount<=3)playTick();bCount--;}else{bPhase=(bPhase+1)%4;bCount=bPhases[bPhase].time;runBF();document.getElementById('breath-timer').innerText=`${bCount}초`;bCount--;}}
+    function toggleSound(t,el){const a=document.getElementById(`audio-${t}`);if(!a.paused){a.pause();el.classList.remove('active');}else{a.play();el.classList.add('active');}}
+
+    let tSec=600,tInt=null;function toggleTimer(){if(tInt)stopTimer();else startTimer()}function startTimer(){if(tInt)return;document.getElementById('global-timer').style.color='var(--primary)';tInt=setInterval(()=>{if(tSec>0){tSec--;updT()}else{stopTimer();alert("종료")}},1000)}function stopTimer(){clearInterval(tInt);tInt=null;document.getElementById('global-timer').style.color='#868e96'}function resetTimer(){stopTimer();tSec=600;updT();document.getElementById('global-timer').style.color='var(--primary)'}function updT(){document.getElementById('global-timer').innerText=`${String(Math.floor(tSec/60)).padStart(2,'0')}:${String(tSec%60).padStart(2,'0')}`}
+    async function addDumpItem(){const v=document.getElementById('dump-input').value.trim();if(!v)return;db.transaction(STORE_NAME,'readwrite').objectStore(STORE_NAME).add({text:v,date:new Date()});document.getElementById('dump-input').value="";loadDumps()}function loadDumps(){if(!db)return;const l=document.getElementById('dump-list-ui');l.innerHTML="";db.transaction(STORE_NAME,'readonly').objectStore(STORE_NAME).openCursor(null,'prev').onsuccess=e=>{const c=e.target.result;if(c){l.innerHTML+=`<li class="dump-item"><span>${c.value.text}</span><button onclick="delDump(${c.key})" style="border:none;background:none;cursor:pointer;color:#888">&times;</button></li>`;c.continue()}}}function delDump(k){db.transaction(STORE_NAME,'readwrite').objectStore(STORE_NAME).delete(k).oncomplete=loadDumps}function clearDumps(){if(confirm("삭제?"))db.transaction(STORE_NAME,'readwrite').objectStore(STORE_NAME).clear().oncomplete=loadDumps}
+    let uT=5400,uInt=null;function startUltra(){if(uInt)return;uInt=setInterval(()=>{if(uT>0){uT--;document.getElementById('ultra-display').innerText=`${String(Math.floor(uT/60)).padStart(2,'0')}:${String(uT%60).padStart(2,'0')}`;document.getElementById('ultra-progress').style.width=`${((5400-uT)/5400)*100}%`}else{clearInterval(uInt)}},1000)}function resetUltra(){clearInterval(uInt);uInt=null;uT=5400;document.getElementById('ultra-display').innerText="90:00";document.getElementById('ultra-progress').style.width="0%"}
+
+    window.onload = function() { 
+        initDB(); loadVoices(); setTimeout(loadVoices, 500); 
+        const box=document.getElementById('gaze-box');box.onclick=()=>{document.fullscreenElement?document.exitFullscreen():box.requestFullscreen().catch(e=>console.log(e))};
+
+        document.addEventListener('keydown', (e) => {
+            const tag = e.target.tagName;
+            // 몰입 모드 단축키
+            if (e.key.toLowerCase() === 'h' && tag !== 'INPUT' && tag !== 'TEXTAREA') { 
+                e.preventDefault(); toggleImmersive(); 
+            }
+            // N-back 스페이스바 단축키
+            if (e.code === 'Space' && nbTimer && tag !== 'INPUT' && tag !== 'TEXTAREA') {
+                e.preventDefault(); checkNBackMatch();
+            }
+        });
+    }
+
+    function toggleImmersive() {
+        document.body.classList.toggle('immersive-mode');
+        const isImmersive = document.body.classList.contains('immersive-mode');
+        const icon = document.getElementById('toggle-icon');
+        if(icon) icon.className = isImmersive ? 'fas fa-eye' : 'fas fa-eye-slash';
+    }
+</script>
+</body>
+</html>

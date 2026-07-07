@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workspace Manager</title>
+    <link rel="stylesheet" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+    <style>
+        :root {
+            --bg-body: #F4F5F7; --bg-card: #FFFFFF;
+            --primary: #5A6A85; --primary-hover: #4A5870; --primary-soft: #F0F3F7;
+            --text-main: #2D3748; --text-sub: #718096;
+            --border: #E2E8F0; --danger: #E53E3E; --danger-bg: #FFF5F5;
+            --success: #38A169; --success-soft: #F0FFF4;
+            --shadow-soft: 0 10px 30px -5px rgba(30, 41, 59, 0.04);
+            --radius-lg: 20px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; }
+        body { background-color: var(--bg-body); color: var(--text-main); height: 100vh; display: flex; overflow: hidden; letter-spacing: -0.3px; }
+
+        /* Left Sidebar */
+        .sidebar { width: 380px; background: var(--bg-card); border-right: 1px solid var(--border); display: flex; flex-direction: column; height: 100%; z-index: 10; }
+        .sidebar-header { padding: 24px 20px 16px; border-bottom: 1px solid #f1f5f9; }
+        .header-actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .header-actions h2 { font-size: 20px; font-weight: 700; color: var(--text-main); }
+        .btn-new { background: var(--primary); color: white; border: none; padding: 8px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; transition: 0.2s; display: flex; flex-direction: column; align-items: center; }
+        .btn-new:hover { background: var(--primary-hover); }
+        .shortcut-hint { font-size: 9px; opacity: 0.7; font-weight: 400; margin-top: 2px; }
+        .search-input { width: 100%; padding: 12px 16px; border: 1px solid var(--border); border-radius: 8px; background: #FAFAFA; font-size: 13px; outline: none; transition: 0.2s; }
+
+        /* Workspace List */
+        .workspace-list { flex: 1; overflow-y: auto; padding: 16px 20px; list-style: none; }
+        .list-item { padding: 14px 16px; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 10px; cursor: pointer; transition: 0.2s; background: #fff; position: relative; }
+        .list-item:hover { background: #FAFAFA; border-color: #CBD5E0; }
+        .list-item.active { border-color: var(--primary); background: var(--primary-soft); }
+        
+        .badge-group { display: flex; gap: 4px; margin-bottom: 8px; }
+        .badge { font-size: 10px; font-weight: 700; padding: 3px 7px; border-radius: 5px; }
+        .badge-db { background: #EBF8FF; color: #2B6CB0; }
+        .badge-backup { background: var(--success-soft); color: var(--success); border: 1px solid #C6F6D5; }
+        .badge-warning { background: var(--danger-bg); color: var(--danger); border: 1px solid #FEB2B2; }
+        
+        .list-item h4 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+        .list-item p { font-size: 11px; color: var(--text-sub); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        /* Main Content */
+        .main-content { flex: 1; padding: 40px; overflow-y: auto; display: flex; justify-content: center; }
+        .form-card { background: var(--bg-card); width: 100%; max-width: 600px; padding: 40px; border-radius: var(--radius-lg); box-shadow: var(--shadow-soft); border: 1px solid rgba(226, 232, 240, 0.6); }
+        .form-card h1 { font-size: 24px; font-weight: 700; margin-bottom: 30px; }
+
+        .form-group { margin-bottom: 22px; }
+        .form-group label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+        .form-group input[type="text"], .form-group select { width: 100%; padding: 12px 16px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; outline: none; background: #FAFAFA; }
+        .form-group input:focus, .form-group select:focus { border-color: var(--primary); background: #fff; }
+
+        /* Checkbox Styling */
+        .checkbox-group { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+        .checkbox-group input { width: 18px; height: 18px; cursor: pointer; }
+
+        .btn-browse { background: #EDF2F7; border: 1px solid var(--border); padding: 0 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+        
+        /* 💡 추가된 링크 버튼 스타일 */
+        .btn-link { background: #fff; border: 1px solid var(--border); padding: 10px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--primary); transition: 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+        .btn-link:hover { background: var(--primary-soft); border-color: #cbd5e1; }
+
+        .btn-group { display: flex; gap: 12px; margin-top: 30px; }
+        .btn { flex: 1; padding: 14px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: 0.2s; }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-cancel { background: var(--danger-bg); color: var(--danger); }
+
+        .toast { position: fixed; bottom: 30px; right: 30px; background: #1E293B; color: #fff; padding: 14px 24px; border-radius: 12px; font-size: 14px; opacity: 0; transform: translateY(20px); transition: 0.3s; z-index: 1000; display: flex; align-items: center; gap: 8px; }
+        .toast.show { opacity: 1; transform: translateY(0); }
+    </style>
+</head>
+<body>
+
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <div class="header-actions">
+                <h2>워크스페이스</h2>
+                <button type="button" class="btn-new" onclick="resetForm()">
+                    <span>+ 새 연결</span>
+                </button>
+            </div>
+            <input type="text" class="search-input" id="search-box" placeholder="검색..." oninput="renderList()">
+        </div>
+        <ul class="workspace-list" id="ws-list"></ul>
+    </aside>
+
+    <main class="main-content">
+        <div class="form-card">
+            <h1 id="form-title">새 워크스페이스 연결</h1>
+            
+            <div class="form-group">
+                <label>🗄️ IndexedDB 선택</label>
+                <select id="db-select" onchange="updateVersionHint()"></select>
+                <div id="version-info" style="font-size: 12px; margin-top: 6px;"></div>
+            </div>
+
+            <div class="form-group">
+                <label>📄 로컬 페이지 제목</label>
+                <input type="text" id="page-title" placeholder="페이지 제목 입력">
+            </div>
+
+            <div class="form-group">
+                <label>🔗 파일 경로</label>
+                <div style="display: flex; gap: 8px;">
+                    <input type="text" id="page-url" placeholder="./파일명.html" style="flex: 1;">
+                    <input type="file" id="file-picker" accept=".html" style="display: none;">
+                    <button type="button" class="btn-browse" onclick="document.getElementById('file-picker').click()">찾아보기</button>
+                </div>
+            </div>
+
+            <hr style="border: 0; border-top: 1px solid var(--border); margin: 30px 0;">
+
+            <div class="form-group" style="display: flex; justify-content: space-between; align-items: center; background: #FAFAFA; padding: 16px 20px; border-radius: 12px; border: 1px solid var(--border);">
+                <label class="checkbox-group" style="margin: 0;">
+                    <input type="checkbox" id="is-backup">
+                    <span style="font-weight: 600; color: var(--text-main);">📦 백업 대상 포함</span>
+                </label>
+                
+                <button type="button" class="btn-link" onclick="window.open('./dbbackup.html', '_blank')">
+                    💾 DB 백업 관리 열기 ↗
+                </button>
+            </div>
+
+            <div class="btn-group">
+                <button type="button" class="btn btn-primary" onclick="saveWorkspace()">저장하기</button>
+                <button type="button" class="btn btn-cancel" id="btn-delete" style="display: none;" onclick="deleteWorkspace()">삭제</button>
+            </div>
+        </div>
+    </main>
+
+    <div id="toast" class="toast"><span>✅</span> <span id="toast-msg"></span></div>
+
+    <script>
+        const DB_NAME = 'WorkspaceManagerDB';
+        const STORE_NAME = 'mappings';
+        let db, currentEditId = null, toastTimeout, currentMappings = [], currentBrowserDBs = [];
+
+        async function initDB() {
+            return new Promise((resolve) => {
+                const request = indexedDB.open(DB_NAME, 1);
+                request.onupgradeneeded = (e) => {
+                    const database = e.target.result;
+                    if (!database.objectStoreNames.contains(STORE_NAME)) database.createObjectStore(STORE_NAME, { keyPath: 'id' });
+                };
+                request.onsuccess = (e) => { db = e.target.result; resolve(); };
+            });
+        }
+
+        async function loadDatabasesIntoSelect() {
+            const selectEl = document.getElementById('db-select');
+            selectEl.innerHTML = '<option value="">선택하세요</option>';
+            if (indexedDB.databases) {
+                currentBrowserDBs = await indexedDB.databases();
+                currentBrowserDBs.filter(d => d.name !== DB_NAME).forEach(d => {
+                    const opt = document.createElement('option');
+                    opt.value = d.name; opt.dataset.version = d.version;
+                    opt.textContent = `${d.name} (v${d.version})`;
+                    selectEl.appendChild(opt);
+                });
+            }
+        }
+
+        // 파일 경로 피커 로직
+        document.getElementById('file-picker').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const input = document.getElementById('page-url');
+                input.value = (input.value && input.value.includes('/')) 
+                    ? input.value.substring(0, input.value.lastIndexOf('/') + 1) + file.name 
+                    : `./${file.name}`;
+                if (!document.getElementById('page-title').value) {
+                    document.getElementById('page-title').value = file.name.replace(/\.[^/.]+$/, "");
+                }
+            }
+            e.target.value = '';
+        });
+
+        async function renderList() {
+            const listEl = document.getElementById('ws-list');
+            const query = document.getElementById('search-box').value.toLowerCase();
+            const tx = db.transaction(STORE_NAME, 'readonly');
+            currentMappings = await new Promise(r => tx.objectStore(STORE_NAME).getAll().onsuccess = e => r(e.target.result));
+            
+            listEl.innerHTML = '';
+            const filtered = currentMappings.filter(m => m.title.toLowerCase().includes(query) || m.dbName.toLowerCase().includes(query));
+            
+            filtered.sort((a,b) => b.id - a.id).forEach(ws => {
+                const li = document.createElement('li');
+                li.className = `list-item ${currentEditId === ws.id ? 'active' : ''}`;
+                li.onclick = () => loadIntoForm(ws.id);
+                
+                const actual = currentBrowserDBs.find(d => d.name === ws.dbName);
+                const isVersionMismatch = actual && ws.dbVersion && actual.version.toString() !== ws.dbVersion.toString();
+                
+                li.innerHTML = `
+                    <div class="badge-group">
+                        <span class="badge badge-db ${isVersionMismatch ? 'badge-warning' : ''}">
+                            ${ws.dbName} (v${ws.dbVersion || '?'}) ${isVersionMismatch ? '⚠️' : ''}
+                        </span>
+                        ${ws.isBackup ? '<span class="badge badge-backup">📦 Backup</span>' : ''}
+                    </div>
+                    <h4>${ws.title}</h4>
+                    <p>${ws.url}</p>
+                `;
+                listEl.appendChild(li);
+            });
+        }
+
+        async function saveWorkspace() {
+            const select = document.getElementById('db-select');
+            const dbName = select.value;
+            const dbVersion = select.options[select.selectedIndex]?.dataset.version;
+            const title = document.getElementById('page-title').value;
+            const url = document.getElementById('page-url').value;
+            const isBackup = document.getElementById('is-backup').checked; // 백업 여부만 추출
+
+            if (!dbName || !title || !url) return alert('필수 항목을 채워주세요.');
+
+            const mappingId = currentEditId || Date.now();
+            // 백업 경로 데이터를 스키마에서 제외하고 저장
+            const data = { id: mappingId, dbName, dbVersion, title, url, isBackup };
+
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            tx.objectStore(STORE_NAME).put(data).onsuccess = () => {
+                currentEditId = mappingId;
+                showToast(currentEditId ? '수정되었습니다.' : '저장되었습니다.');
+                renderList();
+                loadIntoForm(mappingId);
+            };
+        }
+
+        function loadIntoForm(id) {
+            const ws = currentMappings.find(m => m.id === id);
+            if (!ws) return;
+            currentEditId = id;
+            document.getElementById('form-title').innerText = '워크스페이스 편집';
+            document.getElementById('db-select').value = ws.dbName;
+            document.getElementById('page-title').value = ws.title;
+            document.getElementById('page-url').value = ws.url;
+            document.getElementById('is-backup').checked = ws.isBackup || false;
+            document.getElementById('btn-delete').style.display = 'block';
+            updateVersionHint();
+            renderList();
+        }
+
+        function resetForm() {
+            currentEditId = null;
+            document.getElementById('form-title').innerText = '새 워크스페이스 연결';
+            document.querySelectorAll('input[type="text"]').forEach(i => i.value = '');
+            document.getElementById('db-select').selectedIndex = 0;
+            document.getElementById('is-backup').checked = false;
+            document.getElementById('btn-delete').style.display = 'none';
+            document.getElementById('version-info').innerHTML = '';
+            renderList();
+        }
+
+        async function deleteWorkspace() {
+            if (!confirm('삭제하시겠습니까?')) return;
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            tx.objectStore(STORE_NAME).delete(currentEditId).onsuccess = () => {
+                showToast('삭제되었습니다.');
+                resetForm();
+            };
+        }
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            document.getElementById('toast-msg').innerText = msg;
+            t.classList.add('show');
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => t.classList.remove('show'), 1000);
+        }
+
+        function updateVersionHint() {
+            const select = document.getElementById('db-select');
+            const ver = select.options[select.selectedIndex]?.dataset.version;
+            const info = document.getElementById('version-info');
+            if (currentEditId) {
+                const ws = currentMappings.find(m => m.id === currentEditId);
+                if (ws && ws.dbName === select.value && ws.dbVersion != ver) {
+                    info.innerHTML = `<span style="color:var(--danger); font-weight:700;">⚠️ 버전 불일치: v${ws.dbVersion} ➔ 현재 v${ver}</span>`;
+                    return;
+                }
+            }
+            info.innerHTML = ver ? `<span style="color:var(--success);">✅ 현재 버전: v${ver}</span>` : '';
+        }
+
+        document.addEventListener('keydown', e => {
+            if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'n') { e.preventDefault(); resetForm(); }
+            if (e.ctrlKey && e.key.toLowerCase() === 's') { e.preventDefault(); saveWorkspace(); }
+        });
+
+        window.onload = async () => {
+            await initDB();
+            await loadDatabasesIntoSelect();
+            await renderList();
+        };
+    </script>
+</body>
+</html>

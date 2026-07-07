@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>마인드맵 뷰어</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #121214; 
+            --toolbar-bg: rgba(40, 40, 45, 0.85); 
+            --toolbar-border: rgba(255, 255, 255, 0.1);
+            --text-main: #E2E2E2; 
+            --text-muted: #A0A0A5; 
+            --accent-color: #5E5CE6; 
+            --accent-hover: #7D7AFF;
+            --success-color: #32D74B; 
+            
+            /* 🌟 부드럽고 덜 자극적인 알림창 색상으로 변경 🌟 */
+            --toast-bg: rgba(44, 44, 46, 0.95);
+            --toast-text: #FF8A8A; 
+            --toast-border: rgba(255, 138, 138, 0.2);
+        }
+
+        body { margin: 0; padding: 0; background-color: var(--bg-color); color: var(--text-main); font-family: -apple-system, sans-serif; overflow: hidden; display: flex; height: 100vh; user-select: none; }
+        
+        #toolbar { position: absolute; top: 24px; left: 50%; transform: translateX(-50%); background: var(--toolbar-bg); backdrop-filter: blur(16px); border: 1px solid var(--toolbar-border); padding: 10px 24px; border-radius: 50px; display: flex; align-items: center; gap: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); z-index: 100; }
+        .file-upload-wrapper { position: relative; overflow: hidden; display: inline-block; }
+        .file-upload-wrapper input[type="file"] { position: absolute; left: 0; top: 0; opacity: 0; cursor: pointer; height: 100%; width: 100%; }
+        
+        button, .btn { background-color: transparent; color: var(--text-main); border: 1px solid var(--toolbar-border); padding: 8px 16px; border-radius: 20px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s; display: flex; align-items: center; white-space: nowrap; }
+        button:hover, .btn:hover { background-color: rgba(255,255,255,0.1); }
+        .btn.primary { background-color: var(--accent-color); border: none; color: white; }
+        .btn.primary:hover { background-color: var(--accent-hover); box-shadow: 0 0 15px rgba(94,92,230,0.4); }
+        .btn.success { background-color: var(--success-color); border: none; color: #111; font-weight: 600; }
+        
+        /* 해상도 선택 드롭다운 스타일 */
+        select.btn { appearance: none; background-color: rgba(0,0,0,0.2); outline: none; padding-right: 16px; text-align: center; }
+        select.btn option { background: #2C2C2E; color: white; }
+
+        .tool-toggles { display: flex; background: rgba(0,0,0,0.3); border-radius: 24px; padding: 4px; gap: 4px; }
+        .tool-toggles .btn { border: none; border-radius: 20px; padding: 6px 14px; }
+        .tool-toggles .btn.active { background-color: var(--accent-color); color: white; box-shadow: 0 2px 10px rgba(94,92,230,0.4); }
+
+        .zoom-controls { display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.3); padding: 4px 12px; border-radius: 24px; }
+        .icon-btn { border: none; padding: 4px 8px; font-size: 16px; border-radius: 50%; min-width: 28px; height: 28px; }
+        
+        .scale-input-wrapper { display: flex; align-items: center; background: rgba(255,255,255,0.08); border-radius: 6px; padding: 2px 8px; border: 1px solid transparent; }
+        .scale-input-wrapper:focus-within { border-color: var(--accent-color); }
+        #scale-input { width: 36px; background: transparent; border: none; color: var(--text-main); font-weight: 600; font-size: 14px; text-align: right; outline: none; -moz-appearance: textfield; }
+        #scale-input::-webkit-outer-spin-button, #scale-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .scale-percent { font-weight: 600; font-size: 14px; color: var(--text-muted); margin-left: 2px; }
+        .divider { width: 1px; height: 24px; background-color: var(--toolbar-border); }
+
+        #viewer-container { width: 100%; height: 100%; overflow: auto; position: relative; }
+        #canvas-wrapper { position: relative; margin: 100px auto; display: none; width: fit-content; }
+        canvas { display: block; box-shadow: 0 12px 40px rgba(0,0,0,0.6); border-radius: 4px; background-color: white; }
+
+        #selection-box { position: absolute; border: 2px dashed var(--accent-color); background-color: rgba(94,92,230,0.15); display: none; pointer-events: none; z-index: 10; }
+        #empty-state { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: var(--text-muted); font-size: 16px; text-align: center; pointer-events: none; }
+        
+        #viewer-container::-webkit-scrollbar { width: 10px; height: 10px; }
+        #viewer-container::-webkit-scrollbar-track { background: transparent; }
+        #viewer-container::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 5px; }
+
+        /* 🌟 거슬리지 않는 고급스러운 토스트 UI 🌟 */
+        #toast-message { 
+            position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%) translateY(100px); 
+            background-color: var(--toast-bg); color: var(--toast-text); 
+            border: 1px solid var(--toast-border);
+            padding: 12px 24px; border-radius: 8px; font-weight: 500; font-size: 14px; letter-spacing: -0.3px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4); opacity: 0; transition: all 0.4s cubic-bezier(0.68,-0.55,0.265,1.55); z-index: 1000; pointer-events: none; 
+        }
+        #toast-message.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+    </style>
+</head>
+<body>
+
+    <div id="toolbar">
+        <div class="file-upload-wrapper">
+            <div class="btn primary">문서 열기</div>
+            <input type="file" id="file-input" accept="application/pdf" />
+        </div>
+        
+        <div class="divider"></div>
+        
+        <select id="resolution-select" class="btn" title="화질 설정">
+            <option value="high" selected>고해상도</option>
+            <option value="standard">일반</option>
+        </select>
+
+        <div class="divider"></div>
+        
+        <div class="zoom-controls">
+            <button id="zoom-out" class="icon-btn">&minus;</button>
+            <div class="scale-input-wrapper">
+                <input type="number" id="scale-input" value="100" min="20" />
+                <span class="scale-percent">%</span>
+            </div>
+            <button id="zoom-in" class="icon-btn">&#43;</button>
+        </div>
+        <button id="fit-screen">화면 맞춤</button>
+        
+        <div class="divider"></div>
+        
+        <div class="tool-toggles">
+            <button id="tool-pan" class="btn active">🤚 이동</button>
+            <button id="tool-select" class="btn">⬚ 영역지정</button>
+        </div>
+        <button id="btn-zoom-selected" class="btn success" style="display: none;">선택 확대 🔍</button>
+    </div>
+
+    <div id="viewer-container">
+        <div id="empty-state">상단의 '문서 열기'를 눌러 마인드맵 PDF를 불러오세요.</div>
+        <div id="canvas-wrapper">
+            <canvas id="pdf-canvas"></canvas>
+            <div id="selection-box"></div> 
+        </div>
+    </div>
+
+    <div id="toast-message">메시지 내용</div>
+
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+        let pdfDoc = null, pageNum = 1, scale = 1.0;
+        let isRendering = false, renderPending = false;
+        let baseDocWidth = 0, baseDocHeight = 0;
+
+        const canvas = document.getElementById('pdf-canvas'), ctx = canvas.getContext('2d');
+        const viewerContainer = document.getElementById('viewer-container'), canvasWrapper = document.getElementById('canvas-wrapper');
+        const scaleInput = document.getElementById('scale-input'), emptyState = document.getElementById('empty-state');
+        const resolutionSelect = document.getElementById('resolution-select');
+        const selectionBox = document.getElementById('selection-box'), toastMessage = document.getElementById('toast-message');
+        const toolPanBtn = document.getElementById('tool-pan'), toolSelectBtn = document.getElementById('tool-select');
+        const btnZoomSelected = document.getElementById('btn-zoom-selected');
+
+        let currentMode = 'pan', isDragging = false;
+        let startX, startY, scrollLeft, scrollTop, selStartX, selStartY, selectedArea = null;
+        let toastTimeout;
+
+        function showToast(msg) {
+            toastMessage.innerHTML = msg; 
+            toastMessage.classList.add('show');
+            clearTimeout(toastTimeout); toastTimeout = setTimeout(() => toastMessage.classList.remove('show'), 3500);
+        }
+
+        // 🌟 현재 선택된 해상도 픽셀 비율 가져오기 🌟
+        function getOutputScale() {
+            if (resolutionSelect.value === 'standard') {
+                return 1; // 일반 화질 (메모리 대폭 절약)
+            }
+            return window.devicePixelRatio || 2; // 고해상도 (선명함)
+        }
+
+        // 해상도 변경 시 즉시 다시 렌더링
+        resolutionSelect.addEventListener('change', () => {
+            if (pdfDoc) renderPage(pageNum);
+        });
+
+        function getDynamicMemoryLimit() {
+            let maxLimitMB = 250; 
+            if (navigator.deviceMemory) {
+                const ramGB = navigator.deviceMemory;
+                if (ramGB >= 8) maxLimitMB = 700; 
+                else if (ramGB >= 4) maxLimitMB = 400; 
+                else maxLimitMB = 150; 
+            }
+            return maxLimitMB;
+        }
+
+        const DYNAMIC_MAX_MB = getDynamicMemoryLimit();
+
+        function isMemorySafe(targetScale) {
+            if (!baseDocWidth || !baseDocHeight) return true;
+            
+            // 🌟 해상도 옵션(outputScale)에 따라 메모리 계산도 달라짐
+            const currentOutputScale = getOutputScale();
+            const predictedWidth = baseDocWidth * targetScale * currentOutputScale;
+            const predictedHeight = baseDocHeight * targetScale * currentOutputScale;
+            
+            const memoryBytes = predictedWidth * predictedHeight * 4;
+            const estimatedMB = memoryBytes / (1024 * 1024);
+
+            if (estimatedMB > DYNAMIC_MAX_MB) {
+                showToast(`ℹ️ 메모리 보호를 위해 확대를 제한합니다.<br><span style="font-size:12px; opacity:0.8;">(예상: ${Math.round(estimatedMB)}MB / 허용: ${DYNAMIC_MAX_MB}MB)</span>`);
+                return false;
+            }
+            return true;
+        }
+
+        function renderPage(num) {
+            if (!pdfDoc) return;
+            if (isRendering) { renderPending = true; return; }
+            isRendering = true;
+            
+            pdfDoc.getPage(num).then(function(page) {
+                const viewport = page.getViewport({ scale: scale });
+                
+                // 선택된 해상도 비율 적용
+                const outputScale = getOutputScale();
+
+                canvas.width = Math.floor(viewport.width * outputScale);
+                canvas.height = Math.floor(viewport.height * outputScale);
+                
+                // CSS 크기는 브라우저 스케일 기준 (변함없음)
+                canvas.style.width = Math.floor(viewport.width) + "px";
+                canvas.style.height =  Math.floor(viewport.height) + "px";
+
+                const transform = outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : null;
+                const renderTask = page.render({ canvasContext: ctx, transform: transform, viewport: viewport });
+                
+                renderTask.promise.then(function() {
+                    isRendering = false;
+                    if (renderPending) { renderPending = false; renderPage(pageNum); }
+                });
+                scaleInput.value = Math.round(scale * 100);
+            });
+        }
+
+        function applyManualScale() {
+            if (!pdfDoc) return;
+            let val = parseInt(scaleInput.value);
+            if (isNaN(val)) val = Math.round(scale * 100);
+            val = Math.max(20, val);
+            
+            const newScale = val / 100;
+            if (!isMemorySafe(newScale)) { scaleInput.value = Math.round(scale * 100); return; }
+            scale = newScale; renderPage(pageNum); clearSelection();
+        }
+
+        scaleInput.addEventListener('change', applyManualScale);
+        scaleInput.addEventListener('keydown', e => { if (e.key === 'Enter') { applyManualScale(); scaleInput.blur(); }});
+
+        function zoomIn() { if (!pdfDoc) return; const newScale = scale * 1.15; if (isMemorySafe(newScale)) { scale = newScale; renderPage(pageNum); clearSelection(); } }
+        function zoomOut() { if (!pdfDoc) return; scale = Math.max(scale / 1.15, 0.2); renderPage(pageNum); clearSelection(); }
+        function clearSelection() { if(currentMode === 'select' && selectedArea) { selectionBox.style.display = 'none'; btnZoomSelected.style.display = 'none'; selectedArea = null; } }
+
+        document.getElementById('zoom-in').addEventListener('click', zoomIn);
+        document.getElementById('zoom-out').addEventListener('click', zoomOut);
+        document.getElementById('fit-screen').addEventListener('click', function() {
+            if(!pdfDoc) return;
+            pdfDoc.getPage(1).then(page => {
+                const unscaledViewport = page.getViewport({ scale: 1.0 });
+                scale = Math.min((window.innerWidth - 80) / unscaledViewport.width, (window.innerHeight - 80) / unscaledViewport.height);
+                renderPage(pageNum); clearSelection();
+            });
+        });
+
+        document.getElementById('file-input').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file || file.type !== 'application/pdf') return;
+
+            const fileReader = new FileReader();
+            fileReader.onload = function() {
+                pdfjsLib.getDocument(new Uint8Array(this.result)).promise.then(pdf => {
+                    pdfDoc = pdf; emptyState.style.display = 'none'; canvasWrapper.style.display = 'inline-block'; setMode('pan'); 
+                    pdf.getPage(1).then(page => {
+                        const unscaledViewport = page.getViewport({ scale: 1.0 });
+                        baseDocWidth = unscaledViewport.width; baseDocHeight = unscaledViewport.height;
+                        
+                        const A4_W = 794, A4_H = 1123;
+                        const isLandscape = unscaledViewport.width > unscaledViewport.height;
+                        const targetW = isLandscape ? A4_H : A4_W, targetH = isLandscape ? A4_W : A4_H;
+                        scale = Math.min(targetW / unscaledViewport.width, targetH / unscaledViewport.height, 1.0);
+                        renderPage(pageNum);
+                    });
+                });
+            };
+            fileReader.readAsArrayBuffer(file);
+        });
+
+        function setMode(mode) {
+            currentMode = mode;
+            if (mode === 'pan') { toolPanBtn.classList.add('active'); toolSelectBtn.classList.remove('active'); viewerContainer.style.cursor = 'grab'; selectionBox.style.display = 'none'; btnZoomSelected.style.display = 'none'; selectedArea = null; } 
+            else { toolSelectBtn.classList.add('active'); toolPanBtn.classList.remove('active'); viewerContainer.style.cursor = 'crosshair'; }
+        }
+
+        toolPanBtn.addEventListener('click', () => setMode('pan'));
+        toolSelectBtn.addEventListener('click', () => setMode('select'));
+
+        viewerContainer.addEventListener('mousedown', e => {
+            if (e.target.closest('#toolbar')) return; 
+            isDragging = true;
+            if (currentMode === 'pan') { viewerContainer.style.cursor = 'grabbing'; startX = e.pageX; startY = e.pageY; scrollLeft = viewerContainer.scrollLeft; scrollTop = viewerContainer.scrollTop; } 
+            else if (currentMode === 'select') {
+                const rect = canvasWrapper.getBoundingClientRect();
+                selStartX = Math.max(0, Math.min(e.clientX - rect.left, canvasWrapper.clientWidth));
+                selStartY = Math.max(0, Math.min(e.clientY - rect.top, canvasWrapper.clientHeight));
+                selectionBox.style.left = selStartX + 'px'; selectionBox.style.top = selStartY + 'px';
+                selectionBox.style.width = '0px'; selectionBox.style.height = '0px';
+                selectionBox.style.display = 'block'; btnZoomSelected.style.display = 'none'; 
+            }
+        });
+
+        window.addEventListener('mouseup', () => {
+            if (!isDragging) return;
+            isDragging = false;
+            if (currentMode === 'pan') viewerContainer.style.cursor = 'grab';
+            else if (currentMode === 'select') {
+                if (selectedArea && selectedArea.w > 20 && selectedArea.h > 20) btnZoomSelected.style.display = 'block'; 
+                else { selectionBox.style.display = 'none'; selectedArea = null; }
+            }
+        });
+
+        window.addEventListener('mousemove', e => {
+            if (!isDragging) return;
+            e.preventDefault();
+            if (currentMode === 'pan') {
+                viewerContainer.scrollLeft = scrollLeft - ((e.pageX - startX) * 1.5);
+                viewerContainer.scrollTop = scrollTop - ((e.pageY - startY) * 1.5);
+            } else if (currentMode === 'select') {
+                const rect = canvasWrapper.getBoundingClientRect();
+                const currentX = Math.max(0, Math.min(e.clientX - rect.left, canvasWrapper.clientWidth));
+                const currentY = Math.max(0, Math.min(e.clientY - rect.top, canvasWrapper.clientHeight));
+                const boxX = Math.min(selStartX, currentX), boxY = Math.min(selStartY, currentY);
+                const boxW = Math.abs(currentX - selStartX), boxH = Math.abs(currentY - selStartY);
+                selectionBox.style.left = boxX + 'px'; selectionBox.style.top = boxY + 'px';
+                selectionBox.style.width = boxW + 'px'; selectionBox.style.height = boxH + 'px';
+                selectedArea = { x: boxX, y: boxY, w: boxW, h: boxH };
+            }
+        });
+
+        btnZoomSelected.addEventListener('click', () => {
+            if (!selectedArea) return;
+            const newScale = scale * 1.5;
+            if (!isMemorySafe(newScale)) return; 
+            const exactRatio = newScale / scale;
+            scale = newScale; renderPage(pageNum);
+
+            selectedArea.x *= exactRatio; selectedArea.y *= exactRatio;
+            selectedArea.w *= exactRatio; selectedArea.h *= exactRatio;
+            selectionBox.style.left = selectedArea.x + 'px'; selectionBox.style.top = selectedArea.y + 'px';
+            selectionBox.style.width = selectedArea.w + 'px'; selectionBox.style.height = selectedArea.h + 'px';
+
+            setTimeout(() => {
+                viewerContainer.scrollLeft = (selectedArea.x + (selectedArea.w / 2) + 100) - (viewerContainer.clientWidth / 2);
+                viewerContainer.scrollTop = (selectedArea.y + (selectedArea.h / 2) + 100) - (viewerContainer.clientHeight / 2);
+            }, 50); 
+        });
+
+        window.addEventListener('keydown', e => {
+            if (e.target.tagName === 'INPUT' && e.key !== 'Enter') return;
+            if (e.key === '+' || e.key === '=') zoomIn(); else if (e.key === '-' || e.key === '_') zoomOut();
+        });
+
+        viewerContainer.addEventListener('wheel', e => {
+            if (e.ctrlKey) { e.preventDefault(); if (e.deltaY < 0) zoomIn(); else zoomOut(); }
+        }, { passive: false });
+    </script>
+</body>
+</html>

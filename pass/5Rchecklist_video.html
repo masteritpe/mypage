@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VIDEO 학습 노트</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root{--bg:#f0f2f5; --card:#ffffff; --ink:#202124; --muted:#5f6368; --accent:#1a73e8; --accent-bg:#e8f0fe; --danger:#d93025; --success:#188038; --warn:#f9ab00; --border:#dadce0;}
+        
+        body, html { margin: 0; padding: 0; font-family: 'Noto Sans KR', sans-serif; background-color: var(--bg); height: 100%; overflow: hidden; color: var(--ink); }
+        #app-container { display: flex; flex-direction: column; height: 100vh; }
+
+        /* Header */
+        #main-header { display: flex; justify-content: space-between; align-items: center; padding: 0 20px; background-color: #fff; border-bottom: 1px solid var(--border); z-index: 10; height: 50px; flex-shrink: 0; }
+        .header-title { font-size: 16px; font-weight: 700; color: var(--accent); display: flex; align-items: center; gap: 8px; }
+        .control-btn { padding: 6px 12px; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; font-weight: 500; background-color: #fff; color: var(--muted); font-size: 13px; transition: 0.2s; display: inline-flex; align-items: center; gap: 6px; }
+        .control-btn:hover { background-color: #f8f9fa; color: var(--ink); }
+        .control-btn.primary { background-color: var(--accent); color: #fff; border-color: var(--accent); }
+        .control-btn.primary:hover { background-color: #1765cc; }
+        .control-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Layout */
+        #main-content { display: flex; flex-grow: 1; overflow: hidden; height: calc(100vh - 50px); }
+        .split-panel { display: flex; flex-direction: column; overflow: hidden; background: #fff; }
+
+        /* === Video Panel Layout === */
+        #video-viewer-panel { 
+            flex: 6.5; 
+            border-right: 1px solid var(--border); 
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            height: 100%; 
+            min-height: 0; 
+            overflow: hidden;
+        }
+        
+        #video-container { 
+            flex: 1; 
+            overflow: hidden; 
+            background-color: #000; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            position: relative;
+            min-height: 0;
+        }
+        
+        video { 
+            width: 100%; 
+            height: 100%; 
+            object-fit: contain; 
+            outline: none; 
+        }
+
+        #video-placeholder { color: #fff; text-align: center; opacity: 0.8; }
+        
+        .video-controls-bottom { 
+            height: 45px; 
+            background: #fff; 
+            border-top: 1px solid var(--border); 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            padding: 0 16px; 
+            flex-shrink: 0;
+            z-index: 10;
+        }
+
+        /* Editor Panel (Right) */
+        #editor-panel { flex: 3.5; display: flex; flex-direction: column; background: var(--bg); position: relative; }
+        
+        .editor-toolbar { padding: 10px 20px; background: rgba(255,255,255,0.9); backdrop-filter: blur(5px); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 20; }
+        
+        .editor-scroll-area { flex: 1; overflow-y: auto; padding: 20px; }
+        .editor-paper { background: #fff; padding: 40px; border-radius: 2px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); min-height: 100%; display: flex; flex-direction: column; gap: 20px; }
+
+        /* Inputs */
+        .modern-input { border: none; border-bottom: 1px solid transparent; background: transparent; padding: 4px 0; border-radius: 0; font-family: inherit; transition: 0.2s; outline: none; }
+        .modern-input:focus { border-bottom-color: var(--accent); }
+        .paper-header { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+        #domainInput { font-size: 15px; font-weight: 600; color: var(--accent); flex: 1; }
+        #domainSeqInput, #seq-jump { font-size: 15px; width: 50px; text-align: center; color: var(--muted); }
+
+        /* WYSIWYG & Section Styling */
+        .section-block { display: flex; flex-direction: column; gap: 6px; }
+        .section-label { 
+            font-size: 11px; font-weight: 700; text-transform: uppercase; color: #9aa0a6; 
+            letter-spacing: 0.05em; display: flex; align-items: center; gap: 6px; 
+        }
+        
+        .wysiwyg-editor, textarea.raw-editor {
+            min-height: 60px; padding: 10px; border: 1px solid transparent; border-radius: 4px;
+            background: #f8f9fa; font-size: 14px; line-height: 1.6; color: #3c4043;
+            transition: all 0.2s; white-space: pre-wrap; word-break: break-word; outline: none;
+            font-family: 'Noto Sans KR', sans-serif;
+        }
+        .wysiwyg-editor:hover, textarea.raw-editor:hover { background: #f1f3f4; }
+        .wysiwyg-editor:focus, textarea.raw-editor:focus { background: #fff; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(26,115,232,0.2); }
+        
+        .wysiwyg-editor[data-for="topic"] { font-size: 18px; font-weight: 700; color: var(--ink); min-height: 40px; background: transparent; padding: 8px 0; border-radius: 0; border-bottom: 1px solid #eee; }
+        .wysiwyg-editor[data-for="topic"]:focus { border-bottom-color: var(--accent); box-shadow: none; background: transparent; }
+
+        /* Timestamp specific */
+        #timeline-ui { font-family: monospace; background-color: #f0f9ff; border: 1px solid transparent; resize: vertical; }
+        #timeline-ui:focus { border-color: var(--accent); background: #fff; }
+
+        textarea.hidden-source { display: none; }
+
+        /* Highlights */
+        mark { background: #fce8b2; color: #202124; padding: 0 2px; border-radius: 2px; }
+        red { color: var(--danger); } blue { color: var(--accent); } green { color: var(--success); }
+        del { color: #9aa0a6; text-decoration: line-through; }
+        u { text-decoration: underline; text-decoration-color: var(--accent); }
+
+        /* Bookmark Bar */
+        #bookmark-bar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 4px; margin-left: auto; }
+        .bookmark-chip {
+            display: inline-flex; align-items: center; gap: 4px;
+            background: #fff; color: #5f6368; border: 1px solid #dadce0;
+            padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;
+            cursor: pointer; transition: all 0.2s;
+        }
+        .bookmark-chip:hover { background: #e8f0fe; color: var(--accent); border-color: var(--accent); }
+        .bookmark-chip i { font-size: 10px; }
+        .bookmark-chip.mismatch { border-color: #fbd38d; color: #c05621; background-color: #fffaf0; }
+
+        /* Attachments (Vertical layout - NEW) */
+        .attachments-container { display: flex; flex-direction: column; gap: 15px; margin-top: 10px; }
+        .attachment-card { border: 1px solid #dadce0; border-radius: 6px; background: #fff; display: none; }
+        .card-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; border-bottom: 1px dashed #dadce0; font-size: 13px; color: #5f6368; }
+        .card-header span { font-weight: 600; color: #1a73e8; display: flex; align-items: center; gap: 6px; }
+        .card-delete-btn { color: #d93025; background: none; border: none; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 4px; padding: 0; outline: none; }
+        .card-delete-btn:hover { text-decoration: underline; }
+        .card-body { padding: 15px; display: flex; justify-content: center; align-items: center; cursor: pointer; background: #fafafa; }
+        .card-body img { max-width: 100%; max-height: 500px; object-fit: contain; border: 1px solid #eee; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        
+        .add-image-btn { width: 100%; padding: 15px; border: 1px dashed #dadce0; border-radius: 6px; background: #fff; color: #5f6368; cursor: pointer; font-size: 14px; transition: all 0.2s; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px; outline: none; }
+        .add-image-btn:hover { background: #f1f3f4; color: #1a73e8; border-color: #1a73e8; }
+        .add-image-btn i { font-size: 16px; }
+
+        .pill { background: #eef5fd; color: #0b57d0; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+
+        /* Modal */
+        .modal-overlay { display: none; position: fixed; z-index: 9999; inset: 0; background-color: rgba(0,0,0,0.85); justify-content: center; align-items: center; backdrop-filter: blur(2px); }
+        .modal-content-wrapper { position: relative; max-width: 90%; max-height: 90%; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+        .modal-content { max-width: 100%; max-height: 80vh; border-radius: 4px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+        .close-modal { position: absolute; top: -40px; right: -40px; color: #fff; font-size: 30px; cursor: pointer; transition: 0.2s; }
+        .close-modal:hover { color: var(--danger); transform: scale(1.1); }
+
+        #toast-area { position: fixed; right: 20px; bottom: 20px; z-index: 10000; display: flex; flex-direction: column; gap: 8px; }
+        .toast { display: flex; align-items: center; gap: 10px; background: #323232; color: #fff; border-radius: 4px; padding: 12px 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); font-size: 14px; animation: slideIn 0.3s; }
+        .toast.ok { border-left: 4px solid var(--success); } .toast.warn { border-left: 4px solid var(--warn); } .toast.bad { border-left: 4px solid var(--danger); }
+        @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        /* === Memo Panel CSS === */
+        .side-panel-slide {
+            position: fixed; top: 0; right: -380px; width: 380px; height: 100vh;
+            z-index: 2000; box-shadow: -4px 0 15px rgba(0,0,0,0.1); 
+            transition: right 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+            display: flex; flex-direction: column;
+        }
+        .side-panel-slide.open { right: 0; }
+        .memo-sidebar { background: #fffbeb; border-left: 1px solid #fcd34d; }
+        .memo-header { padding: 16px; border-bottom: 1px solid #fcd34d; display: flex; justify-content: space-between; align-items: center; background: rgba(255, 251, 235, 0.95); }
+        #memo-textarea { flex: 1; border: none; padding: 16px; background: transparent; resize: none; font-family: inherit; font-size: 14px; line-height: 1.6; color: #744210; outline: none; }
+        .btn-icon-memo { background: transparent; border: none; cursor: pointer; font-size: 16px; color: #b45309; transition: color 0.2s; }
+        .btn-icon-memo:hover { color: #744210; }
+    </style>
+</head>
+<body>
+    <div id="app-container">
+        <header id="main-header">
+            <div class="header-title"><i class="fas fa-play-circle"></i> VIDEO 학습 노트</div>
+            <div style="display:flex; align-items:center; gap:10px;">
+                <div class="pill" style="color:var(--muted); background:#f1f3f4;">
+                    <i class="fas fa-keyboard"></i> 이전/다음(방향키) | Ctrl+Alt+ R/B/M | Ctrl+1~7(형광펜) | Ctrl+Shift+X(초기화)
+                </div>
+                <button class="control-btn" id="btn-memo" style="color:#d97706; border-color:#fcd34d; background:#fffbeb;">
+                    <i class="fas fa-sticky-note"></i> 메모
+                </button>
+                <button id="load-video-btn" class="control-btn primary">
+                    <i class="fas fa-video"></i> 동영상 열기
+                </button>
+            </div>
+        </header>
+
+        <main id="main-content">
+            <section id="video-viewer-panel">
+                <div id="video-container">
+                    <div id="video-placeholder">
+                        <i class="fas fa-play-circle" style="font-size: 48px; margin-bottom: 15px;"></i>
+                        <p>상단 <strong>'동영상 열기'</strong> 버튼으로 파일을 선택하세요.</p>
+                    </div>
+                </div>
+                
+                <div class="video-controls-bottom">
+                    <div style="flex:1; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; margin-right:10px;">
+                        <span id="video-status" style="font-size:13px; font-weight:bold; color:#555;">Ready</span>
+                    </div>
+                    <div>
+                        <button id="btn-capture-timestamp" class="control-btn" style="color:var(--accent); border-color:var(--accent);">
+                            <i class="fas fa-clock"></i> 타임스탬프 기록
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <section id="editor-panel">
+                <div class="editor-toolbar">
+                    <div style="display:flex; gap:6px;">
+                        <button class="control-btn" id="btn-new" title="새로 만들기"><i class="fas fa-plus"></i></button>
+                        <button class="control-btn primary" id="btn-save" title="저장 (Ctrl+S)"><i class="fas fa-save"></i> 저장</button>
+                        <button class="control-btn" id="btn-clear" title="초기화"><i class="fas fa-eraser"></i></button>
+                    </div>
+                    <div style="display:flex; gap:6px; align-items:center;">
+                        <input id="seq-jump" type="number" step="any" placeholder="No." class="modern-input" style="width:50px; text-align:center; background:#f1f3f4; border-radius:4px;">
+                        <button class="control-btn" id="btn-seq-load" title="번호로 불러오기"><i class="fas fa-search"></i></button>
+                        <div style="width:1px; height:20px; background:var(--border); margin:0 4px;"></div>
+                        <button class="control-btn" id="btn-nav-prev"><i class="fas fa-arrow-left"></i></button>
+                        <button class="control-btn" id="btn-nav-next"><i class="fas fa-arrow-right"></i></button>
+                    </div>
+                </div>
+
+                <div class="editor-scroll-area">
+                    <div class="editor-paper">
+                        <div class="paper-header">
+                            <input id="domainInput" type="text" class="modern-input" placeholder="도메인(예: 네트워크)" spellcheck="false" autocomplete="off" />
+                            <span style="color:#dadce0;">/</span>
+                            <input id="domainSeqInput" type="number" step="any" class="modern-input" placeholder="#" title="자동 연번" />
+                            <input id="priority" type="hidden" value="0" />
+                        </div>
+
+                        <div class="section-block">
+                            <textarea id="topic" class="hidden-source"></textarea>
+                            </div>
+
+                        <div class="section-block">
+                            <div class="section-label"><i class="fas fa-align-left"></i> Definition</div>
+                            <textarea id="definition" class="hidden-source"></textarea>
+                        </div>
+
+                        <div class="section-block">
+                            <div class="section-label"><i class="far fa-lightbulb"></i> Mnemonic</div>
+                            <textarea id="mnemonic" class="hidden-source"></textarea>
+                        </div>
+
+                        <div class="section-block">
+                            <div class="section-label"><i class="far fa-sticky-note"></i> Notes</div>
+                            <textarea id="notes-ui" class="hidden-source"></textarea>
+                        </div>
+
+                        <div class="section-block">
+                            <div class="section-label">
+                                <span><i class="fas fa-history"></i> Timeline</span>
+                                <div id="bookmark-bar"></div>
+                            </div>
+                            <textarea id="timeline-ui" class="raw-editor" spellcheck="false"></textarea>
+                        </div>
+
+                        <div class="section-block" style="margin-top:auto;">
+                            <div class="section-label"><i class="far fa-images"></i> Attachments</div>
+                            
+                            <div style="display:none;">
+                                <input type="file" id="imgFile1" accept="image/*"><input type="checkbox" id="img1-remove">
+                                <input type="file" id="imgFile2" accept="image/*"><input type="checkbox" id="img2-remove">
+                                <input type="file" id="imgFile3" accept="image/*"><input type="checkbox" id="img3-remove">
+                                <input type="file" id="imgFile4" accept="image/*"><input type="checkbox" id="img4-remove">
+                                <input type="file" id="imgFile5" accept="image/*"><input type="checkbox" id="img5-remove">
+                            </div>
+
+                            <div class="attachments-container" id="attachments-container">
+                                <div class="attachment-card" id="card-1">
+                                    <div class="card-header">
+                                        <span><i class="far fa-image"></i> Image 1</span>
+                                        <button class="card-delete-btn" id="btn-del-img-1" type="button"><i class="fas fa-times"></i> 삭제</button>
+                                    </div>
+                                    <div class="card-body" id="card-body-1" title="클릭하여 원본 보기">
+                                        <img id="img-preview-1" src="">
+                                    </div>
+                                </div>
+                                <div class="attachment-card" id="card-2">
+                                    <div class="card-header">
+                                        <span><i class="far fa-image"></i> Image 2</span>
+                                        <button class="card-delete-btn" id="btn-del-img-2" type="button"><i class="fas fa-times"></i> 삭제</button>
+                                    </div>
+                                    <div class="card-body" id="card-body-2" title="클릭하여 원본 보기">
+                                        <img id="img-preview-2" src="">
+                                    </div>
+                                </div>
+                                <div class="attachment-card" id="card-3">
+                                    <div class="card-header">
+                                        <span><i class="far fa-image"></i> Image 3</span>
+                                        <button class="card-delete-btn" id="btn-del-img-3" type="button"><i class="fas fa-times"></i> 삭제</button>
+                                    </div>
+                                    <div class="card-body" id="card-body-3" title="클릭하여 원본 보기">
+                                        <img id="img-preview-3" src="">
+                                    </div>
+                                </div>
+                                <div class="attachment-card" id="card-4">
+                                    <div class="card-header">
+                                        <span><i class="far fa-image"></i> Image 4</span>
+                                        <button class="card-delete-btn" id="btn-del-img-4" type="button"><i class="fas fa-times"></i> 삭제</button>
+                                    </div>
+                                    <div class="card-body" id="card-body-4" title="클릭하여 원본 보기">
+                                        <img id="img-preview-4" src="">
+                                    </div>
+                                </div>
+                                <div class="attachment-card" id="card-5">
+                                    <div class="card-header">
+                                        <span><i class="far fa-image"></i> Image 5</span>
+                                        <button class="card-delete-btn" id="btn-del-img-5" type="button"><i class="fas fa-times"></i> 삭제</button>
+                                    </div>
+                                    <div class="card-body" id="card-body-5" title="클릭하여 원본 보기">
+                                        <img id="img-preview-5" src="">
+                                    </div>
+                                </div>
+
+                                <button class="add-image-btn" id="btn-add-image" type="button">
+                                    <i class="fas fa-plus"></i> 이미지 추가
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div id="memo-sidebar" class="side-panel-slide memo-sidebar">
+        <div class="memo-header">
+            <div style="font-weight:700; color:#b45309; font-size:14px;"><i class="fas fa-paste"></i> 퀵 메모</div>
+            <button class="btn-icon-memo" id="btn-close-memo"><i class="fas fa-times"></i></button>
+        </div>
+        <textarea id="memo-textarea" placeholder="자유롭게 작성하세요"></textarea>
+    </div>
+
+    <div id="img-modal" class="modal-overlay">
+        <div class="modal-content-wrapper">
+            <span class="close-modal">&times;</span>
+            <img class="modal-content" id="modal-img">
+        </div>
+    </div>
+
+    <div id="toast-area"></div>
+
+    <script src="./5R_core.js"></script>
+
+    <script>
+        const videoApp = { 
+            videoElement: null, lastFocusedInput: null,
+            currentFileName: null, linkedFileName: null,
+            lastSyncedId: 'INIT_STATE' 
+        };
+
+        // === Main Script ===
+        (async function(){
+            const S = window.SELTE;
+            const $ = (s) => document.querySelector(s);
+            const $$ = (sel) => document.querySelectorAll(sel);
+            let currentState = { editingId: null, items: [] };
+
+            // --- Init ---
+            async function init() {
+                try {
+                    await S.openDB();
+                    await refreshData();
+                    setupWysiwygEditors();
+                    setupImageSlots();
+                    setupHotkeys();
+                    setupPasteHandler();
+                    setupVideoLogic();
+                    setupMemo(); 
+                    S.toast("DB 연결 완료", "ok");
+                } catch(e) {
+                    console.error(e);
+                    S.toast("초기화 오류: " + e.message, "bad");
+                }
+
+                const closeModal = $('.close-modal');
+                const imgModal = $('#img-modal');
+                if(closeModal) closeModal.onclick = () => imgModal.style.display = 'none';
+                if(imgModal) imgModal.onclick = (e) => { if(e.target === imgModal) imgModal.style.display = 'none'; };
+            }
+
+            // --- Memo Feature Logic ---
+            function setupMemo() {
+                const memoSidebar = $('#memo-sidebar');
+                const memoText = $('#memo-textarea');
+                const btnMemo = $('#btn-memo');
+                const btnCloseMemo = $('#btn-close-memo');
+
+                if (memoText) {
+                    memoText.value = localStorage.getItem("5R_memo") || "";
+                    memoText.oninput = () => localStorage.setItem("5R_memo", memoText.value);
+                }
+
+                if (btnMemo) btnMemo.onclick = () => memoSidebar.classList.add("open");
+                if (btnCloseMemo) btnCloseMemo.onclick = () => memoSidebar.classList.remove("open");
+            }
+
+            // --- Video Specific Logic ---
+            function setupVideoLogic() {
+                const timelineUI = $('#timeline-ui');
+                if(timelineUI) {
+                    timelineUI.addEventListener('input', updateBookmarkBar);
+                    timelineUI.addEventListener('focus', () => videoApp.lastFocusedInput = timelineUI);
+                }
+
+                $('#btn-capture-timestamp').onclick = () => {
+                    if (!videoApp.videoElement) { S.toast('동영상을 먼저 여세요.', 'warn'); return; }
+                    const cur = videoApp.videoElement.currentTime;
+                    const hh = Math.floor(cur / 3600);
+                    const mm = Math.floor((cur % 3600) / 60);
+                    const ss = Math.floor(cur % 60);
+                    let timeStr = hh > 0 
+                        ? `[${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}]` 
+                        : `[${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}]`;
+
+                    const target = videoApp.lastFocusedInput || $('#timeline-ui');
+                    if(target) {
+                        if (target.isContentEditable) {
+                            target.focus();
+                            document.execCommand('insertText', false, ' ' + timeStr + ' ');
+                            target.dispatchEvent(new Event('input'));
+                        } else {
+                            const start = target.selectionStart || target.value.length;
+                            const textToInsert = (target.value.length > 0 && target.value[start-1] !== '\n' ? ' ' : '') + timeStr + ' ';
+                            target.setRangeText(textToInsert, start, start, 'end');
+                            target.focus();
+                            target.dispatchEvent(new Event('input'));
+                            if(target.id === 'timeline-ui') updateBookmarkBar();
+                        }
+                    }
+                };
+
+                $('#load-video-btn').onclick = () => {
+                    const input = document.createElement('input');
+                    input.type = 'file'; input.accept = 'video/*';
+                    input.onchange = (e) => {
+                        const file = e.target.files[0];
+                        if (!file) return;
+                        $('#video-placeholder').style.display = 'none';
+                        if(videoApp.videoElement) videoApp.videoElement.remove();
+                        videoApp.currentFileName = file.name;
+                        
+                        const video = document.createElement('video');
+                        video.src = URL.createObjectURL(file);
+                        video.controls = true; 
+                        video.addEventListener('loadedmetadata', () => {
+                            checkVideoMismatch(false);
+                            updateBookmarkBar();
+                        });
+                        $('#video-container').appendChild(video);
+                        videoApp.videoElement = video;
+                    };
+                    input.click();
+                };
+            }
+
+            function updateBookmarkBar() {
+                const bar = $('#bookmark-bar');
+                if(!bar) return;
+                const text = $('#timeline-ui').value || '';
+                const regex = /\[(\d{1,2}:\d{2}(?::\d{2})?)\]/g;
+                let timestamps = [];
+                let match;
+                while ((match = regex.exec(text)) !== null) timestamps.push(match[1]);
+                
+                timestamps = [...new Set(timestamps)].sort();
+                bar.innerHTML = '';
+                
+                const isMismatch = videoApp.linkedFileName && videoApp.currentFileName && (videoApp.linkedFileName !== videoApp.currentFileName);
+
+                timestamps.forEach(time => {
+                    const btn = document.createElement('div');
+                    btn.className = 'bookmark-chip';
+                    if(isMismatch) btn.classList.add('mismatch');
+                    btn.innerHTML = `<i class="fas fa-play"></i> ${time}`;
+                    btn.onclick = () => jumpToTime(time);
+                    bar.appendChild(btn);
+                });
+            }
+
+            function jumpToTime(timeStr) {
+                if (!videoApp.videoElement) { S.toast('재생 중인 동영상이 없습니다.', 'warn'); return; }
+                const parts = timeStr.split(':').map(Number);
+                let seconds = 0;
+                if (parts.length === 3) seconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
+                else seconds = parts[0] * 60 + parts[1];
+                videoApp.videoElement.currentTime = seconds;
+                videoApp.videoElement.play();
+            }
+
+            function checkVideoMismatch(showAlert = true) {
+                const statusEl = $('#video-status');
+                if (!videoApp.linkedFileName) {
+                    if (videoApp.currentFileName) statusEl.innerHTML = `<span style="color:#555;">Loaded: ${videoApp.currentFileName}</span>`;
+                    else statusEl.textContent = 'Ready';
+                    return;
+                }
+                if (!videoApp.currentFileName) {
+                    statusEl.innerHTML = `<span style="color:#718096;">Link: ${videoApp.linkedFileName} (영상 없음)</span>`;
+                    return; 
+                }
+                if (videoApp.linkedFileName !== videoApp.currentFileName) {
+                    statusEl.innerHTML = `<span style="color:#e53e3e;">⚠️ 불일치 (${videoApp.linkedFileName})</span>`;
+                    if(showAlert) S.toast(`저장된 영상 정보와 다릅니다.`, 'warn');
+                } else {
+                    statusEl.innerHTML = `<span style="color:#2f855a;">✅ ${videoApp.currentFileName} (일치)</span>`;
+                }
+            }
+
+            // --- Editor Logic ---
+            function setupWysiwygEditors() {
+                ['topic', 'definition', 'mnemonic', 'notes-ui'].forEach(id => {
+                    const ta = $(`#${id}`);
+                    if (!ta) return;
+                    if(ta.previousElementSibling && ta.previousElementSibling.classList.contains('wysiwyg-editor')) return;
+
+                    const div = document.createElement('div');
+                    div.className = 'wysiwyg-editor';
+                    div.contentEditable = true;
+                    div.spellcheck = false;
+                    div.dataset.for = id;
+                    if(id === 'topic') div.setAttribute('placeholder', 'Topic Title');
+                    
+                    div.addEventListener('input', () => { ta.value = div.innerHTML; });
+                    div.addEventListener('focus', () => videoApp.lastFocusedInput = div);
+                    
+                    ta.parentNode.insertBefore(div, ta);
+                });
+            }
+
+            function setEditorContent(id, htmlVal) {
+                const ta = $(`#${id}`);
+                if(ta) ta.value = htmlVal;
+                if(id !== 'timeline-ui') {
+                    const div = $(`.wysiwyg-editor[data-for="${id}"]`);
+                    if(div) div.innerHTML = S.renderWithMark(htmlVal);
+                }
+            }
+
+            // --- Image (Vertical Cards) Logic ---
+            function setupImageSlots() {
+                const btnAddImage = $('#btn-add-image');
+                if (btnAddImage) {
+                    btnAddImage.onclick = () => {
+                        for(let i=1; i<=5; i++) {
+                            const card = $(`#card-${i}`);
+                            if (card.style.display === 'none' || !card.style.display) {
+                                $(`#imgFile${i}`).click();
+                                return;
+                            }
+                        }
+                        S.toast('최대 5개의 이미지만 추가할 수 있습니다.', 'warn');
+                    };
+                }
+
+                for(let i=1; i<=5; i++) {
+                    const fileInput = $(`#imgFile${i}`);
+                    const rmCheck = $(`#img${i}-remove`);
+                    const delBtn = $(`#btn-del-img-${i}`);
+                    const cardBody = $(`#card-body-${i}`);
+                    
+                    if(delBtn) {
+                        delBtn.onclick = (e) => {
+                            e.stopPropagation(); 
+                            if(fileInput) fileInput.value = ''; 
+                            if(rmCheck) rmCheck.checked = true; 
+                            updateSlotUI(i, false);
+                            S.toast(`이미지 ${i} 삭제됨 (저장 필요)`, 'info');
+                        };
+                    }
+                    
+                    if(cardBody) {
+                        cardBody.onclick = () => {
+                            const img = $(`#img-preview-${i}`);
+                            if(img && img.src) openModal(img.src);
+                        };
+                    }
+                    
+                    if(fileInput) {
+                        fileInput.onchange = () => {
+                            if(fileInput.files && fileInput.files[0]) {
+                                updateSlotUI(i, true);
+                                S.toast(`이미지 ${i} 추가됨`, 'ok');
+                            }
+                        };
+                    }
+                }
+            }
+
+            function openModal(src) { $('#modal-img').src = src; $('#img-modal').style.display = 'flex'; }
+            
+            async function updateSlotUI(idx, hasData, imageId = null) {
+                const card = $(`#card-${idx}`);
+                const preview = $(`#img-preview-${idx}`);
+                if(hasData) {
+                    card.style.display = 'block';
+                    if (imageId) {
+                        preview.src = await S.getImageDataURL(imageId);
+                    } else {
+                        const fileInput = $(`#imgFile${idx}`);
+                        if (fileInput && fileInput.files && fileInput.files[0]) {
+                            const reader = new FileReader();
+                            reader.onload = (e) => { preview.src = e.target.result; };
+                            reader.readAsDataURL(fileInput.files[0]);
+                        }
+                    }
+                } else {
+                    card.style.display = 'none';
+                    preview.src = '';
+                }
+                
+                let allFilled = true;
+                for(let i=1; i<=5; i++) {
+                    const c = $(`#card-${i}`);
+                    if (c && (c.style.display === 'none' || !c.style.display)) {
+                        allFilled = false;
+                        break;
+                    }
+                }
+                const btnAdd = $('#btn-add-image');
+                if(btnAdd) btnAdd.style.display = allFilled ? 'none' : 'flex';
+            }
+
+            function setupPasteHandler() {
+                document.addEventListener('paste', (e) => {
+                    const activeEl = document.activeElement;
+                    if (activeEl && (activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'INPUT')) {
+                        return;
+                    }
+
+                    const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+                    let blob = null;
+                    for (let i = 0; i < items.length; i++) {
+                        if (items[i].type.indexOf("image") !== -1) { blob = items[i].getAsFile(); break; }
+                    }
+                    if (blob) {
+                        e.preventDefault(); 
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                            const img = new Image();
+                            img.onload = () => {
+                                const canvas = document.createElement('canvas');
+                                canvas.width = img.width; canvas.height = img.height;
+                                const ctx = canvas.getContext('2d');
+                                ctx.drawImage(img, 0, 0);
+                                canvas.toBlob((pngBlob) => {
+                                    const file = new File([pngBlob], `clipboard_${Date.now()}.png`, { type: 'image/png' });
+                                    addFileToEmptySlot(file);
+                                }, 'image/png');
+                            };
+                            img.src = event.target.result;
+                        };
+                        reader.readAsDataURL(blob);
+                    }
+                });
+            }
+
+            function addFileToEmptySlot(file) {
+                let addedSlot = -1;
+                for (let i = 1; i <= 5; i++) {
+                    const card = $(`#card-${i}`);
+                    const fileInput = $(`#imgFile${i}`);
+                    const rmCheck = $(`#img${i}-remove`);
+                    const isOccupied = card.style.display === 'block';
+                    
+                    if (!isOccupied && fileInput) {
+                        const dt = new DataTransfer(); dt.items.add(file); fileInput.files = dt.files;
+                        if(rmCheck) rmCheck.checked = false;
+                        updateSlotUI(i, true); addedSlot = i; break;
+                    }
+                }
+                if (addedSlot > 0) S.toast(`이미지 ${addedSlot}번 붙여넣기 완료`, 'ok');
+                else S.toast('이미지 슬롯 가득 참', 'warn');
+            }
+
+            function setupHotkeys() {
+                document.addEventListener('keydown', (e) => {
+                    const key = (e.key || '').toLowerCase();
+                    const isCtrl = e.ctrlKey || e.metaKey;
+                    const isAlt = e.altKey;
+                    const isShift = e.shiftKey;
+                    
+                    const activeEl = document.activeElement;
+                    const isInputActive = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable);
+                    
+                    // 방향키 이전/다음 이동 단축키
+                    if (!isInputActive) {
+                        if (key === 'arrowleft') { e.preventDefault(); navigate(-1); return; }
+                        if (key === 'arrowright') { e.preventDefault(); navigate(1); return; }
+                    }
+                    
+                    if (isCtrl && key === 's') { e.preventDefault(); save(); return; }
+                    
+                    if (activeEl && activeEl.isContentEditable) {
+                        // 모든 서식 지우기 (Ctrl + Shift + X)
+                        if (isCtrl && isShift && key === 'x') {
+                            e.preventDefault(); 
+                            document.execCommand('removeFormat', false, null); 
+                            document.execCommand('styleWithCSS', false, true);
+                            document.execCommand('foreColor', false, '#202124'); // 기본 글자색 복구
+                            document.execCommand('hiliteColor', false, 'transparent'); // 기본 배경색 복구
+                            return;
+                        }
+
+                        // 취소선 (Ctrl + 0)
+                        if (isCtrl && !isAlt && !isShift && key === '0') {
+                            e.preventDefault(); 
+                            document.execCommand('strikeThrough'); 
+                            return;
+                        }
+
+                        // 컬러 형광펜 배경색 (Ctrl + 1 ~ 7)
+                        if (isCtrl && !isAlt && !isShift) {
+                            const highlightMap = {
+                                '1': 'orange',       // 주황색
+                                '2': '#87cefa',      // 파란색 (LightSkyBlue)
+                                '3': 'yellow',       // 노란색
+                                '4': '#90ee90',      // 녹색 (LightGreen)
+                                '5': 'pink',         // 분홍색
+                                '6': '#d2b48c',      // 갈색 (Tan)
+                                '7': 'lightgray'     // 회색
+                            };
+                            
+                            if (highlightMap[key]) {
+                                e.preventDefault();
+                                document.execCommand('styleWithCSS', false, true);
+                                document.execCommand('hiliteColor', false, highlightMap[key]);
+                                return;
+                            }
+                        }
+
+                        // 커스텀 텍스트 서식 (Ctrl + Alt + 조합)
+                        if (isCtrl && isAlt && !isShift) {
+                            // 글자색 빨강(R), 파랑(B)
+                            const colorMap = { 'r': '#d93025', 'b': '#1a73e8' }; 
+                            if (colorMap[key]) { 
+                                e.preventDefault(); 
+                                document.execCommand('styleWithCSS', false, true); 
+                                document.execCommand('foreColor', false, colorMap[key]); 
+                                return; 
+                            }
+                            
+                            // 두음 강조 (M): 남색 배경(#0d3a9e), 흰색 글씨, 굵게 처리
+                            if (key === 'm') { 
+                                e.preventDefault(); 
+                                document.execCommand('styleWithCSS', false, true); 
+                                document.execCommand('bold', false, null);
+                                document.execCommand('foreColor', false, '#ffffff'); 
+                                document.execCommand('hiliteColor', false, '#0d3a9e'); 
+                                return; 
+                            }
+                        }
+                    }
+                }, true);
+            }
+
+            // --- Data Logic ---
+            async function refreshData() { currentState.items = await S.getAllItems(); }
+
+            function clearForm() {
+                currentState.editingId = null;
+                $('#domainInput').value = ''; $('#domainSeqInput').value = ''; $('#seq-jump').value = '';
+                ['topic','definition','mnemonic','notes-ui'].forEach(id => setEditorContent(id, ''));
+                $('#timeline-ui').value = '';
+                videoApp.linkedFileName = null;
+                
+                for(let i=1; i<=5; i++) {
+                    const f=$(`#imgFile${i}`), rm=$(`#img${i}-remove`);
+                    if(f) f.value=''; if(rm) rm.checked=false;
+                    updateSlotUI(i, false);
+                }
+                updateBookmarkBar();
+                checkVideoMismatch(false);
+                S.toast('새 항목 작성 대기', 'info');
+            }
+
+            async function loadBySeq(domain, seq) {
+                if(!domain) { S.toast('도메인 필요', 'warn'); return; }
+                if(!seq) { S.toast('연번 필요', 'warn'); return; }
+                await refreshData();
+                const target = currentState.items.find(it => 
+                    (it.domain||'').trim() === domain.trim() && Math.abs((it.domainSeq||0) - parseFloat(seq)) < 0.0001
+                );
+                if(target) { loadItem(target); S.toast(`${domain} #${seq} 로드됨`, 'ok'); }
+                else S.toast(`항목 없음: ${domain} #${seq}`, 'warn');
+            }
+
+            async function loadItem(it) {
+                currentState.editingId = it.id;
+                $('#domainInput').value = it.domain;
+                $('#domainSeqInput').value = it.domainSeq;
+                $('#seq-jump').value = it.domainSeq;
+                $('#priority').value = it.priority || 0;
+                
+                setEditorContent('topic', S.denormalizeForEdit(it.topic));
+                setEditorContent('definition', S.denormalizeForEdit(it.definition));
+                setEditorContent('mnemonic', S.denormalizeForEdit(it.mnemonic));
+                
+                if (it.videoInfo) {
+                    $('#timeline-ui').value = it.videoInfo.timeline || '';
+                    videoApp.linkedFileName = it.videoInfo.fileName || null;
+                    setEditorContent('notes-ui', S.denormalizeForEdit(it.notes));
+                } else {
+                    splitLegacyData(S.denormalizeForEdit(it.notes));
+                }
+
+                for(let i=1; i<=5; i++) {
+                    const f=$(`#imgFile${i}`), rm=$(`#img${i}-remove`);
+                    if(f) f.value=''; if(rm) rm.checked=false;
+                    updateSlotUI(i, !!it[`img${i}Id`], it[`img${i}Id`]);
+                }
+                updateBookmarkBar();
+                checkVideoMismatch(false);
+            }
+
+            function splitLegacyData(fullText) {
+                let clean = fullText || '', timeline = '', fName = null;
+                const TAG_PFX = '/*--- VIDEO_FILE: ', TAG_SFX = ' ---*/';
+                const sIdx = clean.lastIndexOf(TAG_PFX);
+                if(sIdx !== -1) {
+                    const eIdx = clean.indexOf(TAG_SFX, sIdx);
+                    if(eIdx !== -1) {
+                        fName = clean.substring(sIdx + TAG_PFX.length, eIdx).trim();
+                        clean = clean.substring(0, sIdx) + clean.substring(eIdx + TAG_SFX.length);
+                    }
+                }
+                const SEP = /\/\*--- TIMELINE_SPLIT ---\*\//;
+                if(SEP.test(clean)) {
+                    const p = clean.split(SEP);
+                    timeline = p[0].trim(); clean = p.slice(1).join('').trim();
+                }
+                $('#timeline-ui').value = timeline;
+                setEditorContent('notes-ui', clean);
+                videoApp.linkedFileName = fName;
+            }
+
+            async function save() {
+                const domain = $('#domainInput').value.trim();
+                const topicVal = $(`#topic`).value.trim();
+                if(!domain || !topicVal) { S.toast('도메인/토픽 필수', 'bad'); return; }
+
+                try {
+                    let seq = parseFloat($('#domainSeqInput').value);
+                    if (!Number.isFinite(seq) || seq === 0) seq = S.nextDomainSeq(domain);
+
+                    const timelineContent = $('#timeline-ui').value;
+                    const notesContent = $(`#notes-ui`).value;
+                    const finalFileName = videoApp.currentFileName || videoApp.linkedFileName || '';
+
+                    const item = {
+                        domain, domainSeq: seq,
+                        topic: S.normalizeForStore(topicVal),
+                        definition: S.normalizeForStore($(`#definition`).value),
+                        mnemonic: S.normalizeForStore($(`#mnemonic`).value),
+                        notes: S.normalizeForStore(notesContent),
+                        priority: parseInt($('#priority').value)||0,
+                        videoInfo: { fileName: finalFileName, timeline: timelineContent },
+                        ts: S.nowISO(), checked: false
+                    };
+
+                    if(currentState.editingId) {
+                        item.id = currentState.editingId;
+                        const old = currentState.items.find(x => x.id === item.id);
+                        if(old) item.checked = old.checked;
+                    } else {
+                        item.id = S.uid();
+                        currentState.editingId = item.id;
+                    }
+
+                    const curItem = currentState.items.find(x => x.id === item.id);
+                    for(let i=1; i<=5; i++) {
+                        const f=$(`#imgFile${i}`), rm=$(`#img${i}-remove`);
+                        if(f && f.files[0]) item[`img${i}Id`] = await S.putImageBlob(f.files[0]);
+                        else if(rm && rm.checked) item[`img${i}Id`] = '';
+                        else if(curItem && curItem[`img${i}Id`]) item[`img${i}Id`] = curItem[`img${i}Id`];
+                        else item[`img${i}Id`] = '';
+                    }
+
+                    await S.putItem(item);
+                    await refreshData();
+                    videoApp.linkedFileName = finalFileName;
+                    updateBookmarkBar();
+                    checkVideoMismatch(false);
+                    S.toast('저장되었습니다', 'ok');
+                } catch(e) { console.error(e); S.toast('저장 실패', 'bad'); }
+            }
+
+            function navigate(delta) {
+                const domain = $('#domainInput').value.trim();
+                let seq = parseFloat($('#seq-jump').value || $('#domainSeqInput').value);
+                if(!domain || isNaN(seq)) return;
+                const items = currentState.items.filter(x => (x.domain||'').trim() === domain).sort((a,b)=>(a.domainSeq||0)-(b.domainSeq||0));
+                if(!items.length) return;
+                
+                let idx = items.findIndex(x => x.id === currentState.editingId);
+                if(idx === -1) idx = items.findIndex(x => Math.abs(x.domainSeq - seq) < 0.0001);
+                
+                if(idx === -1 && delta > 0) idx = -1;
+                if(idx === -1 && delta < 0) idx = items.length;
+                
+                let nextIdx = idx + delta;
+                if(nextIdx < 0) nextIdx = 0;
+                if(nextIdx >= items.length) nextIdx = items.length - 1;
+                
+                loadItem(items[nextIdx]);
+            }
+
+            // Bindings
+            const bind = (id, fn) => { const el = $(id); if(el) el.onclick = fn; };
+            bind('#btn-new', clearForm);
+            bind('#btn-save', save);
+            bind('#btn-clear', clearForm);
+            bind('#btn-seq-load', () => loadBySeq($('#domainInput').value, $('#seq-jump').value));
+            const jIn = $('#seq-jump'); if(jIn) jIn.onkeydown = (e) => { if(e.key==='Enter') $('#btn-seq-load').click(); };
+            bind('#btn-nav-prev', () => navigate(-1));
+            bind('#btn-nav-next', () => navigate(1));
+
+            // Run
+            init();
+        })();
+    </script>
+</body>
+</html>

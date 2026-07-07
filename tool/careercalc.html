@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>경력 기간 자동 집계 (엑셀 연동)</title>
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <style>
+        :root {
+            --bg: #f3f4f6;
+            --card: #ffffff;
+            --border: #e5e7eb;
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --text-main: #1f2937;
+            --text-sub: #6b7280;
+            --header-bg: #e5e7eb; 
+            --th-bg: #f9fafb;     
+        }
+
+        body {
+            font-family: "Pretendard Variable", sans-serif;
+            background: var(--bg);
+            color: var(--text-main);
+            margin: 0;
+            padding: 40px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1100px;
+            background: var(--card);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            padding: 32px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        /* 상단 영역 */
+        .top-section {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            padding-bottom: 20px;
+            border-bottom: 2px solid var(--border);
+        }
+
+        .title-area h1 { margin: 0 0 8px 0; font-size: 24px; font-weight: 800; }
+        .title-area p { margin: 0; color: var(--text-sub); font-size: 14px; }
+
+        .stats-card {
+            background: #eff6ff;
+            padding: 15px 25px;
+            border-radius: 8px;
+            text-align: right;
+            border: 1px solid #dbeafe;
+        }
+        .stats-label { font-size: 13px; color: #1e40af; font-weight: 600; margin-bottom: 4px; }
+        .stats-value { font-size: 32px; font-weight: 800; color: #1e3a8a; line-height: 1; }
+        .stats-value span { font-size: 16px; font-weight: 600; margin-left: 4px; }
+
+        /* 툴바 */
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s;
+            border: 1px solid var(--border);
+            background: #fff;
+            color: var(--text-main);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            text-decoration: none;
+        }
+        .btn:hover { background: #f9fafb; border-color: #d1d5db; }
+        .btn-primary { background: var(--primary); color: white; border-color: var(--primary); }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-green { background: #10b981; color: white; border-color: #10b981; }
+        .btn-green:hover { background: #059669; }
+
+        /* 테이블 스타일 */
+        .table-wrap {
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+        
+        .main-header th {
+            background: #9ca3af;
+            color: white;
+            padding: 10px;
+            font-weight: 700;
+            text-align: left;
+            padding-left: 20px;
+        }
+
+        .sub-header th {
+            background: #e5e7eb;
+            color: #374151;
+            padding: 12px 8px;
+            font-size: 13px;
+            font-weight: 700;
+            border-bottom: 1px solid #d1d5db;
+            text-align: center;
+        }
+
+        td {
+            border-bottom: 1px solid var(--border);
+            padding: 4px;
+        }
+        
+        input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid transparent;
+            border-radius: 4px;
+            font-size: 13px;
+            text-align: center;
+            background: transparent;
+            box-sizing: border-box;
+            font-family: inherit;
+        }
+        input[type="text"]:focus {
+            background: white;
+            border-color: var(--primary);
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(37,99,235,0.1);
+        }
+        td:nth-child(1) input, td:nth-child(4) input { text-align: left; padding-left: 10px; }
+        
+        .calc-field {
+            color: var(--primary);
+            font-weight: 700;
+            background: #eff6ff !important;
+            cursor: default;
+        }
+
+        .btn-del {
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            border: none;
+            background: transparent;
+            color: #9ca3af;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+        }
+        .btn-del:hover { background: #fee2e2; color: #ef4444; }
+
+        .add-row-btn {
+            width: 100%;
+            padding: 12px;
+            margin-top: -1px;
+            background: #fff;
+            border: none;
+            border-top: 1px solid var(--border);
+            color: var(--text-sub);
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .add-row-btn:hover { background: #f9fafb; color: var(--primary); }
+
+        #fileInput { display: none; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="top-section">
+        <div class="title-area">
+            <h1>📄 경력 기간 자동 계산기</h1>
+            <p>기간을 입력하거나 엑셀 파일을 업로드하여 경력을 산출하세요.</p>
+        </div>
+        <div class="stats-card">
+            <div class="stats-label">총 경력 합계</div>
+            <div class="stats-value" id="total-display">0<span>년</span> 0<span>개월</span></div>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <button class="btn" onclick="downloadTemplate()">💾 양식 다운로드</button>
+        <label for="fileInput" class="btn btn-green">
+            📂 엑셀 업로드
+            <input type="file" id="fileInput" accept=".xlsx, .xls" onchange="handleExcelUpload(this)">
+        </label>
+        <button class="btn btn-primary" onclick="exportToExcel()">📥 결과 저장</button>
+    </div>
+
+    <div class="table-wrap">
+        <table id="career-table">
+            <thead>
+                <tr class="main-header">
+                    <th colspan="7">경력 사항</th>
+                </tr>
+                <tr class="sub-header">
+                    <th style="width: 20%;">사업명</th>
+                    <th style="width: 22%;">참여기간 (YYYY.MM ~ YYYY.MM)</th>
+                    <th style="width: 10%;">개월수</th>
+                    <th style="width: 15%;">담당업무</th>
+                    <th style="width: 12%;">발주처</th>
+                    <th style="width: 12%;">소속사</th>
+                    <th style="width: 40px;"></th>
+                </tr>
+            </thead>
+            <tbody id="tbody-career">
+                </tbody>
+        </table>
+        <button class="add-row-btn" onclick="addRow()">+ 행 추가하기</button>
+    </div>
+</div>
+
+<script>
+    // --- 초기화 ---
+    window.onload = function() {
+        // 샘플 데이터 제거하고 빈 행만 하나 추가
+        addRow(); 
+        // 초기 합계 계산 (0으로 리셋 확인)
+        calcTotal();
+    };
+
+    // --- 행 조작 로직 ---
+    function addRow(name="", period="", role="", client="", company="") {
+        const tbody = document.getElementById('tbody-career');
+        const tr = document.createElement('tr');
+        
+        tr.innerHTML = `
+            <td><input type="text" placeholder="사업명" value="${name}"></td>
+            <td>
+                <input type="text" class="input-period" placeholder="2020.01 ~ 2021.12" value="${period}" oninput="calcRow(this)">
+            </td>
+            <td><input type="text" class="calc-field input-months" readonly tabindex="-1" data-months="0"></td>
+            <td><input type="text" placeholder="업무" value="${role}"></td>
+            <td><input type="text" placeholder="발주처" value="${client}"></td>
+            <td><input type="text" placeholder="소속사" value="${company}"></td>
+            <td><button class="btn-del" onclick="removeRow(this)" tabindex="-1">×</button></td>
+        `;
+        tbody.appendChild(tr);
+        
+        if(period) calcRow(tr.querySelector('.input-period'));
+    }
+
+    function removeRow(btn) {
+        const row = btn.closest('tr');
+        if(document.querySelectorAll('#tbody-career tr').length > 1) {
+            row.remove();
+        } else {
+            row.querySelectorAll('input').forEach(input => input.value = '');
+            // 삭제 대신 초기화 시 개월 수도 0으로 리셋
+            const monthInput = row.querySelector('.input-months');
+            monthInput.value = '';
+            monthInput.dataset.months = 0;
+        }
+        calcTotal();
+    }
+
+    // --- 계산 로직 ---
+    function calcRow(input) {
+        const row = input.closest('tr');
+        const monthInput = row.querySelector('.input-months');
+        const val = input.value.trim();
+        
+        if (!val || !val.includes('~')) {
+            monthInput.value = '';
+            monthInput.dataset.months = 0;
+            calcTotal();
+            return;
+        }
+
+        const parts = val.split('~');
+        const start = parseDate(parts[0].trim());
+        const end = parseDate(parts[1].trim());
+
+        if (start && end) {
+            const startMonths = (start.year * 12) + start.month;
+            const endMonths = (end.year * 12) + end.month;
+            let diff = endMonths - startMonths + 1; // 당월 포함
+            
+            if (diff < 0) diff = 0;
+            
+            monthInput.value = diff + '개월';
+            monthInput.dataset.months = diff;
+        } else {
+            monthInput.value = '형식오류';
+            monthInput.dataset.months = 0;
+        }
+        calcTotal();
+    }
+
+    function parseDate(str) {
+        // 숫자만 남김
+        const nums = str.replace(/[^0-9]/g, '');
+        if (nums.length < 5 || nums.length > 8) return null;
+        
+        const year = parseInt(nums.substring(0, 4));
+        const monthStr = nums.substring(4);
+        const month = parseInt(monthStr);
+
+        if (month < 1 || month > 12) return null;
+        return { year, month };
+    }
+
+    function calcTotal() {
+        const inputs = document.querySelectorAll('.input-months');
+        let total = 0;
+        inputs.forEach(inp => total += parseInt(inp.dataset.months || 0));
+
+        const y = Math.floor(total / 12);
+        const m = total % 12;
+        
+        const display = document.getElementById('total-display');
+        display.innerHTML = `${y}<span>년</span> ${m}<span>개월</span>`;
+    }
+
+    // --- 엑셀 업로드 처리 ---
+    function handleExcelUpload(input) {
+        const file = input.files[0];
+        if(!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, {type: 'array'});
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+            
+            if(rows.length > 0) {
+                if(confirm('기존 데이터를 지우고 새로 작성하시겠습니까?')) {
+                    document.getElementById('tbody-career').innerHTML = '';
+                }
+
+                rows.forEach(row => {
+                    const name = row['사업명'] || row['프로젝트명'] || '';
+                    let period = row['참여기간'] || row['기간'] || '';
+                    const role = row['담당업무'] || row['역할'] || '';
+                    const client = row['발주처'] || row['고객사'] || '';
+                    const company = row['소속사'] || row['소속'] || '';
+
+                    if (typeof period === 'number') {
+                        period = String(period);
+                    }
+
+                    addRow(name, period, role, client, company);
+                });
+            }
+        };
+        reader.readAsArrayBuffer(file);
+        input.value = '';
+    }
+
+    // --- 엑셀 다운로드 (양식 & 결과) ---
+    function downloadTemplate() {
+        const wb = XLSX.utils.book_new();
+        const wsData = [
+            ["사업명", "참여기간", "담당업무", "발주처", "소속사"],
+            ["차세대 시스템 구축", "2019.01 ~ 2020.12", "PL", "A은행", "B테크"],
+            ["유지보수 프로젝트", "2021-03 ~ 2022-02", "개발", "C공사", "B테크"]
+        ];
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+        ws['!cols'] = [{wch:30}, {wch:25}, {wch:15}, {wch:15}, {wch:15}];
+        
+        XLSX.utils.book_append_sheet(wb, ws, "입력양식");
+        XLSX.writeFile(wb, "경력_입력양식.xlsx");
+    }
+
+    function exportToExcel() {
+        const wb = XLSX.utils.book_new();
+        const table = document.getElementById('career-table');
+        
+        // 1. 헤더
+        const headers = [];
+        table.querySelectorAll('.sub-header th').forEach(th => {
+            if(th.innerText) headers.push(th.innerText);
+        });
+
+        // 2. 데이터
+        const bodyRows = [];
+        table.querySelectorAll('tbody tr').forEach(tr => {
+            const rowData = [];
+            tr.querySelectorAll('input').forEach(input => {
+                rowData.push(input.value);
+            });
+            bodyRows.push(rowData);
+        });
+
+        // 3. 정렬 (최신순 내림차순)
+        bodyRows.sort((a, b) => {
+            const dateStrA = a[1] || "";
+            const dateStrB = b[1] || "";
+
+            const parseStart = (str) => {
+                if (!str) return 0;
+                const startPart = str.split('~')[0]; 
+                const numStr = startPart.replace(/[^0-9]/g, '');
+                return parseInt(numStr) || 0;
+            };
+
+            const numA = parseStart(dateStrA);
+            const numB = parseStart(dateStrB);
+
+            return numB - numA;
+        });
+
+        // 4. 저장
+        const data = [headers, ...bodyRows];
+        const ws = XLSX.utils.aoa_to_sheet(data);
+        ws['!cols'] = [{wch:30}, {wch:25}, {wch:10}, {wch:15}, {wch:15}, {wch:15}];
+        
+        XLSX.utils.book_append_sheet(wb, ws, "경력집계");
+        XLSX.writeFile(wb, "경력사항_집계결과.xlsx");
+    }
+</script>
+
+</body>
+</html>

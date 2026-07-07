@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Keynote Player</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/variable/pretendardvariable.css">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+<style>
+    /* Premium UI Variables */
+    :root {
+        --base-bg: #f4f4f5;           
+        --surface-1: #ffffff;         
+        --surface-2: #f8fafc;         
+        
+        --text-main: #09090b;         
+        --text-sub: #52525b;          
+        --text-muted: #9ca3af;        
+        
+        --border-light: rgba(0, 0, 0, 0.08);
+        --border-hover: rgba(0, 0, 0, 0.15);
+        
+        --accent-gradient: linear-gradient(135deg, #111827 0%, #374151 100%); 
+        --accent-color: #111827;
+        
+        --success: #059669;
+        
+        --radius-pill: 100px;
+        --radius-xl: 24px;
+        --radius-md: 12px;
+        --radius-sm: 8px;
+        
+        --shadow-glass: 0 8px 30px rgba(0, 0, 0, 0.04);
+        --shadow-glow: 0 4px 15px rgba(17, 24, 39, 0.15);
+    }
+
+    * { box-sizing: border-box; outline: none; margin: 0; padding: 0; }
+    
+    body { 
+        font-family: 'Pretendard Variable', -apple-system, sans-serif; 
+        background-color: var(--base-bg); 
+        color: var(--text-main);
+        height: 100vh; display: flex; flex-direction: column; overflow: hidden; 
+        transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); 
+        letter-spacing: -0.01em;
+    }
+
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #d4d4d8; border-radius: 10px; }
+    ::-webkit-scrollbar-thumb:hover { background: #a1a1aa; }
+
+    /* Header & Sidebar Styles */
+    .header-area { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px 16px 24px; flex-shrink: 0; gap: 16px; }
+    
+    /* 🚀 셀렉트 박스 CSS */
+    .note-select {
+        flex: 1;
+        max-width: 400px;
+        padding: 10px 24px;
+        border-radius: var(--radius-pill);
+        border: 1px solid var(--border-light);
+        background-color: rgba(0,0,0,0.04);
+        color: var(--text-main);
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        appearance: none; 
+        background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2352525b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+        background-repeat: no-repeat;
+        background-position: right 16px center;
+        background-size: 16px;
+        padding-right: 40px;
+        outline: none;
+        transition: all 0.2s ease;
+        font-family: inherit;
+    }
+    .note-select:hover {
+        background-color: rgba(0,0,0,0.06);
+        border-color: var(--border-hover);
+    }
+    .note-select:focus {
+        border-color: var(--text-sub);
+        box-shadow: 0 0 0 2px rgba(17, 24, 39, 0.05);
+        background-color: var(--surface-1);
+    }
+    
+    .exit-btn { padding: 10px 20px; border-radius: var(--radius-pill); background: var(--surface-1); border: 1px solid var(--border-light); color: var(--text-main); cursor: pointer; font-size: 14px; font-weight: 700; transition: 0.2s; display: flex; align-items: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+    .exit-btn:hover { background: var(--surface-2); border-color: var(--border-hover); }
+
+    .main-wrapper { flex: 1; display: flex; padding: 0 24px 24px 24px; gap: 24px; overflow: hidden; }
+
+    .sidebar { width: 320px; background: var(--surface-1); border: 1px solid var(--border-light); border-radius: var(--radius-xl); display: flex; flex-direction: column; overflow: hidden; box-shadow: var(--shadow-glass); }
+    .sidebar-header { padding: 20px 24px; border-bottom: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center; }
+    .sidebar-header span { font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+    
+    .header-actions { display: flex; align-items: center; gap: 8px; }
+    .check-all-label { font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; color: var(--text-sub); transition: color 0.2s; }
+    .check-all-label:hover { color: var(--text-main); }
+    .check-all-label input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; accent-color: var(--accent-color); flex-shrink: 0; }
+    
+    .btn-reset { 
+        background: transparent; border: none; color: var(--text-muted); 
+        cursor: pointer; font-size: 13px; transition: all 0.2s; 
+        display: flex; align-items: center; justify-content: center; 
+        padding: 4px; border-radius: 4px;
+    }
+    .btn-reset:hover { color: #dc2626; background: rgba(220, 38, 38, 0.08); }
+    
+    .list-container { flex: 1; overflow-y: auto; padding: 12px; }
+    .list-item { display: flex; align-items: center; gap: 12px; padding: 14px 16px; margin-bottom: 4px; border-radius: var(--radius-md); border-left: 3px solid transparent; cursor: pointer; transition: 0.2s; }
+    .list-item:hover { background: var(--surface-2); }
+    .list-item.active { background: rgba(17, 24, 39, 0.05); border-left-color: var(--accent-color); }
+    .list-item input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; accent-color: var(--accent-color); flex-shrink: 0; }
+    .list-item-title { flex: 1; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+    .list-item.active .list-item-title { font-weight: 700; }
+    .completed-text { color: var(--text-muted) !important; text-decoration: line-through; }
+
+    /* Player Area & Controls */
+    .player-area { flex: 1; display: flex; flex-direction: column; min-width: 0; gap: 16px; position: relative; }
+    .player-header { display: flex; justify-content: space-between; align-items: center; padding: 0 4px; min-height: 60px; }
+    
+    .status-box { display: flex; flex-direction: column; gap: 2px; }
+    .status-title { font-size: 12px; font-weight: 700; color: var(--text-sub); letter-spacing: 1px; }
+    .status-value { font-size: 24px; font-weight: 800; color: var(--accent-color); font-variant-numeric: tabular-nums; }
+    .speed-select { padding: 8px 16px; font-size: 14px; font-weight: 700; border: 1px solid var(--border-light); border-radius: var(--radius-sm); outline: none; cursor: pointer; }
+
+    .header-center, .header-right { opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+    .player-area.show-controls .header-center, .player-area.show-controls .header-right,
+    .player-header:hover .header-center, .player-header:hover .header-right { opacity: 1; pointer-events: auto; }
+
+    .header-center { flex: 0 0 auto; display: flex; justify-content: center; align-items: center; position: absolute; left: 50%; transform: translateX(-50%); }
+    .controls { padding: 4px 8px; display: flex; align-items: center; justify-content: center; gap: 4px; background: var(--surface-1); border: 1px solid rgba(0,0,0,0.06); border-radius: var(--radius-pill); box-shadow: 0 2px 10px rgba(0,0,0,0.03); }
+    .ctrl-group { display: flex; align-items: center; gap: 4px; } 
+    
+    .nav-btn { width: 36px; height: 36px; border-radius: 50%; border: none; background: transparent; color: var(--text-sub); cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center; }
+    .nav-btn:hover:not(:disabled) { background: rgba(0,0,0,0.04); color: var(--text-main); }
+    .nav-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .action-btn { padding: 8px 16px; border-radius: var(--radius-pill); border: none; background: transparent; font-weight: 600; font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: 0.2s; }
+    .btn-play { color: var(--text-main); }
+    .btn-play:hover { background: rgba(0,0,0,0.04); }
+    .btn-stop { color: #dc2626; }
+    .btn-stop:hover { background: rgba(220, 38, 38, 0.08); }
+    .btn-complete:hover { background: rgba(16, 185, 129, 0.08); color: var(--success); }
+
+    /* Content Screen */
+    .screen { 
+        flex: 1; background: #ffffff; border-radius: var(--radius-xl); border: 1px solid var(--border-light); 
+        display: flex; flex-direction: column; overflow: hidden; position: relative;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03); 
+    }
+    
+    .progress-bar { height: 4px; background: rgba(0,0,0,0.05); width: 100%; position: absolute; top: 0; left: 0; z-index: 5; }
+    .progress-fill { height: 100%; background: var(--accent-gradient); width: 0%; box-shadow: var(--shadow-glow); transition: width 0.1s linear; }
+    
+    .screen-content { 
+        flex: 1; padding: 60px 50px; overflow-y: auto; 
+        display: block; scroll-behavior: smooth;
+    }
+    
+    /* 📖 Document Layout */
+    .paper-container {
+        width: 100%; 
+        max-width: 1000px;
+        margin: 0 auto;
+        font-family: 'Noto Serif KR', serif; 
+    }
+    
+    /* 🚀 Quill Editor Reset & Padding Control */
+    .ql-editor { 
+        font-family: inherit; 
+        font-size: inherit; 
+        line-height: inherit; 
+        min-height: auto; 
+        height: auto; 
+        overflow: visible;
+    }
+    
+    .paper-prob.ql-editor, .paper-sol.ql-editor { padding: 0; }
+    .paper-lead.ql-editor { padding: 4px 0 4px 20px; border-left: 5px solid #111827; margin-bottom: 30px; font-size: 28px; line-height: 1.7; color: #52525b; } 
+    .paper-conc.ql-editor { padding: 25px 30px; background: #f8fafc; border-radius: 12px; border: 1px solid #f1f5f9; margin-bottom: 30px; font-size: 28px; line-height: 1.7; color: #4b5563; } 
+    .paper-sol.ql-editor { font-size: 28px; line-height: 1.7; color: #374151; }
+    
+    .paper-prob-container { display: flex; align-items: baseline; gap: 15px; margin-bottom: 30px; font-family: 'Pretendard Variable', -apple-system, sans-serif; }
+    .paper-prob-num { font-size: 46px; font-weight: 800; color: var(--accent-color); line-height: 1.4; font-variant-numeric: tabular-nums; }
+    .paper-prob.ql-editor { font-size: 46px; line-height: 1.4; color: #111827; font-weight: 700; }
+
+    .ql-editor [style*="background-color"] {
+        padding: 2px 4px;
+        border-radius: 4px;
+    }
+
+    .ql-editor table { width: 100%; border-collapse: collapse; margin: 30px 0; font-family: 'Pretendard Variable', -apple-system, sans-serif; text-align: left; font-size: 24px; line-height: 1.5; }
+    .ql-editor th, .ql-editor td { border: 1px solid #e5e7eb; padding: 15px 20px; }
+    .ql-editor th { background-color: #f8fafc; font-weight: 700; color: #374151; }
+
+    .paper-divider { border: 0; height: 1px; background: #e5e7eb; margin: 0 0 30px 0; }
+
+    .ql-editor p { margin-top: 0; margin-bottom: 0.6em; }
+    .ql-editor p:last-child { margin-bottom: 0; }
+    
+    .ql-editor p:has(img) { margin-bottom: 0 !important; } 
+    .ql-editor img { 
+        max-width: 100%; border-radius: 8px; 
+        margin: 6px 0 !important; display: block; 
+        border: 1px solid rgba(0,0,0,0.06); cursor: pointer; transition: transform 0.2s; box-shadow: 0 2px 8px rgba(0,0,0,0.04); 
+    }
+    .ql-editor img:hover { transform: scale(1.01); box-shadow: 0 8px 24px rgba(0,0,0,0.1); }
+    
+    .paper-lead p:empty, .paper-conc p:empty, .paper-prob p:empty, .paper-sol p:empty { display: none !important; }
+    .ql-editor p:has(br:only-child) { display: none !important; }
+
+    .empty-state { position: absolute; inset: 0; background: var(--surface-1); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 5; text-align: center; }
+    .empty-state-icon { width: 80px; height: 80px; border-radius: 50%; background: #f4f4f5; display: flex; align-items: center; justify-content: center; margin-bottom: 24px; border: 1px solid var(--border-light);}
+    .empty-state i { font-size: 32px; color: var(--text-muted); }
+    .empty-state p.main-text { font-size: 20px; font-weight: 800; color: var(--text-main); margin-bottom: 8px; }
+
+    /* --- Immersive Mode (Ctrl + H key) --- */
+    body.immersive .header-area { opacity: 0; height: 0; padding-top: 0; padding-bottom: 0; pointer-events: none; overflow: hidden;}
+    body.immersive .sidebar { width: 0; opacity: 0; border: none; margin: 0; padding: 0; pointer-events: none;}
+    body.immersive .main-wrapper { padding: 24px; }
+
+    body.immersive .player-header { 
+        position: absolute; 
+        top: 16px; 
+        right: 16px; 
+        left: 16px; 
+        min-height: auto; 
+        pointer-events: none; 
+        justify-content: flex-end;
+        z-index: 100;
+        background: transparent;
+        padding: 0;
+        box-shadow: none;
+    }
+    body.immersive .header-left,
+    body.immersive .header-center,
+    body.immersive .status-title,
+    body.immersive #speed-select { 
+        display: none !important; 
+    }
+    body.immersive .header-right { 
+        opacity: 0.3 !important; 
+        pointer-events: auto; 
+        transition: opacity 0.3s;
+    }
+    body.immersive .header-right:hover { 
+        opacity: 1 !important; 
+    }
+
+    /* --- Presentation Mode (Ctrl + M key) --- */
+    body.presentation .header-area { display: none !important; }
+    body.presentation .sidebar { display: none !important; }
+    body.presentation .player-header { display: none !important; }
+    body.presentation .main-wrapper { padding: 0 !important; border-radius: 0; }
+    body.presentation .screen { border-radius: 0; border: none; box-shadow: none; }
+
+    /* 모달 */
+    .image-modal { display: none; position: fixed; z-index: 9999; inset: 0; background-color: rgba(0,0,0,0.85); backdrop-filter: blur(10px); justify-content: center; align-items: center; opacity: 0; transition: opacity 0.3s; }
+    .image-modal.show { display: flex; opacity: 1; }
+    .image-modal img { 
+        max-width: 90%; 
+        max-height: 90vh; 
+        border-radius: var(--radius-md); 
+        object-fit: contain; 
+        background-color: #ffffff; 
+        padding: 16px; 
+        box-sizing: border-box;
+    }
+</style>
+</head>
+<body>
+
+<div class="header-area">
+    <select class="note-select" id="note-select"></select>
+
+    <button class="exit-btn" onclick="window.location.href='keynote.html'"><i class="fas fa-sign-out-alt"></i> 에디터 복귀</button>
+</div>
+
+<div class="main-wrapper">
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <span><i class="fas fa-list-ul"></i> 문제 리스트</span>
+            <div class="header-actions">
+                <label class="check-all-label"><input type="checkbox" id="check-all"> 전체선택</label>
+                <button id="btn-reset-status" class="btn-reset" title="암기 완료 기록 초기화">
+                    <i class="fas fa-rotate-right"></i>
+                </button>
+            </div>
+        </div>
+        <div class="list-container" id="item-list"></div>
+    </div>
+
+    <div class="player-area">
+        <div class="player-header">
+            <div class="header-left">
+                <div class="status-box">
+                    <div class="status-title">PROGRESS</div>
+                    <div class="status-value" id="status-counter">0 / 0</div>
+                </div>
+            </div>
+
+            <div class="header-center">
+                <div class="controls" id="player-controls" style="display: none;">
+                    <div class="ctrl-group">
+                        <button class="nav-btn" id="btn-prev"><i class="fas fa-step-backward"></i></button>
+                        <button class="action-btn btn-play" id="btn-play"><i class="fas fa-play"></i> PLAY</button>
+                        <button class="action-btn btn-stop" id="btn-stop" style="display:none;"><i class="fas fa-stop"></i> STOP</button>
+                        <button class="nav-btn" id="btn-next"><i class="fas fa-step-forward"></i></button>
+                    </div>
+                    <div style="width: 1px; height: 16px; background: rgba(0,0,0,0.08); margin: 0 4px;"></div>
+                    <button class="action-btn btn-complete" id="btn-complete" title="스페이스바를 누르면 상태를 변경합니다">
+                        <i class="fas fa-check"></i> 암기 완료 (Space)
+                    </button>
+                </div>
+            </div>
+
+            <div class="header-right">
+                <div class="status-box" style="align-items: flex-end;">
+                    <div class="status-title" style="margin-right:4px;">SPEED PITCH</div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <select id="speed-select" class="speed-select">
+                            <option value="5000">x1.5 (5s)</option>
+                            <option value="10000" selected>x1.0 (10s)</option>
+                            <option value="15000">x0.7 (15s)</option>
+                            <option value="20000">x0.5 (20s)</option>
+                        </select>
+                        <button id="btn-immersive-toggle" class="nav-btn" style="background: var(--surface-1); border: 1px solid var(--border-light); box-shadow: 0 2px 4px rgba(0,0,0,0.02);" title="몰입 모드 전환 (Ctrl+H)">
+                            <i class="fas fa-expand"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="screen">
+            <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+
+            <div id="empty-state" class="empty-state">
+                <div class="empty-state-icon"><i class="fas fa-file-alt"></i></div>
+                <p class="main-text">선택된 문항이 없습니다.</p>
+                <p style="color:var(--text-sub);">좌측 리스트에서 복습할 문항을 체크해주세요.</p>
+            </div>
+
+            <div class="screen-content" id="screen-content" style="display: none;">
+                <div class="paper-container">
+                    <div class="paper-lead ql-editor" id="play-lead"></div>
+                    
+                    <div class="paper-prob-container" id="prob-container">
+                        <div class="paper-prob-num" id="play-prob-num"></div>
+                        <div class="paper-prob ql-editor" id="play-prob"></div>
+                    </div>
+
+                    <div class="paper-conc ql-editor" id="play-conc"></div>
+                    
+                    <hr class="paper-divider" id="sol-divider">
+                    <div class="paper-sol ql-editor" id="play-sol"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="image-modal" class="image-modal" onclick="this.classList.remove('show')">
+    <img id="modal-image" src="" alt="확대된 이미지">
+</div>
+
+<script>
+    let db;
+    let allNotes = [];
+    let currentNote = null;
+    let validIndices = []; 
+    let selectedIndices = []; 
+    let currentPlayIndex = -1;
+
+    let playInterval = null;
+    let progressInterval = null;
+    let isPlaying = false;
+    let slideDuration = 10000;
+    let startTime = 0;
+
+    const $noteSelect = document.getElementById('note-select');
+    const $list = document.getElementById('item-list');
+    const $checkAll = document.getElementById('check-all');
+    const $btnResetStatus = document.getElementById('btn-reset-status'); 
+    const $screenContent = document.getElementById('screen-content');
+    const $emptyState = document.getElementById('empty-state');
+    const $playerControls = document.getElementById('player-controls');
+    
+    const $playerAreaDOM = document.querySelector('.player-area');
+    let controlsTimeout;
+    
+    $playerAreaDOM.addEventListener('mousemove', () => {
+        $playerAreaDOM.classList.add('show-controls');
+        clearTimeout(controlsTimeout);
+        controlsTimeout = setTimeout(() => {
+            $playerAreaDOM.classList.remove('show-controls');
+        }, 2000);
+    });
+    
+    $playerAreaDOM.addEventListener('mouseleave', () => {
+        $playerAreaDOM.classList.remove('show-controls');
+    });
+
+    const isEmptyHTML = (html) => {
+        if (!html) return true;
+        const stripped = html.replace(/<[^>]*>/g, '').trim();
+        const hasImg = html.includes('<img');
+        return stripped === '' && !hasImg;
+    };
+
+    const initDB = () => {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open('StudyNoteDB', 1);
+            request.onsuccess = (e) => { db = e.target.result; resolve(); };
+            request.onerror = () => reject('DB 연결 에러. 에디터에서 먼저 노트를 생성해주세요.');
+        });
+    };
+
+    async function init() {
+        try {
+            await initDB();
+            await loadNotes();
+        } catch(e) {
+            alert(e);
+        }
+    }
+
+    function loadNotes() {
+        return new Promise((resolve) => {
+            const transaction = db.transaction(['notes'], 'readonly');
+            const request = transaction.objectStore('notes').getAll();
+            request.onsuccess = () => {
+                // 🚀 숫자 오름차순(자연 정렬) 적용
+                allNotes = request.result.sort((a, b) => {
+                    const titleA = a.title || '';
+                    const titleB = b.title || '';
+                    return titleA.localeCompare(titleB, undefined, { numeric: true, sensitivity: 'base' });
+                });
+                
+                renderNoteSelect();
+                if(allNotes.length > 0) loadNoteData(allNotes[0].id);
+                resolve();
+            };
+        });
+    }
+
+    // 🚀 셀렉트 박스 렌더링
+    function renderNoteSelect() {
+        $noteSelect.innerHTML = '';
+        if(allNotes.length === 0) {
+            $noteSelect.style.display = 'none';
+            return;
+        }
+        $noteSelect.style.display = 'block';
+        
+        allNotes.forEach(note => {
+            const option = document.createElement('option');
+            option.value = note.id;
+            const titleText = note.title || '제목 없음';
+            option.textContent = titleText;
+            if(currentNote && currentNote.id === note.id) {
+                option.selected = true;
+            }
+            $noteSelect.appendChild(option);
+        });
+    }
+
+    // 🚀 셀렉트 박스 OnChange 이벤트 (다른 노트 선택 시)
+    $noteSelect.addEventListener('change', (e) => {
+        if(isPlaying) stopPlay(); 
+        const selectedId = e.target.value;
+        const note = allNotes.find(n => String(n.id) === String(selectedId));
+        if(note) {
+            loadNoteData(note.id); 
+        }
+    });
+
+    function loadNoteData(noteId) {
+        currentNote = allNotes.find(n => n.id === noteId);
+        validIndices = [];
+        
+        currentNote.items.forEach((item, index) => {
+            if(item.checked === undefined) item.checked = false;
+            const prob = (item.problem||'').replace(/<p><br><\/p>|<p>&nbsp;<\/p>/gi, '').trim();
+            const lead = (item.lead||'').replace(/<p><br><\/p>|<p>&nbsp;<\/p>/gi, '').trim();
+            const conc = (item.concept||'').replace(/<p><br><\/p>|<p>&nbsp;<\/p>/gi, '').trim();
+            const sol = (item.solution||'').replace(/<p><br><\/p>|<p>&nbsp;<\/p>/gi, '').trim();
+            
+            if(!isEmptyHTML(prob) || !isEmptyHTML(lead) || !isEmptyHTML(conc) || !isEmptyHTML(sol)) {
+                validIndices.push(index);
+            }
+        });
+        
+        renderNoteSelect();
+        renderList();
+        updateSelection();
+        if(selectedIndices.length > 0) showSlide(0);
+        else showEmpty();
+    }
+
+    function renderList() {
+        $list.innerHTML = '';
+        if(validIndices.length === 0) {
+            $list.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-muted); font-size:14px;">기록된 내용이 없습니다.</div>';
+            return;
+        }
+
+        validIndices.forEach((realIndex) => {
+            const item = currentNote.items[realIndex];
+            const div = document.createElement('div');
+            div.className = 'list-item';
+            div.id = `list-item-${realIndex}`;
+            
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = item.problem || '';
+            const fullTitle = tempDiv.textContent.trim() || `[내용 참조]`;
+            let plainTitle = fullTitle;
+            if(plainTitle.length > 25) plainTitle = plainTitle.substring(0, 25) + '...';
+
+            const isChecked = item.checked ? '' : 'checked';
+            const completedClass = item.checked ? 'completed-text' : '';
+            
+            div.innerHTML = `
+                <input type="checkbox" class="item-checkbox" data-idx="${realIndex}" ${isChecked}>
+                <div class="list-item-title ${completedClass}" title="${fullTitle.replace(/"/g, '&quot;')}">${realIndex + 1}. ${plainTitle}</div>
+            `;
+            
+            div.querySelector('.list-item-title').onclick = () => {
+                if(isPlaying) stopPlay();
+                const checkbox = div.querySelector('input');
+                if(!checkbox.checked) { checkbox.checked = true; updateSelection(); }
+                const newPlayIndex = selectedIndices.indexOf(realIndex);
+                if(newPlayIndex !== -1) showSlide(newPlayIndex);
+            };
+            
+            div.querySelector('input').onchange = () => updateSelection();
+            $list.appendChild(div);
+        });
+    }
+
+    function updateSelection() {
+        const checkboxes = document.querySelectorAll('.item-checkbox');
+        selectedIndices = [];
+        checkboxes.forEach(cb => { if(cb.checked) selectedIndices.push(parseInt(cb.dataset.idx)); });
+        $checkAll.checked = checkboxes.length > 0 && selectedIndices.length === checkboxes.length;
+        
+        if(selectedIndices.length === 0) showEmpty();
+        else if(selectedIndices[currentPlayIndex] === undefined && !isPlaying) showSlide(0);
+        else { updateCounter(); document.getElementById('btn-prev').disabled = selectedIndices.length <= 1; document.getElementById('btn-next').disabled = selectedIndices.length <= 1; }
+    }
+
+    $checkAll.onchange = (e) => {
+        document.querySelectorAll('.item-checkbox').forEach(cb => cb.checked = e.target.checked);
+        updateSelection();
+        if(selectedIndices.length > 0 && !isPlaying) showSlide(0);
+    };
+
+    function updateCompleteButtonUI(isCompleted) {
+        const btn = document.getElementById('btn-complete');
+        if (isCompleted) {
+            btn.innerHTML = '<i class="fas fa-undo"></i> 완료 해제 (Space)';
+            btn.className = 'action-btn btn-undo';
+        } else {
+            btn.innerHTML = '<i class="fas fa-check"></i> 암기 완료 (Space)';
+            btn.className = 'action-btn btn-complete';
+        }
+    }
+
+    function saveCurrentNoteState() {
+        const transaction = db.transaction(['notes'], 'readwrite');
+        transaction.objectStore('notes').put(currentNote);
+    }
+
+    $btnResetStatus.onclick = () => {
+        if (!currentNote || !currentNote.items) return;
+        
+        if(confirm('현재 선택된 키노트의 모든 "암기 완료" 기록을 초기화하시겠습니까?')) {
+            currentNote.items.forEach(item => {
+                item.checked = false;
+            });
+            saveCurrentNoteState();
+            renderList();
+            
+            if (currentPlayIndex !== -1 && selectedIndices.length > 0) {
+                showSlide(currentPlayIndex);
+            }
+        }
+    };
+
+    document.getElementById('btn-complete').onclick = () => {
+        if(selectedIndices.length === 0) return;
+        const realIndex = selectedIndices[currentPlayIndex];
+        const item = currentNote.items[realIndex];
+
+        item.checked = !item.checked;
+        saveCurrentNoteState();
+        
+        const titleDiv = document.querySelector(`#list-item-${realIndex} .list-item-title`);
+        if(item.checked) titleDiv.classList.add('completed-text');
+        else titleDiv.classList.remove('completed-text');
+        
+        updateCompleteButtonUI(item.checked);
+        
+        if (item.checked) {
+            document.querySelector(`.item-checkbox[data-idx="${realIndex}"]`).checked = false;
+            updateSelection();
+            if(selectedIndices.length > 0) {
+                let nextIdx = currentPlayIndex >= selectedIndices.length ? 0 : currentPlayIndex;
+                showSlide(nextIdx);
+                if(isPlaying) resetProgressTimer(); 
+            } else {
+                showEmpty();
+                if(isPlaying) stopPlay(); 
+            }
+        }
+    };
+
+    function setContentOrHide(elementId, content) {
+        const el = document.getElementById(elementId);
+        
+        let cleanContent = content ? content
+            .replace(/<p><br><\/p>/gi, '')
+            .replace(/<p>&nbsp;<\/p>/gi, '')
+            .replace(/<p>\s*<\/p>/gi, '')
+            .replace(/(<br\s*\/?>)+<\/p>/gi, '</p>')
+            .trim() : '';
+
+        if(!isEmptyHTML(cleanContent)) {
+            el.innerHTML = cleanContent;
+            el.style.display = 'block';
+            return true;
+        } else {
+            el.innerHTML = '';
+            el.style.display = 'none';
+            return false;
+        }
+    }
+
+    function showSlide(playIndex) {
+        if(selectedIndices.length === 0) return showEmpty();
+        currentPlayIndex = playIndex;
+        const realIndex = selectedIndices[currentPlayIndex];
+        const item = currentNote.items[realIndex];
+
+        $emptyState.style.display = 'none';
+        $screenContent.style.display = 'block'; 
+        $playerControls.style.display = 'flex'; 
+
+        $screenContent.scrollTop = 0;
+
+        updateCompleteButtonUI(item.checked);
+
+        setContentOrHide('play-lead', item.lead);
+        
+        let probClean = item.problem ? item.problem.replace(/<p><br><\/p>/gi, '').replace(/<p>&nbsp;<\/p>/gi, '').trim() : '';
+        const hasProb = !isEmptyHTML(probClean);
+        
+        document.getElementById('prob-container').style.display = hasProb ? 'flex' : 'none';
+        if(hasProb) {
+            document.getElementById('play-prob-num').textContent = `${realIndex + 1}.`;
+            setContentOrHide('play-prob', item.problem);
+        }
+
+        setContentOrHide('play-conc', item.concept);
+        
+        const hasSol = setContentOrHide('play-sol', item.solution);
+        document.getElementById('sol-divider').style.display = hasSol ? 'block' : 'none';
+
+        document.querySelectorAll('.ql-editor img').forEach(img => {
+            img.onclick = (e) => {
+                document.getElementById('modal-image').src = e.target.src;
+                document.getElementById('image-modal').classList.add('show');
+            };
+        });
+
+        document.querySelectorAll('.list-item').forEach(el => el.classList.remove('active'));
+        const activeEl = document.getElementById(`list-item-${realIndex}`);
+        if(activeEl) { activeEl.classList.add('active'); activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+        
+        updateCounter();
+        document.getElementById('progress-fill').style.width = '0%';
+        document.getElementById('progress-fill').style.transition = 'none';
+    }
+
+    function showEmpty() {
+        $emptyState.style.display = 'flex';
+        $screenContent.style.display = 'none';
+        $playerControls.style.display = 'none'; 
+        document.getElementById('status-counter').textContent = '0 / 0';
+        document.getElementById('progress-fill').style.width = '0%';
+    }
+
+    function updateCounter() {
+        let cur = (currentPlayIndex + 1).toString().padStart(2, '0');
+        let tot = selectedIndices.length.toString().padStart(2, '0');
+        document.getElementById('status-counter').textContent = `${cur} / ${tot}`;
+    }
+
+    function playNext() {
+        if(selectedIndices.length === 0) return stopPlay();
+        currentPlayIndex = currentPlayIndex + 1 >= selectedIndices.length ? 0 : currentPlayIndex + 1;
+        showSlide(currentPlayIndex);
+        if(isPlaying) resetProgressTimer();
+    }
+
+    function playPrev() {
+        if(selectedIndices.length === 0) return;
+        currentPlayIndex = currentPlayIndex - 1 < 0 ? selectedIndices.length - 1 : currentPlayIndex - 1;
+        showSlide(currentPlayIndex);
+        if(isPlaying) resetProgressTimer();
+    }
+
+    function startPlay() {
+        if(selectedIndices.length === 0) return alert('재생할 항목을 선택하세요.');
+        if(currentPlayIndex === -1) currentPlayIndex = 0;
+        isPlaying = true;
+        slideDuration = parseInt(document.getElementById('speed-select').value);
+        
+        document.getElementById('btn-play').style.display = 'none';
+        document.getElementById('btn-stop').style.display = 'flex';
+        
+        showSlide(currentPlayIndex);
+        resetProgressTimer();
+    }
+
+    function stopPlay() {
+        isPlaying = false;
+        clearInterval(playInterval);
+        clearInterval(progressInterval);
+        document.getElementById('btn-play').style.display = 'flex';
+        document.getElementById('btn-stop').style.display = 'none';
+        document.getElementById('progress-fill').style.width = '0%';
+        document.getElementById('progress-fill').style.transition = 'none';
+    }
+
+    function resetProgressTimer() {
+        clearInterval(playInterval); clearInterval(progressInterval);
+        startTime = Date.now();
+        document.getElementById('progress-fill').style.transition = 'width 0.1s linear';
+        
+        progressInterval = setInterval(() => {
+            let percent = ((Date.now() - startTime) / slideDuration) * 100;
+            if(percent > 100) percent = 100;
+            document.getElementById('progress-fill').style.width = `${percent}%`;
+        }, 100);
+
+        playInterval = setInterval(() => { playNext(); }, slideDuration);
+    }
+
+    document.getElementById('btn-play').onclick = startPlay;
+    document.getElementById('btn-stop').onclick = stopPlay;
+    document.getElementById('btn-next').onclick = () => { if(isPlaying) stopPlay(); playNext(); };
+    document.getElementById('btn-prev').onclick = () => { if(isPlaying) stopPlay(); playPrev(); };
+    document.getElementById('speed-select').onchange = (e) => { if(isPlaying) { slideDuration = parseInt(e.target.value); resetProgressTimer(); } };
+
+    function toggleImmersiveMode() {
+        document.body.classList.toggle('immersive');
+        document.body.classList.remove('presentation');
+        const icon = document.querySelector('#btn-immersive-toggle i');
+        if(document.body.classList.contains('immersive')) {
+            icon.className = 'fas fa-compress';
+        } else {
+            icon.className = 'fas fa-expand';
+        }
+    }
+
+    document.getElementById('btn-immersive-toggle').onclick = toggleImmersiveMode;
+
+    document.addEventListener('keydown', (e) => {
+        if (e.ctrlKey && e.key.toLowerCase() === 'm') {
+            e.preventDefault();
+            document.body.classList.toggle('presentation');
+            document.body.classList.remove('immersive'); 
+            return;
+        }
+
+        if (e.ctrlKey && e.key.toLowerCase() === 'h') { 
+            e.preventDefault(); 
+            toggleImmersiveMode(); 
+            return; 
+        }
+        
+        if (selectedIndices.length > 0) {
+            if(e.key === 'ArrowRight') { e.preventDefault(); if(isPlaying) stopPlay(); playNext(); } 
+            else if(e.key === 'ArrowLeft') { e.preventDefault(); if(isPlaying) stopPlay(); playPrev(); }
+            
+            else if(e.key === 'ArrowUp') {
+                e.preventDefault(); 
+                $screenContent.scrollBy({ top: -80, behavior: 'smooth' }); 
+            }
+            else if(e.key === 'ArrowDown') { 
+                e.preventDefault(); 
+                $screenContent.scrollBy({ top: 80, behavior: 'smooth' }); 
+            }
+            
+            else if(e.key === ' ') { 
+                e.preventDefault(); 
+                if($playerControls.style.display !== 'none') document.getElementById('btn-complete').click(); 
+            }
+        }
+    });
+
+    window.onload = init;
+</script>
+</body>
+</html>

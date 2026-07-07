@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terraform HCL 시뮬레이터 (Pro)</title>
+    <style>
+        :root {
+            --bg-color: #1e1e1e;
+            --panel-bg: #252526;
+            --text-color: #d4d4d4;
+            --border-color: #3c3c3c;
+            --var-color: #ce9178;
+            --local-color: #dcdcaa;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            height: 100vh;
+            box-sizing: border-box;
+            gap: 20px;
+        }
+
+        h2 {
+            font-size: 1.2rem;
+            margin-top: 0;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+            color: #569cd6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .status-badge {
+            font-size: 0.8rem;
+            background-color: #4CAF50;
+            color: #fff;
+            padding: 3px 8px;
+            border-radius: 12px;
+        }
+
+        .editor-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: var(--panel-bg);
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+
+        textarea {
+            flex: 1;
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 15px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 1.05rem;
+            line-height: 1.5;
+            resize: none;
+            outline: none;
+            white-space: pre;
+            tab-size: 2;
+        }
+
+        textarea:focus { border-color: #569cd6; }
+
+        .results-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .panel {
+            background-color: var(--panel-bg);
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .output-block {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background-color: #1e1e1e;
+            padding: 15px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+            font-size: 0.95rem;
+            color: #d4d4d4;
+            margin-bottom: 10px;
+        }
+
+        .output-name { color: #4EC9B0; font-weight: bold; }
+        .output-value { color: var(--var-color); word-break: break-all; }
+        .empty-msg { color: #888; font-style: italic; }
+        
+        .section-title {
+            color: #9cdcfe;
+            margin-bottom: 10px;
+            font-size: 1.1rem;
+            font-weight: bold;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="editor-container">
+        <h2>
+            <span>🛠️ HCL 에디터</span>
+            <span class="status-badge">실시간 연동 중</span>
+        </h2>
+        <textarea id="hclInput" spellcheck="false"># 도시 리스트 선언
+variable "cities" {
+  description = "List of cities"
+  type        = list(string)
+  default     = ["Seoul", "Tokyo", "New York"]
+}
+
+# 각 도시 앞에 접두사 추가
+locals {
+  prefixed_cities = [for city in var.cities : "City: ${city}"]
+}
+
+# 출력값 정의
+output "formatted_cities" {
+  description = "List of cities with prefix"
+  value       = local.prefixed_cities
+}</textarea>
+    </div>
+
+    <div class="results-container">
+        <div class="panel" style="flex: 1;">
+            <h2>🖥️ 테라폼 실행 결과 (Outputs & Plan)</h2>
+            
+            <div class="section-title">Outputs:</div>
+            <div id="outputsDisplay"></div>
+
+            <div class="section-title" style="margin-top: 20px;">Resources Plan:</div>
+            <div id="planDisplay" class="output-block"></div>
+        </div>
+    </div>
+
+    <script>
+        const hclInput = document.getElementById('hclInput');
+        hclInput.addEventListener('input', runSimulation);
+
+        function runSimulation() {
+            const hclCode = hclInput.value;
+            
+            const variables = {};
+            const locals = {};
+            const outputs = [];
+            const resources = [];
+
+            // 1. Variable 파싱 (리스트 배열 완벽 지원)
+            const varRegex = /variable\s+"([^"]+)"\s*\{([\s\S]*?)\n\s*\}/g;
+            let match;
+            while ((match = varRegex.exec(hclCode)) !== null) {
+                const vName = match[1];
+                const blockContent = match[2];
+                let val = ""; 
+
+                const defMatch = blockContent.match(/default\s*=\s*(\[.*?\]|"[^"]*")/);
+                if (defMatch) {
+                    let rawVal = defMatch[1];
+                    if (rawVal.startsWith('[')) {
+                        // 대괄호로 묶인 리스트인 경우 배열로 변환
+                        val = rawVal.replace(/[\[\]"]/g, '').split(',').map(s => s.trim());
+                    } else {
+                        // 단순 문자열인 경우
+                        val = rawVal.replace(/"/g, '');
+                    }
+                }
+                variables[vName] = val;
+            }
+
+            // 2. Locals 파싱 및 For 루프 해석
+            const localRegex = /locals\s*\{([\s\S]*?)\n\s*\}/g;
+            while ((match = localRegex.exec(hclCode)) !== null) {
+                const blockContent = match[1];
+                const lines = blockContent.split('\n');
+                
+                for (let line of lines) {
+                    // key = value 형태 추출
+                    const kvMatch = line.match(/^\s*([a-zA-Z0-9_-]+)\s*=\s*(.+)$/);
+                    if (kvMatch) {
+                        const lName = kvMatch[1];
+                        let lValRaw = kvMatch[2].trim();
+
+                        // [for city in var.cities : "City: ${city}"] 구문 분석
+                        const forMatch = lValRaw.match(/\[\s*for\s+([a-zA-Z0-9_]+)\s+in\s+var\.([a-zA-Z0-9_]+)\s*:\s*"([^"]+)"\s*\]/);
+                        
+                        if (forMatch) {
+                            const iterVar = forMatch[1];     // 예: city
+                            const listVarName = forMatch[2]; // 예: cities
+                            const template = forMatch[3];    // 예: City: ${city}
+
+                            const sourceList = variables[listVarName];
+                            if (Array.isArray(sourceList)) {
+                                // 리스트를 순회하며 템플릿 치환 적용
+                                locals[lName] = sourceList.map(item => {
+                                    const regex = new RegExp(`\\$\\{${iterVar}\\}`, 'g');
+                                    return template.replace(regex, item);
+                                });
+                            } else {
+                                locals[lName] = `[Error: var.${listVarName}은(는) 리스트가 아닙니다.]`;
+                            }
+                        } else if (lValRaw.startsWith('"')) {
+                            // 단순 문자열인 경우
+                            locals[lName] = lValRaw.replace(/"/g, '');
+                        }
+                    }
+                }
+            }
+
+            // 3. Output 파싱 (local.xxx 및 var.xxx 참조 완벽 지원)
+            const outRegex = /output\s+"([^"]+)"\s*\{([\s\S]*?)\n\s*\}/g;
+            while ((match = outRegex.exec(hclCode)) !== null) {
+                const oName = match[1];
+                const blockContent = match[2];
+                
+                const valMatch = blockContent.match(/value\s*=\s*(.+)$/m);
+                if (valMatch) {
+                    let rawVal = valMatch[1].trim();
+
+                    if (rawVal.startsWith('local.')) {
+                        // local.prefixed_cities 참조 처리
+                        const lName = rawVal.replace('local.', '');
+                        let res = locals[lName];
+                        // 배열이면 테라폼 포맷으로 묶어서 출력
+                        let finalVal = Array.isArray(res) ? `[\n  ${res.map(s => `"${s}"`).join(',\n  ')}\n]` : `"${res}"`;
+                        outputs.push({ name: oName, value: finalVal });
+                    } 
+                    else if (rawVal.startsWith('var.')) {
+                        // var.cities 참조 처리
+                        const vName = rawVal.replace('var.', '');
+                        let res = variables[vName];
+                        let finalVal = Array.isArray(res) ? `[\n  ${res.map(s => `"${s}"`).join(',\n  ')}\n]` : `"${res}"`;
+                        outputs.push({ name: oName, value: finalVal });
+                    }
+                    else {
+                        // 기본 문자열 및 ${} 치환
+                        let outStr = rawVal.replace(/"/g, '');
+                        outStr = outStr.replace(/\$\{var\.([^}]+)\}/g, (m, v) => variables[v] || '');
+                        outStr = outStr.replace(/\$\{local\.([^}]+)\}/g, (m, l) => locals[l] || '');
+                        outputs.push({ name: oName, value: `"${outStr}"` });
+                    }
+                }
+            }
+
+            // 4. Resource 파싱 (기존 로직 유지)
+            const resourceRegex = /resource\s+"([^"]+)"\s+"([^"]+)"/g;
+            while ((match = resourceRegex.exec(hclCode)) !== null) {
+                resources.push({ type: match[1], name: match[2] });
+            }
+
+            renderOutputs(outputs);
+            renderPlan(resources);
+        }
+
+        function renderOutputs(outputs) {
+            const display = document.getElementById('outputsDisplay');
+            if (outputs.length === 0) {
+                display.innerHTML = '<div class="empty-msg">선언된 output 블록이 없습니다.</div>';
+                return;
+            }
+
+            let html = '';
+            outputs.forEach(out => {
+                // value가 리스트 포맷인 경우 줄바꿈 유지(pre)
+                html += `<div class="output-block">
+                    <span class="output-name">${out.name}</span> = <span class="output-value" style="white-space: pre-wrap;">${out.value}</span>
+                </div>`;
+            });
+            display.innerHTML = html;
+        }
+
+        function renderPlan(resources) {
+            const display = document.getElementById('planDisplay');
+            if (resources.length === 0) {
+                display.innerHTML = '<span class="empty-msg">선언된 resource 블록이 없습니다.</span>';
+                return;
+            }
+
+            let html = `<div style="color:#e5e510; font-weight:bold; margin-bottom:10px;">Plan: ${resources.length} to add, 0 to change, 0 to destroy.</div>`;
+            resources.forEach(res => {
+                html += `<div style="margin-bottom:5px;"><span style="color:#4CAF50;">+ create</span> ${res.type}.${res.name}</div>`;
+            });
+            display.innerHTML = html;
+        }
+
+        // 초기 실행
+        runSimulation();
+    </script>
+</body>
+</html>

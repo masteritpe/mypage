@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>⚡️ Writing Drill</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" rel="stylesheet">
+<style>
+    /* 1. Reset & Variables */
+    :root {
+        --primary: #2563eb;
+        --primary-soft: #eff6ff;
+        --text-main: #111827;
+        --text-sub: #6b7280;
+        --border: #e5e7eb;
+        --bg-body: #f3f4f6;
+        --bg-panel: #ffffff;
+        --danger: #ef4444;
+        --success: #10b981;
+        --radius: 12px;
+        --shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.1);
+    }
+
+    * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; }
+    
+    html, body {
+        margin: 0; padding: 0;
+        width: 100%; 
+        height: 100vh; height: 100dvh; 
+        overflow: hidden;
+        font-family: 'Pretendard', sans-serif;
+        background: var(--bg-body); color: var(--text-main);
+    }
+
+    .app-container { display: flex; width: 100%; height: 100%; position: relative; }
+
+    /* 2. Sidebar */
+    aside {
+        width: 280px; min-width: 280px; height: 100%;
+        background: var(--bg-panel); border-right: 1px solid var(--border);
+        display: flex; flex-direction: column; z-index: 20;
+        transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
+                    min-width 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
+                    padding 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                    height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        overflow: hidden;
+    }
+    .sidebar-header {
+        height: 56px; min-height: 56px; display: flex; align-items: center; padding: 0 20px;
+        font-weight: 800; font-size: 1.1rem; color: var(--text-main); border-bottom: 1px solid var(--border);
+        white-space: nowrap;
+    }
+    .sidebar-content { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 15px; padding-bottom: 40px; white-space: nowrap; }
+
+    /* 3. Main Content */
+    main { flex: 1; height: 100%; display: flex; flex-direction: column; min-width: 0; background: var(--bg-body); }
+
+    /* Toolbar (Compact Style) */
+    .toolbar {
+        height: 56px; min-height: 56px;
+        background: var(--bg-panel); border-bottom: 1px solid var(--border);
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 0 20px; flex-shrink: 0; z-index: 10;
+        transition: margin-top 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Immersive Mode Styles */
+    body.immersive-mode aside {
+        width: 0 !important;
+        min-width: 0 !important;
+        padding: 0 !important;
+        border-right: none;
+    }
+    body.immersive-mode .toolbar {
+        margin-top: -57px; 
+    }
+
+    /* [수정] Toggle Button Position */
+    .toggle-view-btn {
+        position: fixed; top: 10px; 
+        right: 170px; /* 기존 10px에서 170px로 이동하여 버튼 겹침 방지 */
+        z-index: 1001;
+        width: 36px; height: 36px;
+        background: rgba(255,255,255,0.9); border: 1px solid var(--border);
+        border-radius: 8px; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        color: var(--text-sub); transition: 0.2s;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+    .toggle-view-btn:hover { background: #fff; color: var(--primary); }
+    body.immersive-mode .toggle-view-btn { opacity: 0.5; }
+    body.immersive-mode .toggle-view-btn:hover { opacity: 1; }
+
+    /* Workspace */
+    .workspace {
+        flex: 1; overflow-y: auto; overflow-x: hidden;
+        display: flex; justify-content: center; align-items: flex-start;
+        padding: 40px 20px 120px 20px;
+        transition: padding 0.3s;
+    }
+
+    /* Paper */
+    .paper {
+        width: 100%; max-width: 800px; background: var(--bg-panel);
+        border: 1px solid var(--border); border-radius: 16px;
+        box-shadow: var(--shadow); padding: 40px;
+        display: flex; flex-direction: column; gap: 30px;
+        transition: border-color 0.3s, box-shadow 0.3s;
+    }
+    .paper.review { border-color: var(--success); box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.1); }
+
+    /* UI Components */
+    .data-card { background: var(--primary-soft); padding: 12px; border-radius: 8px; border: 1px solid #dbeafe; font-size: 0.8rem; }
+    .data-row { display: flex; justify-content: space-between; margin-bottom: 8px; color: var(--text-sub); }
+    .data-val { font-weight: 700; color: var(--primary); }
+
+    .history-item {
+        padding: 10px; background: white; border: 1px solid var(--border);
+        border-radius: 8px; margin-bottom: 6px; cursor: pointer; transition: 0.2s;
+        position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+    }
+    .history-item:hover { border-color: var(--primary); transform: translateY(-2px); }
+    .history-topic { font-weight: 700; font-size: 0.85rem; margin-bottom: 4px; line-height: 1.4; }
+    .history-meta { font-size: 0.75rem; color: #9ca3af; display: flex; gap: 6px; }
+    .btn-del-hist { position: absolute; right: 5px; top: 5px; border:none; background:transparent; color:#d1d5db; cursor: pointer; padding:5px; }
+    .btn-del-hist:hover { color: var(--danger); }
+
+    /* Drill Header */
+    .topic-section { text-align: center; margin-bottom: 10px; }
+    .round-tag { display: inline-block; font-size: 0.75rem; font-weight: 700; color: var(--primary); background: var(--primary-soft); padding: 4px 12px; border-radius: 20px; margin-bottom: 15px; letter-spacing: 0.5px; }
+    .topic-display { font-size: 1.8rem; font-weight: 800; line-height: 1.4; color: #111; word-break: keep-all; }
+    .timer-display { font-family: 'Pretendard', monospace; font-size: 1.6rem; font-weight: 700; color: #cbd5e1; margin-top: 15px; font-variant-numeric: tabular-nums; }
+    .timer-display.active { color: var(--primary); }
+    .timer-display.ended { color: var(--danger); }
+
+    /* Inputs */
+    .field-group label { display: block; font-size: 0.85rem; font-weight: 700; color: #4b5563; margin-bottom: 8px; }
+    .field-input {
+        width: 100%; padding: 14px; border: 1px solid #e5e7eb; border-radius: 8px;
+        font-size: 1rem; line-height: 1.6; background: #f9fafb; resize: vertical; font-family: inherit;
+        transition: 0.2s;
+    }
+    .field-input:focus { background: white; border-color: var(--primary); box-shadow: 0 0 0 4px var(--primary-soft); }
+
+    /* Reference Box */
+    .ref-box {
+        margin-top: 20px; padding: 24px; background: #f0fdf4; border: 1px solid #bbf7d0;
+        border-radius: var(--radius); display: none;
+    }
+    .ref-box.show { display: block; animation: fadeUp 0.3s ease; }
+    .ref-header { display: flex; justify-content: space-between; margin-bottom: 15px; align-items: center; }
+    .ref-title { font-weight: 800; color: #15803d; font-size: 1rem; }
+    .ref-text { font-size: 0.95rem; color: #14532d; white-space: pre-wrap; line-height: 1.7; margin-bottom: 20px; padding: 10px; background: rgba(255,255,255,0.6); border-radius: 6px; }
+    .ref-label { font-size: 0.75rem; font-weight: 800; color: #15803d; opacity: 0.8; margin-bottom: 6px; text-transform: uppercase; }
+
+    /* Buttons */
+    .round-select { padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; font-weight: 600; min-width: 180px; font-size: 0.85rem; cursor: pointer; }
+    
+    .btn { padding: 10px 18px; border-radius: 8px; font-weight: 600; border: 1px solid var(--border); background: white; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; font-size: 0.95rem; transition: 0.2s; }
+    .btn:hover { background: #f3f4f6; transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
+    
+    .btn-compact { padding: 6px 14px; font-size: 0.85rem; height: 36px; border-radius: 6px; }
+
+    .btn-primary { background: var(--primary); color: white; border-color: var(--primary); box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2); }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-danger { color: var(--danger); background: #fef2f2; border-color: #fee2e2; }
+    .btn-sm { padding: 4px 10px; font-size: 0.75rem; }
+    
+    .btn-clear-all { border: none; background: transparent; color: #ef4444; font-size: 0.75rem; font-weight: 700; cursor: pointer; opacity: 0.8; }
+    .btn-clear-all:hover { opacity: 1; text-decoration: underline; }
+
+    .action-bar { 
+        display: flex; justify-content: center; gap: 12px; margin-top: 10px; 
+        padding-top: 30px; border-top: 1px dashed var(--border); flex-wrap: wrap;
+    }
+
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* Mobile */
+    @media (max-width: 768px) {
+        .app-container { flex-direction: column; }
+        aside { width: 100%; height: auto; max-height: 35%; border-right: none; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+        
+        body.immersive-mode aside { height: 0 !important; min-height: 0 !important; border: none; }
+        
+        .sidebar-content { padding: 15px; }
+        .toolbar { padding: 0 15px; }
+        main { height: 65%; }
+        .workspace { padding: 20px 15px 100px 15px; }
+        .paper { padding: 25px; }
+        .topic-display { font-size: 1.4rem; }
+        .action-bar { flex-direction: column; }
+        .btn { width: 100%; justify-content: center; }
+        .btn-compact { width: auto; }
+    }
+</style>
+</head>
+<body>
+
+<button class="toggle-view-btn" onclick="toggleImmersive()" title="몰입 모드 (H)">
+    <i id="toggle-icon" class="fas fa-eye-slash"></i>
+</button>
+
+<div id="toast" style="position:fixed; bottom:30px; left:50%; transform:translateX(-50%); background:rgba(17, 24, 39, 0.95); color:white; padding:12px 24px; border-radius:30px; font-size:0.9rem; font-weight:600; opacity:0; pointer-events:none; transition:0.3s; z-index:999; box-shadow: 0 4px 12px rgba(0,0,0,0.15);"></div>
+
+<div class="app-container">
+    <aside>
+        <div class="sidebar-header">⚡️ Writing Drill</div>
+        <div class="sidebar-content">
+            <div class="data-card">
+                <div class="data-row">
+                    <span>문제 은행</span>
+                    <span class="data-val" id="qCount">0</span>
+                </div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+                    <button class="btn btn-sm" onclick="exportToExcel()" style="justify-content:center;">📥 백업</button>
+                    <button class="btn btn-sm btn-primary" onclick="document.getElementById('excelFile').click()" style="justify-content:center;">📂 업로드</button>
+                    <input type="file" id="excelFile" accept=".xlsx, .csv" style="display:none" onchange="importFromExcel(event)">
+                </div>
+            </div>
+
+            <div style="font-size:0.75rem; color:#6b7280; line-height:1.8; background:#f9fafb; padding:10px; border-radius:8px;">
+                <div>🔥 <b>Alt + C</b> : 연속 모드</div>
+                <div>✨ <b>Alt + R</b> : 초기화</div>
+                <div>❌ <b>Alt + X</b> : 중단 (연속)</div>
+                <div>💾 <b>Ctrl + S</b> : 저장</div>
+                <div>⏩ <b>Ctrl + Ent</b> : 다음 문제 (연속)</div>
+                <div>✅ <b>Alt + M</b> : 정답 확인</div>
+                <div>👀 <b>H</b> : 몰입 모드 토글</div>
+            </div>
+
+            <div style="flex:1;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <div style="font-size:0.75rem; font-weight:800; color:#9ca3af; text-transform:uppercase; letter-spacing:0.5px;">History (<span id="rCount">0</span>)</div>
+                    <button class="btn-clear-all" onclick="deleteAllHistory()">전체 삭제</button>
+                </div>
+                <div id="historyList"></div>
+            </div>
+        </div>
+    </aside>
+
+    <main>
+        <div class="toolbar">
+            <select id="roundSelect" class="round-select" onchange="updateStatus()">
+                <option value="all">전체 라운드(All Rounds)</option>
+            </select>
+            <div style="display:flex; gap:8px;">
+                <button class="btn btn-compact" title="Alt + R" onclick="resetDrill()">초기화</button>
+                <button class="btn btn-compact btn-primary" title="Ctrl + S" onclick="saveRecord()">저장</button>
+            </div>
+        </div>
+
+        <div class="workspace">
+            <div class="paper" id="paperArea">
+                <div style="position:absolute; top:0; left:0; height:4px; background:var(--primary); width:0%; transition:0.1s; border-radius:12px 12px 0 0;" id="progressFill"></div>
+
+                <div class="topic-section">
+                    <span class="round-tag" id="displayRound">READY</span>
+                    <div class="topic-display" id="displayTopic">라운드 선택 후<br>시작하세요</div>
+                    <div class="timer-display" id="displayTimer">00.00</div>
+                    <div id="queueBadge" style="display:none; color:#ea580c; font-size:0.85rem; font-weight:700; margin-top:8px;">남은 문제: 0</div>
+                </div>
+
+                <div style="display:flex; flex-direction:column; gap:20px;">
+                    <div class="field-group">
+                        <label>정의(Definition)</label>
+                        <textarea id="inDef" class="field-input" rows="3" placeholder="내용을 입력하세요..." disabled></textarea>
+                    </div>
+                    <div class="field-group">
+                        <label>키워드(Keywords)</label>
+                        <input id="inKeys" type="text" class="field-input" placeholder="키워드1, 키워드2..." disabled>
+                    </div>
+                    <div class="field-group">
+                        <label>상세 설명/복기(Review Note)</label>
+                        <textarea id="inDetail" class="field-input" rows="4" placeholder="리뷰 단계에서 활성화됩니다." disabled></textarea>
+                    </div>
+                </div>
+
+                <div id="refArea" class="ref-box">
+                    <div class="ref-header">
+                        <span class="ref-title">💡 모범 답안</span>
+                        <button class="btn btn-sm" onclick="copyRefToInput()">⬆️ 복사하기</button>
+                    </div>
+                    <div class="ref-label">정의</div>
+                    <div id="refDef" class="ref-text"></div>
+                    <div class="ref-label">키워드</div>
+                    <div id="refKeys" class="ref-text"></div>
+                </div>
+
+                <div class="action-bar">
+                    <button id="btnContinuous" class="btn btn-primary" onclick="startContinuousDrill()">🔥 연속 모드(Alt+C)</button>
+                    
+                    <button id="btnSingle" class="btn" onclick="nextQuestion()">🎲 1문제(Alt+N)</button>
+                    
+                    <button id="btnStop" class="btn btn-danger" style="display:none;" onclick="stopContinuousDrill()">⏹ 중단(Alt+X)</button>
+                    
+                    <button id="btnFinish" class="btn btn-primary" style="display:none;" onclick="finishDrill(true)">✅ 정답 확인(Alt+M)</button>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script>
+    /* ----------------------------------------------------
+       IndexedDB Helper Class
+       ---------------------------------------------------- */
+    class DrillDB {
+        constructor() {
+            this.dbName = 'WritingDrillDB';
+            // FIX: 버전 1에서 저장소가 생성되지 않는 문제를 해결하기 위해 버전을 2로 올림
+            this.version = 1; 
+            this.db = null;
+        }
+
+        async init() {
+            return new Promise((resolve, reject) => {
+                const req = indexedDB.open(this.dbName, this.version);
+                
+                req.onupgradeneeded = (e) => {
+                    const db = e.target.result;
+                    // 저장소 생성 로직
+                    if (!db.objectStoreNames.contains('questions')) {
+                        const qStore = db.createObjectStore('questions', { keyPath: 'id' });
+                        qStore.createIndex('round', 'round', { unique: false });
+                    }
+                    if (!db.objectStoreNames.contains('history')) {
+                        const hStore = db.createObjectStore('history', { keyPath: 'id' });
+                        hStore.createIndex('date', 'date', { unique: false });
+                    }
+                };
+
+                req.onsuccess = (e) => {
+                    this.db = e.target.result;
+                    resolve(true);
+                };
+                req.onerror = (e) => reject(e);
+            });
+        }
+
+        async getAll(storeName) {
+            return new Promise((resolve, reject) => {
+                const tx = this.db.transaction(storeName, 'readonly');
+                const store = tx.objectStore(storeName);
+                const req = store.getAll();
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => reject(req.error);
+            });
+        }
+
+        async put(storeName, data) {
+            return new Promise((resolve, reject) => {
+                const tx = this.db.transaction(storeName, 'readwrite');
+                const store = tx.objectStore(storeName);
+                const req = store.put(data);
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => reject(req.error);
+            });
+        }
+
+        async addBulk(storeName, items) {
+            return new Promise((resolve, reject) => {
+                const tx = this.db.transaction(storeName, 'readwrite');
+                const store = tx.objectStore(storeName);
+                items.forEach(item => store.put(item));
+                tx.oncomplete = () => resolve(true);
+                tx.onerror = () => reject(tx.error);
+            });
+        }
+
+        async delete(storeName, id) {
+            return new Promise((resolve, reject) => {
+                const tx = this.db.transaction(storeName, 'readwrite');
+                const store = tx.objectStore(storeName);
+                const req = store.delete(id);
+                req.onsuccess = () => resolve(true);
+                req.onerror = () => reject(req.error);
+            });
+        }
+        
+        async clear(storeName) {
+            return new Promise((resolve, reject) => {
+                const tx = this.db.transaction(storeName, 'readwrite');
+                const store = tx.objectStore(storeName);
+                const req = store.clear();
+                req.onsuccess = () => resolve(true);
+                req.onerror = () => reject(req.error);
+            });
+        }
+
+        // DB 삭제 유틸리티 (에러 복구용)
+        static deleteDB() {
+            return new Promise((resolve, reject) => {
+                const req = indexedDB.deleteDatabase('WritingDrillDB');
+                req.onsuccess = () => resolve(true);
+                req.onerror = () => reject(req.error);
+            });
+        }
+    }
+
+    /* ----------------------------------------------------
+       App Logic
+       ---------------------------------------------------- */
+    const db = new DrillDB();
+    let questionBank = [], currentQ = null, timerInterval = null, timeLeft = 80;
+    let isContinuous = false, drillQueue = [];
+    let isRetestMode = false;
+    const TIME_LIMIT = 80;
+
+    // Initialization with Enhanced Error Handling
+    window.onload = async () => { 
+        try {
+            await db.init();
+            await loadData(); 
+            await renderHistory(); 
+            updateRoundDropdown();
+        } catch(e) {
+            console.error("DB Error:", e);
+            // 오류 발생 시 DB 초기화 제안
+            if(confirm("데이터베이스 오류가 발생했습니다. DB를 초기화하고 다시 시작할까요? (기존 기록은 삭제됩니다)")) {
+                try {
+                    await DrillDB.deleteDB();
+                    location.reload();
+                } catch(delErr) {
+                    alert("초기화 실패. 브라우저 캐시를 삭제해주세요.");
+                }
+            }
+        }
+    };
+
+    document.addEventListener('keydown', (e) => {
+        // [추가] H 키: 몰입 모드 토글 (입력창 포커스 아닐 때만)
+        if (e.key.toLowerCase() === 'h' && 
+            e.target.tagName !== 'INPUT' && 
+            e.target.tagName !== 'TEXTAREA') { 
+            e.preventDefault(); 
+            toggleImmersive(); 
+            return;
+        }
+
+        // Ctrl + S : 저장
+        if((e.ctrlKey||e.metaKey) && (e.key==='s'||e.key==='S')) { e.preventDefault(); saveRecord(); return; }
+        
+        // Alt + C : 연속 모드 시작
+        if(e.altKey && (e.key==='c'||e.key==='C')) { e.preventDefault(); startContinuousDrill(); return; }
+        
+        // Ctrl + Enter : 연속 모드 스킵 / 다음 문제 (정답 확인 후에도 작동)
+        if(isContinuous && (e.ctrlKey||e.metaKey) && e.key==='Enter') { e.preventDefault(); autoSaveAndNext(); return; }
+        
+        // Alt + R : 초기화
+        if(e.altKey && (e.key==='r'||e.key==='R')) { e.preventDefault(); resetDrill(); return; }
+        
+        // Alt + X : 연속 모드 중단
+        if(isContinuous && e.altKey && (e.key==='x'||e.key==='X')) { e.preventDefault(); stopContinuousDrill(); return; }
+        
+        // Alt + M : 정답 확인 (연속 모드에서도 작동하도록 제한 해제)
+        if(e.altKey && (e.key==='m'||e.key==='M')) { 
+            e.preventDefault(); 
+            // 버튼이 화면에 보이는 상태(활성화 상태)라면 실행
+            const btn = document.getElementById('btnFinish');
+            if(btn && btn.style.display !== 'none') finishDrill(true); 
+        }
+        
+        // Alt + N : 1문제 모드에서 다음 문제
+        if(!isContinuous && e.altKey && (e.key==='n'||e.key==='N')) {
+             e.preventDefault(); nextQuestion(); 
+        }
+    });
+
+    // [추가] 몰입 모드 토글 함수
+    function toggleImmersive() {
+        document.body.classList.toggle('immersive-mode');
+        const isImmersive = document.body.classList.contains('immersive-mode');
+        const icon = document.getElementById('toggle-icon');
+        if(icon) icon.className = isImmersive ? 'fas fa-eye' : 'fas fa-eye-slash';
+    }
+
+    /* Audio Logic */
+    function playBeep() {
+        try {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContext) return;
+            const ctx = new AudioContext();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(880, ctx.currentTime); 
+            gain.gain.setValueAtTime(0.1, ctx.currentTime); 
+            osc.start();
+            osc.stop(ctx.currentTime + 0.15); 
+        } catch(e) {
+            console.error("Audio Play Error", e);
+        }
+    }
+
+    async function loadData() {
+        questionBank = await db.getAll('questions');
+        updateStatus();
+    }
+
+    function updateRoundDropdown() {
+        const sel = document.getElementById('roundSelect');
+        const val = sel.value;
+        const rounds = [...new Set(questionBank.map(q => q.round))].sort();
+        sel.innerHTML = '<option value="all">전체 라운드(All Rounds)</option>';
+        rounds.forEach(r => {
+            const opt = document.createElement('option');
+            opt.value = r; opt.innerText = `ROUND ${r}`;
+            sel.appendChild(opt);
+        });
+        if(rounds.includes(val) || val === 'all') sel.value = val;
+    }
+
+    function getPool() {
+        const r = document.getElementById('roundSelect').value;
+        return r === 'all' ? questionBank : questionBank.filter(q => String(q.round) === String(r));
+    }
+
+    function startContinuousDrill() {
+        const pool = getPool();
+        if(pool.length === 0) { alert("문제가 없습니다."); return; }
+        
+        isRetestMode = false;
+        document.getElementById('btnSingle').innerText = "🎲 1문제(Alt+N)";
+
+        drillQueue = [...pool].sort(() => Math.random() - 0.5);
+        isContinuous = true;
+        toggleButtons('running'); // 초기 상태: 실행 중
+        document.getElementById('queueBadge').style.display = 'block';
+        nextQuestion();
+    }
+
+    function stopContinuousDrill() {
+        if(confirm("중단하시겠습니까?")) { isContinuous = false; resetDrill(); }
+    }
+
+    function autoSaveAndNext() {
+        if(!currentQ) return;
+        saveRecordInternal(); // 저장
+        nextQuestion(); // 다음 문제로
+    }
+
+    function nextQuestion() {
+        if(isContinuous) {
+            if(drillQueue.length === 0) {
+                isContinuous = false; resetDrill();
+                alert("🎉 라운드 완료!"); return;
+            }
+            currentQ = drillQueue.pop();
+            document.getElementById('queueBadge').innerText = `남은 문제: ${drillQueue.length}`;
+            toggleButtons('running'); // 연속 모드 문제 풀이 상태로 버튼 갱신
+        } 
+        else if(isRetestMode) {
+            // currentQ 유지
+        }
+        else {
+            const pool = getPool();
+            if(pool.length === 0) { alert("문제 없음"); return; }
+            currentQ = pool[Math.floor(Math.random() * pool.length)];
+            toggleButtons('single');
+        }
+
+        renderPaper('drill');
+        startTimer();
+    }
+
+    function startTimer() {
+        clearInterval(timerInterval);
+        timeLeft = TIME_LIMIT;
+        updateTimerUI();
+        document.getElementById('displayTimer').classList.add('active');
+
+        timerInterval = setInterval(() => {
+            timeLeft -= 0.1;
+            if(timeLeft <= 0) {
+                if(isContinuous) {
+                    // [수정됨] 연속 모드 타임아웃 시 비프음 재생 후 넘어감
+                    playBeep(); 
+                    autoSaveAndNext(); 
+                } else {
+                    finishDrill(false);
+                }
+            } else updateTimerUI();
+        }, 100);
+    }
+
+    function updateTimerUI() {
+        const t = Math.max(0, timeLeft).toFixed(2);
+        document.getElementById('displayTimer').innerText = t;
+        const pct = (timeLeft / TIME_LIMIT) * 100;
+        document.getElementById('progressFill').style.width = pct + "%";
+    }
+
+    function finishDrill(manual) {
+        clearInterval(timerInterval);
+        // 수동(Alt+M)이 아닐 때(시간초과 등)만 비프음
+        if(!manual) playBeep(); 
+        
+        document.getElementById('displayTimer').classList.remove('active');
+        document.getElementById('displayTimer').classList.add('ended');
+        
+        renderPaper('review');
+
+        if(isContinuous) {
+            // 연속 모드에서는 '정답 확인' 후 '다음 문제' 버튼이 필요함
+            toggleButtons('running_review');
+        } else {
+            toggleButtons('review');
+        }
+    }
+
+    function resetDrill() {
+        clearInterval(timerInterval);
+        isContinuous = false; 
+        drillQueue = [];
+        isRetestMode = false;
+        document.getElementById('btnSingle').innerText = "🎲 1문제(Alt+N)";
+
+        toggleButtons('init');
+        renderPaper('init');
+    }
+
+    function renderPaper(mode) {
+        const elTopic = document.getElementById('displayTopic');
+        const elRound = document.getElementById('displayRound');
+        const inDef = document.getElementById('inDef');
+        const inKeys = document.getElementById('inKeys');
+        const inDetail = document.getElementById('inDetail');
+        const refArea = document.getElementById('refArea');
+        const paper = document.getElementById('paperArea');
+
+        if(mode === 'init') {
+            elTopic.innerText = "라운드 선택 후\n시작하세요";
+            elRound.innerText = "READY";
+            inDef.value = ""; inKeys.value = ""; inDetail.value = "";
+            inDef.disabled = true; inKeys.disabled = true; inDetail.disabled = true;
+            refArea.classList.remove('show');
+            paper.classList.remove('review');
+            document.getElementById('progressFill').style.width = "0%";
+            document.getElementById('displayTimer').innerText = "00.00";
+            document.getElementById('queueBadge').style.display = 'none';
+        } else if(mode === 'drill') {
+            elTopic.innerText = currentQ.topic;
+            elRound.innerText = `ROUND ${currentQ.round}`;
+            inDef.value = ""; inKeys.value = ""; inDetail.value = "";
+            inDef.disabled = false; inKeys.disabled = false; inDetail.disabled = true;
+            refArea.classList.remove('show');
+            paper.classList.remove('review');
+            inDef.focus();
+        } else if(mode === 'review') {
+            inDetail.disabled = false;
+            paper.classList.add('review');
+            document.getElementById('refDef').innerText = currentQ.def || "없음";
+            document.getElementById('refKeys').innerText = currentQ.keys || "없음";
+            refArea.classList.add('show');
+            setTimeout(() => {
+                document.querySelector('.workspace').scrollTo({ top: document.querySelector('.workspace').scrollHeight, behavior: 'smooth' });
+            }, 100);
+        } else if(mode === 'edit') {
+            elTopic.innerText = currentQ.topic;
+            elRound.innerText = `ROUND ${currentQ.round}`;
+            inDef.disabled = false; inKeys.disabled = false; inDetail.disabled = false;
+            paper.classList.add('review');
+            document.getElementById('refDef').innerText = currentQ.def || "없음";
+            document.getElementById('refKeys').innerText = currentQ.keys || "없음";
+            refArea.classList.add('show');
+        }
+    }
+
+    function toggleButtons(state) {
+        const bCont = document.getElementById('btnContinuous');
+        const bSingle = document.getElementById('btnSingle');
+        const bStop = document.getElementById('btnStop');
+        const bFinish = document.getElementById('btnFinish');
+
+        // 우선 모두 숨김
+        bCont.style.display = 'none'; 
+        bSingle.style.display = 'none';
+        bStop.style.display = 'none'; 
+        bFinish.style.display = 'none';
+
+        // 버튼 텍스트/기능 초기화
+        bFinish.innerText = "✅ 정답 확인(Alt+M)";
+        bFinish.onclick = () => finishDrill(true);
+        bFinish.className = "btn btn-primary";
+
+        if(state === 'init' || state === 'review') {
+            // 초기화면 or 단일 문제 리뷰 중
+            bCont.style.display = 'inline-flex';
+            bSingle.style.display = 'inline-flex';
+        } 
+        else if(state === 'running') {
+            // 연속 모드: 문제 푸는 중 (중단 버튼 + 정답 확인 버튼 표시)
+            bStop.style.display = 'inline-flex';
+            bFinish.style.display = 'inline-flex';
+        } 
+        else if(state === 'running_review') {
+            // 연속 모드: 정답 확인 중 (중단 버튼 + 다음 문제 버튼 표시)
+            bStop.style.display = 'inline-flex';
+            
+            // finish 버튼을 '다음 문제' 버튼으로 재활용
+            bFinish.style.display = 'inline-flex';
+            bFinish.innerHTML = "⏩ 다음 문제(Ctrl+Ent)"; // 아이콘/텍스트 변경
+            bFinish.onclick = () => autoSaveAndNext(); // 클릭 시 다음 문제로
+        }
+        else if(state === 'single') {
+            // 단일 모드: 문제 푸는 중
+            bFinish.style.display = 'inline-flex';
+        }
+    }
+
+    async function saveRecord() {
+        if(!currentQ) { showToast("토픽이 없습니다 😅"); return; }
+        await saveRecordInternal();
+        showToast("✅ 저장되었습니다");
+    }
+
+    async function saveRecordInternal() {
+        const userDef = document.getElementById('inDef').value;
+        const userKeys = document.getElementById('inKeys').value;
+        const userDetail = document.getElementById('inDetail').value;
+        
+        const history = await db.getAll('history');
+        const existing = history.find(r => String(r.round) === String(currentQ.round) && r.topic === currentQ.topic);
+
+        const record = {
+            id: existing ? existing.id : Date.now(),
+            date: new Date().toISOString().split('T')[0],
+            round: currentQ.round, topic: currentQ.topic,
+            def: userDef, keys: userKeys, detail: userDetail
+        };
+
+        await db.put('history', record);
+        await renderHistory();
+    }
+
+    async function renderHistory() {
+        const list = document.getElementById('historyList');
+        const h = await db.getAll('history');
+        document.getElementById('rCount').innerText = h.length;
+        list.innerHTML = '';
+        h.sort((a,b)=>b.id-a.id).forEach(r => {
+            const div = document.createElement('div');
+            div.className = 'history-item';
+            div.innerHTML = `
+                <div class="history-topic">${r.topic}</div>
+                <div class="history-meta">
+                    <span style="background:#f3f4f6; padding:2px 6px; border-radius:4px; font-weight:700;">R${r.round}</span>
+                    <span>${r.date}</span>
+                </div>
+                <button class="btn-del-hist" onclick="delHist(${r.id}, event)">×</button>
+            `;
+            div.onclick = (e) => { if(!e.target.classList.contains('btn-del-hist')) loadHistory(r); };
+            list.appendChild(div);
+        });
+    }
+
+    async function delHist(id, e) {
+        e.stopPropagation();
+        if(confirm("삭제할까요?")) {
+            await db.delete('history', id);
+            await renderHistory();
+        }
+    }
+
+    async function deleteAllHistory() {
+        const h = await db.getAll('history');
+        if (h.length === 0) { alert("삭제할 기록이 없습니다."); return; }
+        
+        if (confirm("⚠️ 정말로 모든 학습 기록을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.")) {
+            await db.clear('history');
+            await renderHistory();
+            if (isRetestMode) resetDrill();
+            showToast("🗑️ 모든 기록이 삭제되었습니다.");
+        }
+    }
+
+    function loadHistory(r) {
+        clearInterval(timerInterval); 
+        isContinuous = false;
+        
+        isRetestMode = true;
+        document.getElementById('btnSingle').innerText = "↺ 다시 풀기 (Alt+N)";
+
+        const orig = questionBank.find(q => q.topic === r.topic && String(q.round) === String(r.round));
+        currentQ = { round: r.round, topic: r.topic, def: orig?.def, keys: orig?.keys };
+        
+        document.getElementById('inDef').value = r.def;
+        document.getElementById('inKeys').value = r.keys;
+        document.getElementById('inDetail').value = r.detail || "";
+        
+        toggleButtons('review');
+        renderPaper('edit');
+    }
+
+    function copyRefToInput() {
+        if(confirm("모범 답안을 복사할까요?")) {
+            document.getElementById('inDef').value = document.getElementById('refDef').innerText;
+            document.getElementById('inKeys').value = document.getElementById('refKeys').innerText;
+        }
+    }
+
+    function showToast(msg) {
+        const t = document.getElementById('toast');
+        t.innerText = msg; t.style.opacity = 1;
+        setTimeout(()=>t.style.opacity=0, 1000);
+    }
+    function updateStatus() { document.getElementById('qCount').innerText = getPool().length; }
+
+    // CSV/Excel Import Function
+    function importFromExcel(e) {
+        const f = e.target.files[0]; 
+        if(!f) return;
+        
+        const r = new FileReader();
+        r.onload = async (evt) => {
+            try {
+                const data = new Uint8Array(evt.target.result);
+                const wb = XLSX.read(data, {type:'array'});
+                const ws = wb.Sheets[wb.SheetNames[0]];
+                const rows = XLSX.utils.sheet_to_json(ws, {header: 1});
+
+                if(!rows || rows.length === 0) { 
+                    alert("데이터가 없습니다."); 
+                    return; 
+                }
+                
+                let headIdx = -1;
+                let idxR = -1, idxT = -1, idxD = -1, idxK = -1;
+
+                const splitCSV = (str) => {
+                    if(typeof str !== 'string') return [str];
+                    const regex = /,(?=(?:(?:[^"]*"){2})*[^"]*$)/; 
+                    return str.split(regex).map(s => {
+                        let clean = s.trim();
+                        if(clean.startsWith('"') && clean.endsWith('"')) {
+                            clean = clean.slice(1, -1).replace(/""/g, '"');
+                        }
+                        return clean;
+                    });
+                };
+
+                for(let i=0; i < Math.min(rows.length, 10); i++) {
+                    let row = rows[i];
+                    if(row.length === 1 && typeof row[0] === 'string' && row[0].includes(',')) {
+                        row = splitCSV(row[0]);
+                    }
+                    const rowStr = row.map(c => String(c).trim());
+                    const t = rowStr.findIndex(c => c.includes('토픽') || c.toLowerCase().includes('topic'));
+                    
+                    if(t > -1) {
+                        headIdx = i;
+                        idxT = t;
+                        idxR = rowStr.findIndex(c => c.includes('라운드') || c.toLowerCase().includes('round'));
+                        idxD = rowStr.findIndex(c => c.includes('정의') || c.toLowerCase().includes('def'));
+                        idxK = rowStr.findIndex(c => c.includes('키워드') || c.toLowerCase().includes('key'));
+                        break;
+                    }
+                }
+
+                if(headIdx === -1) {
+                    const firstRow = rows[0].length === 1 && typeof rows[0][0] === 'string' ? splitCSV(rows[0][0]) : rows[0];
+                    if(firstRow.some(c => String(c).includes('토픽'))) {
+                         headIdx = 0; 
+                         idxR=0; idxT=1; idxD=2; idxK=3;
+                    } else {
+                        headIdx = -1; 
+                        idxR=0; idxT=1; idxD=2; idxK=3;
+                    }
+                }
+
+                const newI = [];
+                for(let i = headIdx + 1; i < rows.length; i++) {
+                    let row = rows[i];
+                    if(!row || row.length === 0) continue;
+                    if(row.length === 1 && typeof row[0] === 'string' && row[0].includes(',')) {
+                        row = splitCSV(row[0]);
+                    }
+
+                    const valT = row[idxT];
+                    if(!valT) continue; 
+
+                    newI.push({
+                        id: Date.now() + Math.random(),
+                        round: idxR > -1 ? (row[idxR] || "1") : "1",
+                        topic: String(valT).trim(),
+                        def: idxD > -1 ? String(row[idxD] || "").trim() : "",
+                        keys: idxK > -1 ? String(row[idxK] || "").trim() : ""
+                    });
+                }
+
+                if(newI.length) {
+                    await db.addBulk('questions', newI);
+                    await loadData();
+                    updateRoundDropdown();
+                    alert(`✅ ${newI.length}개 문제 로딩 성공! (CSV 파싱 적용됨)`);
+                } else {
+                    alert("추가할 데이터가 없습니다. 엑셀/CSV 형식을 확인해주세요.");
+                }
+
+            } catch(e) { 
+                console.error(e); 
+                alert("파일 읽기 실패! 형식을 확인해주세요."); 
+            }
+            e.target.value = "";
+        };
+        r.readAsArrayBuffer(f);
+    }
+
+    async function exportToExcel() {
+        const h = await db.getAll('history');
+        if(!h.length) { alert("기록 없음"); return; }
+        const d = h.map(r=>({"라운드":r.round, "토픽":r.topic, "정의":r.def, "키워드":r.keys, "내용":r.detail, "날짜":r.date}));
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(d), "기록");
+        XLSX.writeFile(wb, `Log_${new Date().toISOString().slice(0,10)}.xlsx`);
+    }
+</script>
+</body>
+</html>

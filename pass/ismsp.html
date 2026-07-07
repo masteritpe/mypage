@@ -1,0 +1,1320 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ISMS-P 노트</title>
+  
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <link rel="stylesheet" href="https://webfontworld.github.io/kopub/KoPubWorldDotum.css">
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+  <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+  
+  <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+
+  <style>
+    :root {
+      --bg-body: #F9FAFB;
+      --bg-surface: #FFFFFF;
+      --bg-sidebar: #F3F4F6;
+      --border-light: #F3F4F6;
+      --border-base: #E5E7EB;
+      --border-dark: #D1D5DB;
+      --text-main: #111827;
+      --text-muted: #6B7280;
+      --primary: #111827;
+      --primary-hover: #374151;
+      --secondary: #FFFFFF;
+      --secondary-hover: #F9FAFB;
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --editor-font-size: 16px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background: var(--bg-body); color: var(--text-main); margin: 0; padding: 0;
+      -webkit-font-smoothing: antialiased; height: 100vh; display: flex; overflow: hidden;
+    }
+
+    .sidebar { width: 320px; background: var(--bg-surface); border-right: 1px solid var(--border-base); display: flex; flex-direction: column; z-index: 10; transition: transform 0.3s ease, width 0.3s ease; }
+    
+    .sidebar-header { height: 64px; min-height: 64px; padding: 0 20px; border-bottom: 1px solid var(--border-base); display: flex; align-items: center; justify-content: space-between; }
+    .app-title { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px; margin: 0; flex: 1; color: #059669; }
+    .search-count-badge { font-size: 13px; font-weight: 700; color: #059669; background: #ecfdf5; padding: 4px 10px; border-radius: 20px; flex-shrink: 0; transition: all 0.2s; }
+
+    .view-container { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+
+    .sidebar-search { padding: 16px 20px; border-bottom: 1px solid var(--border-light); background: var(--bg-surface); }
+    .search-box { width: 100%; padding: 8px 12px; border-radius: var(--radius-md); border: 1px solid var(--border-base); font-size: 13px; background: var(--bg-body); outline: none; }
+    .search-box:focus { border-color: var(--primary); }
+
+    .note-list { flex: 1; overflow-y: auto; padding: 10px; margin: 0; list-style: none; }
+    .note-item { padding: 10px 14px; border-radius: var(--radius-md); cursor: pointer; margin-bottom: 4px; transition: background 0.2s; display: flex; flex-direction: column; gap: 4px; }
+    .note-item:hover { background: var(--bg-sidebar); }
+    .note-item.active { background: #059669; color: white; }
+    .note-title { font-weight: 600; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .main-content { flex: 1; display: flex; flex-direction: column; overflow-y: auto; background: var(--bg-body); position: relative; overflow-anchor: none; scroll-behavior: smooth; }
+    
+    .top-bar { position: sticky; top: 0; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(8px); height: 64px; min-height: 64px; padding: 0 30px; border-bottom: 1px solid var(--border-base); display: flex; justify-content: space-between; align-items: center; z-index: 5; transition: transform 0.3s ease, height 0.3s ease, opacity 0.3s ease; overflow-x: auto; }
+    .title-input { font-size: 20px; font-weight: 700; border: none; background: transparent; outline: none; flex: 1; min-width: 0; margin-right: 20px; color: #047857; }
+    .actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+    .divider { width: 1px; height: 20px; background: var(--border-dark); margin: 0 4px; }
+
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 14px; border-radius: var(--radius-md); font-size: 14px; font-weight: 600; cursor: pointer; transition: 0.2s; border: 1px solid transparent; outline: none; white-space: nowrap; flex-shrink: 0; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary { background: #059669; color: white; box-shadow: var(--shadow-sm); }
+    .btn-primary:hover:not(:disabled) { background: #047857; transform: translateY(-1px); }
+    .btn-outline { background: var(--secondary); color: var(--text-main); border-color: var(--border-base); }
+    .btn-outline:hover:not(:disabled) { background: var(--secondary-hover); border-color: #D1D5DB; }
+    .btn-danger { color: #ef4444; border-color: #fca5a5; background: #fef2f2; }
+    .btn-danger:hover:not(:disabled) { background: #fee2e2; border-color: #ef4444; }
+
+    .form-wrapper { padding: 30px 40px; max-width: 1000px; margin: 0 auto; width: 100%; transition: padding 0.3s ease; }
+    .keynote-card { background: var(--bg-surface); border: 1px solid var(--border-base); border-radius: var(--radius-lg); padding: 24px; margin-bottom: 24px; box-shadow: var(--shadow-md); transition: box-shadow 0.3s; scroll-margin-top: 80px; }
+    
+    .edit-ui .card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+    .edit-ui .badge-number { background: #059669; color: white; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 6px; font-size: 14px; font-weight: 700; flex-shrink: 0; }
+    
+    .edit-ui .form-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px; }
+    .edit-ui .form-group:last-child { margin-bottom: 0; }
+    .edit-ui .form-group label { font-size: 16px; font-weight: 700; color: #047857; display: flex; align-items: center; gap: 6px; }
+
+    .simple-editor.ql-container.ql-snow { border: 1px solid var(--border-base) !important; border-radius: var(--radius-md) !important; background: var(--bg-body); transition: background 0.2s, border-color 0.2s; }
+    .simple-editor.ql-container.ql-snow:focus-within { border-color: #059669 !important; background: var(--bg-surface); }
+    .simple-editor .ql-editor { min-height: 60px; padding: 14px; font-size: var(--editor-font-size) !important; font-family: inherit; line-height: 1.6; }
+
+    .simple-editor .ql-editor ul, .simple-editor .ql-editor ol { padding-left: 0 !important; }
+    .simple-editor .ql-editor li.ql-indent-0:not(.ql-direction-rtl),
+    .simple-editor .ql-editor li:not(.ql-direction-rtl) { padding-left: 1em !important; }
+    .simple-editor .ql-editor li.ql-indent-0:not(.ql-direction-rtl)::before,
+    .simple-editor .ql-editor li:not(.ql-direction-rtl)::before { margin-left: -1em !important; }
+
+    .toast { visibility: hidden; background-color: #111827; color: #fff; text-align: center; border-radius: var(--radius-md); padding: 12px 24px; position: fixed; z-index: 1000; left: 50%; bottom: 20px; transform: translateX(-50%); font-size: 14px; opacity: 0; transition: opacity 0.3s, bottom 0.3s; display: flex; align-items: center; gap: 8px; box-shadow: var(--shadow-md); }
+    .toast.show { visibility: visible; opacity: 1; bottom: 40px; }
+    
+    body.card-mode .sidebar, body.check-mode .sidebar { display: none !important; }
+    body.card-mode .top-bar, body.check-mode .top-bar { display: none !important; }
+    body.card-mode .form-wrapper { padding-top: 50px; } 
+    body.check-mode .form-wrapper { display: none !important; }
+    body.card-mode .keynote-card { display: none; }
+    body.card-mode .keynote-card.active-card { display: block; animation: fadeIn 0.3s ease; }
+    
+    .check-mode-wrapper { display: none; padding: 30px 20px; max-width: 800px; margin: 0 auto; width: 100%; flex-direction: column; }
+    body.check-mode .check-mode-wrapper { display: flex; animation: fadeIn 0.3s ease; }
+    
+    .check-card { background: var(--bg-surface); border: 1px solid var(--border-base); border-radius: var(--radius-lg); padding: 20px 24px; box-shadow: var(--shadow-md); }
+    .check-header { font-size: 16px; font-weight: 700; color: #059669; margin-bottom: 12px; border-bottom: 1px solid var(--border-base); padding-bottom: 8px; display: flex; justify-content: space-between;}
+    
+    .pure-text-box {
+      background: #F9FAFB; padding: 12px 16px; border-radius: 8px; border: 1px solid #E5E7EB;
+      margin-bottom: 16px; font-size: 16px; line-height: 1.6; color: #111827;
+    }
+    .pure-text-box p, .pure-text-box div { margin: 0 0 6px 0; }
+    .pure-text-box p:last-child, .pure-text-box div:last-child { margin-bottom: 0; }
+    .pure-text-box ul, .pure-text-box ol { margin: 0; padding-left: 20px; }
+    .pure-text-box li { margin-bottom: 4px; }
+    .pure-text-box li:last-child { margin-bottom: 0; }
+    
+    .check-options { display: flex; flex-direction: column; gap: 8px; }
+    .check-option-btn { text-align: left; padding: 12px 16px; background: var(--bg-surface); border: 1px solid var(--border-dark); border-radius: var(--radius-md); cursor: pointer; transition: all 0.2s; display: flex; flex-direction: column; gap: 4px; }
+    .check-option-btn:hover:not(:disabled) { background: var(--bg-sidebar); border-color: #059669; }
+    .check-option-btn.correct { background: #d1fae5 !important; border-color: #059669 !important; }
+    .check-option-btn.correct .check-option-title { color: #065f46 !important; }
+    .check-option-btn.correct .check-option-desc { color: #065f46 !important; opacity: 0.9; font-weight: 500; }
+    .check-option-btn.wrong { background: #fee2e2 !important; border-color: #ef4444 !important; }
+    .check-option-btn.wrong .check-option-title { color: #991b1b !important; }
+    .check-option-btn.wrong .check-option-desc { color: #991b1b !important; opacity: 0.9; }
+    .check-option-btn:disabled { cursor: not-allowed; opacity: 0.8; }
+    
+    .check-option-title { font-size: 16px; font-weight: bold; color: var(--primary); display: flex; align-items: baseline; gap: 6px; line-height: 1.4; }
+    .check-option-desc { font-size: 15px; color: var(--text-muted); padding-left: 24px; line-height: 1.5; word-break: keep-all; margin-top: 2px; }
+
+    .check-result-container { text-align: center; padding: 40px 20px; }
+    .check-result-title { font-size: 24px; font-weight: bold; color: var(--text-main); margin-bottom: 10px; }
+    .check-result-score { font-size: 48px; font-weight: 800; color: #059669; margin: 20px 0; }
+    .check-actions { display: flex; gap: 12px; justify-content: center; margin-top: 30px; }
+
+    /* 항목 관리 모달 스타일 */
+    .modal-overlay { visibility: hidden; opacity: 0; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(17, 24, 39, 0.6); z-index: 1000; display: flex; align-items: center; justify-content: center; transition: 0.2s; backdrop-filter: blur(4px); }
+    .modal-overlay.show { visibility: visible; opacity: 1; }
+    .modal-content { background: var(--bg-surface); width: 680px; max-width: 90%; border-radius: var(--radius-lg); box-shadow: var(--shadow-md); display: flex; flex-direction: column; max-height: 85vh; }
+    .modal-header { padding: 16px 20px; border-bottom: 1px solid var(--border-base); display: flex; justify-content: space-between; align-items: center; }
+    .modal-title { font-size: 18px; font-weight: 700; color: var(--primary); display: flex; align-items: center; gap: 8px; }
+    .modal-body { padding: 20px; overflow-y: auto; flex: 1; }
+    .manage-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+    .manage-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: var(--bg-body); border: 1px solid var(--border-base); border-radius: var(--radius-md); }
+    .manage-item-info { display: flex; align-items: center; gap: 12px; overflow: hidden; flex: 1; margin-right: 12px; }
+    .manage-item-num { font-weight: 700; color: #059669; width: 24px; flex-shrink: 0; }
+    .manage-item-title { font-size: 14px; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="app-title">
+        <i class="ph-fill ph-book-open-text"></i> ISMS-P 노트
+      </div>
+      <div id="searchCountBadge" class="search-count-badge" title="항목 개수">0</div>
+    </div>
+
+    <div id="view-notes" class="view-container">
+      <div class="sidebar-search">
+        <input type="text" id="searchInput" class="search-box" placeholder="항목 검색..." spellcheck="false" onkeyup="handleSearchInput(event)">
+      </div>
+      <ul class="note-list" id="noteList"></ul>
+    </div>
+  </aside>
+
+  <main class="main-content" id="mainContent">
+    <div class="top-bar">
+      <input type="text" id="docTitle" class="title-input" placeholder="제목을 입력하세요" spellcheck="false">
+      <div class="actions">
+        <input type="number" id="itemCount" style="display:none;" value="1">
+        <button class="btn btn-outline" onclick="toggleCheckMode()"><i class="ph ph-check-square-offset"></i> 확인</button>
+        <button class="btn btn-outline" onclick="toggleDefectCheckMode()"><i class="ph ph-shield-warning"></i> 결함</button>
+        <button class="btn btn-outline" onclick="toggleCardMode()"><i class="ph ph-browsers"></i> 카드</button>
+        <div class="divider"></div>
+        <button class="btn btn-outline" onclick="openManageModal()"><i class="ph ph-list-plus"></i> 항목</button>
+        
+        <input type="file" id="excelFileInput" accept=".xlsx, .xls, .csv" style="display:none;" onchange="importExcel(event)">
+        <button class="btn btn-outline" onclick="document.getElementById('excelFileInput').click()" style="color: #059669;"><i class="ph ph-file-xls"></i> 업로드</button>
+        <button class="btn btn-outline" onclick="exportExcel()" style="color: #059669;"><i class="ph ph-file-xls"></i> 다운로드</button>
+        
+        <input type="file" id="jsonFileInput" accept=".json" style="display:none;" onchange="importJSON(event)">
+        <button class="btn btn-outline" onclick="document.getElementById('jsonFileInput').click()"><i class="ph ph-upload-simple"></i> 복원</button>
+        <button class="btn btn-outline" onclick="exportJSON()"><i class="ph ph-download-simple"></i> 백업</button>
+        
+        <div class="divider"></div>
+        <button class="btn btn-primary" onclick="saveCurrentNote()"><i class="ph ph-floppy-disk"></i> 저장</button>
+      </div>
+    </div>
+
+    <div class="form-wrapper">
+      <div id="formContainer"></div>
+    </div>
+
+    <div id="checkModeContainer" class="check-mode-wrapper"></div>
+  </main>
+
+  <div id="saveToast" class="toast"><i class="ph-bold ph-check"></i> 저장되었습니다</div>
+
+  <div class="modal-overlay" id="manageModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title"><i class="ph-bold ph-list-plus"></i> 인증기준 항목 관리</div>
+        <button class="btn btn-outline" style="border:none; padding:4px;" onclick="closeManageModal()"><i class="ph ph-x" style="font-size:20px;"></i></button>
+      </div>
+      <div class="modal-body">
+        <div style="margin-bottom: 16px; display:flex; justify-content:space-between; align-items:center;">
+          <span style="font-size: 14px; color: var(--text-muted);">총 <span id="manageTotalCount" style="font-weight:bold; color:var(--primary);">0</span>개 항목</span>
+          <button class="btn btn-primary" onclick="addNewItem()"><i class="ph ph-plus"></i> 새 항목 추가</button>
+        </div>
+        <ul class="manage-list" id="manageList"></ul>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let db;
+    let currentNoteId = null;
+    let leadEditors = [];
+    let probEditors = [];
+    let concEditors = [];
+    let defectEditors = [];
+
+    let isCardMode = false;
+    let currentCardIndex = 1;
+
+    let isCheckMode = false;
+    let checkQuestions = [];
+    let currentCheckIndex = 0;
+    let correctCheckCount = 0;
+
+    let isDefectCheckMode = false;
+    let defectCheckQuestions = [];
+    let currentDefectCheckIndex = 0;
+    let correctDefectCheckCount = 0;
+
+    const Size = Quill.import('attributors/style/size');
+    Size.whitelist = null;
+    Quill.register(Size, true);
+
+    function changeFontSize(quill, range, delta) {
+      if (!range) return;
+      let format = quill.getFormat(range);
+      let currentSize = format.size || '16px';
+      let num = parseInt(currentSize);
+      if (isNaN(num)) num = 16;
+      quill.format('size', (num + delta) + 'px');
+    }
+
+    const quillBindings = {
+      strikethrough: { key: '0', ctrlKey: true, handler: function(range, context) { this.quill.format('strike', !context.format.strike); } },
+      colorRed: { key: 'R', ctrlKey: true, altKey: true, handler: function(range) { this.quill.format('color', 'red'); } },
+      colorBlue: { key: 'B', ctrlKey: true, altKey: true, handler: function(range) { this.quill.format('color', 'blue'); } },
+      colorGreen: { key: 'G', ctrlKey: true, altKey: true, handler: function(range) { this.quill.format('color', 'green'); } },
+      clearFormat: { key: 'X', shiftKey: true, ctrlKey: true, handler: function(range) { this.quill.removeFormat(range.index, range.length); } },
+      mark1: { key: '1', ctrlKey: true, handler: function(range) { this.quill.format('background', '#ffe5b4'); } },
+      mark2: { key: '2', ctrlKey: true, handler: function(range) { this.quill.format('background', '#add8e6'); } },
+      mark3: { key: '3', ctrlKey: true, handler: function(range) { this.quill.format('background', '#ffffe0'); } },
+      mark4: { key: '4', ctrlKey: true, handler: function(range) { this.quill.format('background', '#90ee90'); } },
+      mark5: { key: '5', ctrlKey: true, handler: function(range) { this.quill.format('background', '#ffb6c1'); } },
+      mark6: { key: '6', ctrlKey: true, handler: function(range) { this.quill.format('background', '#d2b48c'); } },
+      mark7: { key: '7', ctrlKey: true, handler: function(range) { this.quill.format('background', '#d3d3d3'); } },
+      acronym: { key: 'M', ctrlKey: true, altKey: true, handler: function(range) {
+          this.quill.format('background', '#0d3a9e');
+          this.quill.format('color', '#ffffff');
+          this.quill.format('bold', true);
+        }
+      },
+      sizePlusEqual: { key: '=', ctrlKey: true, handler: function(range) { changeFontSize(this.quill, range, 1); } },
+      sizePlus: { key: '+', ctrlKey: true, shiftKey: true, handler: function(range) { changeFontSize(this.quill, range, 1); } },
+      sizeMinus: { key: '-', ctrlKey: true, handler: function(range) { changeFontSize(this.quill, range, -1); } }
+    };
+
+    function showToast(msg, icon = 'ph-check') {
+      const toast = document.getElementById('saveToast');
+      toast.innerHTML = `<i class="ph-bold ${icon}"></i> ${msg}`;
+      toast.classList.add('show');
+      setTimeout(() => { toast.classList.remove('show'); }, 1000);
+    }
+
+    function isValidText(html) {
+      if (!html) return false;
+      let tmp = document.createElement('div');
+      tmp.innerHTML = html.replace(/<br\s*[\/]?>/gi, ' ');
+      return tmp.textContent.replace(/\s+/g, '').trim().length > 0;
+    }
+
+    function getPureHTML(html) {
+      if (!html) return '';
+      const temp = document.createElement('div');
+      temp.innerHTML = html;
+
+      let hasEmpty = true;
+      while (hasEmpty) {
+        hasEmpty = false;
+        const els = temp.querySelectorAll('*');
+        for (let i = 0; i < els.length; i++) {
+          const el = els[i];
+          if (el.tagName === 'IMG' || el.tagName === 'IFRAME') continue;
+          if (el.textContent.trim() === '' && !el.querySelector('img, iframe')) {
+            el.remove();
+            hasEmpty = true; 
+          }
+        }
+      }
+
+      const allEls = temp.querySelectorAll('*');
+      allEls.forEach(el => {
+        el.removeAttribute('class');
+        if (el.hasAttribute('style')) {
+          let style = el.getAttribute('style');
+          style = style.replace(/font-size:[^;]+;?/gi, '');
+          style = style.replace(/margin[^;]+;?/gi, '');
+          style = style.replace(/padding[^;]+;?/gi, '');
+          el.setAttribute('style', style);
+        }
+      });
+
+      return temp.innerHTML.trim();
+    }
+
+    function parseOptionData(htmlContent) {
+      let cleanHtml = htmlContent
+        .replace(/<br\s*[\/]?>/gi, '\n')
+        .replace(/<\/p>/gi, '\n')
+        .replace(/<\/div>/gi, '\n')
+        .replace(/<\/li>/gi, '\n');
+        
+      let tmp = document.createElement('div');
+      tmp.innerHTML = cleanHtml;
+      let text = tmp.textContent || "";
+      
+      let lines = text.split('\n').map(s => s.trim()).filter(s => s.length > 0);
+      
+      let title = lines.length > 0 ? lines[0] : "항목";
+      let desc = lines.length > 1 ? lines.slice(1).join(' ') : "";
+      
+      if (lines.length === 1) {
+        let match = text.match(/^(\[[^\]]+\]\s*[^ ]+(?:\s+[^ ]+)?)\s+(.*)/);
+        if (match) {
+          title = match[1];
+          desc = match[2];
+        }
+      }
+      
+      return { title, desc };
+    }
+
+    function shuffleArray(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+      return array;
+    }
+
+    function toggleCheckMode() {
+      if (!isCheckMode) {
+        if (isCardMode) toggleCardMode();
+        if (isDefectCheckMode) toggleDefectCheckMode();
+        startCheckMode();
+      } else {
+        isCheckMode = false;
+        document.body.classList.remove('check-mode');
+        showToast('체크 모드 OFF', 'ph-check-square-offset');
+      }
+    }
+
+    function startCheckMode() {
+      const currentData = getCurrentNoteData();
+      const validItems = currentData.items.filter(item => isValidText(item.problem) && isValidText(item.concept));
+      
+      if(validItems.length < 5) {
+        alert('체크모드를 실행하려면 내용이 작성된 항목이 최소 5개 이상 필요합니다.');
+        return;
+      }
+
+      isCheckMode = true;
+      document.body.classList.add('check-mode');
+      showToast('체크 모드 ON', 'ph-check-square-offset');
+
+      checkQuestions = shuffleArray([...validItems]);
+      currentCheckIndex = 0;
+      correctCheckCount = 0;
+      renderCheckQuestion();
+    }
+
+    function renderCheckQuestion() {
+      const container = document.getElementById('checkModeContainer');
+      
+      if (currentCheckIndex >= checkQuestions.length) {
+        showCheckResult();
+        return;
+      }
+
+      const currentQ = checkQuestions[currentCheckIndex];
+      const currentData = getCurrentNoteData();
+      const allItems = currentData.items.filter(item => isValidText(item.problem));
+      
+      let distractors = allItems.filter(item => item.problem !== currentQ.problem);
+      distractors = shuffleArray(distractors).slice(0, 4);
+      
+      let options = [currentQ, ...distractors];
+      options = shuffleArray(options);
+
+      let optionsHtml = options.map((opt, idx) => {
+        const isCorrect = (opt.problem === currentQ.problem);
+        const parsed = parseOptionData(opt.problem);
+
+        return `<button class="check-option-btn" onclick="handleCheckAnswer(this, ${isCorrect})">
+                  <div class="check-option-title">
+                    <span style="flex-shrink: 0; width: 18px;">${idx + 1}.</span> 
+                    <span>${parsed.title}</span>
+                  </div>
+                  ${parsed.desc ? `<div class="check-option-desc">${parsed.desc}</div>` : ''}
+                </button>`;
+      }).join('');
+
+      container.innerHTML = `
+        <div class="check-card">
+          <div class="check-header">
+            <span>문제 ${currentCheckIndex + 1} / ${checkQuestions.length}</span>
+            <span style="color: var(--text-muted); cursor:pointer;" onclick="toggleCheckMode()"><i class="ph ph-x"></i> 닫기</span>
+          </div>
+          <div style="font-weight:bold; color:var(--primary); margin-bottom:10px; font-size: 16px;">
+            <i class="ph-fill ph-question"></i> 다음 주요 확인사항에 해당하는 인증기준은 무엇일까요?
+          </div>
+          <div class="pure-text-box">
+            ${getPureHTML(currentQ.concept)}
+          </div>
+          <div class="check-options">
+            ${optionsHtml}
+          </div>
+        </div>
+      `;
+    }
+
+    function handleCheckAnswer(btn, isCorrect) {
+      const buttons = document.querySelectorAll('.check-option-btn');
+      buttons.forEach(b => b.disabled = true); 
+
+      if (isCorrect) {
+        btn.classList.add('correct');
+        correctCheckCount++;
+      } else {
+        btn.classList.add('wrong');
+        buttons.forEach(b => {
+          if(b.getAttribute('onclick').includes('true')) {
+            b.classList.add('correct');
+          }
+        });
+      }
+
+      setTimeout(() => {
+        currentCheckIndex++;
+        renderCheckQuestion();
+      }, 1500);
+    }
+
+    function showCheckResult() {
+      const container = document.getElementById('checkModeContainer');
+      const percentage = Math.round((correctCheckCount / checkQuestions.length) * 100);
+      
+      container.innerHTML = `
+        <div class="check-card check-result-container">
+          <div class="check-result-title">학습 평가 완료! 🎉</div>
+          <div class="check-result-score">${correctCheckCount} / ${checkQuestions.length}</div>
+          <p style="color: var(--text-muted); font-size: 16px;">정답률: <strong>${percentage}%</strong></p>
+          
+          <div class="check-actions">
+            <button class="btn btn-outline" onclick="toggleCheckMode()">학습 노트로 돌아가기</button>
+            <button class="btn btn-primary" onclick="startCheckMode()"><i class="ph ph-arrow-counter-clockwise"></i> 다시 풀기</button>
+          </div>
+        </div>
+      `;
+    }
+
+    /* ====== 체크(결함) 모드 부분 ====== */
+    function toggleDefectCheckMode() {
+      if (!isDefectCheckMode) {
+        if (isCardMode) toggleCardMode();
+        if (isCheckMode) toggleCheckMode();
+        startDefectCheckMode();
+      } else {
+        isDefectCheckMode = false;
+        document.body.classList.remove('check-mode');
+        showToast('체크(결함) 모드 OFF', 'ph-shield-warning');
+      }
+    }
+
+    function startDefectCheckMode() {
+      const currentData = getCurrentNoteData();
+      const validItems = currentData.items.filter(item => isValidText(item.defect) && isValidText(item.problem));
+      
+      if(validItems.length < 5) {
+        alert('체크(결함) 모드를 실행하려면 결함사례가 작성된 항목이 최소 5개 이상 필요합니다.');
+        return;
+      }
+
+      isDefectCheckMode = true;
+      document.body.classList.add('check-mode');
+      showToast('체크(결함) 모드 ON', 'ph-shield-warning');
+
+      defectCheckQuestions = shuffleArray([...validItems]);
+      currentDefectCheckIndex = 0;
+      correctDefectCheckCount = 0;
+      renderDefectCheckQuestion();
+    }
+
+    function renderDefectCheckQuestion() {
+      const container = document.getElementById('checkModeContainer');
+      
+      if (currentDefectCheckIndex >= defectCheckQuestions.length) {
+        showDefectCheckResult();
+        return;
+      }
+
+      const currentQ = defectCheckQuestions[currentDefectCheckIndex];
+      const currentData = getCurrentNoteData();
+      const allItems = currentData.items.filter(item => isValidText(item.problem));
+      
+      let distractors = allItems.filter(item => item.problem !== currentQ.problem);
+      distractors = shuffleArray(distractors).slice(0, 4); // 4개의 오답 추출 (총 5지선다)
+      
+      let options = [currentQ, ...distractors];
+      options = shuffleArray(options);
+
+      let optionsHtml = options.map((opt, idx) => {
+        const isCorrect = (opt.problem === currentQ.problem);
+        const parsed = parseOptionData(opt.problem);
+
+        return `<button class="check-option-btn" onclick="handleDefectCheckAnswer(this, ${isCorrect})">
+                  <div class="check-option-title">
+                    <span style="flex-shrink: 0; width: 18px;">${idx + 1}.</span> 
+                    <span>${parsed.title}</span>
+                  </div>
+                  ${parsed.desc ? `<div class="check-option-desc">${parsed.desc}</div>` : ''}
+                </button>`;
+      }).join('');
+
+      container.innerHTML = `
+        <div class="check-card">
+          <div class="check-header">
+            <span>문제 ${currentDefectCheckIndex + 1} / ${defectCheckQuestions.length}</span>
+            <span style="color: var(--text-muted); cursor:pointer;" onclick="toggleDefectCheckMode()"><i class="ph ph-x"></i> 닫기</span>
+          </div>
+          <div style="font-weight:bold; color:var(--primary); margin-bottom:10px; font-size: 16px;">
+            <i class="ph-fill ph-question"></i> 다음 결함 사례에 해당하는 인증기준은 무엇일까요?
+          </div>
+          <div class="pure-text-box">
+            ${getPureHTML(currentQ.defect)}
+          </div>
+          <div class="check-options">
+            ${optionsHtml}
+          </div>
+        </div>
+      `;
+    }
+
+    function handleDefectCheckAnswer(btn, isCorrect) {
+      const buttons = document.querySelectorAll('.check-option-btn');
+      buttons.forEach(b => b.disabled = true);
+
+      if (isCorrect) {
+        btn.classList.add('correct');
+        correctDefectCheckCount++;
+      } else {
+        btn.classList.add('wrong');
+        buttons.forEach(b => {
+          if (b.getAttribute('onclick').includes('true')) {
+            b.classList.add('correct');
+          }
+        });
+      }
+
+      setTimeout(() => {
+        currentDefectCheckIndex++;
+        renderDefectCheckQuestion();
+      }, 1500); 
+    }
+
+    function showDefectCheckResult() {
+      const container = document.getElementById('checkModeContainer');
+      const percentage = Math.round((correctDefectCheckCount / defectCheckQuestions.length) * 100);
+      
+      container.innerHTML = `
+        <div class="check-card check-result-container">
+          <div class="check-result-title">결함사례 분석 평가 완료! 🎉</div>
+          <div class="check-result-score">${correctDefectCheckCount} / ${defectCheckQuestions.length}</div>
+          <p style="color: var(--text-muted); font-size: 16px;">정답률: <strong>${percentage}%</strong></p>
+          
+          <div class="check-actions">
+            <button class="btn btn-outline" onclick="toggleDefectCheckMode()">학습 노트로 돌아가기</button>
+            <button class="btn btn-primary" onclick="startDefectCheckMode()"><i class="ph ph-arrow-counter-clockwise"></i> 다시 풀기</button>
+          </div>
+        </div>
+      `;
+    }
+    /* ====== 체크(결함) 모드 부분 끝 ====== */
+
+    function toggleCardMode() {
+      if (isCheckMode) toggleCheckMode();
+      if (isDefectCheckMode) toggleDefectCheckMode();
+
+      isCardMode = !isCardMode;
+      const cards = document.querySelectorAll('.keynote-card');
+      
+      if (isCardMode) {
+        document.body.classList.add('card-mode');
+        
+        const totalCards = parseInt(document.getElementById('itemCount').value);
+        if (currentCardIndex > totalCards) currentCardIndex = totalCards;
+
+        updateCardVisibility(); 
+        showToast('카드 모드 ON (좌/우 방향키 이동)', 'ph-browsers');
+      } else {
+        document.body.classList.remove('card-mode');
+        cards.forEach(c => c.classList.remove('active-card'));
+        const targetCard = cards[currentCardIndex - 1];
+        if (targetCard) targetCard.scrollIntoView({ behavior: 'auto', block: 'start' });
+        showToast('카드 모드 OFF', 'ph-browsers');
+      }
+    }
+
+    function updateCardVisibility() {
+      const cards = document.querySelectorAll('.keynote-card');
+      cards.forEach((card, index) => {
+        if (index + 1 === currentCardIndex) card.classList.add('active-card');
+        else card.classList.remove('active-card');
+      });
+      const mainContent = document.getElementById('mainContent');
+      if (mainContent) mainContent.scrollTop = 0;
+    }
+
+    function createNewNote() {
+      const newId = 'custom_' + Date.now();
+      const newNote = {
+        id: newId,
+        title: "새로운 학습 노트",
+        date: new Date().toISOString(),
+        items: [{ problem: '', lead: '', concept: '', defect: '' }]
+      };
+      const transaction = db.transaction(['notes'], 'readwrite');
+      transaction.objectStore('notes').put(newNote);
+      transaction.oncomplete = () => {
+        renderNoteList().then(() => loadNoteById(newId));
+        showToast('새로운 노트가 생성되었습니다');
+      };
+    }
+
+    document.addEventListener('keydown', function(e) {
+      const activeEl = document.activeElement;
+      const isEditing = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable || activeEl.closest('.ql-editor'));
+
+      if (!isEditing && e.key === '`') {
+        e.preventDefault();
+        window.location.href = 'about:blank';
+        return;
+      }
+      if (e.ctrlKey && e.altKey && (e.key === 'n' || e.key === 'N')) {
+        e.preventDefault();
+        createNewNote();
+        return;
+      }
+      if (e.ctrlKey && (e.key === 's' || e.key === 'S')) {
+        e.preventDefault(); 
+        saveCurrentNote(); 
+        return; 
+      }
+      if (e.ctrlKey && (e.key === 'm' || e.key === 'M')) {
+        e.preventDefault();
+        toggleCardMode();
+        return;
+      }
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        if (!isEditing && isCardMode) {
+          e.preventDefault(); 
+          if (e.key === 'ArrowLeft') {
+            if (currentCardIndex > 1) { currentCardIndex--; updateCardVisibility(); }
+          } else {
+            const totalCards = parseInt(document.getElementById('itemCount').value);
+            if (currentCardIndex < totalCards) { currentCardIndex++; updateCardVisibility(); }
+          }
+        }
+      }
+    });
+
+    function handleSearchInput(event) {
+      renderNoteList(); 
+    }
+
+    // JSON 복원
+    function importJSON(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          let text = e.target.result;
+          text = text.replace(/^\uFEFF/, '');
+          text = text.replace(/[\u0000-\u0008\u000B-\u001F]/g, '');
+
+          const importedData = JSON.parse(text);
+          const notesToRestore = Array.isArray(importedData) ? importedData : [importedData];
+          
+          const transaction = db.transaction(['notes'], 'readwrite');
+          const store = transaction.objectStore('notes');
+          let count = notesToRestore.length;
+          
+          notesToRestore.forEach((note, index) => {
+            if (!note.id) {
+              note.id = 'custom_' + Date.now() + '_' + index;
+            }
+
+            if (note.items) {
+              note.items.forEach(item => {
+                if (typeof item.defect === 'undefined') item.defect = '';
+              });
+            }
+
+            store.put(note).onsuccess = () => {
+              count--;
+              if (count === 0) {
+                renderNoteList().then(() => {
+                   if (notesToRestore.length > 0) loadNoteById(notesToRestore[0].id);
+                });
+                showToast('JSON 파일이 복원되었습니다', 'ph-upload-simple');
+              }
+            };
+          });
+        } catch (err) {
+          console.error("JSON 파싱 에러:", err);
+          alert('올바른 JSON 형식이 아닙니다.\n\n[상세 에러]\n' + err.message + '\n\n※ 메모장 등으로 수정하셨다면, 따옴표(" ") 안에 엔터(줄바꿈)가 들어갔는지 확인해 보세요.');
+        }
+      };
+      
+      reader.readAsText(file, 'UTF-8');
+      event.target.value = ''; 
+    }
+
+    function exportJSON() {
+      const note = getCurrentNoteData(); 
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(note, null, 2));
+      const safeTitle = note.title.replace(/[^a-z0-9가-힣_\-]/gi, '_');
+      const downloadAnchorNode = document.createElement('a'); 
+      downloadAnchorNode.setAttribute("href", dataStr); 
+      downloadAnchorNode.setAttribute("download", `ISMSP_${safeTitle}_backup.json`);
+      document.body.appendChild(downloadAnchorNode); 
+      downloadAnchorNode.click(); 
+      downloadAnchorNode.remove();
+    }
+
+    function stripHtmlForExcel(html) {
+      if (!html) return "";
+      
+      let text = html
+        .replace(/<br\s*[\/]?>/gi, '\n')
+        .replace(/<\/p>/gi, '\n')
+        .replace(/<\/div>/gi, '\n')
+        .replace(/<li>/gi, '• ')
+        .replace(/<\/li>/gi, '\n');
+        
+      text = text.replace(/<[^>]*>?/gm, '');
+      
+      let txt = document.createElement('textarea');
+      txt.innerHTML = text;
+      let decoded = txt.value;
+      
+      return decoded.replace(/\n\s*\n\s*\n/g, '\n\n').trim();
+    }
+
+    function formatForImport(text) {
+      if (!text) return "";
+      text = String(text);
+      if (!/<[a-z][\s\S]*>/i.test(text)) {
+          return text.replace(/\r?\n/g, '<br>');
+      }
+      return text;
+    }
+
+    function formatProblemForImport(text) {
+      if (!text) return "";
+      text = String(text);
+      if (!/<[a-z][\s\S]*>/i.test(text)) {
+          let lines = text.split(/\r?\n/);
+          if (lines.length > 0 && lines[0].trim() !== '') {
+              lines[0] = `<strong>${lines[0].trim()}</strong>`;
+          }
+          return lines.join('<br>');
+      }
+      return text;
+    }
+
+    // 엑셀 업로드 
+    function importExcel(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, {type: 'array'});
+          
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          
+          const rows = XLSX.utils.sheet_to_json(worksheet, {defval: ""});
+
+          let safeTitle = file.name.replace(/\.[^/.]+$/, ""); 
+          safeTitle = safeTitle.replace(/_COM/gi, '').trim();
+
+          const currentNote = getCurrentNoteData();
+          const transaction = db.transaction(['notes'], 'readwrite');
+          const store = transaction.objectStore('notes');
+          
+          if(currentNote.id) {
+              store.put(currentNote);
+          }
+
+          const getAllRequest = store.getAll();
+          getAllRequest.onsuccess = () => {
+              const allNotes = getAllRequest.result || [];
+              let targetNote = allNotes.find(n => n.title === safeTitle);
+              
+              if (!targetNote) {
+                  targetNote = {
+                      id: 'custom_' + Date.now(),
+                      title: safeTitle || "새로운 학습 노트",
+                      date: new Date().toISOString(),
+                      items: []
+                  };
+              }
+
+              if (targetNote.items.length === 1) {
+                 const firstItem = targetNote.items[0];
+                 const plainProb = firstItem.problem ? firstItem.problem.replace(/<[^>]*>?/gm, '').trim() : '';
+                 const plainConc = firstItem.concept ? firstItem.concept.replace(/<[^>]*>?/gm, '').trim() : '';
+                 if (!plainProb && !plainConc) {
+                     targetNote.items = [];
+                 }
+              }
+
+              function getCompareKey(text) {
+                  if (!text) return '';
+                  let plain = text.replace(/<[^>]*>?/gm, ''); 
+                  plain = plain.replace(/&nbsp;/gi, ' ');
+                  let match = plain.match(/\[(.*?)\]/);
+                  if (match) return match[1].trim();
+                  return plain.replace(/\s+/g, '');
+              }
+
+              let updatedCount = 0;
+              let addedCount = 0;
+
+              rows.forEach(row => {
+                const keys = Object.keys(row);
+                
+                const valLead = row["분야"] !== undefined ? row["분야"] : (keys.length > 0 ? row[keys[0]] : "");
+                const valProb = row["인증기준"] !== undefined ? row["인증기준"] : (keys.length > 1 ? row[keys[1]] : "");
+                const valConc = row["확인사항"] !== undefined ? row["확인사항"] : (keys.length > 2 ? row[keys[2]] : "");
+                const valDefect = row["결함사례"] !== undefined ? row["결함사례"] : (keys.length > 3 ? row[keys[3]] : "");
+
+                const newItem = {
+                  lead: formatForImport(valLead),
+                  problem: formatProblemForImport(valProb), 
+                  concept: formatForImport(valConc),
+                  defect: formatForImport(valDefect)
+                };
+
+                const newKey = getCompareKey(newItem.problem);
+                if (!newKey) return; 
+
+                const existingIndex = targetNote.items.findIndex(item => {
+                    return getCompareKey(item.problem) === newKey;
+                });
+
+                if (existingIndex !== -1) {
+                    targetNote.items[existingIndex] = newItem;
+                    updatedCount++;
+                } else {
+                    targetNote.items.push(newItem);
+                    addedCount++;
+                }
+              });
+
+              if (targetNote.items.length === 0) {
+                  targetNote.items.push({ lead: '', problem: '', concept: '', defect: '' });
+              }
+
+              store.put(targetNote).onsuccess = () => {
+                renderNoteList().then(() => loadNoteById(targetNote.id));
+                showToast(`[${safeTitle}] 업데이트: ${updatedCount}건, 추가: ${addedCount}건`, 'ph-upload-simple');
+              };
+          };
+
+        } catch (err) {
+          console.error(err);
+          alert('올바른 형식의 엑셀 파일이 아닙니다.');
+        }
+      };
+      reader.readAsArrayBuffer(file);
+      event.target.value = ''; 
+    }
+
+    function exportExcel() {
+      const note = getCurrentNoteData(); 
+      
+      const rows = note.items.map(item => ({
+        "분야": stripHtmlForExcel(item.lead),
+        "인증기준": stripHtmlForExcel(item.problem),
+        "확인사항": stripHtmlForExcel(item.concept),
+        "결함사례": stripHtmlForExcel(item.defect)
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+
+      const range = XLSX.utils.decode_range(worksheet['!ref']);
+      for(let R = range.s.r; R <= range.e.r; ++R) {
+        for(let C = range.s.c; C <= range.e.c; ++C) {
+          const cellAddress = XLSX.utils.encode_cell({r: R, c: C});
+          if(!worksheet[cellAddress]) continue;
+
+          if(R === 0) {
+             worksheet[cellAddress].s = {
+                font: { bold: true },
+                alignment: { vertical: "top", horizontal: "left", wrapText: true }
+             };
+          } else {
+             worksheet[cellAddress].s = {
+                alignment: { vertical: "top", horizontal: "left", wrapText: true }
+             };
+          }
+        }
+      }
+
+      worksheet['!cols'] = [
+        { wch: 25 }, 
+        { wch: 45 }, 
+        { wch: 65 }, 
+        { wch: 65 }  
+      ];
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "ISMSP");
+
+      const safeTitle = note.title.replace(/[^a-z0-9가-힣_\-]/gi, '_') || "새로운_학습_노트";
+      
+      XLSX.writeFile(workbook, `ISMSP_${safeTitle}.xlsx`);
+    }
+
+    const initDB = () => {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open('ISMSP_DB', 1);
+        request.onupgradeneeded = (e) => { 
+          const database = e.target.result; 
+          if (!database.objectStoreNames.contains('notes')) database.createObjectStore('notes', { keyPath: 'id' }); 
+        };
+        request.onsuccess = (e) => { 
+          db = e.target.result; 
+          resolve();
+        };
+        request.onerror = (e) => reject('DB Error');
+      });
+    };
+
+    window.onload = async () => { 
+      await initDB(); 
+      await renderNoteList(); 
+      
+      const transaction = db.transaction(['notes'], 'readonly');
+      const store = transaction.objectStore('notes');
+      const request = store.getAllKeys();
+      request.onsuccess = () => {
+        if (request.result && request.result.length > 0) {
+          loadNoteById(request.result[0]);
+        } else {
+          generateForms(1);
+        }
+      };
+    };
+
+    function generateForms(num) {
+      const container = document.getElementById('formContainer');
+      document.getElementById('itemCount').value = num; 
+
+      const currentCount = probEditors.length;
+
+      if (num > currentCount) {
+        for (let i = currentCount + 1; i <= num; i++) {
+          const card = document.createElement('div'); 
+          card.className = 'keynote-card'; 
+          card.id = `card-${i}`;
+          
+          card.innerHTML = `
+            <div class="edit-ui">
+              <div class="card-header">
+                <div class="badge-number">${i}</div>
+              </div>
+              <div class="form-group">
+                <label><i class="ph-fill ph-tag"></i> 분야</label>
+                <div id="lead-${i}" class="simple-editor"></div>
+              </div>
+              <div class="form-group">
+                <label><i class="ph-fill ph-target"></i> 인증기준 및 상세내용</label>
+                <div id="prob-${i}" class="simple-editor"></div>
+              </div>
+              <div class="form-group">
+                <label><i class="ph-fill ph-list-checks"></i> 주요 확인사항</label>
+                <div id="conc-${i}" class="simple-editor"></div>
+              </div>
+              <div class="form-group">
+                <label><i class="ph-fill ph-warning-circle"></i> 주요 결함 사례</label>
+                <div id="defect-${i}" class="simple-editor"></div>
+              </div>
+            </div>
+          `;
+          container.appendChild(card);
+
+          const quillOptions = { 
+            theme: 'snow', 
+            scrollingContainer: '#mainContent', 
+            modules: { toolbar: false, keyboard: { bindings: quillBindings } } 
+          };
+
+          const qLead = new Quill(`#lead-${i}`, { ...quillOptions, placeholder: '분야' }); 
+          qLead.root.setAttribute('spellcheck', false);
+          leadEditors.push(qLead);
+
+          const qProb = new Quill(`#prob-${i}`, { ...quillOptions, placeholder: '기준 내용' }); 
+          qProb.root.setAttribute('spellcheck', false);
+          probEditors.push(qProb);
+
+          const qConc = new Quill(`#conc-${i}`, { ...quillOptions, placeholder: '확인사항' }); 
+          qConc.root.setAttribute('spellcheck', false);
+          concEditors.push(qConc);
+
+          const qDefect = new Quill(`#defect-${i}`, { ...quillOptions, placeholder: '결함 사례' }); 
+          qDefect.root.setAttribute('spellcheck', false);
+          defectEditors.push(qDefect);
+        }
+      }
+
+      for (let i = 0; i < probEditors.length; i++) {
+        const card = document.getElementById(`card-${i+1}`);
+        if (!card) continue;
+        if (i < num) {
+          card.style.display = ''; 
+          leadEditors[i].setContents([]); 
+          probEditors[i].setContents([]); 
+          concEditors[i].setContents([]);
+          defectEditors[i].setContents([]);
+        } else {
+          card.style.display = 'none';
+          leadEditors[i].setContents([]); 
+          probEditors[i].setContents([]); 
+          concEditors[i].setContents([]);
+          defectEditors[i].setContents([]);
+        }
+      }
+    }
+
+    function getCurrentNoteData() {
+      let title = document.getElementById('docTitle').value.trim();
+      title = title.replace(/_COM/gi, '').trim();
+      document.getElementById('docTitle').value = title;
+      
+      const num = parseInt(document.getElementById('itemCount').value) || 0;
+      const items = [];
+      for (let i = 1; i <= num; i++) {
+        if (leadEditors[i-1] && probEditors[i-1] && concEditors[i-1] && defectEditors[i-1]) {
+          items.push({ 
+            lead: leadEditors[i-1].root.innerHTML,
+            problem: probEditors[i-1].root.innerHTML, 
+            concept: concEditors[i-1].root.innerHTML,
+            defect: defectEditors[i-1].root.innerHTML
+          });
+        }
+      }
+      return { id: currentNoteId, title: title, date: new Date().toISOString(), items: items };
+    }
+
+    function saveCurrentNote(optionalNote) {
+      const note = optionalNote || getCurrentNoteData();
+      const transaction = db.transaction(['notes'], 'readwrite');
+      transaction.objectStore('notes').put(note);
+      transaction.oncomplete = () => { 
+        showToast('저장되었습니다'); 
+        renderNoteList(); 
+      };
+    }
+
+    function renderNoteList() {
+      return new Promise((resolve) => {
+        const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+        const transaction = db.transaction(['notes'], 'readonly');
+        const store = transaction.objectStore('notes');
+        const request = store.openCursor(); 
+
+        const list = document.getElementById('noteList'); 
+        const currentScrollTop = list.scrollTop; 
+        
+        list.innerHTML = '';
+        const matchedItems = []; 
+
+        request.onsuccess = (e) => {
+          const cursor = e.target.result;
+          if (cursor) {
+            const note = cursor.value;
+            if (note.items) {
+              note.items.forEach((item, index) => {
+                let match = item.problem.match(/<strong>(.*?)<\/strong>/);
+                let displayTitle = match ? match[1] : '항목';
+                let searchText = (item.problem + ' ' + item.concept + ' ' + (item.defect || '')).replace(/<[^>]+>/g, '').toLowerCase(); 
+                
+                if (searchText.includes(searchTerm)) {
+                  let originalId = match ? (match[1].match(/\[(.*?)\]/) ? match[1].match(/\[(.*?)\]/)[1] : '') : '';
+                  matchedItems.push({
+                    noteId: note.id,
+                    noteTitle: note.title,
+                    itemIndex: index,
+                    displayTitle: displayTitle,
+                    originalId: originalId
+                  });
+                }
+              });
+            }
+            cursor.continue(); 
+          } else {
+            matchedItems.sort((a, b) => {
+                const aParts = a.originalId.split('.').map(Number);
+                const bParts = b.originalId.split('.').map(Number);
+                for(let i=0; i<Math.max(aParts.length, bParts.length); i++) {
+                    const av = aParts[i] || 0;
+                    const bv = bParts[i] || 0;
+                    if (av !== bv) return av - bv;
+                }
+                return 0;
+            });
+
+            const countBadge = document.getElementById('searchCountBadge');
+            if (countBadge) {
+              countBadge.textContent = matchedItems.length;
+            }
+
+            matchedItems.forEach(meta => {
+              const li = document.createElement('li'); 
+              li.className = `note-item`;
+              li.innerHTML = `
+                <div class="note-title" style="color: var(--primary); font-size: 16px;">${meta.displayTitle}</div>
+                <div style="font-size: 14px; color: var(--text-muted); margin-top: 4px;">${meta.noteTitle}</div>
+              `;
+              li.onclick = () => {
+                if (currentNoteId !== meta.noteId) {
+                  loadNoteById(meta.noteId).then(() => {
+                    setTimeout(() => {
+                      if (isCardMode) {
+                        currentCardIndex = meta.itemIndex + 1;
+                        updateCardVisibility();
+                      } else if (isCheckMode || isDefectCheckMode) {
+                        if(isCheckMode) toggleCheckMode();
+                        if(isDefectCheckMode) toggleDefectCheckMode();
+                      } else {
+                        const target = document.getElementById(`card-${meta.itemIndex + 1}`);
+                        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }
+                    }, 100);
+                  });
+                } else {
+                  if (isCardMode) {
+                    currentCardIndex = meta.itemIndex + 1;
+                    updateCardVisibility();
+                  } else if (isCheckMode || isDefectCheckMode) {
+                    if(isCheckMode) toggleCheckMode();
+                    if(isDefectCheckMode) toggleDefectCheckMode();
+                    const target = document.getElementById(`card-${meta.itemIndex + 1}`);
+                    if (target) setTimeout(()=>target.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+                  } else {
+                    const target = document.getElementById(`card-${meta.itemIndex + 1}`);
+                    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }
+                }
+              }; 
+              list.appendChild(li);
+            });
+            
+            list.scrollTop = currentScrollTop;
+            
+            resolve();
+          }
+        };
+      });
+    }
+
+    function loadNoteById(noteId) {
+      return new Promise((resolve) => {
+        const transaction = db.transaction(['notes'], 'readonly');
+        const request = transaction.objectStore('notes').get(noteId);
+        request.onsuccess = () => {
+          if (request.result) loadNote(request.result);
+          resolve();
+        };
+      });
+    }
+
+    function loadNote(note) {
+      currentNoteId = note.id; 
+      
+      let safeTitle = note.title || '';
+      safeTitle = safeTitle.replace(/_COM/gi, '').trim();
+      document.getElementById('docTitle').value = safeTitle;
+      note.title = safeTitle; 
+
+      const items = note.items || []; 
+      generateForms(items.length);
+      
+      items.forEach((item, index) => {
+        leadEditors[index].clipboard.dangerouslyPasteHTML(item.lead || ''); 
+        probEditors[index].clipboard.dangerouslyPasteHTML(item.problem || ''); 
+        concEditors[index].clipboard.dangerouslyPasteHTML(item.concept || ''); 
+        defectEditors[index].clipboard.dangerouslyPasteHTML(item.defect || ''); 
+      }); 
+      document.getElementById('mainContent').scrollTop = 0;
+    }
+
+    function openManageModal() {
+      document.getElementById('manageModal').classList.add('show');
+      renderManageList();
+    }
+
+    function closeManageModal() {
+      document.getElementById('manageModal').classList.remove('show');
+    }
+
+    function renderManageList(optionalNote) {
+      const list = document.getElementById('manageList');
+      list.innerHTML = '';
+      
+      const currentData = optionalNote || getCurrentNoteData();
+      document.getElementById('manageTotalCount').textContent = currentData.items.length;
+      
+      currentData.items.forEach((item, idx) => {
+        let tmp = document.createElement('div');
+        tmp.innerHTML = item.problem || '';
+        let titleText = tmp.textContent.trim() || '비어있는 항목';
+
+        const li = document.createElement('li');
+        li.className = 'manage-item';
+        li.innerHTML = `
+          <div class="manage-item-info">
+            <span class="manage-item-num">${idx + 1}</span>
+            <span class="manage-item-title" title="${titleText}">${titleText}</span>
+          </div>
+          <div style="display: flex; gap: 4px; flex-shrink: 0; align-items: center;">
+            <button class="btn btn-outline" style="padding: 6px 10px;" onclick="editItem(${idx})" title="해당 항목 내용 편집"><i class="ph-bold ph-pencil-simple"></i> 편집</button>
+            <button class="btn btn-outline btn-danger" style="padding: 6px 10px;" onclick="deleteItem(${idx})" title="항목 삭제"><i class="ph-bold ph-trash"></i></button>
+          </div>
+        `;
+        list.appendChild(li);
+      });
+    }
+
+    function addNewItem() {
+      const note = getCurrentNoteData();
+      note.items.push({ lead: '', problem: '', concept: '', defect: '' }); 
+      loadNote(note);
+      
+      renderManageList(note);
+      saveCurrentNote(note);
+    }
+
+    function deleteItem(index) {
+      if(!confirm('해당 항목을 삭제하시겠습니까? (복구할 수 없습니다)')) return;
+      const note = getCurrentNoteData();
+      note.items.splice(index, 1);
+      
+      if (note.items.length === 0) {
+        note.items.push({ lead: '', problem: '', concept: '', defect: '' }); 
+      }
+      
+      if (currentCardIndex > note.items.length) {
+        currentCardIndex = note.items.length;
+      }
+      
+      loadNote(note);
+      
+      renderManageList(note);
+      saveCurrentNote(note);
+    }
+
+    function editItem(index) {
+      closeManageModal();
+      
+      setTimeout(() => {
+        if (isCardMode) {
+          currentCardIndex = index + 1;
+          updateCardVisibility();
+        } else {
+          const target = document.getElementById(`card-${index + 1}`);
+          if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 100);
+    }
+  </script>
+</body>
+</html>

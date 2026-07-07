@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IndexedDB 마이그레이션 도구</title>
+    <style>
+        :root {
+            /* 차분하고 고급스러운 세이지 기반 팔레트 */
+            --primary-sage: #6A8B89;   /* 메인 세이지 컬러 */
+            --dark-sage: #4E6E6C;      /* 어두운 세이지 (버튼 호버 등) */
+            --accent-warm: #C2B280;    /* 따뜻한 악센트 (복원 버튼) */
+            --bg-warm: #F5F4F0;        /* 따뜻한 배경색 */
+            --card-bg: #FFFFFF;        /* 카드 배경 */
+            --text-main: #333D3B;      /* 짙은 차콜 텍스트 */
+            --text-sub: #6B7A78;       /* 보조 텍스트 */
+            --border-color: #E0E2E1;   /* 테두리 색상 */
+        }
+
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+            background-color: var(--bg-warm);
+            color: var(--text-main);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            line-height: 1.6;
+        }
+
+        .container {
+            background: var(--card-bg);
+            width: 100%;
+            max-width: 640px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+            overflow: hidden;
+            text-align: center;
+            border: 1px solid var(--border-color);
+        }
+
+        .header {
+            padding: 40px 30px 20px;
+        }
+
+        .badge {
+            display: inline-block;
+            background-color: #EDF2F1;
+            color: var(--primary-sage);
+            font-size: 0.85rem;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 20px;
+            margin-bottom: 12px;
+        }
+
+        h1 {
+            margin: 0 0 12px;
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: var(--text-main);
+            letter-spacing: -0.5px;
+        }
+
+        p.desc {
+            color: var(--text-sub);
+            margin: 0;
+            font-size: 1.05rem;
+        }
+
+        /* 브라우저 목업 스타일 (정적이고 깔끔하게) */
+        .browser-guide-area {
+            background-color: #FAFAFA;
+            padding: 30px 20px;
+            border-top: 1px solid var(--border-color);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .browser-mockup {
+            background: white;
+            margin: 0 auto;
+            width: 92%;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            border: 1px solid #E5E7E6;
+            overflow: hidden;
+        }
+
+        .browser-header {
+            background: #F0F2F1;
+            padding: 8px 12px;
+            display: flex;
+            gap: 6px;
+            border-bottom: 1px solid #E5E7E6;
+        }
+
+        .dot { width: 10px; height: 10px; border-radius: 50%; background-color: #D1D5D4; }
+
+        .bookmark-bar-target {
+            background: #FCFCFC;
+            color: var(--text-sub);
+            padding: 14px;
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            border-top: 2px dashed var(--border-color);
+        }
+        
+        .target-icon { font-size: 1.2rem; color: var(--primary-sage); }
+
+        /* 정적인 안내 문구 */
+        .drag-guide-text {
+            margin: 25px 0 15px;
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--primary-sage);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        /* 버튼 영역 */
+        .button-group {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            flex-wrap: wrap;
+            padding: 0 20px 40px;
+        }
+
+        .bookmarklet-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 14px 28px;
+            font-size: 1rem;
+            font-weight: 600;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            cursor: move; /* 드래그 커서 유지 */
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+        }
+
+        .bookmarklet-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+        }
+        
+        .bookmarklet-btn:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+        }
+
+        .btn-backup {
+            background-color: var(--primary-sage);
+        }
+        .btn-backup:hover { background-color: var(--dark-sage); }
+
+        .btn-restore {
+            background-color: var(--accent-warm);
+            color: #3E3A2F; /* 밝은 배경엔 어두운 글씨 */
+        }
+        .btn-restore:hover { background-color: #B0A172; }
+
+        .icon { font-size: 1.2rem; }
+
+        .footer-note {
+            margin-top: 0;
+            background-color: #FAFAFA;
+            padding: 20px;
+            font-size: 0.9rem;
+            color: var(--text-sub);
+            border-top: 1px solid var(--border-color);
+        }
+        
+        strong { color: var(--text-main); font-weight: 600; }
+    </style>
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css" />
+</head>
+<body>
+
+    <div class="container">
+        <div class="header">
+            <span class="badge">설치 가이드</span>
+            <h1>IndexedDB 마이그레이션 도구</h1>
+            <p class="desc">
+                데이터베이스 이전이 필요하신가요?<br>
+                아래 버튼을 브라우저 상단의 <strong>북마크 바</strong>로 드래그하여 설치하세요.
+            </p>
+        </div>
+
+        <div class="browser-guide-area">
+            <div class="browser-mockup">
+                <div class="browser-header">
+                    <div class="dot"></div>
+                    <div class="dot"></div>
+                    <div class="dot"></div>
+                </div>
+                <div class="bookmark-bar-target">
+                    <span class="target-icon">⇧</span> 여기에 버튼을 끌어다 놓으세요 (북마크 바)
+                </div>
+            </div>
+        </div>
+
+        <div class="drag-guide-text">
+            <span>설치할 버튼 선택 후 드래그</span>
+        </div>
+
+        <div class="button-group">
+            <a href="javascript:(async function(){console.log('%c⏳ DB 백업 시작...','color:blue;font-weight:bold;');const dbs=await indexedDB.databases();if(!dbs.length){alert('⚠️ 저장된 IndexedDB가 없습니다.');return;}const exportData={};let totalItems=0;for(const dbInfo of dbs){try{const db=await new Promise((r,j)=>{const req=indexedDB.open(dbInfo.name);req.onsuccess=e=>r(e.target.result);req.onerror=e=>j(e)});const storeNames=Array.from(db.objectStoreNames);if(storeNames.length){exportData[dbInfo.name]={};const tx=db.transaction(storeNames,'readonly');for(const store of storeNames){const records=await new Promise((r,j)=>{const req=tx.objectStore(store).getAll();req.onsuccess=e=>r(e.target.result);req.onerror=e=>j(e)});exportData[dbInfo.name][store]=records;totalItems+=records.length;}}db.close();}catch(e){console.error(e);}}const jsonStr=JSON.stringify(exportData,null,2);const blob=new Blob([jsonStr],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`DB_Backup_${location.hostname}_${new Date().toISOString().slice(0,10)}.json`;document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);alert(`✅ 백업 완료!\n총 ${dbs.length}개 DB, ${totalItems}개 데이터 다운로드됨.`);})();" 
+               class="bookmarklet-btn btn-backup" onclick="return false;" title="드래그해서 북마크바에 놓으세요">
+                <span class="icon">💾</span> DB 백업하기
+            </a>
+
+            <a href="javascript:(function(){const input=document.createElement('input');input.type='file';input.accept='.json';input.onchange=function(e){const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=async function(evt){try{const data=JSON.parse(evt.target.result);const dbNames=Object.keys(data);let successCount=0;if(!confirm(`⚠️ 경고: 현재 사이트의 DB를 덮어씁니다.\n총 ${dbNames.length}개의 DB 복원을 진행하시겠습니까?`))return;for(const name of dbNames){try{const db=await new Promise((r,j)=>{const req=indexedDB.open(name);req.onsuccess=e=>r(e.target.result);req.onerror=e=>j(e)});const existStores=Array.from(db.objectStoreNames);const targetStores=Object.keys(data[name]).filter(s=>existStores.includes(s));if(targetStores.length){const tx=db.transaction(targetStores,'readwrite');for(const s of targetStores){const store=tx.objectStore(s);data[name][s].forEach(row=>store.put(row));}await new Promise((r,j)=>{tx.oncomplete=r;tx.onerror=j});successCount++;}db.close();}catch(err){console.error(`[${name}] 복원 실패:`,err);}}alert(`✅ 복원 완료!\n${successCount}개의 DB가 처리되었습니다.\n페이지를 새로고침하세요.`);location.reload();}catch(err){alert('❌ 파일 처리 중 오류 발생:\n'+err);}};reader.readAsText(file);};input.click();})();" 
+               class="bookmarklet-btn btn-restore" onclick="return false;" title="드래그해서 북마크바에 놓으세요">
+                <span class="icon">♻️</span> DB 복원하기
+            </a>
+        </div>
+
+        <div class="footer-note">
+            <p><strong>💡 사용 방법 완료</strong></p>
+            <p style="margin-bottom: 0;">설치가 끝났으면 이 페이지를 닫고, 작업할 웹사이트에서 북마크 바의 버튼을 클릭하여 사용하세요.</p>
+        </div>
+    </div>
+
+</body>
+</html>

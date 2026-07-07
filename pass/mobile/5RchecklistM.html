@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>5R Checklist</title>
+<link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+    :root {
+        --primary: #2563eb; --bg: #f8fafc; --card: #ffffff;
+        --text: #1e293b; --sub: #64748b; --border: #e2e8f0;
+        --sab: env(safe-area-inset-bottom);
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; font-family: 'Pretendard', sans-serif; }
+    body { margin: 0; background: var(--bg); color: var(--text); height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+    body.modal-open { overflow: hidden; }
+
+    red { color:#ef4444; font-weight:700; } blue { color:#2563eb; font-weight:700; }
+    mark { background:#fef08a; padding:0 2px; border-radius:4px; }
+
+    header { background: #fff; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); z-index: 10; }
+    .tab-nav { background: #fff; display: flex; border-bottom: 1px solid var(--border); justify-content: center; z-index: 9; }
+    .tab-item { width: 140px; text-align: center; padding: 16px 0; font-weight: 700; color: var(--sub); cursor: pointer; position: relative; }
+    .tab-item.active { color: var(--primary); }
+    .tab-item.active::after { content: ''; position: absolute; bottom: 0; left: 20%; right: 20%; height: 3px; background: var(--primary); border-radius: 2px; }
+
+    /* 헤더 및 탭 네비게이션 숨김 스타일 */
+    body.header-hidden header, 
+    body.header-hidden .tab-nav { display: none; }
+    
+    main { flex: 1; overflow-y: auto; padding: 20px; position: relative; -webkit-overflow-scrolling: touch; }
+    .view-section { display: none; max-width: 1400px; margin: 0 auto; width: 100%; }
+    .view-section.active { display: block; }
+
+    .list-tools { display: flex; gap: 10px; margin-bottom: 20px; width: 100%; }
+    .list-tools select, .list-tools input { padding: 12px 16px; border: 1px solid var(--border); border-radius: 14px; background: #fff; outline: none; flex: 1; }
+
+    .grid-container { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); padding-bottom: 80px; }
+    @media (max-width: 600px) { .grid-container { grid-template-columns: 1fr; } }
+
+    .card { background: var(--card); border-radius: 20px; padding: 22px; border: 1px solid var(--border); box-shadow: 0 4px 10px rgba(0,0,0,0.03); cursor: pointer; transition: 0.2s; }
+    .card.checked { opacity: 0.5; background: #f1f5f9; }
+    .card-topic { font-size: 1.15rem; font-weight: 700; line-height: 1.5; white-space: pre-wrap; word-break: break-all; }
+
+    .flash-wrapper { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: space-around; padding-bottom: 20px; }
+    .flash-scene { width: 100%; max-width: 900px; aspect-ratio: 16/10; perspective: 1500px; cursor: pointer; }
+    @media (max-width: 1024px) { .flash-scene { max-width: 450px; aspect-ratio: 4/5.8; } }
+
+    .flash-inner { width: 100%; height: 100%; position: relative; transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1); transform-style: preserve-3d; }
+    .flash-scene.flipped .flash-inner { transform: rotateY(180deg); }
+    .flash-face { position: absolute; inset: 0; backface-visibility: hidden; background: #fff; border-radius: 32px; padding: 40px; border: 1px solid var(--border); box-shadow: 0 15px 35px rgba(0,0,0,0.06); display: flex; flex-direction: column; }
+    .flash-front { align-items: center; justify-content: center; text-align: center; }
+    .flash-back { transform: rotateY(180deg); overflow-y: auto; text-align: left; }
+
+    .f-text { font-size: 1.1rem; line-height: 1.7; color: #334155; white-space: pre-wrap; word-break: break-all; margin-bottom: 24px; }
+    .f-label { font-size: 0.8rem; font-weight: 800; color: var(--primary); margin-bottom: 6px; display: block; letter-spacing: 0.5px; }
+
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+    .modal-content { background: #fff; width: 95%; max-width: 900px; border-radius: 28px; padding: 32px; max-height: 85vh; overflow-y: auto; position: relative; }
+    @media (max-width: 600px) { 
+        .modal-overlay { align-items: flex-end; } 
+        .modal-content { width: 100%; border-radius: 28px 28px 0 0; padding-bottom: calc(var(--sab) + 20px); max-height: 92vh; } 
+    }
+    
+    .close-x-btn { position: absolute; top: 20px; right: 20px; width: 40px; height: 40px; border-radius: 50%; background: #f1f5f9; border: none; font-size: 1.2rem; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--sub); z-index: 100; }
+
+    .lightbox { display: none; position: fixed; inset: 0; background: #000; z-index: 10000; align-items: center; justify-content: center; }
+    .lightbox img { max-width: 100%; max-height: 100%; object-fit: contain; }
+    .lightbox .close-x-btn { background: rgba(255,255,255,0.2); color: #fff; top: env(safe-area-inset-top, 20px); }
+
+    .f-img-thumb { width: 100%; max-width: 700px; border-radius: 12px; margin-top: 12px; cursor: pointer; border: 1px solid #eee; display: block; margin-left: auto; margin-right: auto; }
+
+    .circle-btn { width: 52px; height: 52px; border-radius: 18px; border: none; background: #fff; box-shadow: 0 4px 10px rgba(0,0,0,0.05); cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--sub); }
+    .check-btn { width: 68px; height: 68px; border-radius: 24px; background: var(--primary); color: #fff; border: none; font-size: 1.6rem; cursor: pointer; box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3); }
+
+    /* 숨김 토글 전용 플로팅 버튼 */
+    .toggle-view-btn { position: fixed; top: 12px; right: 12px; z-index: 1001; width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--border); background: rgba(255,255,255,0.9); color: var(--sub); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    body.header-hidden .toggle-view-btn { opacity: 0.5; }
+</style>
+</head>
+<body>
+
+<button class="toggle-view-btn" onclick="toggleHeader()" title="헤더 숨기기/보이기 (H)">
+    <i id="toggle-icon" class="fas fa-eye-slash"></i>
+</button>
+
+<header id="main-header">
+    <div style="font-weight:900; color:var(--primary); font-size:1.4rem; letter-spacing:-0.5px;">5Rchecklist</div>
+    <div style="display:flex; gap:10px; margin-right: 45px;">
+        <button class="circle-btn" style="width:38px; height:38px;" onclick="exportJSON()"><i class="fas fa-download"></i></button>
+        <button class="circle-btn" style="width:38px; height:38px;" onclick="$('#json-import').click()"><i class="fas fa-upload"></i></button>
+        <input type="file" id="json-import" style="display:none" accept=".json,application/json" onchange="importJSON(this)">
+    </div>
+</header>
+
+<nav class="tab-nav" id="main-nav">
+    <div class="tab-item active" onclick="setTab('list')">목록(List)</div>
+    <div class="tab-item" onclick="setTab('flash')">플래시카드</div>
+</nav>
+
+<main id="main-scroll-area">
+    <div id="view-list" class="view-section active">
+        <div class="list-tools">
+            <select id="domain-filter" onchange="renderList()"><option value="">모든 영역 필터</option></select>
+            <input type="search" id="search-input" placeholder="토픽 또는 내용 검색..." oninput="renderList()">
+        </div>
+        <div id="list-container" class="grid-container"></div>
+    </div>
+
+    <div id="view-flash" class="view-section">
+        <div class="flash-wrapper">
+            <div id="flash-card-obj" class="flash-scene" onclick="toggleFlip()">
+                <div class="flash-inner">
+                    <div class="flash-face flash-front">
+                        <div id="f-domain" style="font-size:1rem; font-weight:800; color:var(--primary); margin-bottom:15px; opacity:0.8;"></div>
+                        <div id="f-topic" class="card-topic" style="font-size:2.8rem; text-align:center;"></div>
+                    </div>
+                    <div class="flash-face flash-back" id="f-back-scroll">
+                        <span class="f-label">DEFINITION</span><div id="f-def" class="f-text"></div>
+                        <span class="f-label">MNEMONIC</span><div id="f-mne" class="f-text"></div>
+                        <div id="f-imgs"></div>
+                    </div>
+                </div>
+            </div>
+            <div style="width:100%; max-width:500px;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <button class="circle-btn" onclick="event.stopPropagation(); prevFlash()"><i class="fas fa-chevron-left"></i></button>
+                    <div style="text-align:center;">
+                        <button class="check-btn" onclick="event.stopPropagation(); toggleCheck()"><i id="f-check-icon" class="fas fa-check"></i></button>
+                        <div id="f-progress" style="font-size:0.9rem; font-weight:800; color:var(--sub); margin-top:10px;">0 / 0</div>
+                    </div>
+                    <button class="circle-btn" onclick="event.stopPropagation(); nextFlash()"><i class="fas fa-chevron-right"></i></button>
+                </div>
+                <button id="toggle-unchecked-btn" style="width:100%; padding:16px; margin-top:20px; border-radius:18px; border:1px solid var(--border); background:#fff; font-weight:700; color:var(--sub); cursor:pointer;" onclick="toggleUncheckedMode()">미완료 건만 집중 학습</button>
+            </div>
+        </div>
+    </div>
+</main>
+
+<div class="modal-overlay" id="detail-modal" onclick="if(event.target===this) closeModal()">
+    <div class="modal-content">
+        <button class="close-x-btn" onclick="closeModal()"><i class="fas fa-times"></i></button>
+        <div id="m-domain" style="font-size:0.9rem; font-weight:800; color:var(--primary); margin-bottom:10px;"></div>
+        <div id="m-topic" class="card-topic" style="font-size:2.2rem; margin-bottom:28px; padding-right:40px;"></div>
+        <div id="m-body"></div>
+        <div id="m-imgs"></div>
+        <button style="width:100%; padding:20px; border:none; border-radius:18px; background:#f1f5f9; font-weight:800; color:var(--text); margin-top:25px; cursor:pointer;" onclick="closeModal()">닫기</button>
+    </div>
+</div>
+
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+    <button class="close-x-btn" onclick="closeLightbox()"><i class="fas fa-times"></i></button>
+    <img id="lightbox-img" src="" onclick="event.stopPropagation()">
+</div>
+
+<script>
+    const $ = (s) => document.querySelector(s);
+    let db = null, allItems = [], flashItems = [], flashIndex = 0, uncheckedMode = false;
+
+    function toggleHeader() {
+        const isHidden = document.body.classList.toggle('header-hidden');
+        $('#toggle-icon').className = isHidden ? 'fas fa-eye' : 'fas fa-eye-slash';
+    }
+
+    window.onpopstate = function() { closeModal(true); closeLightbox(true); };
+    function renderHTML(t) {
+        if(!t) return '';
+        let s = String(t).replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+        return s.replace(/<\s*red\s*>([\s\S]*?)<\s*\/\s*red\s*>/gi, '<red>$1</red>')
+                .replace(/<\s*blue\s*>([\s\S]*?)<\s*\/\s*blue\s*>/gi, '<blue>$1</blue>')
+                .replace(/<\s*mark\s*>([\s\S]*?)<\s*\/\s*mark\s*>/gi, '<mark>$1</mark>');
+    }
+
+    async function openDB() {
+        if (db) return; // 이미 연결되어 있으면 스킵
+        return new Promise((res, rej) => {
+            const rq = indexedDB.open('5R_check_db', 2); // 버전 2
+            rq.onupgradeneeded = (e) => {
+                const database = e.target.result;
+                if (!database.objectStoreNames.contains('items')) {
+                    database.createObjectStore('items', { keyPath: 'id' });
+                }
+                if (!database.objectStoreNames.contains('images')) {
+                    database.createObjectStore('images', { keyPath: 'id' });
+                }
+            };
+            rq.onsuccess = () => { db = rq.result; res(); };
+            rq.onerror = (e) => { 
+                console.error("DB 로드 실패:", e); 
+                alert("브라우저 데이터베이스를 열 수 없습니다. 시크릿 모드인지 확인해주세요.");
+                rej(e); 
+            };
+        });
+    }
+
+    async function refreshData() {
+        try {
+            if (!db) await openDB(); // 모바일 환경 재연결 방어 코드
+            const tx = db.transaction('items','readonly');
+            allItems = await new Promise((r, rej) => { 
+                const req = tx.objectStore('items').getAll();
+                req.onsuccess = e => r(e.target.result || []); 
+                req.onerror = () => rej(req.error);
+            });
+            const domains = [...new Set(allItems.map(i => i.domain))].sort();
+            $('#domain-filter').innerHTML = '<option value="">모든 영역 필터</option>' + domains.map(d => `<option value="${d}">${d}</option>`).join('');
+            renderList();
+        } catch(err) {
+            console.error(err);
+        }
+    }
+    
+    function renderList() {
+        const dF = $('#domain-filter').value, sF = $('#search-input').value.toLowerCase();
+        const f = allItems.filter(i => (!dF || i.domain === dF) && (!sF || (i.topic + i.definition).toLowerCase().includes(sF)));
+        const c = $('#list-container'); c.innerHTML = '';
+        f.forEach(item => {
+            const el = document.createElement('div'); el.className = `card ${item.checked ? 'checked' : ''}`;
+            el.onclick = () => openDetail(item.id);
+            el.innerHTML = `<div style="font-size:0.8rem; font-weight:800; color:var(--primary); margin-bottom:8px; opacity:0.8;">${item.domain}</div><div class="card-topic">${renderHTML(item.topic)}</div>`;
+            c.appendChild(el);
+        });
+    }
+    function toggleFlip() { $('#flash-card-obj').classList.toggle('flipped'); }
+    async function openDetail(id) {
+        const item = allItems.find(i => i.id === id);
+        $('#m-domain').textContent = item.domain;
+        $('#m-topic').innerHTML = renderHTML(item.topic);
+        $('#m-body').innerHTML = `<span class="f-label">DEFINITION</span><div class="f-text">${renderHTML(item.definition)}</div><span class="f-label">MNEMONIC</span><div class="f-text">${renderHTML(item.mnemonic)}</div>`;
+        renderImages(item, $('#m-imgs'));
+        history.pushState({modal: 'detail'}, '');
+        $('#detail-modal').style.display = 'flex';
+        document.body.classList.add('modal-open');
+    }
+    function closeModal(isPopState = false) {
+        $('#detail-modal').style.display = 'none';
+        document.body.classList.remove('modal-open');
+        if(!isPopState && history.state?.modal === 'detail') history.back();
+    }
+    async function renderImages(item, container) {
+        container.innerHTML = '';
+        for(let i=1; i<=5; i++) {
+            const imgId = item[`img${i}Id`];
+            if(imgId) {
+                const res = await new Promise(async r => { 
+                    try {
+                        if (!db) await openDB(); // 모바일 환경 재연결 방어 코드
+                        const tx = db.transaction('images');
+                        tx.objectStore('images').get(imgId).onsuccess = e => r(e.target.result); 
+                    } catch(err) { r(null); }
+                });
+                if(res) {
+                    const img = document.createElement('img'); img.src = URL.createObjectURL(res.blob); img.className = 'f-img-thumb';
+                    img.onclick = (e) => { e.stopPropagation(); openLightbox(img.src); };
+                    container.appendChild(img);
+                }
+            }
+        }
+    }
+    function openLightbox(src) {
+        $('#lightbox-img').src = src;
+        $('#lightbox').style.display = 'flex';
+        history.pushState({modal: 'lightbox'}, '');
+        document.body.classList.add('modal-open');
+    }
+    function closeLightbox(isPopState = false) {
+        $('#lightbox').style.display = 'none';
+        if (!($('#detail-modal').style.display === 'flex')) document.body.classList.remove('modal-open');
+        if(!isPopState && history.state?.modal === 'lightbox') history.back();
+    }
+    function initFlashcards() {
+        const dF = $('#domain-filter').value;
+        flashItems = allItems.filter(i => (!dF || i.domain === dF) && (uncheckedMode ? !i.checked : true));
+        flashIndex = 0; renderFlashcard();
+    }
+    function renderFlashcard() {
+        $('#flash-card-obj').classList.remove('flipped');
+        if(!flashItems.length) { $('#f-topic').textContent = "조건에 맞는 카드 없음"; return; }
+        const item = flashItems[flashIndex];
+        $('#f-domain').textContent = item.domain; $('#f-topic').innerHTML = renderHTML(item.topic);
+        $('#f-def').innerHTML = renderHTML(item.definition); $('#f-mne').innerHTML = renderHTML(item.mnemonic);
+        $('#f-progress').textContent = `${flashIndex + 1} / ${flashItems.length}`;
+        $('#f-check-icon').style.color = item.checked ? '#a5f3fc' : '#fff';
+        renderImages(item, $('#f-imgs'));
+    }
+    function nextFlash() { if(flashItems.length) { flashIndex = (flashIndex + 1) % flashItems.length; renderFlashcard(); } }
+    function prevFlash() { if(flashItems.length) { flashIndex = (flashIndex - 1 + flashItems.length) % flashItems.length; renderFlashcard(); } }
+    async function toggleCheck() { 
+        if (!db) await openDB(); // 모바일 환경 재연결 방어 코드
+        const item = flashItems[flashIndex]; item.checked = !item.checked; 
+        db.transaction('items','readwrite').objectStore('items').put(item); renderFlashcard(); renderList(); 
+    }
+    function toggleUncheckedMode() { uncheckedMode = !uncheckedMode; $('#toggle-unchecked-btn').style.background = uncheckedMode?'#1e293b':'#fff'; $('#toggle-unchecked-btn').style.color = uncheckedMode?'#fff':'#64748b'; initFlashcards(); }
+    function setTab(t) { 
+        document.querySelectorAll('.tab-item, .view-section').forEach(el => el.classList.remove('active'));
+        if(t==='list') { $('.tab-item:nth-child(1)').classList.add('active'); $('#view-list').classList.add('active'); }
+        else { $('.tab-item:nth-child(2)').classList.add('active'); $('#view-flash').classList.add('active'); initFlashcards(); }
+    }
+    
+    async function exportJSON() { 
+        try {
+            if (!db) await openDB(); // 모바일 환경 재연결 방어 코드
+            const tx = db.transaction('items','readonly'); 
+            tx.objectStore('items').getAll().onsuccess = e => { 
+                let items = e.target.result || [];
+                const dF = $('#domain-filter').value;
+                if (dF) items = items.filter(item => item.domain === dF);
+                if (items.length === 0) { alert('백업할 데이터가 없습니다.'); return; }
+
+                const blob = new Blob([JSON.stringify({items: items})], {type:'application/json'}); 
+                const a = document.createElement('a'); 
+                a.href = URL.createObjectURL(blob); 
+                a.download = dF ? `5R_backup_${dF}.json` : '5R_backup.json'; 
+                a.click(); 
+            }; 
+        } catch(err) {
+            console.error(err);
+            alert("백업 중 오류가 발생했습니다.");
+        }
+    }
+
+    async function importJSON(input) { 
+        if (!input.files || input.files.length === 0) return;
+
+        // 모바일 환경에서 파일 선택기 복귀 시 db 유실 방지 및 복원
+        if (!db) {
+            try { 
+                await openDB(); 
+            } catch (err) {
+                alert("데이터베이스 연결에 실패하여 파일을 가져올 수 없습니다.");
+                input.value = '';
+                return;
+            }
+        }
+
+        const file = input.files[0];
+        const reader = new FileReader(); 
+        
+        reader.onload = e => { 
+            try {
+                const data = JSON.parse(e.target.result); 
+                if (!data || !data.items || !Array.isArray(data.items)) {
+                    throw new Error("유효한 백업 데이터 형식이 아닙니다.");
+                }
+
+                const tx = db.transaction('items','readwrite'); 
+                tx.onerror = (err) => {
+                    alert("데이터 저장 중 오류가 발생했습니다.");
+                    console.error(err);
+                };
+
+                data.items.forEach(i => tx.objectStore('items').put(i)); 
+                
+                tx.oncomplete = () => { 
+                    refreshData(); 
+                    alert(`총 ${data.items.length}개의 데이터가 성공적으로 복구되었습니다!`);
+                }; 
+            } catch (error) {
+                alert("파일을 읽는 중 문제가 발생했습니다.\n" + error.message);
+                console.error(error);
+            } finally {
+                input.value = '';
+            }
+        }; 
+        reader.onerror = () => { alert("파일 읽기 실패"); input.value = ''; };
+        reader.readAsText(file); 
+    }
+    
+    document.addEventListener('keydown', (e) => {
+        if (e.ctrlKey && e.key.toLowerCase() === 'x') { e.preventDefault(); closeModal(); closeLightbox(); return; }
+        if (e.key.toLowerCase() === 'h' && e.target.tagName !== 'INPUT') { e.preventDefault(); toggleHeader(); }
+        if($('#view-flash').classList.contains('active')) {
+            if(e.code === 'Space') { e.preventDefault(); toggleFlip(); }
+            if(e.key === 'ArrowRight') { e.preventDefault(); nextFlash(); }
+            if(e.key === 'ArrowLeft') { e.preventDefault(); prevFlash(); }
+            if(e.key === 'Enter') { e.preventDefault(); toggleCheck(); }
+            const scrollArea = $('#f-back-scroll');
+            if(e.key === 'ArrowDown') { scrollArea.scrollTop += 60; }
+            if(e.key === 'ArrowUp') { scrollArea.scrollTop -= 60; }
+        }
+    });
+
+    window.onload = async () => { 
+        await openDB(); 
+        await refreshData(); 
+    };
+</script>
+</body>
+</html>

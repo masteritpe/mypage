@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>토픽 검색 (PDF 로컬 뷰어)</title>
+  <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" rel="stylesheet" />
+  <style>
+    /* 컬러 팔레트 및 전역 변수 설정 */
+    :root {
+      --bg: #f1f5f9;
+      --surface: #ffffff;
+      --ink: #0f172a;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --danger: #ef4444;
+      --success: #10b981;
+      --radius: 12px;
+      --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+      --font: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    
+    html, body {
+      height: 100%; margin: 0; padding: 0;
+      font-family: var(--font);
+      background-color: var(--bg);
+      color: var(--ink);
+      line-height: 1.5;
+    }
+
+    /* 스크롤바 커스텀 */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+    /* 헤더 영역 */
+    header {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--border);
+    }
+    
+    header .wrap {
+      max-width: 1400px; margin: 0 auto; padding: 16px 20px;
+      display: flex; gap: 12px; align-items: center; justify-content: space-between;
+    }
+    
+    header h1 {
+      font-size: 20px; margin: 0; font-weight: 700; color: var(--ink);
+      display: flex; align-items: center; gap: 10px;
+    }
+
+    .db-badge {
+      background: #e0e7ff; color: #4338ca;
+      padding: 4px 8px; border-radius: 6px;
+      font-size: 12px; font-weight: 600;
+    }
+
+    .target-path {
+      font-size: 13px; color: var(--muted);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .target-path span {
+      background: var(--bg); padding: 4px 8px;
+      border-radius: 6px; font-weight: 600; color: var(--ink);
+    }
+
+    /* 메인 레이아웃 */
+    .layout {
+      max-width: 1400px; margin: 24px auto; padding: 0 20px;
+      display: grid; grid-template-columns: 320px 1fr; gap: 24px;
+    }
+
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      .panel { position: static !important; }
+    }
+
+    .panel {
+      position: sticky; top: 88px;
+      align-self: start;
+      display: flex; flex-direction: column; gap: 20px;
+    }
+
+    /* 카드 UI 공통 */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .card .hd {
+      padding: 16px 20px; border-bottom: 1px solid var(--border);
+      background: #f8fafc; font-weight: 700; font-size: 15px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .card .bd { padding: 20px; }
+
+    /* 폼 요소 및 버튼 */
+    .flex { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .flex-between { display: flex; justify-content: space-between; align-items: center; }
+    .grow { flex: 1; }
+
+    button {
+      border: 0; background: var(--primary); color: #fff;
+      padding: 10px 16px; border-radius: 8px; font-weight: 600;
+      cursor: pointer; font-size: 14px; font-family: inherit;
+      transition: all 0.2s ease; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    }
+    button:hover { background: var(--primary-hover); transform: translateY(-1px); }
+    button:active { transform: translateY(0); }
+    
+    .btn-ghost { background: #f1f5f9; color: var(--ink); }
+    .btn-ghost:hover { background: #e2e8f0; }
+    .btn-line { background: #fff; border: 1px solid var(--border); color: var(--ink); }
+    .btn-line:hover { background: #f8fafc; }
+    .btn-copy { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+    .btn-copy:hover { background: #d1fae5; }
+    .btn-sm { padding: 6px 12px; font-size: 12px; }
+
+    input[type="search"] {
+      width: 100%; padding: 12px 16px;
+      border: 1px solid var(--border); border-radius: 8px;
+      background: #fff; font-family: inherit; font-size: 14px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    input[type="search"]:focus {
+      outline: none; border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+    }
+
+    /* 텍스트 & 상태 표시 (글꼴 기본 폰트로 통일) */
+    .path {
+      font-family: var(--font); background: var(--bg);
+      border: 1px solid var(--border); border-radius: 8px;
+      padding: 10px 12px; color: var(--ink); font-size: 13px;
+      word-break: break-all; margin-top: 6px;
+    }
+    .status-bar { margin-top: 12px; font-size: 13px; color: var(--muted); display: flex; justify-content: space-between; }
+    .icon-pdf { color: var(--danger); font-weight: 800; font-size: 11px; border: 1px solid rgba(239,68,68,0.3); padding: 2px 4px; border-radius: 4px; background: #fef2f2; margin-right: 6px; vertical-align: middle;}
+    .td-sm { font-size: 13px; color: var(--muted); }
+    .highlight { background: #fde047; color: #854d0e; padding: 0 4px; border-radius: 4px; font-weight: 600; }
+
+    /* 테이블 레이아웃 */
+    .rows {
+      height: 35vh; overflow: auto; 
+      border: 1px solid var(--border); border-radius: 8px; background: #fff; resize: vertical;
+    }
+    .table { width: 100%; border-collapse: separate; border-spacing: 0; }
+    .table th, .table td { padding: 12px 16px; border-bottom: 1px solid var(--border); text-align: left; font-size: 14px; }
+    .table th { color: var(--muted); background: rgba(248, 250, 252, 0.95); backdrop-filter: blur(4px); position: sticky; top: 0; z-index: 1; font-weight: 600; }
+    .table tbody tr { transition: background-color 0.15s; }
+    .table tbody tr:hover td { background: #f0f9ff; cursor: pointer; }
+    .table tbody tr:last-child td { border-bottom: none; }
+
+    /* 미리보기 컨테이너 */
+    .preview-container { display: none; margin-top: 24px; animation: fadeIn 0.3s ease; }
+    .preview { height: 80vh; background: #e2e8f0; border-radius: 12px; overflow: hidden; border: 1px solid var(--border); box-shadow: inset 0 2px 4px rgba(0,0,0,0.05); }
+    iframe { width: 100%; height: 100%; border: 0; display: block; }
+    
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <h1>
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--primary)"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+      토픽 검색 
+      <span id="headerDbBadge" class="db-badge" style="display:none">DB 연동됨</span>
+    </h1>
+    <div class="target-path">
+      대상 경로: <span>C:\ITPE\DeepDive\1.PDF학습</span>
+    </div>
+  </div>
+</header>
+
+<main class="layout">
+  <aside class="panel">
+    <section class="card">
+      <div class="hd">1) 인덱싱 관리</div>
+      <div class="bd">
+        <button id="pickDirBtn" style="width:100%">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+          학습 폴더 스캔
+        </button>
+        <div style="margin-top:16px">
+          <label style="font-size:13px; color:var(--muted); font-weight:600">현재 상태</label>
+          <div id="statusText" class="path">준비 중...</div>
+        </div>
+        <div class="status-bar">
+          <span id="fileCount">0개 파일</span>
+          <span id="dbStatus">DB 확인 중</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="hd">2) 토픽 검색</div>
+      <div class="bd">
+        <input id="query" type="search" placeholder="파일 이름 또는 토픽 검색..." autofocus />
+        <div class="flex" style="margin-top:12px">
+          <button id="searchBtn" class="grow">검색하기</button>
+          <button id="resetDbBtn" class="btn-ghost" title="DB 초기화">초기화</button>
+        </div>
+        <div style="margin-top:16px; font-size:12px; color:var(--muted); line-height:1.6; background:#f8fafc; padding:10px; border-radius:8px;">
+          • 폴더 내 내용이 변경되면 <b>[스캔]</b>을 다시 진행하세요.<br>
+          • PDF 확장자 파일만 인덱싱 목록에 추가됩니다.
+        </div>
+      </div>
+    </section>
+  </aside>
+
+  <section class="content">
+    <section class="card">
+      <div class="hd">
+        <span>3) 검색 결과</span>
+        <span id="resultInfo" class="td-sm" style="background:var(--bg); padding:2px 8px; border-radius:12px; font-weight:600; color:var(--primary)">0 건</span>
+      </div>
+      <div class="bd">
+        <div class="rows" id="resultRows">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>파일명 및 위치</th>
+                <th style="width:80px; text-align:center;">액션</th>
+              </tr>
+            </thead>
+            <tbody id="resultBody">
+              <tr><td colspan="2" style="text-align:center; padding:40px; color:var(--muted)">데이터를 로딩 중입니다...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div id="previewContainer" class="preview-container">
+          <div class="flex-between" style="margin-bottom:12px">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--primary)"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+              <strong id="pvTitle" style="font-size:16px; color:var(--ink)">문서 미리보기</strong>
+            </div>
+            <div class="flex">
+               <span id="copyMsg" style="font-size:13px; font-weight:600; color:var(--success); display:none;">경로가 복사되었습니다!</span>
+               <button id="copyPathBtn" class="btn-copy btn-sm">주소 복사</button>
+               <button id="openBtn" class="btn-line btn-sm">새 탭으로 열기</button>
+            </div>
+          </div>
+          <div class="preview" id="pvBox">
+            <iframe id="pdfFrame" src=""></iframe>
+          </div>
+        </div>
+
+      </div>
+    </section>
+  </section>
+</main>
+
+<script>
+  // ========= 로직 =========
+  const TARGET_ROOT_NAME = "C:\\ITPE\\DeepDive\\1.PDF학습";
+  const DB_NAME = "ITPESearchDB";
+  const STORE_NAME = "files";
+  const DB_VERSION = 1;
+
+  let db = null;
+  let files = [];
+  let currentBlobUrl = null;
+  
+  const $ = sel => document.querySelector(sel);
+  
+  // --- IndexedDB 헬퍼 함수 ---
+  function openDB() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, DB_VERSION);
+      req.onupgradeneeded = (e) => {
+        db = e.target.result;
+        if(!db.objectStoreNames.contains(STORE_NAME)){
+          db.createObjectStore(STORE_NAME, { keyPath: 'path' });
+        }
+      };
+      req.onsuccess = (e) => { db = e.target.result; resolve(db); };
+      req.onerror = (e) => reject(e);
+    });
+  }
+
+  async function saveToDB(fileList) {
+    if(!db) await openDB();
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    // 기존 데이터 모두 삭제 후 재저장 (동기화)
+    await new Promise(r => { store.clear().onsuccess = r; });
+    
+    for(const f of fileList) {
+      store.put(f);
+    }
+    return new Promise(r => { tx.oncomplete = r; });
+  }
+
+  async function loadFromDB() {
+    if(!db) await openDB();
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
+    return new Promise((resolve) => {
+      const req = store.getAll();
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve([]);
+    });
+  }
+  
+  // --- 권한 확인 (새로고침 후 필수) ---
+  async function verifyPermission(fileHandle, readWrite) {
+    const opts = {};
+    if (readWrite) opts.mode = 'readwrite';
+    if ((await fileHandle.queryPermission(opts)) === 'granted') return true;
+    if ((await fileHandle.requestPermission(opts)) === 'granted') return true;
+    return false;
+  }
+
+  // --- 유틸 ---
+  function escapeHtml(str){ return String(str).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
+  function highlight(text, query){
+    if(!query) return escapeHtml(text);
+    const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    return escapeHtml(text).replace(regex, '<span class="highlight">$1</span>');
+  }
+
+  // --- 메인 로직 ---
+  async function init(){
+    await openDB();
+    const savedFiles = await loadFromDB();
+    
+    if(savedFiles && savedFiles.length > 0) {
+      files = savedFiles;
+      $('#statusText').textContent = 'DB 로드 완료 (즉시 검색 가능)';
+      $('#statusText').style.color = 'var(--success)';
+      $('#statusText').style.borderColor = 'var(--success)';
+      $('#fileCount').textContent = `${files.length}개`;
+      $('#dbStatus').textContent = '저장됨';
+      $('#headerDbBadge').style.display = 'inline-block';
+      search(''); // 전체 목록 표시
+    } else {
+      $('#statusText').textContent = '폴더 스캔이 필요합니다.';
+      $('#dbStatus').textContent = '데이터 없음';
+      $('#resultBody').innerHTML = '<tr><td colspan="2" style="text-align:center;padding:40px;color:var(--muted)">좌측의 [학습 폴더 스캔] 버튼을 눌러주세요.</td></tr>';
+    }
+  }
+
+  async function* walk(dir, prefix=''){
+    for await (const [name, entry] of dir.entries()){
+      const currPath = prefix ? `${prefix}\\${name}` : name;
+      if(entry.kind === 'file'){
+        if(name.toLowerCase().endsWith('.pdf')){
+          yield { handle: entry, name, path: currPath };
+        }
+      } else if(entry.kind === 'directory'){
+        yield* walk(entry, currPath);
+      }
+    }
+  }
+
+  async function scanDirectory(){
+    try {
+      const dirHandle = await window.showDirectoryPicker({mode: 'read'});
+      if(dirHandle.name !== 'ITPE' && dirHandle.name !== 'itpe'){
+        if(!confirm(`선택한 폴더가 'ITPE'가 아닌 '${dirHandle.name}'입니다. 계속하시겠습니까?`)) return;
+      }
+      
+      $('#statusText').textContent = '스캔 및 DB 저장 중...';
+      $('#statusText').style.color = 'var(--ink)';
+      $('#statusText').style.borderColor = 'var(--border)';
+      files = [];
+      let count = 0;
+      
+      for await (const f of walk(dirHandle)){
+        files.push(f);
+        count++;
+        if(count % 50 === 0) $('#fileCount').textContent = `${count}개 찾는 중...`;
+      }
+
+      // DB 저장
+      await saveToDB(files);
+
+      $('#statusText').textContent = '스캔 및 저장 완료';
+      $('#statusText').style.color = 'var(--success)';
+      $('#statusText').style.borderColor = 'var(--success)';
+      $('#fileCount').textContent = `총 ${count}개`;
+      $('#dbStatus').textContent = '최신화됨';
+      $('#headerDbBadge').style.display = 'inline-block';
+      
+      search(''); 
+      
+    } catch(e) {
+      if(e.name !== 'AbortError') alert('오류: ' + e.message);
+    }
+  }
+
+  function search(forceQuery){
+    const q = (typeof forceQuery === 'string' ? forceQuery : $('#query').value).trim().toLowerCase();
+    
+    if(!files.length) return;
+
+    const results = files.filter(f => f.name.toLowerCase().includes(q));
+    renderResults(results, q);
+  }
+
+  function renderResults(results, query){
+    const tbody = $('#resultBody');
+    tbody.innerHTML = '';
+    $('#resultInfo').textContent = `${results.length} 건`;
+
+    if(results.length === 0){
+      tbody.innerHTML = `<tr><td colspan="2" style="text-align:center;padding:40px;color:var(--muted)">일치하는 PDF 파일이 없습니다.</td></tr>`;
+      return;
+    }
+
+    const frag = document.createDocumentFragment();
+    // 500개 이상이면 렌더링 제한 (성능 보호)
+    const limit = results.length > 500 ? 500 : results.length;
+    
+    for(let i=0; i<limit; i++){
+      const r = results[i];
+      const tr = document.createElement('tr');
+      const fullPath = `${TARGET_ROOT_NAME}\\${r.path}`;
+      
+      // 파일명 제외한 순수 폴더 경로 추출 로직 추가
+      let folderPath = '최상위 폴더';
+      if (r.path.includes('\\')) {
+        folderPath = r.path.substring(0, r.path.lastIndexOf('\\'));
+      } else if (r.path.includes('/')) {
+        folderPath = r.path.substring(0, r.path.lastIndexOf('/'));
+      }
+      
+      // 글꼴 고정폭 제거 및 폴더 경로만 표시되도록 수정
+      tr.innerHTML = `
+        <td>
+          <div style="font-weight:600; margin-bottom:6px; font-size:14px; color:var(--ink);">
+            <span class="icon-pdf">PDF</span> ${highlight(r.name, query)}
+          </div>
+          <div class="td-sm" style="font-size:12px; color:var(--muted);">
+            📂 경로: ${highlight(folderPath, query)}
+          </div>
+        </td>
+        <td style="vertical-align:middle; text-align:center;">
+          <button class="btn-ghost btn-sm">열람</button>
+        </td>
+      `;
+      tr.addEventListener('click', () => openViewer(r, fullPath));
+      frag.appendChild(tr);
+    }
+    tbody.appendChild(frag);
+  }
+
+  async function openViewer(fileData, fullPath){
+    const container = $('#previewContainer');
+    const iframe = $('#pdfFrame');
+    
+    container.style.display = 'block';
+    $('#pvTitle').textContent = fileData.name;
+
+    // 모바일 등에서 뷰어가 열리면 뷰어 쪽으로 스크롤 이동
+    container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    try {
+      const hasPerm = await verifyPermission(fileData.handle);
+      if(!hasPerm) {
+        alert('파일 접근 권한이 허용되지 않았습니다.');
+        return;
+      }
+
+      const file = await fileData.handle.getFile();
+      
+      if(currentBlobUrl) URL.revokeObjectURL(currentBlobUrl);
+      
+      // [중요] 브라우저가 MIME 타입을 모를 때를 대비해 강제로 application/pdf 지정
+      const pdfBlob = new Blob([file], { type: 'application/pdf' });
+      currentBlobUrl = URL.createObjectURL(pdfBlob);
+      
+      iframe.src = currentBlobUrl + "#view=FitH";
+
+      $('#openBtn').onclick = () => window.open(currentBlobUrl, '_blank');
+      $('#copyPathBtn').onclick = async () => {
+        try {
+          await navigator.clipboard.writeText(fullPath);
+          const msg = $('#copyMsg');
+          msg.style.display = 'inline';
+          msg.textContent = '경로 복사됨!';
+          setTimeout(() => msg.style.display='none', 2000);
+        } catch(e) { alert('복사 실패'); }
+      };
+
+    } catch(e) {
+      alert('파일을 여는 중 오류 발생 (권한을 확인하세요): ' + e.message);
+    }
+  }
+
+  // 이벤트
+  $('#pickDirBtn').addEventListener('click', scanDirectory);
+  $('#searchBtn').addEventListener('click', () => search());
+  $('#query').addEventListener('keyup', (e) => { if(e.key === 'Enter') search(); });
+  
+  $('#resetDbBtn').addEventListener('click', async () => {
+    if(confirm('저장된 데이터를 모두 삭제하시겠습니까?')){
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      tx.objectStore(STORE_NAME).clear();
+      files = [];
+      location.reload();
+    }
+  });
+
+  window.addEventListener('load', init);
+
+</script>
+</body>
+</html>

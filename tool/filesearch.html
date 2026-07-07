@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>파일 검색 & 중복검사</title>
+  <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    /* --- 1. 색상 및 테마 설정 --- */
+    :root {
+      --bg-app: #f8f9fa;
+      --bg-surface: #ffffff;
+      --border: #e2e8f0;
+      
+      /* 브랜드 컬러: 차분한 Slate Blue */
+      --primary: #475569;      
+      --primary-hover: #334155;
+      --primary-bg: #f1f5f9;
+      
+      --text-main: #1e293b;
+      --text-sub: #64748b;
+      
+      --group-even: #ffffff; 
+      --group-odd: #f8fafc;
+    }
+
+    * { box-sizing: border-box; outline: none; }
+    
+    body {
+      margin: 0;
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background: var(--bg-app);
+      color: var(--text-main);
+      overflow-y: auto; 
+      font-size: 14px;
+    }
+
+    /* --- 상단 탭 네비게이션 --- */
+    .app-header {
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      padding: 0 20px;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .tab-btn {
+      padding: 16px 20px; border: none; background: none;
+      font-size: 15px; font-weight: 600; color: var(--text-sub);
+      border-bottom: 2px solid transparent; cursor: pointer; transition: 0.2s;
+    }
+    .tab-btn:hover { color: var(--text-main); }
+    .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+    /* 뷰 컨테이너 (탭 전환용) */
+    .view-container { display: none; }
+    .view-container.active { display: grid; }
+
+    /* --- 2. 앱 레이아웃 --- */
+    .app-layout {
+      grid-template-columns: 300px 1fr;
+      min-height: calc(100vh - 53px); 
+    }
+
+    /* 왼쪽 사이드바 */
+    .sidebar {
+      background: var(--bg-app);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      padding: 16px; gap: 16px;
+      height: calc(100vh - 53px); 
+      position: sticky; top: 53px;
+      overflow-y: auto;
+    }
+
+    .card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+      padding: 16px;
+    }
+    .card-title { font-weight: 600; font-size: 14px; margin-bottom: 10px; color: var(--text-main); }
+    .label { display: block; color: var(--text-sub); font-size: 12px; margin-bottom: 5px; }
+    
+    input[type="text"], input[type="search"] {
+      width: 100%; padding: 8px 10px;
+      border: 1px solid var(--border); border-radius: 6px;
+      font-size: 13px; background: #fff; color: var(--text-main); margin-bottom: 8px;
+      transition: all 0.2s;
+    }
+    input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(71, 85, 105, 0.1); }
+
+    button.ui-btn {
+      background: #fff; border: 1px solid var(--border);
+      padding: 8px 12px; border-radius: 6px; cursor: pointer;
+      font-weight: 500; font-size: 13px; color: var(--text-main);
+      transition: 0.2s;
+    }
+    button.ui-btn:hover { background: #f8fafc; border-color: #cbd5e1; }
+    button.primary { background: var(--primary); color: white; border-color: var(--primary); }
+    button.primary:hover { background: var(--primary-hover); }
+
+    .checkbox-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+    .checkbox-item { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; color: var(--text-main); }
+
+    /* 중복검사용 사이드바 스타일 */
+    .folder-list { border: 1px solid var(--border); border-radius: 6px; max-height: 120px; overflow-y: auto; margin-bottom: 12px; background: #fafafa; }
+    .folder-item { padding: 8px 10px; font-size: 12px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+    .folder-item:last-child { border-bottom: none; }
+    .btn-remove { padding: 2px 6px; font-size: 11px; border: none; background: transparent; color: #ef4444; cursor: pointer; }
+
+    /* 오른쪽 메인 영역 */
+    .main-content {
+      display: flex; flex-direction: column;
+      background: var(--bg-surface);
+      min-width: 0;
+    }
+
+    .content-header {
+      height: 50px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 20px;
+    }
+
+    .result-area {
+      flex: 1; 
+      min-height: 300px;
+      overflow: auto; 
+    }
+    
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    thead th {
+      background: #f8fafc; color: var(--text-sub);
+      font-weight: 600; font-size: 12px; text-align: left;
+      padding: 8px 16px; border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 10;
+    }
+    tbody td {
+      padding: 8px 16px; border-bottom: 1px solid var(--border);
+      font-size: 13px; color: var(--text-main); vertical-align: middle;
+    }
+    tbody tr:hover { cursor: pointer; filter: brightness(0.96); }
+
+    .text-truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+    
+    /* 뱃지 및 하이라이트 */
+    .highlight { background: #fef08a; padding: 0 2px; border-radius: 2px; color: #000; }
+    .badge { 
+      display: inline-flex; align-items:center; justify-content:center; 
+      padding: 2px 8px; border-radius: 4px; 
+      font-size: 11px; font-weight: 600; 
+      border: 1px solid transparent; min-width: 46px; 
+    }
+    .badge.hit { background: #e2e8f0; color: #475569; border-color: #cbd5e1; }
+    .badge.warn { background: #fff7ed; color: #c2410c; border-color: #ffedd5; }
+    .badge.dup { background: #e0e7ff; color: #3730a3; border-color: #c7d2fe; }
+    .folder-badge { font-size: 10px; padding: 2px 6px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 4px; color: #475569; margin-bottom: 4px; display: inline-block; }
+
+    /* 스플리터 & 미리보기 패널 */
+    .splitter { height: 1px; background: var(--border); cursor: row-resize; position: relative; z-index: 20; }
+    .splitter::after { content: ""; display: block; height: 10px; width: 100%; position: absolute; top: -5px; }
+    .splitter:hover { background: var(--primary); height: 2px; }
+
+    .preview-panel {
+      height: 400px; display: flex; flex-direction: column;
+      background: #fcfcfc; border-top: 1px solid var(--border);
+    }
+    .preview-header {
+      padding: 8px 16px; border-bottom: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center;
+      background: #fff; font-size: 12px; color: var(--text-sub);
+    }
+    .preview-body { flex: 1; overflow: hidden; display: flex; position: relative; }
+    
+    .code-viewer {
+      flex: 1; overflow: auto; padding: 24px;
+      font-family: 'D2Coding', 'Consolas', 'Monaco', 'Menlo', monospace; 
+      font-size: 13px; line-height: 1.7; color: #334155; 
+      background: #fff; white-space: pre-wrap; word-break: break-all;
+    }
+    .media-frame { width: 100%; height: 100%; border: 0; display: block; background: #f1f5f9; }
+    .media-img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
+
+    .meta-viewer {
+      width: 260px; border-left: 1px solid var(--border);
+      padding: 16px; background: #f8fafc; font-size: 12px;
+      overflow-y: auto; flex-shrink: 0;
+    }
+    .meta-row { margin-bottom: 12px; }
+    .meta-label { color: var(--text-sub); display: block; margin-bottom: 4px; font-size: 11px; font-weight: 500;}
+    .meta-val { word-break: break-all; color: var(--text-main); line-height: 1.4; }
+
+    /* 반응형 */
+    @media (max-width: 800px) {
+      .app-layout { grid-template-columns: 1fr; }
+      .sidebar { height: auto; position: static; border-right: 0; border-bottom: 1px solid var(--border); }
+      .meta-viewer { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<nav class="app-header">
+  <button id="tabSearch" class="tab-btn active">🔍 파일 검색</button>
+  <button id="tabDup" class="tab-btn">📁 중복 파일 검사</button>
+</nav>
+
+<div id="viewSearch" class="view-container app-layout active">
+  <aside class="sidebar">
+    <div class="card">
+      <div class="card-title">1. 폴더 선택</div>
+      <button id="s_btnPick" class="ui-btn primary" style="width:100%">폴더 열기</button>
+      <div style="margin-top:12px;">
+        <div class="label">현재 경로</div>
+        <div id="s_txtPath" style="font-size:12px; color:var(--text-main); word-break:break-all;">(선택 안됨)</div>
+      </div>
+      <div style="margin-top:12px; display:flex; justify-content:space-between; align-items:center">
+        <span class="label" style="margin:0">파일 수</span>
+        <strong id="s_txtCount">0</strong>
+      </div>
+      <div style="margin-top:8px;">
+        <progress id="s_progressScan" max="100" value="0" style="width:100%; height:4px; border-radius:2px;"></progress>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">2. 검색 옵션</div>
+      <div>
+        <input id="s_inpQuery" type="search" placeholder="검색어 입력 (미입력시 전체)" />
+      </div>
+
+      <div class="checkbox-list">
+        <label class="checkbox-item"><input type="checkbox" id="s_chkName" checked> 파일명 포함</label>
+        <label class="checkbox-item"><input type="checkbox" id="s_chkContent" checked> 내용 포함</label>
+        <label class="checkbox-item"><input type="checkbox" id="s_chkCase"> 대소문자 구분</label>
+        <label class="checkbox-item"><input type="checkbox" id="s_chkRegex"> 정규식 사용</label>
+      </div>
+
+      <div style="margin-top:16px;">
+        <span class="label">텍스트 확장자 (쉼표 구분)</span>
+        <input id="s_inpExts" type="text" value="txt, md, js, json, html, css, java, py, c, cpp" />
+      </div>
+
+      <button id="s_btnSearch" class="ui-btn primary" style="width:100%; margin-top:12px;">검색</button>
+    </div>
+  </aside>
+
+  <main class="main-content">
+    <header class="content-header">
+      <div style="font-weight:600; font-size:15px;">
+        검색 결과 목록 <span id="s_resCount" style="color:var(--text-sub); margin-left:6px; font-weight:400; font-size:13px">0건</span>
+      </div>
+    </header>
+
+    <div class="result-area">
+      <table>
+        <colgroup>
+          <col style="width: 40%">
+          <col style="width: 30%">
+          <col style="width: 10%">
+          <col style="width: 12%">
+          <col style="width: 90px"> 
+        </colgroup>
+        <thead>
+          <tr><th>파일명 / 내용</th><th>경로</th><th>크기</th><th>수정일</th><th style="text-align:center">유형</th></tr>
+        </thead>
+        <tbody id="s_resBody">
+          <tr><td colspan="5" style="padding:40px; text-align:center; color:var(--text-sub)">폴더를 선택하고 검색을 시작하세요.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div id="s_splitter" class="splitter"></div>
+
+    <div id="s_previewPanel" class="preview-panel">
+      <div class="preview-header">
+        <strong id="s_pvTitle" style="color:var(--text-main)">미리보기</strong>
+        <div style="display:flex; gap:8px;">
+          <button id="s_btnOpen" class="ui-btn" style="padding:4px 8px; font-size:11px;">새 탭</button>
+          <button id="s_btnDown" class="ui-btn" style="padding:4px 8px; font-size:11px;">다운로드</button>
+        </div>
+      </div>
+      <div class="preview-body">
+        <div id="s_codeView" class="code-viewer">파일을 선택하면 내용이 표시됩니다.</div>
+        <div id="s_metaView" class="meta-viewer"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="viewDup" class="view-container app-layout">
+  <aside class="sidebar">
+    <div class="card">
+      <div class="card-title">1. 비교할 폴더 등록 (2개 이상)</div>
+      <div id="d_folderList" class="folder-list">
+        <div style="padding:10px; text-align:center; color:#94a3b8; font-size:12px;">선택된 폴더가 없습니다.</div>
+      </div>
+      <button id="d_btnAddFolder" class="ui-btn primary" style="width:100%">+ 폴더 추가</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">2. 제외할 경로 (필터링)</div>
+      <span class="label">해당 단어가 포함된 경로/파일은 무시 (쉼표 구분)</span>
+      <input type="text" id="d_inpIgnore" value=".indexeddb.blob, node_modules, .git" />
+    </div>
+
+    <div class="card">
+      <div class="card-title">3. 교차 스캔 실행</div>
+      <div class="label" style="line-height:1.4; margin-bottom:12px;">
+        등록된 <strong>서로 다른 폴더</strong>에 동시에 존재하는 (이름+크기가 동일한) 파일만 찾아냅니다.
+      </div>
+      <button id="d_btnScan" class="ui-btn primary" style="width:100%;">중복 파일 스캔 시작</button>
+      <div style="margin-top:12px; display:flex; justify-content:space-between; align-items:center">
+        <span class="label" style="margin:0">스캔된 총 파일 수</span>
+        <strong id="d_txtCount">0</strong>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main-content">
+    <header class="content-header">
+      <div style="font-weight:600; font-size:15px;">
+        검출 결과 <span id="d_resCount" style="color:var(--text-sub); margin-left:6px; font-weight:400; font-size:13px">0 그룹</span>
+      </div>
+    </header>
+
+    <div class="result-area">
+      <table>
+        <colgroup>
+          <col style="width: 35%">
+          <col style="width: 40%">
+          <col style="width: 10%">
+          <col style="width: 15%">
+        </colgroup>
+        <thead>
+          <tr><th>파일명 (폴더 분포)</th><th>상세 경로</th><th>크기</th><th>수정일</th></tr>
+        </thead>
+        <tbody id="d_resBody">
+          <tr><td colspan="4" style="padding:40px; text-align:center; color:var(--text-sub)">폴더를 2개 이상 등록하고 스캔을 시작하세요.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div id="d_splitter" class="splitter"></div>
+
+    <div id="d_previewPanel" class="preview-panel">
+      <div class="preview-header">
+        <strong id="d_pvTitle" style="color:var(--text-main)">미리보기</strong>
+        <div style="display:flex; gap:8px;">
+          <button id="d_btnDown" class="ui-btn" style="padding:4px 8px; font-size:11px;">다운로드</button>
+        </div>
+      </div>
+      <div class="preview-body">
+        <div id="d_codeView" class="code-viewer">파일을 선택하면 내용이 표시됩니다.</div>
+        <div id="d_metaView" class="meta-viewer"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+
+// --- 공통 유틸리티 ---
+const escapeHtml = str => String(str).replace(/[&<>"']/g, m => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[m]);
+const fmtBytes = b => b===0?'0 B':(b/Math.pow(1024,Math.floor(Math.log(b)/Math.log(1024)))).toFixed(2)+' '+['B','KB','MB','GB','TB'][Math.floor(Math.log(b)/Math.log(1024))];
+const fmtDate = ts => ts?new Date(ts).toLocaleDateString() : '-';
+
+// --- 탭 전환 로직 ---
+$('#tabSearch').onclick = () => {
+  $('#tabSearch').classList.add('active'); $('#tabDup').classList.remove('active');
+  $('#viewSearch').classList.add('active'); $('#viewDup').classList.remove('active');
+};
+$('#tabDup').onclick = () => {
+  $('#tabDup').classList.add('active'); $('#tabSearch').classList.remove('active');
+  $('#viewDup').classList.add('active'); $('#viewSearch').classList.remove('active');
+};
+
+// --- 스플리터 드래그 초기화 ---
+function initSplitter(splitterId, panelId) {
+  const splitter = $('#' + splitterId);
+  const panel = $('#' + panelId);
+  let isDrag = false, startY, startH;
+  
+  splitter.onmousedown = e => {
+    isDrag = true; startY = e.clientY; startH = panel.offsetHeight;
+    document.body.style.cursor = 'row-resize'; document.body.style.userSelect = 'none';
+  };
+  window.onmousemove = e => {
+    if(!isDrag) return;
+    panel.style.height = (startH + (startY - e.clientY)) + 'px';
+  };
+  window.onmouseup = () => { 
+    isDrag = false; document.body.style.cursor = ''; document.body.style.userSelect = ''; 
+  };
+}
+initSplitter('s_splitter', 's_previewPanel');
+initSplitter('d_splitter', 'd_previewPanel');
+
+/* =========================================================
+   1. 파일 검색기 로직 (Search View)
+   ========================================================= */
+let s_dirHandle = null;
+let s_allFiles = []; 
+let s_currentMatcher = null;
+let s_lastBlobUrl = null;
+
+const highlight = (text, matcher) => {
+  if(!matcher) return escapeHtml(text);
+  const re = new RegExp(matcher.source, matcher.flags.includes('g')?matcher.flags:matcher.flags+'g');
+  let last=0, out='', m;
+  const safeText = text.length > 50000 ? text.slice(0, 50000) : text;
+  while((m=re.exec(safeText))!==null){
+    out += escapeHtml(safeText.slice(last, m.index));
+    out += `<span class="highlight">${escapeHtml(m[0])}</span>`;
+    last = m.index + m[0].length;
+    if(m[0].length===0) re.lastIndex++;
+  }
+  out += escapeHtml(safeText.slice(last));
+  return out;
+};
+
+async function* s_walk(dir, path='') {
+  for await (const [name, entry] of dir.entries()) {
+    const curr = path ? `${path}/${name}` : name;
+    if (entry.kind === 'file') yield { handle: entry, name, path: curr };
+    else if (entry.kind === 'directory') yield* s_walk(entry, curr);
+  }
+}
+
+async function s_scanDir() {
+  if(!s_dirHandle) return;
+  s_allFiles = [];
+  $('#s_progressScan').removeAttribute('value');
+  
+  let count = 0;
+  for await (const f of s_walk(s_dirHandle)) {
+    s_allFiles.push({ ...f, size:0, lastModified:0, type:'' });
+    count++;
+    if(count % 300 === 0) $('#s_txtCount').textContent = count;
+  }
+  $('#s_txtCount').textContent = count;
+
+  const total = s_allFiles.length;
+  for (let i=0; i<total; i++) {
+    if(i % 50 === 0) {
+      $('#s_progressScan').value = (i/total)*100;
+      await new Promise(r => setTimeout(r, 0));
+    }
+    try {
+      const file = await s_allFiles[i].handle.getFile();
+      s_allFiles[i].size = file.size; s_allFiles[i].lastModified = file.lastModified; s_allFiles[i].type = file.type;
+    } catch(e){}
+  }
+  $('#s_progressScan').value = 100;
+  
+  if(!$('#s_inpQuery').value.trim()) s_doSearch();
+}
+
+async function s_doSearch() {
+  const q = $('#s_inpQuery').value.trim();
+  if(!s_dirHandle) return alert('폴더를 먼저 선택해주세요.');
+
+  const exts = $('#s_inpExts').value.split(',').map(s=>s.trim().toLowerCase());
+  const useRegex = $('#s_chkRegex').checked, useCase = $('#s_chkCase').checked;
+  const doName = $('#s_chkName').checked, doContent = $('#s_chkContent').checked;
+
+  $('#s_resBody').innerHTML = '<tr><td colspan="5" style="text-align:center; padding:40px;">조회 중...</td></tr>';
+  await new Promise(r=>setTimeout(r,50));
+
+  const results = [];
+  const limit = 2 * 1024 * 1024; // 2MB
+  
+  if (!q) {
+    s_currentMatcher = null;
+    for(let i=0; i<s_allFiles.length; i++) {
+      results.push({ f: s_allFiles[i], type: '전체', snippet: '' });
+      if(i%300===0) await new Promise(r=>setTimeout(r,0));
+    }
+  } else {
+    try { s_currentMatcher = new RegExp(useRegex ? q : q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), useCase ? 'g' : 'gi'); } 
+    catch(e) { return alert('정규식 오류: '+e.message); }
+
+    for(let i=0; i<s_allFiles.length; i++) {
+      const f = s_allFiles[i];
+      let matched = false, snippet = '', type = '';
+
+      if(doName && (s_currentMatcher.test(f.name) || s_currentMatcher.test(f.path))) {
+        matched = true; type = '이름';
+      }
+      if(!matched && doContent && f.size < limit) {
+        const isText = exts.some(e => f.name.toLowerCase().endsWith('.'+e)) || (f.type||'').startsWith('text/');
+        if(isText) {
+          try {
+            const text = await (await f.handle.getFile()).text();
+            if(s_currentMatcher.test(text)) {
+              matched = true; type = '내용';
+              snippet = (text.split('\n').find(l => s_currentMatcher.test(l)) || '').trim().slice(0, 80);
+            }
+          } catch(e){}
+        }
+      }
+      if(matched) results.push({ f, type, snippet });
+      if(i%300===0) await new Promise(r=>setTimeout(r,0));
+    }
+  }
+  s_renderTable(results);
+}
+
+function s_renderTable(results) {
+  $('#s_resCount').textContent = results.length + '건';
+  const tbody = $('#s_resBody');
+  tbody.innerHTML = '';
+  if(results.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:40px; color:var(--text-sub)">검색 결과가 없습니다.</td></tr>';
+    return;
+  }
+  const frag = document.createDocumentFragment();
+  results.slice(0, 1000).forEach(({f, type, snippet}) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>
+        <div class="text-truncate" style="font-weight:600; font-size:13px; color:var(--primary); margin-bottom:2px;">
+          ${highlight(f.name, s_currentMatcher)}
+        </div>
+        ${snippet ? `<div class="text-truncate" style="color:var(--text-sub); font-size:12px;">${highlight(snippet, s_currentMatcher)}</div>` : ''}
+      </td>
+      <td><div class="text-truncate" title="${escapeHtml(f.path)}">${highlight(f.path, s_currentMatcher)}</div></td>
+      <td>${fmtBytes(f.size)}</td>
+      <td>${fmtDate(f.lastModified)}</td>
+      <td style="text-align:center"><span class="badge ${(type==='이름' || type==='전체')?'hit':'warn'}">${type}</span></td>
+    `;
+    tr.onclick = () => s_showPreview(f);
+    frag.appendChild(tr);
+  });
+  tbody.appendChild(frag);
+}
+
+async function s_showPreview(f) {
+  if(s_lastBlobUrl) URL.revokeObjectURL(s_lastBlobUrl);
+  $('#s_pvTitle').textContent = f.name;
+  $('#s_metaView').innerHTML = `
+    <div class="meta-row"><span class="meta-label">경로</span><div class="meta-val">${f.path}</div></div>
+    <div class="meta-row"><span class="meta-label">크기</span><div class="meta-val">${fmtBytes(f.size)}</div></div>
+    <div class="meta-row"><span class="meta-label">타입</span><div class="meta-val">${f.type || '-'}</div></div>
+  `;
+  const container = $('#s_codeView');
+  container.innerHTML = '<div style="color:#aaa; text-align:center; padding-top:40px;">불러오는 중...</div>';
+  container.style.padding = '24px';
+
+  try {
+    const file = await f.handle.getFile();
+    s_lastBlobUrl = URL.createObjectURL(file);
+    $('#s_btnOpen').onclick = () => window.open(s_lastBlobUrl);
+    $('#s_btnDown').onclick = () => { const a=document.createElement('a'); a.href=s_lastBlobUrl; a.download=f.name; a.click(); };
+
+    if(file.type === 'application/pdf') {
+      container.style.padding = '0';
+      container.innerHTML = `<iframe src="${s_lastBlobUrl}" class="media-frame"></iframe>`;
+      return;
+    }
+    if(file.type.startsWith('image/')) {
+      container.innerHTML = `<img src="${s_lastBlobUrl}" class="media-img" />`;
+      return;
+    }
+
+    const exts = $('#s_inpExts').value.split(',').map(s=>s.trim().toLowerCase());
+    if(exts.some(e => f.name.toLowerCase().endsWith('.'+e)) || (f.type||'').startsWith('text/')) {
+      container.innerHTML = highlight(await file.text(), s_currentMatcher);
+    } else {
+      container.innerHTML = `<div style="text-align:center; padding-top:40px; color:var(--text-sub);"><div style="font-size:24px; margin-bottom:10px;">💾</div><div>텍스트 미리보기를 지원하지 않는 파일입니다.</div></div>`;
+    }
+  } catch(e) {
+    container.innerHTML = `<div style="color:red; text-align:center; margin-top:20px;">미리보기 실패<br>${e.message}</div>`;
+  }
+}
+
+$('#s_btnPick').onclick = async () => {
+  try { s_dirHandle = await window.showDirectoryPicker(); $('#s_txtPath').textContent = s_dirHandle.name; s_scanDir(); } catch(e) {}
+};
+$('#s_btnSearch').onclick = s_doSearch;
+$('#s_inpQuery').addEventListener('keydown', e => { if(e.key === 'Enter') s_doSearch(); });
+
+
+/* =========================================================
+   2. 중복 파일 검사기 로직 (Duplicate View)
+   ========================================================= */
+let d_baseFolders = []; 
+let d_allFiles = []; 
+let d_lastBlobUrl = null;
+
+$('#d_btnAddFolder').onclick = async () => {
+  try {
+    const handle = await window.showDirectoryPicker();
+    d_baseFolders.push({ id: Date.now().toString(), handle, name: handle.name });
+    d_renderFolderList();
+  } catch(e) {}
+};
+
+function d_renderFolderList() {
+  const container = $('#d_folderList');
+  if(d_baseFolders.length === 0) {
+    container.innerHTML = '<div style="padding:10px; text-align:center; color:#94a3b8; font-size:12px;">선택된 폴더가 없습니다.</div>';
+    return;
+  }
+  container.innerHTML = d_baseFolders.map((f, i) => `
+    <div class="folder-item">
+      <span class="text-truncate" style="max-width:200px;" title="${f.name}">📁 [${i+1}] ${f.name}</span>
+      <button class="btn-remove" onclick="removeFolder('${f.id}')">X</button>
+    </div>
+  `).join('');
+}
+
+window.removeFolder = (id) => {
+  d_baseFolders = d_baseFolders.filter(f => f.id !== id);
+  d_renderFolderList();
+};
+
+async function* d_walk(dir, path='', baseFolderId, ignoreList) {
+  for await (const [name, entry] of dir.entries()) {
+    const curr = path ? `${path}/${name}` : name;
+    if(ignoreList.some(keyword => curr.toLowerCase().includes(keyword))) continue;
+    if (entry.kind === 'file') yield { handle: entry, name, path: curr, baseFolderId };
+    else if (entry.kind === 'directory') yield* d_walk(entry, curr, baseFolderId, ignoreList);
+  }
+}
+
+$('#d_btnScan').onclick = async () => {
+  if(d_baseFolders.length < 2) return alert('비교를 위해 폴더를 2개 이상 등록해주세요.');
+  
+  const ignoreList = $('#d_inpIgnore').value.split(',').map(s => s.trim().toLowerCase()).filter(s => s);
+  $('#d_resBody').innerHTML = '<tr><td colspan="4" style="text-align:center; padding:40px;">스캔 및 분석 중... 잠시만 기다려주세요.</td></tr>';
+  
+  d_allFiles = [];
+  let count = 0;
+
+  for (const base of d_baseFolders) {
+    for await (const f of d_walk(base.handle, '', base.id, ignoreList)) {
+      // type 속성 추가 (미리보기 판별용)
+      d_allFiles.push({ ...f, size: 0, lastModified: 0, type: '' });
+      if(++count % 200 === 0) $('#d_txtCount').textContent = count;
+    }
+  }
+  $('#d_txtCount').textContent = count;
+
+  for (let i=0; i<d_allFiles.length; i++) {
+    try {
+      const file = await d_allFiles[i].handle.getFile();
+      d_allFiles[i].size = file.size; 
+      d_allFiles[i].lastModified = file.lastModified;
+      // 파일 타입 저장
+      d_allFiles[i].type = file.type;
+    } catch(e){}
+  }
+
+  const map = new Map();
+  for(const f of d_allFiles) {
+    const key = f.name.toLowerCase() + '_' + f.size; 
+    if(!map.has(key)) map.set(key, []);
+    map.get(key).push(f);
+  }
+
+  const duplicates = [];
+  for (const [key, files] of map.entries()) {
+    const distinctBases = new Set(files.map(f => f.baseFolderId));
+    if (distinctBases.size > 1) duplicates.push({ name: files[0].name, files: files });
+  }
+
+  duplicates.sort((a, b) => b.files.length - a.files.length || a.name.localeCompare(b.name));
+  d_renderTable(duplicates);
+};
+
+function d_renderTable(duplicates) {
+  const totalDups = duplicates.reduce((acc, g) => acc + g.files.length, 0);
+  $('#d_resCount').textContent = `${duplicates.length} 그룹 (${totalDups}개 파일)`;
+  const tbody = $('#d_resBody');
+  tbody.innerHTML = '';
+
+  if(duplicates.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:40px;">폴더 간 일치하는 중복 파일이 없습니다.</td></tr>';
+    return;
+  }
+
+  const frag = document.createDocumentFragment();
+  duplicates.forEach((group, index) => {
+    const bgColor = index % 2 === 0 ? 'var(--group-even)' : 'var(--group-odd)';
+    group.files.forEach((f, fIdx) => {
+      const tr = document.createElement('tr');
+      tr.style.backgroundColor = bgColor;
+      if (fIdx === 0 && index > 0) tr.style.borderTop = '2px solid #cbd5e1'; 
+
+      const baseName = d_baseFolders.find(b => b.id === f.baseFolderId)?.name || 'Unknown';
+      tr.innerHTML = `
+        <td>
+          <div style="display:flex; flex-direction:column; gap:4px;">
+            <div class="text-truncate" style="font-weight:600; font-size:13px; color:var(--primary);">
+              ${escapeHtml(f.name)} ${fIdx === 0 ? `<span class="badge dup" style="margin-left:4px;">${group.files.length}곳 중복</span>` : ''}
+            </div>
+            <div><span class="folder-badge">기준: ${escapeHtml(baseName)}</span></div>
+          </div>
+        </td>
+        <td><div class="text-truncate" title="${escapeHtml(f.path)}">${escapeHtml(f.path)}</div></td>
+        <td>${fmtBytes(f.size)}</td>
+        <td>${f.lastModified ? new Date(f.lastModified).toLocaleString() : '-'}</td>
+      `;
+      tr.onclick = () => d_showPreview(f);
+      frag.appendChild(tr);
+    });
+  });
+  tbody.appendChild(frag);
+}
+
+// 파일 내용 렌더링하도록 수정된 중복검사기 미리보기 함수
+async function d_showPreview(f) {
+  if(d_lastBlobUrl) URL.revokeObjectURL(d_lastBlobUrl);
+  $('#d_pvTitle').textContent = f.name;
+  
+  const baseName = d_baseFolders.find(b => b.id === f.baseFolderId)?.name || '';
+  
+  // 우측 패널에 파일 타입 메타 정보 추가
+  $('#d_metaView').innerHTML = `
+    <div class="meta-row"><span class="meta-label">기준 폴더</span><div class="meta-val">${baseName}</div></div>
+    <div class="meta-row"><span class="meta-label">내부 경로</span><div class="meta-val">${f.path}</div></div>
+    <div class="meta-row"><span class="meta-label">크기</span><div class="meta-val">${fmtBytes(f.size)}</div></div>
+    <div class="meta-row"><span class="meta-label">타입</span><div class="meta-val">${f.type || '-'}</div></div>
+  `;
+
+  const container = $('#d_codeView');
+  container.innerHTML = '<div style="color:#aaa; text-align:center; padding-top:40px;">불러오는 중...</div>';
+  container.style.padding = '24px';
+
+  try {
+    const file = await f.handle.getFile();
+    d_lastBlobUrl = URL.createObjectURL(file);
+    $('#d_btnDown').onclick = () => { const a=document.createElement('a'); a.href=d_lastBlobUrl; a.download=f.name; a.click(); };
+
+    // PDF 뷰어
+    if(file.type === 'application/pdf') {
+      container.style.padding = '0';
+      container.innerHTML = `<iframe src="${d_lastBlobUrl}" class="media-frame"></iframe>`;
+      return;
+    }
+    
+    // 이미지 뷰어
+    if(file.type.startsWith('image/')) {
+      container.innerHTML = `<img src="${d_lastBlobUrl}" class="media-img" />`;
+      return;
+    }
+
+    // 텍스트 (확장자 및 MIME 타입 체크 - 파일검색기의 텍스트 확장자 값을 공유)
+    const exts = $('#s_inpExts').value.split(',').map(s=>s.trim().toLowerCase());
+    const isText = exts.some(e => f.name.toLowerCase().endsWith('.'+e)) || (f.type||'').startsWith('text/');
+
+    // 텍스트 렌더링
+    if(isText) {
+      const text = await file.text();
+      container.innerHTML = escapeHtml(text);
+    } else {
+      container.innerHTML = `
+        <div style="text-align:center; padding-top:40px; color:var(--text-sub);">
+          <div style="font-size:24px; margin-bottom:10px;">💾</div>
+          <div>텍스트 미리보기를 지원하지 않는 파일입니다.</div>
+        </div>
+      `;
+    }
+  } catch(e) {
+    container.innerHTML = `<div style="color:red; text-align:center; margin-top:20px;">미리보기 실패<br>${e.message}</div>`;
+  }
+}
+</script>
+</body>
+</html>

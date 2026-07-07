@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Keynote 엑셀</title>
+  <style>
+    /* [UI 디자인] 기존 스타일 100% 유지 */
+    :root{
+      --bg:#f7fafc;
+      --card:#ffffff;
+      --ink:#1a202c;
+      --muted:#718096;
+      --accent:#2b6cb0;
+      --border:#e2e8f0;
+    }
+    *{box-sizing:border-box;}
+    body{
+      margin:0; background:var(--bg); color:var(--ink);
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Noto Sans KR,Arial,sans-serif;
+      height:100vh; display:flex; flex-direction:column;
+    }
+    header{position:sticky; top:0; background:#fff; border-bottom:1px solid #e2e8f0; z-index:10;}
+    header .wrap{
+      display:flex; gap:12px; align-items:center;
+      padding:12px 16px;
+    }
+    header h1{font-size:18px; margin:0; margin-right:auto;}
+    .btn{
+      appearance:none; border:1px solid #cbd5e0; background:#fff; color:var(--ink);
+      padding:7px 11px; border-radius:10px; font-size:13px; cursor:pointer; font-weight:500;
+    }
+    .btn:hover{ background:#f8fafc; }
+    .btn.primary{background:var(--accent); border-color:var(--accent); color:#fff;}
+    .btn.primary:hover{ background:#2c5282; }
+    
+    main{
+      display:grid; grid-template-columns:minmax(420px,4fr) minmax(420px,6fr);
+      gap:16px; padding:16px; flex:1; overflow:hidden;
+    }
+    @media (max-width:980px){
+      main{grid-template-columns:1fr;}
+    }
+    .card{
+      background:var(--card); border:1px solid var(--border); border-radius:14px;
+      display:flex; flex-direction:column; height:100%; overflow:hidden;
+    }
+    .card h2{margin:0; padding:10px 12px; border-bottom:1px solid #edf2f7; font-size:15px;}
+    .card .body{padding:10px 12px; gap:8px; display:flex; flex-direction:column; height:100%; overflow:hidden;}
+    
+    /* 테이블 */
+    .table-container { flex:1; overflow:auto; }
+    table{width:100%; border-collapse:separate; border-spacing:0; table-layout:fixed;}
+    th,td{padding:8px 8px; border-bottom:1px solid #edf2f7; font-size:13px; vertical-align:top; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+    th{background:#f7fafc; text-align:left; position:sticky; top:0; z-index:1;}
+    tbody tr:hover{background:#f9fbff; cursor:pointer;}
+    tbody tr.is-active{background:#e9d8fd;}
+    
+    .row{display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
+    .pill{background:#edf2f7; border:1px solid #e2e8f0; border-radius:999px; padding:3px 9px; font-size:12px;}
+    
+    /* 미리보기 */
+    #preview-area{flex:1; display:flex; flex-direction:column; gap:15px; overflow:auto;}
+    .pv-box{background:#fff; border:1px solid #edf2f7; border-radius:10px; padding:12px;}
+    .pv-label{font-size:12px; color:#0b3d91; font-weight:700; margin-bottom:5px;}
+    .pv-content{font-size:14px; line-height:1.6; white-space:pre-wrap; color:#2d3748; transition: background 0.2s;}
+    
+    /* [수정] 클릭 복사 효과: 아주 연한 회색으로 변경 */
+    .click-copy { cursor: pointer; border-radius: 4px; padding: 2px; }
+    .click-copy:hover { background-color: #f7f7f7; } /* 연한 회색 */
+    .click-copy:active { background-color: #e2e8f0; } /* 클릭 시 조금 더 진한 회색 */
+
+    #img-list{display:flex; flex-wrap:wrap; gap:8px;}
+    .img-wrapper {
+        width:140px; height:140px; border:1px solid #e2e8f0; border-radius:8px; background:#f9fafb; 
+        display:flex; align-items:center; justify-content:center; overflow:hidden; cursor:pointer;
+    }
+    .img-wrapper img{max-width:100%; max-height:100%; object-fit:contain;}
+    
+    #toast-area{position:fixed; right:16px; top:16px; display:flex; flex-direction:column; gap:8px; z-index:999;}
+    .toast{background:#fff; border:1px solid #e2e8f0; border-left:5px solid #3182ce; border-radius:12px;
+      padding:9px 11px; min-width:240px; max-width:360px; display:flex; gap:8px; font-size:13px;
+      box-shadow:0 8px 28px rgba(0,0,0,.06); animation: slideIn 0.3s;
+    }
+    @keyframes slideIn { from{transform:translateX(100%);} to{transform:translateX(0);} }
+    .toast .t-close{margin-left:auto; cursor:pointer; opacity:.6;}
+  </style>
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>Keynote 엑셀</h1>
+      <input type="file" id="xlsxFile" accept=".xlsx,.xls" style="display:none" />
+      <button class="btn primary" id="btn-upload">엑셀 불러오기</button>
+      <button class="btn" id="btn-export-json">JSON 내보내기</button>
+      <button class="btn" id="btn-export-xlsx">엑셀 내보내기</button>
+      <button class="btn" id="btn-clear">DB 초기화</button>
+      <span id="stat" class="pill">대기중</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>문항 목록</h2>
+      <div class="body">
+        <div class="row" style="margin-bottom:6px;">
+          <label style="font-size:12px;color:#4a5568;">시트</label>
+          <select id="sheetFilter" class="btn" style="min-width:140px;"><option value="">전체 시트</option></select>
+          <input id="search" placeholder="검색(문제/출제의도/목차)" style="flex:1; padding:6px 9px; border:1px solid #cbd5e0; border-radius:8px; font-size:13px;" />
+          <span id="count" class="pill">0건</span>
+        </div>
+        <div class="table-container">
+          <table id="tbl">
+            <colgroup>
+                <col style="width: 25%">
+                <col style="width: 15%">
+                <col style="width: 45%">
+                <col style="width: 15%">
+            </colgroup>
+            <thead>
+              <tr>
+                <th>도메인</th>
+                <th>연번</th>
+                <th>문제</th>
+                <th>이미지</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>미리보기</h2>
+      <div class="body" id="preview-area">
+        <div style="text-align:center; margin-top:50px; color:#a0aec0;">목록을 선택하세요</div>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast-area"></div>
+
+<script>
+(function () {
+  const DB_NAME = "KeynoteAllDB";
+  const DB_VER = 1;
+  let db = null;
+  let allData = [];
+  const $ = (sel) => document.querySelector(sel);
+
+  // --- 유틸 ---
+  function toast(msg) {
+    const box = $("#toast-area");
+    const el = document.createElement("div");
+    el.className = "toast";
+    el.innerHTML = `<span>${msg}</span><span class="t-close" onclick="this.parentElement.remove()">✕</span>`;
+    box.appendChild(el);
+    setTimeout(() => el.remove(), 3000);
+  }
+  function setStat(t) { $("#stat").textContent = t; }
+
+  // --- DB ---
+  function openDB() {
+    return new Promise((res) => {
+      const r = indexedDB.open(DB_NAME, DB_VER);
+      r.onupgradeneeded = e => {
+        const d = e.target.result;
+        if(!d.objectStoreNames.contains("items")) d.createObjectStore("items", {keyPath:"id"});
+        if(!d.objectStoreNames.contains("images")) d.createObjectStore("images", {keyPath:"id"});
+      };
+      r.onsuccess = e => { db=e.target.result; res(); };
+      r.onerror = () => { alert("DB Error"); res(); };
+    });
+  }
+
+  // --- 엑셀 로직 (병합) ---
+  async function processExcel(file) {
+    if(!window.ExcelJS) return alert("ExcelJS 로드 실패");
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(await file.arrayBuffer());
+
+    const mergedMap = new Map();
+    let order = 0;
+
+    for (const ws of wb.worksheets) {
+      const sheetName = ws.name;
+
+      // 1. 이미지 스캔
+      const rowImages = {};
+      if (ws.getImages) {
+        for (const img of ws.getImages()) {
+           const r = Math.floor(img.range.tl.nativeRow) + 1;
+           const meta = wb.getImage(img.imageId);
+           if (!meta) continue;
+           
+           let blob = null;
+           try {
+             if (meta.buffer) blob = new Blob([meta.buffer], {type:`image/${meta.extension}`});
+             else if (meta.base64) {
+                 const bin = atob(meta.base64);
+                 const u8 = new Uint8Array(bin.length);
+                 for(let i=0; i<bin.length; i++) u8[i] = bin.charCodeAt(i);
+                 blob = new Blob([u8], {type:`image/${meta.extension}`});
+             }
+           } catch(e){}
+
+           if (blob) {
+             const imgId = "IMG_" + Math.random().toString(36).slice(2) + Date.now();
+             const tx = db.transaction("images", "readwrite");
+             tx.objectStore("images").put({ id: imgId, blob });
+             if (!rowImages[r]) rowImages[r] = [];
+             rowImages[r].push(imgId);
+           }
+        }
+      }
+
+      // 2. 헤더 찾기
+      const hMap = {};
+      ws.getRow(1).eachCell((c,i) => hMap[(c.text||"").trim()] = i);
+      const find = (keys, def) => { 
+          for(const k of keys) for(const h in hMap) if(h.includes(k)) return hMap[h];
+          return def; 
+      };
+
+      const cSeq = find(['문항','연번','No'], 1); 
+      const cQ = find(['문제','질문','Q'], 2);
+      const cIntent = find(['출제의도','의도'], 3);
+      const cOutline = find(['목차', '키워드'], 4);
+      const cNote = find(['비고'], 5);
+
+      // 3. 병합
+      let lastSeq = null;
+
+      ws.eachRow((row, i) => {
+        if (i <= 1) return;
+
+        const getVal = (idx) => {
+           if(!idx) return "";
+           const v = row.getCell(idx).value;
+           if(!v) return "";
+           if(v.richText) return v.richText.map(t=>t.text).join("");
+           if(v.text) return v.text;
+           return v.toString().trim();
+        };
+
+        let rawSeq = getVal(cSeq);
+        const rawQ = getVal(cQ);
+        const imgs = rowImages[i] || [];
+
+        const hasContent = rawSeq || rawQ || imgs.length>0 || getVal(cOutline) || getVal(cNote);
+        if (!hasContent) return;
+
+        if (rawSeq) lastSeq = rawSeq;
+        else rawSeq = lastSeq || `NoSeq_${i}`;
+
+        const key = `${sheetName}||${rawSeq}`;
+        
+        const newData = {
+            q: rawQ,
+            intent: getVal(cIntent),
+            outline: getVal(cOutline),
+            note: getVal(cNote)
+        };
+
+        if (!mergedMap.has(key)) {
+            mergedMap.set(key, {
+                id: `ITEM_${Date.now()}_${order++}`,
+                domain: sheetName,
+                seq: rawSeq,
+                q: newData.q,
+                intent: newData.intent,
+                outline: newData.outline,
+                note: newData.note,
+                imgIds: [...imgs],
+                order: order
+            });
+        } else {
+            const item = mergedMap.get(key);
+            const safeMerge = (oldT, newT) => {
+                if (!newT) return oldT;
+                if (!oldT) return newT;
+                if (oldT.includes(newT)) return oldT; 
+                return oldT + "\n" + newT;
+            };
+            item.q = safeMerge(item.q, newData.q);
+            item.intent = safeMerge(item.intent, newData.intent);
+            item.outline = safeMerge(item.outline, newData.outline);
+            item.note = safeMerge(item.note, newData.note);
+            if (imgs.length > 0) item.imgIds.push(...imgs);
+        }
+      });
+    }
+
+    const items = Array.from(mergedMap.values());
+    const tx = db.transaction("items", "readwrite");
+    items.forEach(it => tx.objectStore("items").put(it));
+    await new Promise(r => tx.oncomplete = r);
+    return items.length;
+  }
+
+  // --- 화면 렌더링 ---
+  async function loadAndRender() {
+    const tx = db.transaction("items", "readonly");
+    allData = await new Promise(r => {
+        const req = tx.objectStore("items").getAll();
+        req.onsuccess = e => r(e.target.result || []);
+    });
+    
+    const sheets = [...new Set(allData.map(i=>i.domain))].sort();
+    const sel = $("#sheetFilter");
+    sel.innerHTML = '<option value="">전체 시트</option>' + sheets.map(s => `<option value="${s}">${s}</option>`).join("");
+    
+    renderList();
+  }
+
+  function renderList() {
+    const tbody = $("#tbl tbody");
+    tbody.innerHTML = "";
+    const filter = $("#sheetFilter").value;
+    const search = $("#search").value.toLowerCase();
+
+    let list = allData.filter(it => {
+        if(filter && it.domain !== filter) return false;
+        if(search && !(it.q+it.seq).toLowerCase().includes(search)) return false;
+        return true;
+    });
+
+    list.sort((a,b) => a.order - b.order);
+    $("#count").textContent = `${list.length}건`;
+
+    list.slice(0, 300).forEach(it => {
+        const tr = document.createElement("tr");
+        const imgCnt = it.imgIds.length;
+        tr.innerHTML = `
+            <td><span class="pill">${it.domain}</span></td>
+            <td><b>${it.seq}</b></td>
+            <td>${(it.q||"").replace(/\n/g," ")}</td>
+            <td>${imgCnt > 0 ? `<span class="pill" style="background:#bee3f8; color:#2a4365">${imgCnt}장</span>` : '-'}</td>
+        `;
+        tr.onclick = () => showPreview(it);
+        tbody.appendChild(tr);
+    });
+  }
+
+  async function showPreview(it) {
+    state.selectedId = it.id;
+    renderList(); 
+
+    const pv = $("#preview-area");
+    // 조용히 복사
+    const silentCopy = "navigator.clipboard.writeText(this.innerText).catch(e=>console.log(e))";
+    
+    const mkBox = (lbl, val, canCopy) => `
+        <div class="pv-box">
+            <div class="pv-label">${lbl}</div>
+            <div class="pv-content ${canCopy ? 'click-copy' : ''}" 
+                 ${canCopy ? `onclick="${silentCopy}" title="클릭하여 복사"` : ''}>${(val||"-").replace(/\n/g,'<br>')}</div>
+        </div>
+    `;
+
+    let html = `<h3 style="color:#2b6cb0; margin:0 0 10px 0;">[${it.domain}] No.${it.seq}</h3>`;
+    html += mkBox("문제", it.q, true); 
+    html += mkBox("출제의도", it.intent, false); 
+    html += mkBox("목차", it.outline, true); 
+    html += mkBox("비고", it.note, false); 
+    html += `<div class="pv-box"><div class="pv-label">이미지 (${it.imgIds.length})</div><div id="img-list"></div></div>`;
+    
+    pv.innerHTML = html;
+
+    const box = document.getElementById("img-list");
+    if(it.imgIds.length === 0) box.innerHTML = "<span style='color:#ccc; font-size:13px;'>이미지 없음</span>";
+    
+    for (const id of it.imgIds) {
+       const url = await new Promise(r => {
+           const req = db.transaction("images").objectStore("images").get(id);
+           req.onsuccess = e => r(e.target.result ? URL.createObjectURL(e.target.result.blob) : null);
+       });
+       if(url) {
+           const div = document.createElement("div");
+           div.className = "img-wrapper";
+           div.innerHTML = `<img src="${url}">`;
+           div.onclick = () => {
+               const w = window.open("");
+               w.document.write(`<img src="${url}" style="max-width:100%">`);
+           };
+           box.appendChild(div);
+       }
+    }
+  }
+
+  // --- [수정됨] 엑셀 내보내기 (상단 정렬) ---
+  async function exportExcel() {
+      if(!allData.length) return toast("내보낼 데이터가 없습니다.");
+      setStat("엑셀 생성중...");
+      
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet("병합결과");
+
+      ws.columns = [
+          { header: '도메인', key: 'domain', width: 20 },
+          { header: '연번', key: 'seq', width: 10 },
+          { header: '문제', key: 'q', width: 40 },
+          { header: '출제의도', key: 'intent', width: 20 },
+          { header: '목차', key: 'outline', width: 25 },
+          { header: '비고', key: 'note', width: 20 },
+          { header: 'img1', key: 'img1', width: 15 },
+          { header: 'img2', key: 'img2', width: 15 },
+          { header: 'img3', key: 'img3', width: 15 },
+          { header: 'img4', key: 'img4', width: 15 },
+          { header: 'img5', key: 'img5', width: 15 },
+          { header: 'img6', key: 'img6', width: 15 },
+          { header: 'img7', key: 'img7', width: 15 },
+          { header: 'img8', key: 'img8', width: 15 },
+          { header: 'img9', key: 'img9', width: 15 },
+          { header: 'img10', key: 'img10', width: 15 },
+      ];
+
+      let rowIndex = 2; 
+      for (const item of allData) {
+          const row = ws.addRow({
+              domain: item.domain,
+              seq: item.seq,
+              q: item.q,
+              intent: item.intent,
+              outline: item.outline,
+              note: item.note
+          });
+          row.height = 100; 
+
+          // [핵심 수정] 모든 셀 수직 상단 정렬
+          row.eachCell({ includeEmpty: true }, (cell) => {
+              cell.alignment = { vertical: 'top', wrapText: true };
+          });
+
+          // 이미지 삽입
+          for (let i = 0; i < item.imgIds.length; i++) {
+              if (i >= 10) break; 
+              const imgId = item.imgIds[i];
+              const blob = await new Promise(r => {
+                  const req = db.transaction("images").objectStore("images").get(imgId);
+                  req.onsuccess = e => r(e.target.result ? e.target.result.blob : null);
+              });
+
+              if (blob) {
+                  const buffer = await blob.arrayBuffer();
+                  const ext = blob.type.split('/')[1] || 'png';
+                  const imageId = wb.addImage({ buffer: buffer, extension: ext });
+                  
+                  ws.addImage(imageId, {
+                      tl: { col: 6 + i, row: rowIndex - 1 },
+                      br: { col: 6 + i + 1, row: rowIndex },
+                      editAs: 'twoCell'
+                  });
+              }
+          }
+          rowIndex++;
+      }
+
+      const buffer = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Keynote_Export_${new Date().toISOString().slice(0,10)}.xlsx`;
+      a.click();
+      
+      setStat("완료");
+      toast("엑셀 다운로드 완료");
+  }
+
+  // --- 이벤트 ---
+  const state = { selectedId: null };
+
+  document.addEventListener("DOMContentLoaded", async () => {
+      await openDB();
+      loadAndRender();
+      setStat("준비됨");
+
+      $("#btn-upload").onclick = () => $("#xlsxFile").click();
+      $("#xlsxFile").onchange = async (e) => {
+          if(!e.target.files[0]) return;
+          try {
+              const cnt = await processExcel(e.target.files[0]);
+              await loadAndRender();
+              toast(`완료: ${cnt}문항`);
+              setStat("완료");
+          } catch(err) { alert(err.message); }
+          e.target.value = "";
+      };
+
+      $("#btn-clear").onclick = async () => {
+          if(confirm("모든 데이터를 삭제하시겠습니까?")) {
+              const tx = db.transaction(["items","images"],"readwrite");
+              tx.objectStore("items").clear();
+              tx.objectStore("images").clear();
+              tx.oncomplete = () => { 
+                  allData = []; renderList(); 
+                  $("#preview-area").innerHTML = '<div style="text-align:center; margin-top:50px; color:#a0aec0;">목록을 선택하세요</div>'; 
+                  toast("삭제됨"); 
+              };
+          }
+      };
+
+      $("#btn-export-json").onclick = () => {
+          if(!allData.length) return toast("데이터 없음");
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(new Blob([JSON.stringify(allData,null,2)], {type:"application/json"}));
+          a.download = "keynote_data.json";
+          a.click();
+      };
+
+      $("#btn-export-xlsx").onclick = exportExcel;
+
+      $("#sheetFilter").onchange = renderList;
+      $("#search").oninput = renderList;
+  });
+
+})();
+</script>
+</body>
+</html>

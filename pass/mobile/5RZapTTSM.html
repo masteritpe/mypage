@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>5R Zap TTS Player</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" rel="stylesheet">
+    
+    <style>
+        /* === Design System === */
+        :root {
+            --bg-app: #F5F7FA;
+            --bg-card: #FFFFFF;
+            --text-main: #334155;
+            --text-sub: #94a3b8;
+            --border: #E2E8F0;
+            --primary: #475569;
+            --accent: #3b82f6;
+            --danger: #ef4444;
+            --font-main: "Pretendard", -apple-system, sans-serif;
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        
+        body { 
+            margin: 0; padding: 0; 
+            font-family: var(--font-main);
+            background: var(--bg-app); 
+            color: var(--text-main); 
+            height: 100vh; 
+            display: flex; flex-direction: column; overflow: hidden;
+        }
+
+        header {
+            padding: 15px 20px;
+            background: rgba(255,255,255,0.9);
+            backdrop-filter: blur(5px);
+            border-bottom: 1px solid var(--border);
+            display: flex; justify-content: space-between; align-items: center;
+            z-index: 10;
+        }
+        .app-title { font-weight: 800; font-size: 18px; color: var(--text-main); }
+        .settings-btn { border: none; background: none; font-size: 18px; color: var(--primary); cursor: pointer; }
+
+        main { flex: 1; overflow-y: auto; padding: 20px; padding-bottom: 150px; }
+
+        /* 설정 패널 */
+        .config-panel {
+            background: var(--bg-card); border-radius: 16px; 
+            padding: 20px; margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.03);
+            border: 1px solid var(--border);
+            display: none;
+        }
+        .config-panel.open { display: block; animation: slideDown 0.3s ease; }
+        .config-group { margin-bottom: 20px; }
+        .config-label { font-size: 12px; font-weight: 700; color: var(--text-sub); margin-bottom: 8px; text-transform: uppercase; display: block; }
+        
+        .chip-container { display: flex; flex-wrap: wrap; gap: 8px; }
+        .chip {
+            padding: 6px 12px; border-radius: 20px; border: 1px solid var(--border);
+            font-size: 13px; font-weight: 600; color: var(--text-sub); background: var(--bg-app);
+            cursor: pointer; transition: 0.2s;
+            display: inline-flex; align-items: center; gap: 5px;
+        }
+        .chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+        .chip:hover { filter: brightness(0.95); }
+        
+        /* 데이터 관리 버튼 스타일 */
+        .chip.danger { color: var(--danger); border-color: var(--danger); background: #fff; }
+        .chip.danger:hover { background: #fee2e2; }
+        
+        .check-group { display: flex; gap: 15px; flex-wrap: wrap; }
+        .custom-check { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 500; cursor: pointer; }
+        .custom-check input { accent-color: var(--primary); transform: scale(1.2); }
+
+        input[type=range] { width: 100%; height: 6px; background: #e2e8f0; border-radius: 5px; -webkit-appearance: none; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; background: var(--primary); border-radius: 50%; cursor: pointer; }
+
+        /* 카드 디스플레이 */
+        .current-card {
+            background: var(--bg-card); border-radius: 20px; padding: 30px 24px;
+            text-align: center; margin-top: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+            min-height: 300px; display: flex; flex-direction: column; justify-content: center;
+        }
+        
+        .play-status { font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 10px; letter-spacing: 1px; }
+        .card-topic { font-size: 26px; font-weight: 800; color: var(--text-main); margin-bottom: 20px; line-height: 1.4; word-break: keep-all; }
+        .card-text { font-size: 16px; color: var(--text-sub); line-height: 1.6; min-height: 60px; white-space: pre-wrap; word-break: break-word;}
+        .card-meta { margin-top: 30px; font-size: 12px; color: #cbd5e1; font-weight: 500; }
+
+        /* 플레이어 바 */
+        .player-bar {
+            position: fixed; bottom: 0; left: 0; width: 100%;
+            background: rgba(255,255,255,0.95); backdrop-filter: blur(10px);
+            border-top: 1px solid var(--border);
+            padding: 15px 20px; padding-bottom: max(20px, env(safe-area-inset-bottom));
+            display: flex; flex-direction: column; align-items: center;
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.03);
+            z-index: 100;
+        }
+        .progress-bar { width: 100%; height: 4px; background: #f1f5f9; border-radius: 2px; margin-bottom: 15px; position: relative; overflow: hidden; }
+        .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.3s; }
+        .controls { display: flex; align-items: center; justify-content: center; gap: 25px; width: 100%; }
+        .ctrl-btn {
+            background: none; border: none; color: var(--text-main);
+            font-size: 20px; cursor: pointer; width: 44px; height: 44px; border-radius: 50%;
+        }
+        .ctrl-btn:active { transform: scale(0.9); background: #f1f5f9; }
+        .ctrl-btn.main { 
+            font-size: 24px; background: var(--text-main); color: #fff; 
+            width: 60px; height: 60px; box-shadow: 0 4px 10px rgba(51, 65, 85, 0.3);
+        }
+        
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        .reading-now { color: var(--accent); font-weight: 700; }
+        
+        /* 태그 스타일 복원 */
+        red { color: #E57373; font-weight: 700; }
+        blue { color: #2563eb; font-weight: 600; }
+        green { color: #059669; font-weight: 600; }
+        mark { background: #fef9c3; color: #854d0e; padding: 0 4px; border-radius: 3px; font-weight: 600; }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="app-title"><i class="fas fa-headphones-alt"></i> 5R TTS Player</div>
+    <button class="settings-btn" onclick="toggleSettings()"><i class="fas fa-sliders-h"></i></button>
+</header>
+
+<main>
+    <div id="settings-panel" class="config-panel open">
+        <div class="config-group">
+            <span class="config-label">1. 도메인 필터</span>
+            <div class="chip-container" id="domain-filters"></div>
+        </div>
+
+        <div class="config-group">
+            <span class="config-label">2. 범위 설정 (No.)</span>
+            <div style="display:flex; align-items:center; gap:10px;">
+                <input type="number" id="range-start" value="1" class="chip" style="width:70px; text-align:center; cursor:text;">
+                <span>~</span>
+                <input type="number" id="range-end" value="999" class="chip" style="width:70px; text-align:center; cursor:text;">
+                <button class="chip active" onclick="applyFilters()">적용</button>
+            </div>
+        </div>
+
+        <div class="config-group">
+            <span class="config-label">3. 컨텐츠 옵션</span>
+            <div class="check-group">
+                <label class="custom-check"><input type="checkbox" id="opt-topic" checked> Topic</label>
+                <label class="custom-check"><input type="checkbox" id="opt-def" checked> 정의</label>
+                <label class="custom-check"><input type="checkbox" id="opt-mne" checked> 두음</label>
+                <label class="custom-check"><input type="checkbox" id="opt-note"> 참고</label>
+            </div>
+        </div>
+
+        <div class="config-group">
+            <span class="config-label">4. 음성 설정</span>
+            <div style="margin-bottom:10px;">
+                <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:4px;">
+                    <span>속도</span>
+                    <span id="speed-val">1.0</span>
+                </div>
+                <input type="range" id="tts-rate" min="0.5" max="2.0" step="0.1" value="1.0" oninput="updateRate(this.value)">
+            </div>
+            <select id="voice-select" class="chip" style="width:100%; display:block; padding:8px;"></select>
+        </div>
+
+        <div class="config-group" style="border-top: 1px solid var(--border); padding-top: 15px;">
+            <span class="config-label">5. 데이터 관리</span>
+            <div class="chip-container">
+                <button class="chip" onclick="backupData()"><i class="fas fa-download"></i> 백업(JSON)</button>
+                <button class="chip" onclick="document.getElementById('file-input').click()"><i class="fas fa-file-import"></i> 복구</button>
+                <button class="chip danger" onclick="resetData()"><i class="fas fa-trash-alt"></i> 초기화</button>
+            </div>
+            <input type="file" id="file-input" accept=".json" style="display:none" onchange="processRestore(this)">
+        </div>
+    </div>
+
+    <div class="current-card">
+        <div class="play-status" id="play-status">READY</div>
+        <div class="card-topic" id="display-topic">데이터 로드 중...</div>
+        <div class="card-text" id="display-text">재생 버튼을 누르면 시작됩니다.</div>
+        <div class="card-meta" id="display-meta">-</div>
+    </div>
+</main>
+
+<div class="player-bar">
+    <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+    <div class="controls">
+        <button class="ctrl-btn" onclick="prevCard()"><i class="fas fa-step-backward"></i></button>
+        <button class="ctrl-btn" onclick="stopTTS()"><i class="fas fa-stop"></i></button>
+        <button class="ctrl-btn main" id="btn-play" onclick="togglePlay()"><i class="fas fa-play"></i></button>
+        <button class="ctrl-btn" onclick="nextCard()"><i class="fas fa-step-forward"></i></button>
+    </div>
+    <div style="margin-top:8px; font-size:12px; color:var(--text-sub);" id="counter-text">0 / 0</div>
+</div>
+
+<script>
+// === [MODULE 1] 데이터베이스 연동 (수정됨: 에러 처리 강화) ===
+const DB = {
+    NAME: '5R_check_db', STORE: 'items',
+    
+    // DB 열기 공통 함수
+    _open(mode = 'readonly') {
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(this.NAME, 1);
+            
+            req.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains(this.STORE)) {
+                    db.createObjectStore(this.STORE, { keyPath: 'id', autoIncrement: true });
+                }
+            };
+
+            req.onsuccess = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains(this.STORE)) {
+                    resolve(null);
+                    return;
+                }
+                const tx = db.transaction(this.STORE, mode);
+                resolve(tx);
+            };
+            // 중요: 에러 객체 자체(e)가 아니라 에러 메시지 정보(e.target.error)를 반환하도록 수정
+            req.onerror = (e) => reject(e.target.error);
+        });
+    },
+
+    async getAll() {
+        try {
+            const tx = await this._open('readonly');
+            if(!tx) return [];
+            return new Promise((resolve, reject) => {
+                const req = tx.objectStore(this.STORE).getAll();
+                req.onsuccess = (e) => resolve(e.target.result || []);
+                req.onerror = (e) => reject(e.target.error);
+            });
+        } catch (e) { console.error(e); return []; }
+    },
+
+    async clear() {
+        try {
+            const tx = await this._open('readwrite');
+            if(!tx) return;
+            return new Promise((resolve, reject) => {
+                const req = tx.objectStore(this.STORE).clear();
+                req.onsuccess = () => resolve();
+                req.onerror = (e) => reject(e.target.error);
+            });
+        } catch (e) { console.error("DB Clear Error", e); }
+    },
+
+    async restore(data) {
+        try {
+            // 1. 기존 데이터 삭제
+            await this.clear();
+            
+            // 2. 데이터 삽입
+            const tx = await this._open('readwrite');
+            if(!tx) throw new Error("데이터베이스를 열 수 없습니다.");
+            
+            const store = tx.objectStore(this.STORE);
+            
+            return new Promise((resolve, reject) => {
+                tx.oncomplete = () => resolve();
+                // 중요: 트랜잭션 에러 처리 개선
+                tx.onerror = (e) => reject(e.target.error || new Error("DB Transaction Failed"));
+
+                data.forEach(item => {
+                    // ID 충돌 방지를 위해 id가 있다면 제거하고 DB의 autoIncrement를 따르게 함
+                    // (필요 시 주석 해제하여 사용 가능, 현재는 그대로 put)
+                    // if (item.id) delete item.id; 
+                    store.put(item); 
+                });
+            });
+        } catch (e) { console.error("DB Restore Error", e); throw e; }
+    }
+};
+
+// === [MODULE 2] 텍스트 처리 (순수 텍스트 추출) ===
+const TextUtils = {
+    // 1. 화면 표시용
+    formatForDisplay(text) {
+        if (!text) return "";
+        let html = text
+            .replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+            .replace(/&quot;/g, '"').replace(/&amp;/g, "&")
+            .replace(/&#39;/g, "'");
+
+        html = html
+            .replace(/<red>(.*?)<\/red>/gi, "<red>$1</red>")
+            .replace(/<blue>(.*?)<\/blue>/gi, "<blue>$1</blue>")
+            .replace(/<green>(.*?)<\/green>/gi, "<green>$1</green>")
+            .replace(/<mark>(.*?)<\/mark>/gi, "<mark>$1</mark>");
+
+        html = html.replace(/\n/g, '<br>');
+        return html;
+    },
+
+    // 2. 음성 읽기용
+    formatForSpeech(text) {
+        if (!text) return "";
+        let clean = text
+            .replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+            .replace(/&quot;/g, '"').replace(/&amp;/g, "&");
+
+        clean = clean.replace(/<[^>]*>/g, " ");
+        clean = clean.replace(/[^a-zA-Z0-9가-힣\s]/g, " ");
+        clean = clean.replace(/\s+/g, " ");
+        return clean.trim();
+    }
+};
+
+// === [MODULE 3] TTS 엔진 ===
+const TTS = {
+    synth: window.speechSynthesis, voice: null, rate: 1.0, isPlaying: false,
+    init() {
+        const loadVoices = () => {
+            const voices = this.synth.getVoices();
+            const select = document.getElementById('voice-select');
+            select.innerHTML = '';
+            const koVoices = voices.filter(v => v.lang.includes('ko'));
+            const target = koVoices.length > 0 ? koVoices : voices;
+            
+            target.forEach((v, i) => {
+                const opt = document.createElement('option');
+                opt.value = i; opt.text = `${v.name}`;
+                if(v.name.includes('Google') || v.name.includes('Heami')) opt.selected = true;
+                select.appendChild(opt);
+            });
+            if(select.options.length > 0) this.voice = target[select.selectedIndex];
+            
+            select.onchange = () => { this.voice = target[select.value]; };
+        };
+        this.synth.onvoiceschanged = loadVoices;
+        loadVoices();
+    },
+    speak(text, onEnd) {
+        if (this.synth.speaking) this.synth.cancel();
+        if (!text) { if(onEnd) onEnd(); return; }
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.rate = this.rate;
+        if (this.voice) utter.voice = this.voice;
+        utter.onend = onEnd;
+        utter.onerror = (e) => { console.error("TTS Error", e); if(onEnd) onEnd(); };
+        this.synth.speak(utter);
+        this.isPlaying = true;
+        updatePlayBtn(true);
+    },
+    stop() { this.synth.cancel(); this.isPlaying = false; updatePlayBtn(false); },
+    pause() { this.synth.pause(); this.isPlaying = false; updatePlayBtn(false); },
+    resume() { this.synth.resume(); this.isPlaying = true; updatePlayBtn(true); }
+};
+
+// === [MODULE 4] 앱 로직 ===
+let rawData = [], playList = [], currentIndex = 0;
+let activeDomains = new Set();
+let isAutoPlaying = false;
+
+window.onload = async () => {
+    TTS.init();
+    await loadDataAndInit();
+};
+
+async function loadDataAndInit() {
+    rawData = await DB.getAll();
+    const filterBox = document.getElementById('domain-filters');
+    filterBox.innerHTML = "";
+    activeDomains.clear();
+
+    if (rawData.length === 0) {
+        document.getElementById('display-topic').innerText = "데이터 없음";
+        document.getElementById('display-text').innerText = "설정 > 복구 버튼으로 JSON 파일을 로드하세요.";
+        document.getElementById('display-meta').innerText = "-";
+        document.getElementById('counter-text').innerText = "0 / 0";
+        return;
+    }
+    
+    const domains = [...new Set(rawData.map(i => (i.domain || '기타').trim()))].sort();
+    
+    domains.forEach(d => {
+        activeDomains.add(d);
+        const chip = document.createElement('div');
+        chip.className = 'chip active'; chip.innerText = d;
+        chip.onclick = () => toggleFilter(chip, d);
+        filterBox.appendChild(chip);
+    });
+    
+    const maxSeq = rawData.reduce((max, i) => Math.max(max, i.domainSeq || 0), 0);
+    document.getElementById('range-end').value = maxSeq || 999;
+    
+    applyFilters();
+}
+
+// === [데이터 관리 기능] ===
+
+async function backupData() {
+    const data = await DB.getAll();
+    if (!data || data.length === 0) {
+        alert("백업할 데이터가 없습니다.");
+        return;
+    }
+    const jsonStr = JSON.stringify(data, null, 2);
+    const blob = new Blob([jsonStr], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    const date = new Date().toISOString().slice(0,10).replace(/-/g,"");
+    a.download = `5R_Backup_${date}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+// 수정됨: 에러 메시지를 명확하게 표시하도록 개선
+function processRestore(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        try {
+            const content = e.target.result;
+            // 빈 파일 체크
+            if (!content || content.trim() === "") throw new Error("파일 내용이 비어있습니다.");
+
+            const data = JSON.parse(content);
+            if (!Array.isArray(data)) throw new Error("JSON 형식이 배열이 아닙니다. (올바른 백업 파일인지 확인하세요)");
+            
+            if(confirm(`총 ${data.length}개의 데이터를 복구하시겠습니까?\n(기존 데이터는 삭제됩니다)`)) {
+                await DB.restore(data);
+                alert("복구가 완료되었습니다.");
+                location.reload(); 
+            }
+        } catch (err) {
+            console.error(err);
+            // 에러 메시지가 없으면(undefined) 객체 자체를 문자열로 변환하여 표시
+            const msg = err.message ? err.message : (typeof err === 'object' ? JSON.stringify(err) : err);
+            alert("파일 읽기 실패: " + msg);
+        } finally {
+            input.value = ''; 
+        }
+    };
+    reader.onerror = () => {
+        alert("파일을 읽는 중 시스템 오류가 발생했습니다.");
+        input.value = '';
+    };
+    reader.readAsText(file);
+}
+
+async function resetData() {
+    if(confirm("정말로 모든 데이터를 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.")) {
+        await DB.clear();
+        alert("초기화되었습니다.");
+        location.reload();
+    }
+}
+
+// === [기존 로직] ===
+
+function toggleFilter(el, d) {
+    if(activeDomains.has(d)) {
+        if(activeDomains.size <= 1) return alert("최소 1개 선택 필요");
+        activeDomains.delete(d); el.classList.remove('active');
+    } else {
+        activeDomains.add(d); el.classList.add('active');
+    }
+}
+
+function applyFilters() {
+    const s = parseInt(document.getElementById('range-start').value) || 0;
+    const e = parseInt(document.getElementById('range-end').value) || 9999;
+    playList = rawData.filter(i => {
+        const d = (i.domain || '기타').trim();
+        const seq = i.domainSeq || 0;
+        return activeDomains.has(d) && seq >= s && seq <= e;
+    });
+    playList.sort((a,b) => {
+        if (a.domain !== b.domain) return (a.domain||'').localeCompare(b.domain||'');
+        return (a.domainSeq || 0) - (b.domainSeq || 0);
+    });
+    currentIndex = 0;
+    if(playList.length > 0) { loadCard(0); TTS.stop(); isAutoPlaying = false; }
+    else { alert("조건에 맞는 데이터가 없습니다."); }
+}
+
+function loadCard(idx) {
+    if (idx < 0 || idx >= playList.length) return;
+    const item = playList[idx];
+    
+    document.getElementById('display-topic').innerHTML = TextUtils.formatForDisplay(item.topic);
+    
+    let content = "";
+    if(item.definition) content += `<b>[Def]</b> ${TextUtils.formatForDisplay(item.definition)}<br><br>`;
+    if(item.mnemonic) content += `<b>[Mne]</b> ${TextUtils.formatForDisplay(item.mnemonic)}<br><br>`;
+    if(item.notes) content += `<span style='color:var(--text-sub)'>${TextUtils.formatForDisplay(item.notes)}</span>`;
+    
+    document.getElementById('display-text').innerHTML = content || "(내용 없음)";
+    document.getElementById('display-meta').innerText = `${item.domain} #${item.domainSeq || '?'}`;
+    
+    const pct = ((idx + 1) / playList.length) * 100;
+    document.getElementById('progress-fill').style.width = `${pct}%`;
+    document.getElementById('counter-text').innerText = `${currentIndex + 1} / ${playList.length}`;
+}
+
+function playCurrentCard() {
+    if (playList.length === 0) return;
+    const item = playList[currentIndex];
+    
+    let parts = [];
+    if(document.getElementById('opt-topic').checked) parts.push(TextUtils.formatForSpeech(item.topic));
+    if(document.getElementById('opt-def').checked && item.definition) parts.push("정의 " + TextUtils.formatForSpeech(item.definition));
+    if(document.getElementById('opt-mne').checked && item.mnemonic) parts.push("두음 " + TextUtils.formatForSpeech(item.mnemonic));
+    if(document.getElementById('opt-note').checked && item.notes) parts.push("참고 " + TextUtils.formatForSpeech(item.notes));
+    
+    const text = parts.join(" \n\n ");
+    document.getElementById('play-status').innerText = "PLAYING...";
+    
+    isAutoPlaying = true;
+    TTS.speak(text, () => {
+        if(isAutoPlaying) setTimeout(nextCard, 1000);
+    });
+}
+
+function togglePlay() {
+    if(!TTS.synth.speaking || TTS.synth.paused) {
+        document.getElementById('settings-panel').classList.remove('open');
+    }
+
+    if(TTS.synth.speaking && !TTS.synth.paused) {
+        TTS.pause(); isAutoPlaying = false;
+        document.getElementById('play-status').innerText = "PAUSED";
+    } else if(TTS.synth.paused) {
+        TTS.resume(); isAutoPlaying = true;
+        document.getElementById('play-status').innerText = "PLAYING...";
+    } else {
+        playCurrentCard();
+    }
+}
+
+function stopTTS() { TTS.stop(); isAutoPlaying = false; document.getElementById('play-status').innerText = "STOPPED"; }
+function nextCard() { 
+    if(currentIndex >= playList.length - 1) { stopTTS(); alert("끝!"); return; }
+    currentIndex++; 
+    loadCard(currentIndex); 
+    if(isAutoPlaying) playCurrentCard(); 
+}
+function prevCard() {
+    if(currentIndex <= 0) return;
+    currentIndex--; 
+    loadCard(currentIndex);
+    if(isAutoPlaying) playCurrentCard();
+}
+
+function toggleSettings() { document.getElementById('settings-panel').classList.toggle('open'); }
+function updateRate(v) { TTS.rate = parseFloat(v); document.getElementById('speed-val').innerText = TTS.rate; }
+function updatePlayBtn(on) {
+    const btn = document.getElementById('btn-play');
+    btn.innerHTML = on ? '<i class="fas fa-pause"></i>' : '<i class="fas fa-play"></i>';
+    if(on) btn.classList.add('reading-now'); else btn.classList.remove('reading-now');
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Diagram Master</title>
+  
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+  
+  <link href="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.snow.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.js"></script>
+  
+  <style>
+    /* 디자인 시스템 변수 */
+    :root {
+      --bg-body: #F9FAFB;
+      --bg-surface: #FFFFFF;
+      --border-light: #F3F4F6;
+      --border-base: #E5E7EB;
+      --text-main: #111827;
+      --text-muted: #6B7280;
+      --primary: #111827;       
+      --primary-hover: #374151;
+      --accent: #2563EB;
+      --accent-hover: #1D4ED8;
+      --secondary: #FFFFFF;
+      --secondary-hover: #F9FAFB;
+      --danger: #EF4444;
+      --danger-hover: #DC2626;
+      --warning-bg: #FEF3C7;
+      --warning-text: #92400E;
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+    }
+    
+    * { box-sizing: border-box; transition: color 0.2s, background-color 0.2s, border-color 0.2s, box-shadow 0.2s; }
+    
+    html, body { 
+      height: 100%; margin: 0; background: var(--bg-body); color: var(--text-main); 
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif; 
+      overflow: hidden; -webkit-font-smoothing: antialiased;
+    }
+    
+    /* === Header === */
+    header { 
+      background: var(--bg-surface); border-bottom: 1px solid var(--border-base); 
+      padding: 0 32px; position: sticky; top: 0; z-index: 50; 
+      display: flex; justify-content: space-between; align-items: center; 
+      height: 72px; flex-shrink: 0; box-shadow: var(--shadow-sm);
+    }
+    .logo { 
+      font-weight: 800; font-size: 20px; color: var(--primary); 
+      display: flex; align-items: center; gap: 10px; letter-spacing: -0.02em; 
+    }
+    .logo i { color: var(--accent); font-size: 28px; }
+    
+    .header-actions { display: flex; gap: 8px; align-items: center; }
+    .divider { width: 1px; height: 24px; background: var(--border-base); margin: 0 6px; }
+
+    /* === Main Layout === */
+    main { 
+      display: grid; grid-template-columns: 320px 1fr 1fr; gap: 24px; padding: 24px 32px; 
+      max-width: 100%; margin: 0 auto; height: calc(100vh - 72px); align-items: stretch; 
+    }
+    
+    /* === Card UI === */
+    .card { 
+      background: var(--bg-surface); border: 1px solid var(--border-base); border-radius: var(--radius-lg); 
+      display: flex; flex-direction: column; overflow: hidden; height: 100%; 
+      box-shadow: var(--shadow-md); 
+    }
+    .card-header { 
+      padding: 16px 20px; border-bottom: 1px solid var(--border-light); font-weight: 700; font-size: 15px; 
+      display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; background: #FAFAFA;
+      color: var(--text-main);
+    }
+    .card-header i { margin-right: 6px; font-size: 18px; vertical-align: middle; }
+    
+    .card-body { 
+      padding: 20px; flex: 1; display: flex; flex-direction: column; gap: 20px; 
+      overflow-y: auto; 
+    }
+    
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
+
+    /* === Form Elements === */
+    .field { display: flex; flex-direction: column; gap: 8px; }
+    
+    /* 한 줄 정렬 그룹 (셀렉트 고정폭, 텍스트입력 유동폭) */
+    .row-group { display: flex; gap: 16px; flex-shrink: 0; align-items: flex-start; }
+    .row-group .field-type { flex: 0 0 110px; } /* 분류폭 대폭 축소 (150px -> 110px) */
+    .row-group .field-topic { flex: 1; } /* 토픽명은 남은 영역 전체 차지 */
+
+    label { font-size: 13px; font-weight: 700; color: var(--text-muted); }
+    
+    input[type="text"], select { 
+      width: 100%; padding: 12px 14px; border: 1px solid var(--border-base); border-radius: var(--radius-md); 
+      font-size: 14px; outline: none; background: #fff; font-family: inherit; color: var(--text-main); 
+      line-height: 1.5; cursor: pointer;
+    }
+    input[type="text"] { cursor: text; }
+    input::placeholder { color: #9CA3AF; }
+    input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+    
+    /* === Quill Editor UI === */
+    .editor-field {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        min-height: 200px; 
+        gap: 8px;
+    }
+    .quill-wrapper { 
+        display: flex; 
+        flex-direction: column; 
+        flex: 1; 
+        min-height: 0; 
+        border: 1px solid var(--border-base);
+        border-radius: var(--radius-md);
+        background: #fff;
+        overflow: hidden; 
+    }
+    #scrolling-container {
+        flex: 1;
+        min-height: 0; 
+        overflow-y: auto;
+        position: relative;
+    }
+    .ql-container.ql-snow { 
+        border: none; 
+        font-family: inherit; 
+        font-size: 14px; 
+        color: var(--text-main); 
+        height: auto;
+        min-height: 100%;
+    }
+    .ql-editor { min-height: 100%; line-height: 1.6; }
+    .ql-editor::before { font-style: normal; color: #9CA3AF; }
+    
+    /* === Upload Area === */
+    .upload-area { 
+      border: 2px dashed #D1D5DB; border-radius: var(--radius-md); text-align: center; cursor: pointer; 
+      display: flex; flex-direction: column; justify-content: center; align-items: center; 
+      background: #FAFAFA; min-height: 140px; padding: 24px; gap: 10px;
+      flex-shrink: 0; 
+    }
+    .upload-area:hover { background: #F0FdfA; border-color: var(--accent); }
+    .upload-area i { font-size: 36px; color: var(--accent); opacity: 0.9; }
+    .upload-text { font-size: 14px; font-weight: 600; color: var(--text-main); }
+    .upload-sub { font-size: 12px; font-weight: 500; color: var(--accent); }
+    
+    /* === Diagram View === */
+    .diagram-view { 
+      width: 100%; height: 100%; background: var(--bg-body); border-radius: var(--radius-md); 
+      display: flex; align-items: center; justify-content: center; overflow: hidden; 
+      border: 1px solid var(--border-base); 
+    }
+    .diagram-view img { 
+        width: 100%; height: 100%; object-fit: contain; background: white; 
+        cursor: zoom-in; 
+    }
+    .diagram-view img:hover {
+        opacity: 0.9;
+    }
+    
+    /* === Buttons === */
+    .btn { 
+      padding: 10px 16px; border-radius: var(--radius-md); font-weight: 600; cursor: pointer; border: none; 
+      display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-family: inherit;
+    }
+    .btn i { font-size: 16px; }
+    .btn-primary { background: var(--primary); color: white; box-shadow: var(--shadow-sm); }
+    .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
+    
+    .btn-secondary { background: var(--secondary); border: 1px solid var(--border-base); color: var(--text-main); box-shadow: var(--shadow-sm); }
+    .btn-secondary:hover { background: var(--secondary-hover); border-color: #D1D5DB; }
+    
+    .btn-accent { background: var(--secondary); border: 1px solid var(--accent); color: var(--accent); box-shadow: var(--shadow-sm); }
+    .btn-accent:hover { background: #EFF6FF; }
+
+    /* === Explorer Sidebar Styles === */
+    .explorer-filter-bar { 
+      padding: 16px 20px; border-bottom: 1px solid var(--border-base); display: flex; flex-direction: column; 
+      gap: 12px; flex-shrink: 0; background: #fff; 
+    }
+    .search-input-wrapper { position: relative; display: flex; align-items: center; }
+    .search-input-wrapper i { position: absolute; left: 14px; color: var(--text-muted); pointer-events: none; font-size: 16px; }
+    .search-input-wrapper input { padding-left: 40px; }
+    
+    .explorer-list { flex: 1; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 10px; background: #FAFAFA; }
+    .explorer-list-item { 
+      display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--border-base); 
+      border-radius: var(--radius-md); background: white; cursor: pointer; position: relative; 
+    }
+    .explorer-list-item:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); border-color: #D1D5DB; }
+    .explorer-list-item.active { border-color: var(--accent); background: #EFF6FF; box-shadow: 0 0 0 1px var(--accent); }
+    .explorer-list-item img { width: 50px; height: 50px; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--border-light); background: #fff; flex-shrink: 0; }
+    .item-info { flex: 1; min-width: 0; }
+    .item-type { font-size: 11px; font-weight: 700; color: var(--accent); margin-bottom: 4px; }
+    .item-topic { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-main); }
+    
+    .delete-btn { 
+      position: absolute; right: 12px; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; 
+      background: #FEE2E2; color: var(--danger); border-radius: var(--radius-sm); display: flex; align-items: center; 
+      justify-content: center; border: none; cursor: pointer; opacity: 0; z-index: 10; font-size: 14px; 
+    }
+    .explorer-list-item:hover .delete-btn { opacity: 1; }
+    .delete-btn:hover { background: var(--danger); color: white; }
+
+    /* === Toast === */
+    #toast { 
+      position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%); background: #1F2937; 
+      color: white; padding: 12px 24px; border-radius: 999px; display: none; z-index: 5000; font-weight: 600; 
+      font-size: 14px; text-align: center; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3); 
+    }
+
+    /* === Memo Sidebar === */
+    .memo-sidebar { 
+      position: fixed; top: 0; right: -420px; width: 400px; height: 100vh; background: var(--warning-bg); 
+      border-left: 1px solid #FDE68A; box-shadow: -10px 0 25px rgba(0,0,0,0.05); z-index: 2000; 
+      display: flex; flex-direction: column; transition: right 0.3s cubic-bezier(0.16, 1, 0.3, 1); 
+    }
+    .memo-sidebar.open { right: 0; }
+    .memo-header { padding: 16px 24px; border-bottom: 1px solid #FDE68A; display: flex; justify-content: space-between; align-items: center; background: rgba(254, 243, 199, 0.95); }
+    .memo-title { font-weight: 700; font-size: 16px; color: var(--warning-text); display: flex; align-items: center; gap: 8px; }
+    .memo-title i { font-size: 20px; }
+    #memo-textarea { 
+      flex: 1; border: none; padding: 24px; display: block; background: transparent; resize: none; outline: none; 
+      font-size: 14px; line-height: 1.6; color: #451A03; width: 100%; min-height: 0; 
+    }
+    #memo-textarea::placeholder { color: #D97706; opacity: 0.6; }
+    .memo-footer { padding: 12px 24px; border-top: 1px solid #FDE68A; font-size: 12px; color: #B45309; display: flex; justify-content: space-between; align-items: center; background: var(--warning-bg); }
+    .btn-icon-memo { border: none; background: transparent; color: var(--warning-text); font-size: 18px; cursor: pointer; padding: 4px; border-radius: 6px; display: flex; align-items: center; justify-content: center;}
+    .btn-icon-memo:hover { background: rgba(217, 119, 6, 0.15); }
+
+    /* === Fullscreen Image Modal (개선됨) === */
+    .image-modal {
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(4px); z-index: 4000;
+      display: none; flex-direction: column; align-items: center; justify-content: center;
+      opacity: 0; transition: opacity 0.2s ease-in-out;
+    }
+    .image-modal.show {
+      display: flex; opacity: 1;
+    }
+    .modal-toolbar {
+      position: absolute; top: 32px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 6px; background: rgba(31, 41, 55, 0.85);
+      padding: 6px 6px 6px 12px; border-radius: 999px; backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5); 
+      z-index: 4001; align-items: center;
+    }
+    .modal-toolbar .btn {
+      background: transparent; border: none; color: #E5E7EB; font-weight: 500;
+      padding: 8px 16px; border-radius: 999px; transition: all 0.2s ease; font-size: 14px;
+    }
+    .modal-toolbar .btn:hover { background: rgba(255, 255, 255, 0.15); color: #fff; transform: translateY(-1px); }
+    .modal-toolbar .btn i { font-size: 18px; }
+    
+    .modal-divider { width: 1px; height: 20px; background: rgba(255, 255, 255, 0.2); margin: 0 6px; }
+    
+    .btn-icon-close {
+      background: transparent; border: none; color: #9CA3AF; font-size: 20px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; width: 36px; height: 36px;
+      border-radius: 50%; transition: all 0.2s ease;
+    }
+    .btn-icon-close:hover { background: #EF4444; color: white; transform: scale(1.05); }
+
+    .image-modal img {
+      max-width: 90vw; max-height: 80vh; object-fit: contain;
+      border-radius: var(--radius-md); box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+      background: white; cursor: zoom-out;
+    }
+
+    /* 반응형 레이아웃 */
+    @media (max-width: 1200px) {
+      main { grid-template-columns: 280px 1fr; }
+      .preview-section { grid-column: span 2; height: 500px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><i class="ph ph-shapes"></i> DIAGRAM MASTER</div>
+  <div class="header-actions">
+    <button class="btn btn-accent" id="btnMaker"><i class="ph ph-pen-nib"></i> 메이킹 도구</button>
+    <button class="btn btn-secondary" id="btn-memo" style="border-color:#FCD34D; color:#B45309; background:#FFFBEB;">
+        <i class="ph ph-note-pencil"></i> 메모장
+    </button>
+    <div class="divider"></div>
+    <button class="btn btn-secondary" id="btnNew"><i class="ph ph-plus"></i> 새 항목</button>
+    <button class="btn btn-secondary" id="btnExcelImport"><i class="ph ph-file-arrow-up"></i> 불러오기</button>
+    <button class="btn btn-secondary" id="btnExcelExport"><i class="ph ph-file-arrow-down"></i> 다운로드</button>
+    <button class="btn btn-primary" id="btnSave"><i class="ph ph-floppy-disk"></i> 저장하기</button>
+    <input type="file" id="excelInput" hidden accept=".xlsx">
+  </div>
+</header>
+
+<main>
+  <section class="card">
+    <div class="card-header">
+      <div><i class="ph ph-folder-open" style="color:var(--accent);"></i> 저장 목록</div>
+      <span id="itemCount" style="font-size:12px; color:var(--text-muted); font-weight:600;">0개 항목</span>
+    </div>
+    <div class="explorer-filter-bar">
+      <select id="explorerTypeFilter">
+        <option value="ALL">전체 유형 보기</option>
+        <option value="개념도">개념도</option>
+        <option value="아키텍처">아키텍처</option>
+        <option value="절차도">절차도</option>
+        <option value="비교도">비교도</option>
+      </select>
+      <div class="search-input-wrapper">
+        <i class="ph ph-magnifying-glass"></i>
+        <input type="text" id="explorerSearch" placeholder="토픽명 검색...">
+      </div>
+    </div>
+    <div class="explorer-list" id="explorerList">
+      </div>
+  </section>
+
+  <section class="card">
+    <div class="card-header">
+      <div><i class="ph ph-sliders-horizontal" style="color:var(--text-muted);"></i> 도식 설계</div>
+    </div>
+    <div class="card-body">
+      
+      <div class="row-group">
+        <div class="field field-type">
+          <label>유형 분류</label>
+          <select id="typeSelect">
+            <option value="개념도">개념도</option>
+            <option value="아키텍처">아키텍처</option>
+            <option value="절차도">절차도</option>
+            <option value="비교도">비교도</option>
+          </select>
+        </div>
+        <div class="field field-topic">
+          <label>토픽명</label>
+          <input type="text" id="topicInput" placeholder="주제 입력">
+        </div>
+      </div>
+      
+      <div class="editor-field">
+        <label>답안 전략</label>
+        <div class="quill-wrapper">
+          <div id="scrolling-container">
+            <div id="strategyEditor"></div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="field" style="flex-shrink: 0;">
+        <label>도식 이미지 업로드 (또는 빈 공간에 Ctrl+V)</label>
+        <div class="upload-area" id="dropZone">
+          <i class="ph ph-cloud-arrow-up"></i>
+          <div class="upload-text">클릭 또는 파일을 끌어다 놓으세요</div>
+          <div class="upload-sub">클립보드 이미지 붙여넣기(Ctrl+V) 지원</div>
+          <input type="file" id="fileInput" hidden accept="image/*">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card preview-section">
+    <div class="card-header">
+      <div><i class="ph ph-monitor" style="color:var(--text-muted);"></i> 도식 검토</div>
+    </div>
+    <div class="card-body" style="padding: 16px;">
+      <div class="diagram-view" id="diagramView">
+        <div style="text-align: center; color:var(--text-muted);">
+          <i class="ph ph-image" style="font-size: 64px; margin-bottom: 16px; opacity: 0.3;"></i>
+          <p style="font-weight: 500; font-size: 15px;">훈련 결과를 확인하세요.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="toast">알림 메시지</div>
+
+<div id="memo-sidebar" class="memo-sidebar">
+    <div class="memo-header">
+        <div class="memo-title">
+            <i class="ph ph-clipboard-text"></i> 텍스트 메모장
+        </div>
+        <div style="display:flex; gap:6px;">
+            <button id="btn-copy-memo" class="btn-icon-memo" title="전체 복사"><i class="ph ph-copy"></i></button>
+            <button id="btn-close-memo" class="btn-icon-memo" title="닫기"><i class="ph ph-x"></i></button>
+        </div>
+    </div>
+    <textarea id="memo-textarea" placeholder="여기에 텍스트를 붙여넣으면 서식이 제거됩니다. (자동 저장됨)"></textarea>
+    <div class="memo-footer">
+        <span id="memo-status">Ready</span>
+        <button id="btn-clear-memo" class="btn btn-secondary" style="padding:4px 10px; font-size:12px; border-color:#D97706; color:#B45309; background:transparent;">비우기</button>
+    </div>
+</div>
+
+<div id="imageModal" class="image-modal">
+    <div class="modal-toolbar">
+        <button id="btnModalCopy" class="btn"><i class="ph ph-copy"></i> 복사</button>
+        <button id="btnModalDownload" class="btn"><i class="ph ph-download-simple"></i> 저장</button>
+        <div class="modal-divider"></div>
+        <button id="btnModalClose" class="btn-icon-close" title="닫기"><i class="ph ph-x"></i></button>
+    </div>
+    <img id="modalImg" src="" alt="확대된 도식">
+</div>
+
+<script>
+  let db; let allItems = []; let currentImage = ""; let currentId = null;
+  let quill;
+  
+  // === Quill Editor 초기화 ===
+  const initQuill = () => {
+    const SizeStyle = Quill.import('attributors/style/size');
+    SizeStyle.whitelist = null; 
+    Quill.register(SizeStyle, true);
+
+    quill = new Quill('#strategyEditor', {
+      modules: {
+        toolbar: false, 
+        table: true, 
+        clipboard: { matchVisual: false },
+        keyboard: {
+            bindings: {
+                strikethrough: { key: '0', shortKey: true, handler: function(range, context) { this.quill.format('strike', !context.format.strike); } },
+                colorRed: { key: 'r', shortKey: true, altKey: true, handler: function() { this.quill.format('color', '#EF4444'); } },
+                colorBlue: { key: 'b', shortKey: true, altKey: true, handler: function() { this.quill.format('color', '#2563EB'); } },
+                colorGreen: { key: 'g', shortKey: true, altKey: true, handler: function() { this.quill.format('color', '#10B981'); } },
+                
+                // 서식 지우기
+                clearFmt: { key: 'x', shortKey: true, shiftKey: true, handler: function(range) { 
+                    if (range.length === 0) {
+                        const formats = this.quill.getFormat(range);
+                        Object.keys(formats).forEach(format => this.quill.format(format, false));
+                    } else {
+                        this.quill.removeFormat(range.index, range.length); 
+                    }
+                }},
+                
+                // 형광펜 마크
+                hl1: { key: '1', shortKey: true, handler: function() { this.quill.format('background', '#FED7AA'); } },
+                hl2: { key: '2', shortKey: true, handler: function() { this.quill.format('background', '#BAE6FD'); } },
+                hl3: { key: '3', shortKey: true, handler: function() { this.quill.format('background', '#FEF08A'); } },
+                hl4: { key: '4', shortKey: true, handler: function() { this.quill.format('background', '#BBF7D0'); } },
+                hl5: { key: '5', shortKey: true, handler: function() { this.quill.format('background', '#FBCFE8'); } },
+                hl6: { key: '6', shortKey: true, handler: function() { this.quill.format('background', '#E7D5C5'); } },
+                hl7: { key: '7', shortKey: true, handler: function() { this.quill.format('background', '#E5E7EB'); } },
+                
+                // 글꼴 크기 증가 (+키, =키)
+                fontUpEq: { key: '=', shortKey: true, handler: function(range, context) {
+                    let cur = parseInt(context.format.size || '14', 10);
+                    this.quill.format('size', (cur + 1) + 'px');
+                }},
+                fontUpNumpad: { key: 107, shortKey: true, handler: function(range, context) {
+                    let cur = parseInt(context.format.size || '14', 10);
+                    this.quill.format('size', (cur + 1) + 'px');
+                }},
+                
+                // 글꼴 크기 감소 (-키)
+                fontDownDash: { key: '-', shortKey: true, handler: function(range, context) {
+                    let cur = parseInt(context.format.size || '14', 10);
+                    this.quill.format('size', Math.max(1, cur - 1) + 'px');
+                }},
+                fontDownNumpad: { key: 109, shortKey: true, handler: function(range, context) {
+                    let cur = parseInt(context.format.size || '14', 10);
+                    this.quill.format('size', Math.max(1, cur - 1) + 'px');
+                }},
+                
+                // 두음 강조
+                duum: { key: 'm', shortKey: true, altKey: true, handler: function() {
+                    this.quill.format('background', '#0d3a9e');
+                    this.quill.format('color', '#ffffff');
+                    this.quill.format('bold', true);
+                }}
+            }
+        }
+      },
+      scrollingContainer: '#scrolling-container', 
+      placeholder: '자유롭게 작성하세요.',
+      theme: 'snow'
+    });
+
+    quill.root.setAttribute('spellcheck', false);
+  };
+
+  const initDB = () => {
+    const request = indexedDB.open("DiagramDB", 1);
+    request.onupgradeneeded = (e) => e.target.result.createObjectStore("diagrams", { keyPath: "id", autoIncrement: true });
+    request.onsuccess = (e) => {
+        db = e.target.result;
+        loadExplorerData();
+    };
+  };
+
+  const showToast = (msg) => {
+    const t = document.getElementById('toast'); 
+    t.innerHTML = msg; 
+    t.style.display = 'block';
+    setTimeout(() => t.style.display = 'none', 2500);
+  };
+
+  const splitString = (str, len = 32000) => {
+    const chunks = [];
+    for (let i = 0; i < str.length; i += len) chunks.push(str.slice(i, i + len));
+    return chunks;
+  };
+
+  const stripHTML = (html) => {
+    const tmp = document.createElement("DIV");
+    tmp.innerHTML = html;
+    return tmp.textContent || tmp.innerText || "";
+  };
+
+  const performSave = () => {
+    const topic = document.getElementById('topicInput').value;
+    if(!topic || !currentImage) return showToast("<i class='ph ph-warning-circle'></i> 토픽명과 이미지를 등록해주세요.");
+    
+    const tx = db.transaction("diagrams", "readwrite");
+    const store = tx.objectStore("diagrams");
+    
+    const data = {
+      topic, 
+      strategy: quill.root.innerHTML, 
+      type: document.getElementById('typeSelect').value,
+      image: currentImage, 
+      date: new Date().toLocaleString()
+    };
+
+    if (currentId) {
+      data.id = currentId;
+      store.put(data);
+    } else {
+      const request = store.add(data);
+      request.onsuccess = (e) => {
+        currentId = e.target.result;
+      };
+    }
+
+    tx.oncomplete = () => { 
+        showToast(`<i class='ph ph-check-circle' style='color:#10B981'></i> 저장 완료`); 
+        loadExplorerData();
+    };
+  };
+
+  const resetForm = (showMsg = true) => {
+    currentId = null;
+    document.getElementById('topicInput').value = ""; 
+    document.getElementById('typeSelect').selectedIndex = 0; 
+    quill.setContents([]); 
+    currentImage = "";
+    document.getElementById('diagramView').innerHTML = '<div style="text-align: center; color:var(--text-muted);"><i class="ph ph-image" style="font-size: 64px; margin-bottom: 16px; opacity: 0.3;"></i><p style="font-weight: 500; font-size: 15px;">훈련 결과를 확인하세요.</p></div>';
+    renderExplorer();
+    if(showMsg) showToast("<i class='ph ph-sparkle'></i> 초기화되었습니다. (새 항목 작성)");
+  };
+
+  const exportToExcel = async () => {
+    db.transaction("diagrams").objectStore("diagrams").getAll().onsuccess = async (e) => {
+      const items = e.target.result; if (!items.length) return showToast("<i class='ph ph-warning-circle'></i> 다운로드할 데이터가 없습니다.");
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet("Diagrams");
+      const hiddenWs = wb.addWorksheet("_HIDDEN_DATA"); hiddenWs.state = 'veryHidden';
+
+      ws.columns = [
+        { header: "유형", key: "type", width: 12 }, { header: "토픽명", key: "topic", width: 30 },
+        { header: "답안 전략", key: "strategy", width: 50 }, { header: "도식(이미지)", key: "img", width: 30 },
+        { header: "등록일", key: "date", width: 22 }
+      ];
+
+      for(let i=0; i<items.length; i++){
+        const item = items[i];
+        const row = ws.addRow({ type: item.type, topic: item.topic, strategy: stripHTML(item.strategy), date: item.date });
+        row.height = 160; 
+        row.eachCell(c => c.alignment = { vertical: 'top', horizontal: 'left', wrapText: true });
+
+        const chunks = splitString(item.image);
+        const hiddenRow = hiddenWs.getRow(i + 2);
+        hiddenRow.getCell(1).value = i + 1;
+        hiddenRow.getCell(2).value = item.strategy; 
+        chunks.forEach((chunk, idx) => hiddenRow.getCell(idx + 3).value = chunk);
+
+        if(item.image.startsWith("data:image")) {
+          const imgId = wb.addImage({ base64: item.image, extension: 'png' });
+          ws.addImage(imgId, { tl: { col: 3, row: i + 1 }, br: { col: 4, row: i + 2 }, editAs: 'oneCell' });
+        }
+      }
+
+      const buf = await wb.xlsx.writeBuffer();
+      const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([buf])); 
+      a.download = `DiagramMaster_${new Date().toISOString().slice(0,10)}.xlsx`; a.click();
+      showToast("<i class='ph ph-download-simple'></i> 엑셀 다운로드 완료");
+    };
+  };
+
+  const importFromExcel = async (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    const wb = new ExcelJS.Workbook();
+    try {
+      await wb.xlsx.load(await file.arrayBuffer());
+      const ws = wb.getWorksheet("Diagrams");
+      const hiddenWs = wb.getWorksheet("_HIDDEN_DATA");
+      if(!ws || !hiddenWs) return showToast("<i class='ph ph-warning-circle'></i> 유효한 백업 파일이 아닙니다.");
+
+      const tx = db.transaction("diagrams", "readwrite");
+      const store = tx.objectStore("diagrams");
+      let count = 0;
+
+      ws.eachRow((row, i) => {
+        if (i === 1) return;
+        const hiddenRow = hiddenWs.getRow(i);
+        const originalHtml = hiddenRow.getCell(2).value?.toString() || row.getCell(3).value?.toString() || "";
+        
+        let fullImage = "";
+        let col = 3; 
+        while(true) {
+          const chunk = hiddenRow.getCell(col).value;
+          if(!chunk) break;
+          fullImage += chunk;
+          col++;
+        }
+
+        if(fullImage) {
+          store.add({
+            type: row.getCell(1).value?.toString() || "",
+            topic: row.getCell(2).value?.toString() || "",
+            strategy: originalHtml, 
+            image: fullImage,
+            date: row.getCell(5).value?.toString() || new Date().toLocaleString()
+          });
+          count++;
+        }
+      });
+      tx.oncomplete = () => { showToast(`<i class='ph ph-check-circle'></i> ${count}개 복원 완료`); loadExplorerData(); e.target.value = ""; };
+    } catch(err) { console.error(err); showToast("<i class='ph ph-warning-circle'></i> 불러오기 실패"); }
+  };
+
+  const loadExplorerData = () => { db.transaction("diagrams").objectStore("diagrams").getAll().onsuccess = (e) => { allItems = e.target.result; renderExplorer(); }; };
+  
+  function renderExplorer() {
+    const list = document.getElementById('explorerList'); list.innerHTML = "";
+    const filter = document.getElementById('explorerTypeFilter').value; 
+    const search = document.getElementById('explorerSearch').value.toLowerCase();
+    
+    const filteredItems = allItems.filter(i => (filter==='ALL'||i.type===filter) && i.topic.toLowerCase().includes(search));
+    document.getElementById('itemCount').textContent = `${filteredItems.length}개 항목`;
+
+    filteredItems.reverse().forEach(item => {
+      const div = document.createElement('div'); 
+      div.className = `explorer-list-item ${currentId === item.id ? 'active' : ''}`;
+      
+      div.innerHTML = `
+        <img src="${item.image}">
+        <div class="item-info">
+            <div class="item-type">${item.type}</div>
+            <div class="item-topic" title="${item.topic}">${item.topic}</div>
+        </div>
+        <button class="delete-btn" onclick="event.stopPropagation(); deleteItem(${item.id})" title="삭제">
+            <i class="ph ph-trash"></i>
+        </button>
+      `;
+      
+      div.onclick = () => { 
+        currentId = item.id; 
+        document.getElementById('topicInput').value = item.topic; 
+        document.getElementById('typeSelect').value = item.type || "개념도";
+        
+        quill.clipboard.dangerouslyPasteHTML(item.strategy || '');
+        
+        currentImage = item.image; 
+        document.getElementById('diagramView').innerHTML = `<img src="${currentImage}">`; 
+        renderExplorer(); 
+      };
+      list.appendChild(div);
+    });
+    
+    if(filteredItems.length === 0) {
+        list.innerHTML = `<div style="text-align:center; padding: 40px 20px; color: var(--text-muted); font-size: 14px; font-weight: 500;"><i class="ph ph-folder-open" style="font-size:32px; display:block; margin-bottom:8px; opacity:0.5;"></i>표시할 항목이 없습니다.</div>`;
+    }
+  }
+  
+  window.deleteItem = (id) => { if(confirm("이 항목을 삭제하시겠습니까?")){ const tx = db.transaction("diagrams", "readwrite"); tx.objectStore("diagrams").delete(id); tx.oncomplete = () => { showToast("<i class='ph ph-trash'></i> 삭제되었습니다."); loadExplorerData(); if(currentId === id) resetForm(false); }; } };
+
+  // ==========================================
+  // MODULE: MEMO
+  // ==========================================
+  function setupMemo(){
+      const btnOpen = document.getElementById('btn-memo');
+      const btnClose = document.getElementById('btn-close-memo');
+      const sidebar = document.getElementById('memo-sidebar');
+      const textarea = document.getElementById('memo-textarea');
+      const status = document.getElementById('memo-status');
+      const btnCopy = document.getElementById('btn-copy-memo');
+      const btnClear = document.getElementById('btn-clear-memo');
+
+      if(!btnOpen || !sidebar) return;
+
+      const toggleMemo = () => sidebar.classList.toggle('open');
+      btnOpen.addEventListener('click', toggleMemo);
+      btnClose.addEventListener('click', () => sidebar.classList.remove('open'));
+
+      const saved = localStorage.getItem('diagram_memo');
+      if (saved) textarea.value = saved;
+
+      textarea.addEventListener('input', () => {
+          localStorage.setItem('diagram_memo', textarea.value);
+          if(status){
+            status.innerHTML = '<i class="ph ph-check"></i> Saved';
+            setTimeout(() => status.textContent = 'Ready', 1000);
+          }
+      });
+
+      btnCopy.addEventListener('click', () => {
+          textarea.select();
+          document.execCommand('copy');
+          showToast('<i class="ph ph-copy"></i> 메모 내용이 복사되었습니다.');
+      });
+
+      btnClear.addEventListener('click', () => {
+          if(confirm('메모를 모두 지우시겠습니까?')) {
+              textarea.value = '';
+              localStorage.removeItem('diagram_memo');
+          }
+      });
+  }
+
+  // ==========================================
+  // MODULE: MODAL (FULLSCREEN IMAGE)
+  // ==========================================
+  function setupImageModal() {
+      const modal = document.getElementById('imageModal');
+      const modalImg = document.getElementById('modalImg');
+      const btnClose = document.getElementById('btnModalClose');
+      const btnCopy = document.getElementById('btnModalCopy');
+      const btnDownload = document.getElementById('btnModalDownload');
+
+      document.getElementById('diagramView').addEventListener('click', (e) => {
+          if(e.target.tagName === 'IMG' && currentImage) {
+              modalImg.src = currentImage;
+              modal.classList.add('show');
+          }
+      });
+
+      const closeModal = () => modal.classList.remove('show');
+      
+      btnClose.addEventListener('click', closeModal);
+      modalImg.addEventListener('click', closeModal); 
+      modal.addEventListener('click', (e) => {
+          if(e.target === modal) closeModal(); 
+      });
+
+      btnCopy.addEventListener('click', async () => {
+          if(!currentImage) return;
+          try {
+              const res = await fetch(currentImage);
+              const blob = await res.blob();
+              await navigator.clipboard.write([
+                  new ClipboardItem({ [blob.type]: blob })
+              ]);
+              showToast("<i class='ph ph-copy'></i> 도식 이미지가 복사되었습니다.");
+          } catch (err) {
+              console.error(err);
+              showToast("<i class='ph ph-warning-circle'></i> 이미지 복사에 실패했습니다.");
+          }
+      });
+
+      btnDownload.addEventListener('click', () => {
+          if(!currentImage) return;
+          const a = document.createElement('a');
+          a.href = currentImage;
+          const topicName = document.getElementById('topicInput').value || 'diagram';
+          a.download = `${topicName}.png`;
+          a.click();
+          showToast("<i class='ph ph-download-simple'></i> 도식 이미지가 저장되었습니다.");
+      });
+  }
+
+  // Events
+  document.getElementById('btnSave').onclick = performSave;
+  document.getElementById('btnNew').onclick = () => resetForm(true);
+  document.getElementById('btnExcelExport').onclick = exportToExcel;
+  document.getElementById('btnExcelImport').onclick = () => document.getElementById('excelInput').click();
+  document.getElementById('excelInput').onchange = importFromExcel;
+  document.getElementById('dropZone').onclick = () => document.getElementById('fileInput').click();
+  document.getElementById('fileInput').onchange = (e) => { const f = e.target.files[0]; if(f){ const r = new FileReader(); r.onload = (ev) => { currentImage = ev.target.result; document.getElementById('diagramView').innerHTML = `<img src="${currentImage}">`; }; r.readAsDataURL(f); } };
+  
+  document.getElementById('explorerTypeFilter').onchange = renderExplorer;
+  document.getElementById('explorerSearch').oninput = renderExplorer;
+  
+  document.getElementById('btnMaker').onclick = () => window.open('diagrammaker.html', '_blank');
+
+  // 전역 이미지 복사/붙여넣기 인터셉트
+  document.addEventListener('paste', (e) => {
+    if (quill && quill.hasFocus()) return;
+
+    const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+    let blob = null;
+    for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf('image') !== -1) {
+            blob = items[i].getAsFile();
+            break;
+        }
+    }
+    if (blob) {
+        e.preventDefault(); 
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+
+                const pngData = canvas.toDataURL('image/png');
+                currentImage = pngData;
+                document.getElementById('diagramView').innerHTML = `<img src="${currentImage}">`;
+                
+                showToast(`<i class='ph ph-clipboard'></i> 이미지 붙여넣기 완료`);
+            };
+            img.src = event.target.result;
+        };
+        reader.readAsDataURL(blob);
+    }
+  });
+
+  window.addEventListener('keydown', (e) => {
+    const isAlt = e.altKey, isCtrl = e.ctrlKey, key = e.key.toLowerCase();
+    if(isCtrl && key === 's') { e.preventDefault(); performSave(); }
+    if(isCtrl && isAlt && key === 'n') { e.preventDefault(); resetForm(true); }
+  });
+
+  // 초기화 실행
+  initQuill();
+  initDB();
+  setupMemo(); 
+  setupImageModal();
+</script>
+</body>
+</html>

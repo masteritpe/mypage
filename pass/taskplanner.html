@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Task Planner</title>
+  <link href="https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f6f7f9; --surface: #ffffff; --text: #1f2937; --subtext: #6b7280;
+      --border: #e5e7eb; --accent: #2563eb; --accent-weak: #e8f0fe; --muted: #f3f4f6;
+      --today-bg: #eef2ff; --shadow: 0 1px 2px rgba(16, 24, 40, .06);
+      --radius: 12px;
+    }
+    [data-theme="dark"] {
+      --bg: #0f172a; --surface: #1e293b; --text: #e5e7eb; --subtext: #9aa4b2;
+      --border: #334155; --accent: #60a5fa; --accent-weak: #1e3a8a; --muted: #0f172a;
+      --today-bg: #172554; --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; height: 100vh; background: var(--bg); color: var(--text); font-family: 'Nanum Gothic', sans-serif; font-size: 14px; }
+    
+    .container { max-width: 1600px; margin: 0 auto; padding: 20px; display: flex; flex-direction: column; height: 100%; }
+    .toolbar { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; box-shadow: var(--shadow); margin-bottom: 16px; }
+    
+    .brand { display: flex; align-items: center; gap: 12px; font-weight: bold; font-size: 1.2rem; margin-right: auto; }
+    .controls { display: flex; gap: 8px; flex-wrap: wrap; }
+    
+    input[type="text"], button { height: 38px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+    button { cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+    button.primary { background: var(--accent); color: white; border: none; }
+    button.icon-btn { width: 34px; padding: 0; }
+
+    .weekdays { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin-bottom: 8px; text-align: center; font-weight: bold; color: var(--subtext); }
+    .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; flex: 1; }
+    
+    .cell { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); min-height: 140px; display: flex; flex-direction: column; overflow: hidden; }
+    .cell.today { border: 2px solid var(--accent); background: var(--today-bg); }
+    .cell.dimmed { opacity: 0.2; }
+    .cell.empty { background: transparent; border: none; }
+
+    .cell-head { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+    .date-badge { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background: var(--muted); border-radius: 6px; font-weight: bold; }
+
+    .cell-body { flex: 1; padding: 8px; display: flex; flex-direction: column; gap: 4px; cursor: pointer; overflow-y: auto; }
+    
+    .task-tag { 
+      background: var(--accent-weak); color: var(--accent); padding: 2px 8px; border-radius: 6px; 
+      font-size: 0.75rem; border-left: 3px solid var(--accent);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .task-tag.done { text-decoration: line-through; opacity: 0.5; background: var(--muted); color: var(--subtext); border-left-color: var(--subtext); }
+    .task-tag.highlight { background: #fef08a; border-left-color: #eab308; color: #854d0e; }
+
+    /* Modal */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 50; display: none; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
+    .modal-overlay.open { display: flex; }
+    .modal-card { background: var(--surface); width: min(500px, 95%); border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+    .modal-header { padding: 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+    .modal-body { padding: 16px; max-height: 60vh; overflow-y: auto; }
+    
+    /* Task List & Edit */
+    .task-input-group { display: flex; gap: 8px; margin-bottom: 16px; }
+    .task-list-item { display: flex; align-items: center; gap: 10px; padding: 10px; border-bottom: 1px solid var(--border); transition: background 0.2s; }
+    .task-list-item:hover { background: var(--muted); }
+    .task-text { flex: 1; cursor: pointer; padding: 4px; border-radius: 4px; }
+    .task-text.done { text-decoration: line-through; color: var(--subtext); }
+    .edit-input { flex: 1; height: 32px; font-size: 14px; border: 1px solid var(--accent); border-radius: 4px; outline: none; padding: 0 8px; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="toolbar">
+    <div class="brand">
+      <button class="icon-btn" id="btnPrev">◀</button>
+      <span id="labelMonth">0000년 00월</span>
+      <button class="icon-btn" id="btnNext">▶</button>
+    </div>
+    <div class="controls" style="flex: 1;">
+      <input type="text" id="inputSearch" placeholder="검색어 입력..." style="width: 100%; max-width: 300px;" />
+    </div>
+    <div class="controls">
+      <button id="btnToday">오늘</button>
+      <button id="btnTheme">🌓</button>
+    </div>
+  </div>
+
+  <div class="weekdays">
+    <div>일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div>토</div>
+  </div>
+  <div class="grid" id="calendarGrid"></div>
+</div>
+
+<div class="modal-overlay" id="taskModal">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div class="modal-title" id="modalDateLabel">날짜</div>
+      <button class="icon-btn" id="modalClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="task-input-group">
+        <input type="text" id="newTaskInput" style="flex:1" placeholder="할 일을 적고 Enter" />
+        <button id="addTaskBtn" class="primary">추가</button>
+      </div>
+      <div id="modalTaskList"></div>
+      <p style="font-size: 11px; color: var(--subtext); margin-top: 10px;">* 내용을 클릭하면 수정할 수 있습니다. (닫기: Ctrl+X)</p>
+    </div>
+  </div>
+</div>
+
+<script>
+class DBService {
+  constructor() {
+    this.dbName = 'TaskPlannerDB';
+    this.storeName = 'dailyTasks';
+    this.db = null;
+  }
+  async connect() {
+    return new Promise((resolve) => {
+      const req = indexedDB.open(this.dbName, 1);
+      req.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(this.storeName)) db.createObjectStore(this.storeName, { keyPath: 'dateKey' });
+      };
+      req.onsuccess = (e) => { this.db = e.target.result; resolve(); };
+    });
+  }
+  async getMonthData(year, month) {
+    const tx = this.db.transaction(this.storeName, 'readonly');
+    const store = tx.objectStore(this.storeName);
+    return new Promise((resolve) => {
+      store.getAll().onsuccess = (e) => {
+        const prefix = `${year}-${String(month + 1).padStart(2, '0')}`;
+        const filtered = {};
+        e.target.result.forEach(item => { if (item.dateKey.startsWith(prefix)) filtered[item.dateKey] = item; });
+        resolve(filtered);
+      };
+    });
+  }
+  async saveTasks(dateKey, tasks) {
+    const tx = this.db.transaction(this.storeName, 'readwrite');
+    const store = tx.objectStore(this.storeName);
+    return tasks.length === 0 ? store.delete(dateKey) : store.put({ dateKey, tasks });
+  }
+}
+
+class TaskApp {
+  constructor() {
+    this.db = new DBService();
+    this.currentDate = new Date();
+    this.schedules = {};
+    this.activeDateKey = null;
+    this.searchQuery = '';
+    this.init();
+  }
+
+  async init() {
+    await this.db.connect();
+    this.setupEvents();
+    this.render();
+  }
+
+  async render() {
+    const y = this.currentDate.getFullYear();
+    const m = this.currentDate.getMonth();
+    this.schedules = await this.db.getMonthData(y, m);
+    document.getElementById('labelMonth').textContent = `${y}년 ${m + 1}월`;
+    
+    const grid = document.getElementById('calendarGrid');
+    grid.innerHTML = '';
+    const firstDay = new Date(y, m, 1).getDay();
+    const lastDate = new Date(y, m + 1, 0).getDate();
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    for (let i = 0; i < firstDay; i++) grid.appendChild(Object.assign(document.createElement('div'), {className:'cell empty'}));
+
+    for (let d = 1; d <= lastDate; d++) {
+      const dateKey = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const tasks = this.schedules[dateKey]?.tasks || [];
+      
+      let hasMatch = false;
+      const cell = document.createElement('div');
+      cell.className = `cell ${dateKey === todayStr ? 'today' : ''}`;
+      
+      const body = document.createElement('div');
+      body.className = 'cell-body';
+      
+      tasks.forEach(t => {
+        const isMatch = this.searchQuery && t.text.includes(this.searchQuery);
+        if (isMatch) hasMatch = true;
+        const tag = Object.assign(document.createElement('div'), {
+          className: `task-tag ${t.done ? 'done' : ''} ${isMatch ? 'highlight' : ''}`,
+          textContent: t.text
+        });
+        body.appendChild(tag);
+      });
+
+      if (this.searchQuery && !hasMatch && tasks.length > 0) cell.classList.add('dimmed');
+      
+      cell.onclick = () => this.openModal(dateKey);
+      cell.innerHTML = `<div class="cell-head"><div class="date-badge">${d}</div></div>`;
+      cell.appendChild(body);
+      grid.appendChild(cell);
+    }
+  }
+
+  setupEvents() {
+    document.getElementById('inputSearch').oninput = (e) => { this.searchQuery = e.target.value.trim(); this.render(); };
+    document.getElementById('btnPrev').onclick = () => { this.currentDate.setMonth(this.currentDate.getMonth() - 1); this.render(); };
+    document.getElementById('btnNext').onclick = () => { this.currentDate.setMonth(this.currentDate.getMonth() + 1); this.render(); };
+    document.getElementById('btnToday').onclick = () => { this.currentDate = new Date(); this.render(); };
+    document.getElementById('modalClose').onclick = () => document.getElementById('taskModal').classList.remove('open');
+    document.getElementById('addTaskBtn').onclick = () => this.addTask();
+    document.getElementById('newTaskInput').onkeydown = (e) => { if(e.key === 'Enter') this.addTask(); };
+    document.getElementById('btnTheme').onclick = () => document.documentElement.setAttribute('data-theme', document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+
+    // [추가된 기능] Ctrl+X 로 모달 닫기
+    document.addEventListener('keydown', (e) => {
+      // Ctrl (또는 Mac Command) + X
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'x') {
+        const modal = document.getElementById('taskModal');
+        // 모달이 열려 있을 때만 동작
+        if (modal.classList.contains('open')) {
+          e.preventDefault(); // 브라우저 기본 '잘라내기' 동작 방지
+          modal.classList.remove('open');
+        }
+      }
+    });
+  }
+
+  openModal(dateKey) {
+    this.activeDateKey = dateKey;
+    document.getElementById('modalDateLabel').textContent = dateKey;
+    this.renderModalTasks();
+    document.getElementById('taskModal').classList.add('open');
+    document.getElementById('newTaskInput').focus();
+  }
+
+  renderModalTasks() {
+    const list = document.getElementById('modalTaskList');
+    list.innerHTML = '';
+    const tasks = this.schedules[this.activeDateKey]?.tasks || [];
+    
+    tasks.forEach((task, idx) => {
+      const item = document.createElement('div');
+      item.className = 'task-list-item';
+      
+      const chk = document.createElement('input');
+      chk.type = 'checkbox';
+      chk.checked = task.done;
+      chk.onchange = () => this.toggleTask(idx);
+
+      const textSpan = document.createElement('span');
+      textSpan.className = `task-text ${task.done ? 'done' : ''}`;
+      textSpan.textContent = task.text;
+      
+      // 클릭 시 수정 모드 전환
+      textSpan.onclick = () => {
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'edit-input';
+        input.value = task.text;
+        
+        input.onblur = () => this.updateTask(idx, input.value);
+        input.onkeydown = (e) => { if(e.key === 'Enter') this.updateTask(idx, input.value); };
+        
+        textSpan.replaceWith(input);
+        input.focus();
+      };
+
+      const delBtn = Object.assign(document.createElement('button'), {
+        className: 'icon-btn', innerHTML: '✕', style: 'color:red; border:none; background:none;'
+      });
+      delBtn.onclick = (e) => { e.stopPropagation(); this.deleteTask(idx); };
+
+      item.append(chk, textSpan, delBtn);
+      list.appendChild(item);
+    });
+  }
+
+  async addTask() {
+    const input = document.getElementById('newTaskInput');
+    if (!input.value.trim()) return;
+    const tasks = this.schedules[this.activeDateKey]?.tasks || [];
+    tasks.push({ text: input.value.trim(), done: false });
+    await this.db.saveTasks(this.activeDateKey, tasks);
+    input.value = '';
+    this.renderModalTasks();
+    this.render();
+  }
+
+  async updateTask(idx, newText) {
+    const val = newText.trim();
+    if (!val) return this.deleteTask(idx);
+    const tasks = this.schedules[this.activeDateKey].tasks;
+    tasks[idx].text = val;
+    await this.db.saveTasks(this.activeDateKey, tasks);
+    this.renderModalTasks();
+    this.render();
+  }
+
+  async toggleTask(idx) {
+    const tasks = this.schedules[this.activeDateKey].tasks;
+    tasks[idx].done = !tasks[idx].done;
+    await this.db.saveTasks(this.activeDateKey, tasks);
+    this.renderModalTasks();
+    this.render();
+  }
+
+  async deleteTask(idx) {
+    const tasks = this.schedules[this.activeDateKey].tasks;
+    tasks.splice(idx, 1);
+    await this.db.saveTasks(this.activeDateKey, tasks);
+    this.renderModalTasks();
+    this.render();
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => new TaskApp());
+</script>
+</body>
+</html>

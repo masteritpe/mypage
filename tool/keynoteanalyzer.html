@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>웹 Keynote 분석</title>
+  
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+  <style>
+    :root {
+      --bg-body: #F9FAFB;
+      --bg-surface: #FFFFFF;
+      --border-light: #F3F4F6;
+      --border-base: #E5E7EB;
+      --border-dark: #D1D5DB;
+      --text-main: #111827;
+      --text-muted: #6B7280;
+      --primary: #111827;
+      --primary-hover: #374151;
+      --secondary: #FFFFFF;
+      --secondary-hover: #F9FAFB;
+      --selection-bg: #DBEAFE; 
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+      --radius-md: 8px;
+      --radius-lg: 12px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background: var(--bg-body); color: var(--text-main);
+      -webkit-font-smoothing: antialiased; 
+      min-height: 100vh; display: flex; flex-direction: column;
+    }
+
+    body.selecting { user-select: none; -webkit-user-select: none; }
+
+    /* 탑 내비게이션 바 */
+    .top-bar { 
+      position: sticky; top: 0; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(8px); 
+      height: 64px; min-height: 64px; padding: 0 32px; border-bottom: 1px solid var(--border-base); 
+      display: flex; justify-content: space-between; align-items: center; z-index: 100; 
+    }
+    .app-title { font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 10px; color: var(--primary); }
+    
+    .actions { display: flex; gap: 10px; align-items: center; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 14px; border-radius: var(--radius-md); font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; border: 1px solid transparent; outline: none; }
+    .btn-primary { background: var(--primary); color: white; box-shadow: var(--shadow-sm); }
+    .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
+    .btn-outline { background: var(--secondary); color: var(--text-main); border-color: var(--border-base); }
+    .btn-outline:hover { background: var(--secondary-hover); border-color: var(--border-dark); }
+    .btn-danger { color: #DC2626; border-color: #FECACA; background: #FEF2F2; }
+    .btn-danger:hover { background: #FEE2E2; }
+
+    /* 드롭다운 메뉴 (표시 컬럼용) */
+    .dropdown-wrapper { position: relative; display: inline-block; }
+    .dropdown-menu {
+      position: absolute; top: 100%; right: 0; margin-top: 8px;
+      background: var(--bg-surface); border: 1px solid var(--border-base);
+      border-radius: var(--radius-md); box-shadow: var(--shadow-md);
+      padding: 12px; z-index: 200; min-width: 140px;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .dropdown-menu label { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; cursor: pointer; user-select: none; }
+    .dropdown-menu input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--primary); cursor: pointer; }
+
+    /* 메인 컨테이너 */
+    .container { padding: 40px 32px; max-width: 1400px; margin: 0 auto; width: 100%; flex: 1; }
+    .keynote-card { background: var(--bg-surface); border: 1px solid var(--border-base); border-radius: var(--radius-lg); padding: 32px; margin-bottom: 28px; box-shadow: var(--shadow-md); position: relative; }
+    
+    .html-textarea { width: 100%; height: 480px; padding: 20px; border: 1px solid var(--border-base); border-radius: var(--radius-md); font-family: monospace; font-size: 14px; line-height: 1.6; resize: vertical; outline: none; transition: 0.2s; margin-top:16px;}
+    .html-textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.05); }
+
+    /* 테이블 스타일 */
+    .table-responsive { width: 100%; overflow-x: auto; border: 1px solid var(--border-base); border-radius: var(--radius-md); position: relative; }
+    
+    table { width: 100%; border-collapse: collapse; font-size: 14px; text-align: left; }
+    th { border: 1px solid #D1D5DB; padding: 12px; background: #F3F4F6; font-weight: 600; text-align: center; position: relative; user-select: none; }
+    td { border: 1px solid #D1D5DB; padding: 12px; vertical-align: top; word-break: keep-all; line-height: 1.6; position: relative; cursor: cell; transition: background 0.1s; }
+    
+    /* 너비 조절 Resizer */
+    .resizer { position: absolute; right: 0; top: 0; width: 5px; height: 100%; cursor: col-resize; user-select: none; z-index: 10; }
+    .resizer:hover, .resizing { border-right: 2px solid var(--primary); }
+
+    /* 에디터블 포커스 및 하이라이트 */
+    td[contenteditable="true"] { cursor: text; background-color: var(--secondary-hover); outline: 2px solid var(--primary); outline-offset: -2px; }
+    .selected-cell { background-color: var(--selection-bg) !important; }
+
+    /* 숨기기/해제 관련 스타일 */
+    .row-checkbox { cursor: pointer; width: 16px; height: 16px; accent-color: var(--primary); }
+    .hidden-row { display: none !important; }
+    .hidden-col { display: none !important; } /* 컬럼 숨기기용 */
+    .unhide-btn { cursor: pointer; transition: color 0.2s; font-size: 16px; }
+    .unhide-btn:hover { color: var(--primary-hover); }
+
+    /* 토스트 알림 */
+    .toast {
+      visibility: hidden; background-color: #111827; color: #fff; text-align: center; border-radius: var(--radius-md);
+      padding: 12px 24px; position: fixed; z-index: 1000; left: 50%; bottom: 20px; transform: translateX(-50%);
+      font-size: 14px; opacity: 0; transition: opacity 0.3s, bottom 0.3s; display: flex; align-items: center; gap: 8px; font-weight: 600;
+    }
+    .toast.show { visibility: visible; opacity: 1; bottom: 40px; }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <header class="top-bar">
+    <div class="app-title"><i class="ph-bold ph-table"></i> 웹 Keynote 분석</div>
+    <div class="actions">
+      <div id="colMenuWrapper" class="dropdown-wrapper hidden">
+        <button class="btn btn-outline" onclick="toggleColumnMenu(event)"><i class="ph ph-columns"></i> 표시 컬럼</button>
+        <div id="columnMenu" class="dropdown-menu hidden">
+          <label><input type="checkbox" checked onchange="toggleColumn(1)"> 번호</label>
+          <label><input type="checkbox" checked onchange="toggleColumn(2)"> 토픽</label>
+          <label><input type="checkbox" checked onchange="toggleColumn(3)"> 키워드</label>
+          <label><input type="checkbox" checked onchange="toggleColumn(4)"> 비고</label>
+          <label><input type="checkbox" checked onchange="toggleColumn(5)"> 상세 내용</label>
+        </div>
+      </div>
+
+      <button class="btn btn-outline hidden" id="btnBack" onclick="switchToInput()"><i class="ph ph-arrow-left"></i> 텍스트 다시 입력</button>
+      <button class="btn btn-danger hidden" id="btnCrop" onclick="applySelectionToPreview()"><i class="ph ph-scissors"></i> 영역 자르기</button>
+      <button class="btn btn-primary" id="btnSubmit" onclick="analyzeAndRender()"><i class="ph ph-magic-wand"></i> 데이터 추출 및 표 생성</button>
+    </div>
+  </header>
+
+  <main class="container">
+    
+    <div id="panelInput" class="keynote-card">
+      <div style="margin-bottom: 12px;">
+        <h3 style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;"><i class="ph-fill ph-textbox"></i> 원본 텍스트 입력</h3>
+        <p class="text-muted" style="font-size: 14px; color: var(--text-muted); line-height: 1.6;">
+          복사한 데이터를 붙여넣으세요. 무의미한 열/행 제어 문자와 <b>[대표]</b> 키워드는 자동 삭제됩니다.<br>
+          변환 후에는 <b>① 더블클릭 수정 ② 마우스 드래그 영역복사 ③ 셀 클릭 자동복사 ④ 열/행 숨기기</b>를 지원합니다.
+        </p>
+      </div>
+      <textarea id="txtSource" class="html-textarea" spellcheck="false" placeholder="이곳에 원본 데이터를 붙여넣으세요..."></textarea>
+    </div>
+
+    <div id="panelOutput" class="keynote-card hidden" style="padding: 0; overflow: hidden; border: none; box-shadow: none;">
+      <div class="table-responsive">
+        <table id="targetTable">
+          <thead>
+            <tr>
+              <th style="width: 40px;" class="unhide-btn" onclick="showHiddenRows()" title="숨긴 행 모두 해제"><i class="ph ph-eye-slash"></i></th>
+              <th style="width: 60px;">번호</th>
+              <th style="width: 220px;">토픽</th>
+              <th style="width: 200px;">키워드</th>
+              <th style="width: 260px;">비고</th>
+              <th>상세 내용</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody">
+            </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <div id="toastCopied" class="toast"><i class="ph-bold ph-check-circle"></i> <span>복사되었습니다</span></div>
+
+  <script>
+    // --- 표시 컬럼 (드롭다운) 제어 ---
+    function toggleColumnMenu(e) {
+      e.stopPropagation();
+      document.getElementById('columnMenu').classList.toggle('hidden');
+    }
+
+    // 화면 바깥 클릭 시 컬럼 메뉴 닫기
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.dropdown-wrapper')) {
+        document.getElementById('columnMenu').classList.add('hidden');
+      }
+    });
+
+    function toggleColumn(colIndex) {
+      const table = document.getElementById('targetTable');
+      const isChecked = event.target.checked;
+      
+      // 헤더(th) 토글
+      const th = table.querySelector(`thead tr th:nth-child(${colIndex + 1})`);
+      if (th) {
+        if (isChecked) th.classList.remove('hidden-col');
+        else th.classList.add('hidden-col');
+      }
+
+      // 본문(td) 토글
+      const tbody = document.getElementById('tableBody');
+      Array.from(tbody.rows).forEach(row => {
+        const td = row.cells[colIndex];
+        if (td) {
+          if (isChecked) td.classList.remove('hidden-col');
+          else td.classList.add('hidden-col');
+        }
+      });
+    }
+
+    function resetColumns() {
+      // 체크박스 전체 선택 상태로 초기화
+      const checkboxes = document.querySelectorAll('#columnMenu input[type="checkbox"]');
+      checkboxes.forEach(cb => cb.checked = true);
+      // 숨긴 헤더 복구
+      const ths = document.querySelectorAll('#targetTable th');
+      ths.forEach(th => th.classList.remove('hidden-col'));
+    }
+
+    // --- 화면 제어 ---
+    function switchToInput() {
+      document.getElementById('panelInput').classList.remove('hidden');
+      document.getElementById('panelOutput').classList.add('hidden');
+      document.getElementById('btnBack').classList.add('hidden');
+      document.getElementById('btnCrop').classList.add('hidden');
+      document.getElementById('colMenuWrapper').classList.add('hidden');
+      document.getElementById('btnSubmit').classList.remove('hidden');
+    }
+
+    function switchToOutput() {
+      document.getElementById('panelInput').classList.add('hidden');
+      document.getElementById('panelOutput').classList.remove('hidden');
+      document.getElementById('btnBack').classList.remove('hidden');
+      document.getElementById('btnCrop').classList.remove('hidden');
+      document.getElementById('colMenuWrapper').classList.remove('hidden');
+      document.getElementById('btnSubmit').classList.add('hidden');
+      initResizers();
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toastCopied');
+      toast.querySelector('span').innerText = msg;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 1500);
+    }
+
+    // --- 분석 엔진 및 렌더링 ---
+    function analyzeAndRender() {
+      const sourceText = document.getElementById('txtSource').value;
+      if (!sourceText.trim()) return alert("분석할 텍스트 데이터를 입력해주세요.");
+
+      const lines = sourceText.split('\n').map(line => line.trim()).filter(line => {
+        if (!line) return false;
+        if (line.includes("열 선택") || line.includes("열 추가") || line.includes("행 선택") || line.includes("행 추가")) return false;
+        if (line.includes("셀 전체 선택") || line.includes("열 너비 조절") || line.includes("행 높이 조절")) return false;
+        if (line.includes("셀 병합") || line.includes("행 분할") || line.includes("열 분할") || line.includes("너비 맞춤") || line === "삭제") return false;
+        if (line === "대표") return false; 
+        return true;
+      });
+
+      if (lines[0] === "토픽" && lines[1] === "키워드" && lines[2] === "비고") lines.splice(0, 3);
+
+      const structuredItems = [];
+      let currentItem = null;
+      let currentBlockMode = null; 
+
+      for (let i = 0; i < lines.length; i++) {
+        const currentLine = lines[i];
+        const numMatch = currentLine.match(/^(\d+)$/);
+        
+        if (numMatch) {
+          if (currentItem) structuredItems.push(currentItem);
+          currentItem = { id: numMatch[1], topic: '', keyword: '', note: '', contents: [] };
+          currentBlockMode = 'TOPIC';
+          continue;
+        }
+
+        if (currentItem) {
+          if (currentBlockMode === 'TOPIC') { currentItem.topic = currentLine; currentBlockMode = 'KEYWORD'; }
+          else if (currentBlockMode === 'KEYWORD') { currentItem.keyword = currentLine; currentBlockMode = 'NOTE'; }
+          else if (currentBlockMode === 'NOTE') { currentItem.note = currentLine; currentBlockMode = 'CONTENT'; }
+          else if (currentBlockMode === 'CONTENT') { currentItem.contents.push(currentLine); }
+        }
+      }
+      if (currentItem) structuredItems.push(currentItem);
+
+      renderTargetDashboard(structuredItems);
+    }
+
+    function renderTargetDashboard(items) {
+      const tbody = document.getElementById('tableBody');
+      tbody.innerHTML = ''; 
+      
+      resetColumns(); // 새로 렌더링할 때 숨김 컬럼 초기화
+
+      if (items.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 24px; color:var(--text-muted);">데이터를 추출하지 못했습니다. 형식을 확인해주세요.</td></tr>`;
+        switchToOutput(); return;
+      }
+
+      items.forEach(item => {
+        const contentHtmlString = item.contents.join('<br>');
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td style="text-align: center;"><input type="checkbox" class="row-checkbox" title="행 숨기기"></td>
+          <td style="text-align: center; font-weight: bold;">${item.id}</td>
+          <td>${item.topic}</td>
+          <td>${item.keyword}</td>
+          <td>${item.note}</td>
+          <td>${contentHtmlString}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      clearSelection();
+      switchToOutput();
+    }
+
+    // --- 행 숨김 해제 기능 ---
+    function showHiddenRows() {
+      const hiddenRows = document.querySelectorAll('.hidden-row');
+      if (hiddenRows.length === 0) {
+        showToast('숨겨진 행이 없습니다');
+        return;
+      }
+      hiddenRows.forEach(row => row.classList.remove('hidden-row'));
+      showToast('모든 숨긴 행이 해제되었습니다');
+    }
+
+    // --- 이벤트 리스너 (체크박스, 셀 클릭 복사, 더블클릭 수정) ---
+    document.getElementById('tableBody').addEventListener('click', function(e) {
+      if (e.target.classList.contains('row-checkbox')) {
+        if (e.target.checked) {
+          e.target.closest('tr').classList.add('hidden-row');
+          e.target.checked = false; 
+        }
+        return;
+      }
+
+      if (startCell && endCell && (startCell.r !== endCell.r || startCell.c !== endCell.c)) return;
+
+      const td = e.target.closest('td');
+      if (!td || td.isContentEditable) return; 
+
+      if (td.cellIndex >= 2 && td.cellIndex <= 5) {
+        navigator.clipboard.writeText(td.innerText).then(() => {
+          showToast('텍스트가 복사되었습니다');
+        }).catch(() => {
+          const temp = document.createElement('textarea');
+          temp.value = td.innerText;
+          document.body.appendChild(temp); temp.select(); document.execCommand('copy'); temp.remove();
+          showToast('텍스트가 복사되었습니다');
+        });
+      }
+    });
+
+    document.getElementById('tableBody').addEventListener('dblclick', function(e) {
+      const td = e.target.closest('td');
+      if (!td || td.cellIndex < 2) return;
+      
+      td.contentEditable = "true";
+      td.focus();
+
+      td.addEventListener('blur', function onBlur() {
+        td.contentEditable = "false";
+        td.removeEventListener('blur', onBlur);
+      });
+    });
+
+    // --- 드래그 기반 영역 자동 복사 및 선택 ---
+    let isSelecting = false;
+    let startCell = null;
+    let endCell = null;
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const table = document.getElementById('targetTable');
+      
+      table.addEventListener('mousedown', function(e) {
+        if (e.target.classList.contains('resizer') || e.target.tagName === 'INPUT' || e.target.isContentEditable) return;
+        const cell = e.target.closest('td, th');
+        if (!cell) return;
+        
+        isSelecting = true;
+        document.body.classList.add('selecting'); 
+        startCell = { r: cell.parentElement.rowIndex, c: cell.cellIndex };
+        endCell = startCell;
+        highlightSelection();
+      });
+
+      table.addEventListener('mouseover', function(e) {
+        if (!isSelecting) return;
+        const cell = e.target.closest('td, th');
+        if (!cell) return;
+        
+        endCell = { r: cell.parentElement.rowIndex, c: cell.cellIndex };
+        highlightSelection();
+      });
+
+      window.addEventListener('mouseup', function(e) {
+        if (isSelecting) {
+          isSelecting = false;
+          document.body.classList.remove('selecting');
+          
+          if (startCell && endCell && (startCell.r !== endCell.r || startCell.c !== endCell.c)) {
+            copySelectedArea();
+          }
+        } else {
+          if (!e.target.closest('#targetTable') && !e.target.closest('.actions')) {
+            clearSelection();
+          }
+        }
+      });
+    });
+
+    function highlightSelection() {
+      const table = document.getElementById('targetTable');
+      document.querySelectorAll('.selected-cell').forEach(c => c.classList.remove('selected-cell'));
+      if (!startCell || !endCell) return;
+
+      const minRow = Math.min(startCell.r, endCell.r);
+      const maxRow = Math.max(startCell.r, endCell.r);
+      const minCol = Math.min(startCell.c, endCell.c);
+      const maxCol = Math.max(startCell.c, endCell.c);
+
+      for (let r = minRow; r <= maxRow; r++) {
+        const row = table.rows[r];
+        if (!row || row.classList.contains('hidden-row')) continue;
+        for (let c = minCol; c <= maxCol; c++) {
+          const cell = row.cells[c];
+          // 숨겨진 컬럼은 하이라이트 제외
+          if (cell && !cell.classList.contains('hidden-col')) {
+            cell.classList.add('selected-cell');
+          }
+        }
+      }
+    }
+
+    function clearSelection() {
+      document.querySelectorAll('.selected-cell').forEach(c => c.classList.remove('selected-cell'));
+      startCell = null; endCell = null;
+    }
+
+    function copySelectedArea() {
+      const table = document.getElementById('targetTable');
+      const minRow = Math.min(startCell.r, endCell.r);
+      const maxRow = Math.max(startCell.r, endCell.r);
+      const minCol = Math.min(startCell.c, endCell.c);
+      const maxCol = Math.max(startCell.c, endCell.c);
+
+      let tempHtml = '<table style="border-collapse: collapse;">';
+      let hasData = false;
+
+      for (let r = minRow; r <= maxRow; r++) {
+        const row = table.rows[r];
+        if (!row || row.classList.contains('hidden-row')) continue;
+        
+        let rowHtml = '<tr>';
+        let rowHasData = false;
+
+        for (let c = minCol; c <= maxCol; c++) {
+          const cell = row.cells[c];
+          // 숨겨진 컬럼은 복사 데이터에서 완전히 제외
+          if (cell && !cell.classList.contains('hidden-col')) {
+            const clone = cell.cloneNode(true);
+            const input = clone.querySelector('input');
+            if(input) input.remove(); 
+            rowHtml += `<td style="border: 1px solid #D1D5DB; padding: 8px;">${clone.innerHTML}</td>`;
+            rowHasData = true;
+          }
+        }
+        rowHtml += '</tr>';
+        
+        if (rowHasData) {
+          tempHtml += rowHtml;
+          hasData = true;
+        }
+      }
+      tempHtml += '</table>';
+
+      if (!hasData) return;
+
+      const blob = new Blob([tempHtml], { type: 'text/html' });
+      const data = [new ClipboardItem({ 'text/html': blob })];
+      
+      navigator.clipboard.write(data).then(() => {
+        showToast('드래그한 표 영역이 복사되었습니다');
+      }).catch(err => {
+        const tempDiv = document.createElement('div');
+        tempDiv.contentEditable = true;
+        tempDiv.innerHTML = tempHtml;
+        document.body.appendChild(tempDiv);
+        tempDiv.focus();
+        document.execCommand('selectAll');
+        document.execCommand('copy');
+        tempDiv.remove();
+        showToast('드래그한 표 영역이 복사되었습니다');
+      });
+    }
+
+    function applySelectionToPreview() {
+      if (!startCell || !endCell || (startCell.r === endCell.r && startCell.c === endCell.c)) {
+        return alert('먼저 남기고 싶은 표 영역을 마우스 드래그로 선택해주세요.');
+      }
+      
+      const table = document.getElementById('targetTable');
+      const minRow = Math.min(startCell.r, endCell.r);
+      const maxRow = Math.max(startCell.r, endCell.r);
+      const minCol = Math.min(startCell.c, endCell.c);
+      const maxCol = Math.max(startCell.c, endCell.c);
+
+      for (let r = table.rows.length - 1; r >= 0; r--) {
+        if (r < minRow || r > maxRow) {
+          table.deleteRow(r);
+        } else {
+          const row = table.rows[r];
+          for (let c = row.cells.length - 1; c >= 0; c--) {
+            if (c < minCol || c > maxCol) {
+              row.deleteCell(c);
+            }
+          }
+        }
+      }
+      clearSelection();
+      initResizers();
+    }
+
+    // --- 헤더 경계선 드래그 (너비 조절) ---
+    function initResizers() {
+      const table = document.getElementById('targetTable');
+      table.querySelectorAll('.resizer').forEach(el => el.remove());
+      
+      const cols = table.querySelectorAll('th');
+      cols.forEach(col => {
+        const resizer = document.createElement('div');
+        resizer.classList.add('resizer');
+        col.appendChild(resizer);
+        createResizableColumn(col, resizer);
+      });
+    }
+
+    function createResizableColumn(col, resizer) {
+      let x = 0;
+      let w = 0;
+      
+      const mouseDownHandler = function(e) {
+        x = e.clientX;
+        const styles = window.getComputedStyle(col);
+        w = parseInt(styles.width, 10);
+        
+        document.addEventListener('mousemove', mouseMoveHandler);
+        document.addEventListener('mouseup', mouseUpHandler);
+        resizer.classList.add('resizing');
+      };
+      
+      const mouseMoveHandler = function(e) {
+        const dx = e.clientX - x;
+        col.style.width = `${w + dx}px`;
+      };
+      
+      const mouseUpHandler = function() {
+        resizer.classList.remove('resizing');
+        document.removeEventListener('mousemove', mouseMoveHandler);
+        document.removeEventListener('mouseup', mouseUpHandler);
+      };
+      
+      resizer.addEventListener('mousedown', mouseDownHandler);
+    }
+  </script>
+</body>
+</html>

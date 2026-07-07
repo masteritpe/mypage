@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Topic Bank</title>
+  <script src="https://cdn.jsdelivr.net/npm/exceljs/dist/exceljs.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700&family=Noto+Serif+KR:wght@400;600;700&display=swap" rel="stylesheet">
+  
+  <style>
+    /* 눈이 편안한 고급스러운 연녹색(에메랄드/민트) 컬러 팔레트 적용 */
+    :root {
+      --bg-app: #f4fbf6;        
+      --bg-card: #ffffff;       
+      --text-main: #1f2937;     
+      --text-muted: #6b7280;    
+      --border-light: #d1d5db;
+      --brand: #10b981;         
+      --brand-hover: #059669;   
+      --brand-soft: #d1fae5;    
+      --header-h: 68px;
+      --sidebar-w: 520px;       
+      --radius-lg: 12px;
+      --radius-md: 8px;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
+    }
+
+    * { box-sizing: border-box; font-family: 'Pretendard', sans-serif; }
+    html, body { height: 100%; margin: 0; padding: 0; background: var(--bg-app); color: var(--text-main); overflow: hidden; }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+
+    /* --- Header --- */
+    .app-header {
+      height: var(--header-h); background: var(--bg-card); border-bottom: 1px solid var(--border-light);
+      display: flex; align-items: center; justify-content: space-between; padding: 0 28px;
+      box-shadow: var(--shadow-sm); z-index: 50; position: relative;
+    }
+    .app-header h1 { font-size: 20px; font-weight: 700; color: var(--text-main); margin: 0; letter-spacing: -0.3px; display: flex; align-items: center; gap: 8px; }
+    
+    .btn { background: var(--brand); color: #fff; border: 1px solid transparent; padding: 9px 18px; border-radius: var(--radius-md); font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; display: inline-flex; align-items: center; justify-content: center; letter-spacing: -0.2px; }
+    .btn:hover { background: var(--brand-hover); transform: translateY(-1px); box-shadow: var(--shadow-md); }
+    .btn.outline { background: #fff; border-color: #cbd5e1; color: #334155; }
+    .btn.outline:hover { background: #f8fafc; border-color: #94a3b8; transform: translateY(0); box-shadow: none; }
+    .btn.ghost { background: transparent; color: var(--text-muted); padding: 9px 14px; }
+    .btn.ghost:hover { background: #f3f4f6; color: var(--text-main); }
+
+    /* --- Layout --- */
+    .app-layout { display: flex; width: 100%; height: calc(100vh - var(--header-h)); gap: 1px; background: var(--border-light); }
+    
+    /* Left Main Area */
+    .main-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg-app); min-width: 600px; }
+    
+    .filter-section { background: var(--bg-card); padding: 20px 28px; flex-shrink: 0; box-shadow: var(--shadow-sm); z-index: 10; }
+    .filter-controls { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; }
+    .chip-group { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip-label { font-size: 13px; font-weight: 600; background: #fff; border: 1px solid #e2e8f0; border-radius: 24px; padding: 6px 16px; cursor: pointer; user-select: none; transition: 0.2s; color: #475569; }
+    .chip-label input:checked + span { color: var(--brand); font-weight: 700; }
+    .chip-label:has(input:checked) { border-color: var(--brand); background: var(--brand-soft); }
+    .chip-label:hover { border-color: #cbd5e1; }
+
+    input[type="text"], input[type="search"], select, textarea {
+      width: 100%; max-width: 100%; padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: var(--radius-md); font-size: 14px; outline: none; transition: all 0.2s; background: #fff; color: var(--text-main);
+    }
+    input:focus, select:focus, textarea:focus { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15); }
+    
+    .table-wrapper { flex: 1; overflow: auto; padding: 0 28px; }
+    .table-container { background: var(--bg-card); border-radius: var(--radius-lg); border: 1px solid var(--border-light); overflow: hidden; margin-top: 20px; margin-bottom: 20px; box-shadow: var(--shadow-sm); }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    thead { position: sticky; top: 0; background: #f8fafc; z-index: 5; }
+    thead::after { content:''; position:absolute; left:0; right:0; bottom:0; border-bottom:1px solid var(--border-light); }
+    th { padding: 14px 16px; color: #475569; font-weight: 600; text-align: left; cursor: pointer; white-space: nowrap; transition: 0.2s; }
+    th:hover { color: var(--brand); background: #f1f5f9; }
+    td { padding: 16px; border-bottom: 1px solid #f1f5f9; color: #334155; vertical-align: top; text-align: left; transition: background 0.2s; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f0fdf4; cursor: pointer; }
+    
+    /* 체크된 행 스타일 */
+    tr.selected-row td { background: #ecfdf5; }
+    tr.selected-row:hover td { background: #d1fae5; }
+    
+    td.problem { white-space: pre-wrap; word-break: break-all; line-height: 1.6; color: var(--text-main); font-size: 15px; }
+    
+    .pagination { background: var(--bg-card); border-top: 1px solid var(--border-light); padding: 16px 28px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+
+    /* Right Sidebar */
+    .sidebar { width: var(--sidebar-w); background: var(--bg-card); display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0; z-index: 20; box-shadow: -2px 0 10px rgba(0,0,0,0.02); }
+    .tabs { display: flex; border-bottom: 1px solid var(--border-light); padding: 0 16px; flex-shrink: 0; background: #ffffff; }
+    .tab { flex: 1; padding: 18px 0; text-align: center; cursor: pointer; font-weight: 600; color: var(--text-muted); font-size: 14px; border-bottom: 3px solid transparent; transition: 0.2s; margin: 0 8px; }
+    .tab:hover { color: var(--text-main); }
+    .tab.active { color: var(--brand); border-bottom-color: var(--brand); }
+    
+    .tab-content { flex: 1; overflow-y: auto; padding: 24px; display: none; flex-direction: column; gap: 24px; background: #fafafa; }
+    .tab-content.active { display: flex; }
+
+    /* Forms */
+    .section-title { font-size: 16px; font-weight: 700; color: var(--text-main); margin: 0 0 16px 0; display: flex; align-items: center; gap: 6px; }
+    .section-title::before { content: ''; display: block; width: 4px; height: 16px; background: var(--brand); border-radius: 2px; }
+    
+    .form-card { background: #fff; border: 1px solid var(--border-light); border-radius: var(--radius-lg); padding: 22px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+    .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .form-row { margin-bottom: 16px; min-width: 0; }
+    .form-row:last-child { margin-bottom: 0; }
+    .form-row label { display: block; font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 8px; }
+    .form-row textarea { resize: vertical; min-height: 250px; font-size: 15px; line-height: 1.6; }
+    
+    .img-upload-box { border: 1px dashed #cbd5e1; border-radius: var(--radius-md); padding: 12px; background: #f8fafc; text-align: center; transition: 0.2s; position: relative; }
+    .img-upload-box:hover { border-color: var(--brand); background: #f0fdf4; }
+    .img-preview { width: 100%; height: 140px; display: flex; align-items: center; justify-content: center; overflow: hidden; margin-top: 10px; background: #fff; border-radius: 6px; cursor: zoom-in; border: 1px solid #e2e8f0; }
+    .img-preview img { max-width: 100%; max-height: 100%; object-fit: contain; }
+
+    /* Analysis UI */
+    .stat-box { background: var(--brand-soft); border: 1px solid #a7f3d0; border-radius: var(--radius-lg); padding: 20px; text-align: center; }
+    .stat-row { display: flex; justify-content: space-between; padding: 10px 12px; border-bottom: 1px dashed #e2e8f0; cursor: pointer; font-size: 14px; border-radius: 6px; transition: 0.2s; }
+    .stat-row:hover { background: #f0fdf4; color: var(--brand); font-weight: 600; padding-left: 16px; }
+    .stat-row:last-child { border-bottom: none; }
+    .word-tag { background: #fff; border: 1px solid #e2e8f0; padding: 6px 14px; border-radius: 20px; font-size: 13px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; transition: 0.2s; box-shadow: var(--shadow-sm); color: #334155; }
+    .word-tag:hover { border-color: var(--brand); color: var(--brand); transform: translateY(-1px); background: #f0fdf4;}
+    .word-tag span { font-size: 11px; background: #f1f5f9; padding: 2px 6px; border-radius: 10px; color: #64748b; }
+
+    /* PDF UI */
+    .pdf-item { padding: 16px; background: #fff; border: 1px solid var(--border-light); border-radius: var(--radius-lg); cursor: pointer; transition: 0.2s; box-shadow: var(--shadow-sm); }
+    .pdf-item:hover { border-color: var(--brand); transform: translateY(-2px); box-shadow: var(--shadow-md); }
+
+    /* --- Exam Paper Viewer Modal --- */
+    #examPaperModal { display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.7); z-index: 9999; align-items: flex-start; justify-content: center; overflow-y: auto; padding: 40px 20px; backdrop-filter: blur(6px); }
+    .exam-paper-container { background: #fff; width: 100%; max-width: 820px; min-height: 1123px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); padding: 70px 60px; position: relative; font-family: 'Noto Serif KR', serif; margin: auto; }
+    .exam-paper-close { position: absolute; top: 20px; right: -60px; background: #fff; color: #333; border: none; width: 48px; height: 48px; border-radius: 50%; cursor: pointer; font-size: 24px; box-shadow: var(--shadow-md); transition: 0.2s; display: flex; align-items: center; justify-content: center; }
+    .exam-paper-close:hover { background: #fee2e2; color: #dc2626; }
+    
+    .exam-header { display: flex; flex-direction: column; margin-bottom: 16px; }
+    .exam-main-title { font-size: 36px; font-weight: 700; color: #000; letter-spacing: -1px; text-align: center; margin-bottom: 24px; }
+    
+    .exam-meta-line { 
+      border-top: 2px solid #000; border-bottom: 2px solid #000; padding: 12px 20px; 
+      display: flex; justify-content: space-between; align-items: center; font-size: 16px; font-weight: 600; margin-bottom: 24px; color: #000;
+    }
+    
+    .exam-warning { font-size: 15px; font-weight: 700; color: #000; margin-bottom: 12px; text-align: center; letter-spacing: -0.5px; }
+    .exam-instruction { font-size: 15px; font-weight: 600; color: #000; border-top: 1px solid #ccc; border-bottom: 1px solid #ccc; padding: 10px 0; margin-bottom: 20px; text-align: center; background: #fafafa;}
+    
+    .exam-questions-list { font-size: 16px; line-height: 1.8; color: #000; }
+    .exam-question-item { margin-bottom: 20px; display: flex; gap: 12px; page-break-inside: avoid; break-inside: avoid; }
+    .exam-question-num { font-weight: 700; white-space: nowrap; font-size: 18px; }
+    .exam-question-text { flex: 1; white-space: pre-wrap; word-break: keep-all; }
+
+    @media print {
+      @page { size: A4; margin: 15mm; }
+      body, html { height: auto !important; overflow: visible !important; background: #fff !important; }
+      body > *:not(#examPaperModal) { display: none !important; }
+      #examPaperModal { display: block !important; position: static !important; background: none !important; padding: 0 !important; overflow: visible !important; }
+      .exam-paper-container { box-shadow: none !important; max-width: 100% !important; padding: 0 !important; min-height: auto !important; overflow: visible !important; margin: 0 !important; }
+      .exam-paper-close, .print-btn { display: none !important; }
+    }
+
+    /* Utilities */
+    .highlight { background: #fef08a; padding: 0 4px; border-radius: 4px; color: #9a3412; font-weight: 600; }
+    #imageZoomModal { display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.9); z-index: 10000; align-items: center; justify-content: center; cursor: zoom-out; backdrop-filter: blur(8px); }
+    #imageZoomModal img { max-width: 90%; max-height: 90%; border-radius: 8px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); }
+    .toast { position: fixed; bottom: 30px; left: 50%; transform: translate(-50%, 20px); background: #1e293b; color: #fff; padding: 14px 28px; border-radius: 30px; opacity: 0; transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1); pointer-events: none; z-index: 11000; font-size: 15px; font-weight: 500; box-shadow: var(--shadow-md); }
+    .toast.show { opacity: 1; transform: translate(-50%, 0); }
+  </style>
+</head>
+<body>
+
+<header class="app-header">
+  <h1>🏛️ Topic Bank</h1>
+  <div style="display: flex; gap: 10px;">
+    <button class="btn" id="btn-view-exam" style="background: #1e293b;">📄 시험지 출력</button>
+    <button class="btn outline" id="btn-delete-selected" style="color: #64748b;">🗑️ 선택 삭제</button>
+    <div style="width: 1px; background: var(--border-light); margin: 0 6px;"></div>
+    <button class="btn outline" id="btn-open">📂 엑셀 열기</button>
+    <button class="btn outline" id="btn-export">💾 엑셀 백업</button>
+    <div style="width: 1px; background: var(--border-light); margin: 0 6px;"></div>
+    <button class="btn outline" id="btn-json-import">📂 JSON 복원</button>
+    <button class="btn outline" id="btn-json-export">💾 JSON 백업</button>
+    
+    <input type="file" id="fileInput" accept=".xlsx" style="display:none">
+    <input type="file" id="jsonFileInput" accept=".json" style="display:none">
+  </div>
+</header>
+
+<div class="app-layout">
+  <main class="main-area">
+    <div class="filter-section">
+      <div class="filter-controls">
+        <input type="search" id="searchInput" placeholder="문제 내 핵심 키워드 검색..." style="flex:1; max-width: 400px;"/>
+        <select id="filterRound" style="width:120px"><option value="">회차 전체</option></select>
+        <select id="filterCategory" style="width:140px"><option value="">종목 전체</option></select>
+        <select id="filterType" style="width:120px"><option value="">유형 전체</option></select>
+        <button class="btn" id="btn-search">조회</button>
+        <button class="btn ghost" id="btn-reset">조건 초기화</button>
+      </div>
+      <div id="sheetFilter" class="chip-group"></div>
+    </div>
+
+    <div class="table-wrapper">
+      <div class="table-container">
+        <table id="resultTable">
+          <colgroup><col width="45"/><col width="90"/><col width="90"/><col width="130"/><col width="100"/><col width="*"/></colgroup>
+          <thead>
+            <tr>
+              <th style="text-align:center;"><input type="checkbox" id="chkAll" style="width:16px; height:16px; cursor:pointer;" title="현재 목록 전체 선택"></th>
+              <th data-sort="sheet">시트분류 ↕</th>
+              <th data-sort="round">회차 ↕</th>
+              <th data-sort="category">종목 ↕</th>
+              <th data-sort="type">유형 ↕</th>
+              <th data-sort="problem">문제 내용 ↕</th>
+            </tr>
+          </thead>
+          <tbody id="dataBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="pagination">
+      <span style="font-size: 14px; color: var(--text-muted); font-weight: 500;">
+        검색 결과: <strong id="resultCount" style="color: var(--text-main); font-size: 16px;">0건</strong>
+        <span style="margin: 0 8px; color: #cbd5e1;">|</span>
+        선택됨: <strong id="selectedCount" style="color: var(--brand); font-size: 16px;">0건</strong>
+      </span>
+      <div style="display: flex; gap: 10px; align-items: center;">
+        <button class="btn outline" id="prevPage">이전</button>
+        <span id="pageInfo" style="font-size: 14px; font-weight: 600; width: 40px; text-align: center;">1 / 1</span>
+        <button class="btn outline" id="nextPage">다음</button>
+      </div>
+      <select id="pageSizeSel" style="width:120px;"><option value="20">20개씩 보기</option><option value="50" selected>50개씩 보기</option><option value="100">100개씩 보기</option></select>
+    </div>
+  </main>
+
+  <aside class="sidebar">
+    <div class="tabs">
+      <div class="tab active" data-target="tab-edit">✏️ 문항 편집</div>
+      <div class="tab" data-target="tab-analyze">📈 출제 분석</div>
+      <div class="tab" data-target="tab-search">🔍 레퍼런스</div>
+    </div>
+
+    <div id="tab-edit" class="tab-content active">
+      <div class="form-card">
+        <h3 class="section-title">토픽 정보</h3>
+        <div class="form-grid">
+          <div class="form-row"><label>시트분류</label><input type="text" id="fSheet" placeholder="예: 기출"></div>
+          <div class="form-row"><label>출제회차</label><input type="text" id="fRound" placeholder="예: 138"></div>
+          <div class="form-row"><label>출제종목</label><input type="text" id="fCategory" placeholder="예: 정보관리"></div>
+          <div class="form-row"><label>문제유형</label><input type="text" id="fType" placeholder="예: 1교시"></div>
+        </div>
+      </div>
+
+      <div class="form-card" style="flex: 1; display: flex; flex-direction: column;">
+        <div class="form-row" style="flex: 1; display: flex; flex-direction: column;">
+          <label>문제 내용 본문</label>
+          <textarea id="fProblem" placeholder="문제를 입력하거나 붙여넣으세요..." style="flex: 1;"></textarea>
+        </div>
+      </div>
+      
+      <div class="form-card">
+        <div class="form-row">
+          <label>참고 이미지 첨부 <span style="font-weight:normal; font-size:12px; color:var(--text-muted);">(Ctrl+V 클립보드 붙여넣기 지원)</span></label>
+          <div class="form-grid">
+            <div class="img-upload-box">
+              <input type="file" id="fImg1" accept="image/*" style="font-size:11px; width:100%; border:none; padding:4px; background: transparent; cursor: pointer;"/>
+              <div class="img-preview" id="previewContainer1" style="display:none"><img id="prev1" alt="img1"></div>
+              <label style="margin-top:8px; font-weight:normal; font-size:12px; display:inline-flex; align-items:center; gap:4px; justify-content:center; cursor:pointer;"><input type="checkbox" id="rmImg1"> 첨부 삭제</label>
+            </div>
+            <div class="img-upload-box">
+              <input type="file" id="fImg2" accept="image/*" style="font-size:11px; width:100%; border:none; padding:4px; background: transparent; cursor: pointer;"/>
+              <div class="img-preview" id="previewContainer2" style="display:none"><img id="prev2" alt="img2"></div>
+              <label style="margin-top:8px; font-weight:normal; font-size:12px; display:inline-flex; align-items:center; gap:4px; justify-content:center; cursor:pointer;"><input type="checkbox" id="rmImg2"> 첨부 삭제</label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:12px; margin-top: auto;">
+        <button class="btn outline" id="btn-cancel" style="flex:1; padding: 12px;">입력 초기화</button>
+        <button class="btn" id="btn-save" style="flex:2; padding: 12px; font-size: 15px;">저장하기 (Ctrl+S)</button>
+      </div>
+    </div>
+
+    <div id="tab-analyze" class="tab-content">
+      <div class="form-card">
+        <div style="display:flex; gap:10px;">
+          <input type="text" id="analyzeInput" placeholder="분석할 키워드 (예: 인공지능)" style="flex:1; padding: 12px;">
+          <button class="btn" id="btn-analyze">분석 실행</button>
+        </div>
+      </div>
+
+      <div id="analyzeResult" style="display:none; flex-direction:column; gap:20px;">
+        <div class="stat-box">
+          <div style="font-size:13px; font-weight: 600; color:var(--brand); margin-bottom:8px;">현재 필터 내 누적 출제 횟수</div>
+          <div id="analyzeTotal" style="font-size:32px; font-weight:700; color:var(--text-main); cursor:pointer;" onclick="navigateAnalysis('total', '')" title="클릭 시 목록으로 이동">0건</div>
+        </div>
+        <div class="form-grid">
+          <div class="form-card" style="padding: 20px;">
+            <div style="font-size:14px; font-weight:700; margin-bottom:14px; color:var(--text-main);">다빈도 출제 종목</div>
+            <div id="analyzeTopCat" style="display:flex; flex-direction:column; gap:8px;"></div>
+          </div>
+          <div class="form-card" style="padding: 20px;">
+            <div style="font-size:14px; font-weight:700; margin-bottom:14px; color:var(--text-main);">다빈도 출제 유형</div>
+            <div id="analyzeTopType" style="display:flex; flex-direction:column; gap:8px;"></div>
+          </div>
+        </div>
+        <div class="form-card">
+          <h3 class="section-title">핵심 연관어 (동시 출현)</h3>
+          <p style="font-size:13px; color:var(--text-muted); margin: 0 0 16px 0;">지문에 함께 포함된 주요 단어들입니다.</p>
+          <div id="analyzeWordCloud" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-search" class="tab-content">
+      <div class="form-card" style="text-align: center;">
+        <button id="btn-scan-dir" class="btn outline" style="width:100%; margin-bottom: 16px; padding: 12px;">📂 로컬 PDF 폴더 스캔 연결</button>
+        <div style="display:flex; justify-content:space-between; font-size:14px; margin-bottom: 8px;">
+          <span style="color:var(--text-muted); font-weight: 500;">연동 상태</span>
+          <span id="pdfStatus" style="color:var(--text-muted); font-weight: 600;">스캔 필요</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; font-size:14px;">
+          <span style="color:var(--text-muted); font-weight: 500;">인덱싱 파일</span>
+          <strong id="pdfCount" style="color:var(--brand); font-size: 16px;">0 files</strong>
+        </div>
+      </div>
+      
+      <input type="search" id="pdfQuery" placeholder="PDF 파일명 실시간 검색..." style="padding: 14px; font-size: 15px; border-radius: var(--radius-lg);">
+      
+      <div id="pdfResultList" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:12px;"></div>
+    </div>
+  </aside>
+</div>
+
+<div id="imageZoomModal"><img id="zoomImg" src="" alt="Zoomed Image"></div>
+
+<div id="examPaperModal">
+  <div class="exam-paper-container">
+    <button class="exam-paper-close" id="btnCloseExam" title="닫기">×</button>
+    <button class="btn print-btn" onclick="window.print()" style="position:absolute; top:30px; right:30px; box-shadow: var(--shadow-md);">🖨 인쇄하기</button>
+    
+    <div class="exam-header">
+      <div class="exam-main-title">국가기술자격 시험문제</div>
+      
+      <div class="exam-meta-line">
+        <span id="examGyosiText">교시: 전체</span>
+        <span>분야: 정보통신</span>
+        <span>종목: <span id="examJongmok">정보관리기술사</span></span>
+        <span id="examSubTitleText">제XXX회 (100분)</span>
+      </div>
+
+      <div class="exam-warning">▶ 수험자 응시 종목 일치 여부, 문제지 인쇄 상태를 반드시 확인하시오.</div>
+      <div class="exam-instruction">※ 아래 나열된 총 <span id="examCountInfo" style="color:#dc2626; font-size: 16px;">0</span>문제를 설명하시오.</div>
+    </div>
+    
+    <div class="exam-questions-list" id="examQuestionsBody"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast">알림</div>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const toast = msg => { const t=$('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 1000); };
+  const escapeHtml = str => String(str).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m]));
+
+  const DB_BANK = 'TopicBankDB'; let dbBank = null;
+  // 상태 관리에 selectedIds(체크된 문제들) 유지
+  const state = { page:1, pageSize:50, filtered:[], items:[], editing:null, sortKey:null, sortOrder:'asc', selectedIds: new Set() };
+  let isInitialLoad = true;
+  const SHEET_ORDER = ["기출", "주모", "모의(빅업)", "합숙(빅업)", "모의(ITPE)", "합숙(ITPE)", "모의(KPC)", "합숙(KPC)", "기출(통신)", "모의(KPC통신)"];
+  const getSheetIdx = s => SHEET_ORDER.indexOf(s) === -1 ? 999 : SHEET_ORDER.indexOf(s);
+  const naturalSort = (a, b) => String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
+
+  // ====== 1. DB ======
+  function openBankDB(){
+    return new Promise((resolve,reject)=>{
+      const rq=indexedDB.open(DB_BANK, 1);
+      rq.onupgradeneeded=e=>{
+        const d=e.target.result;
+        if(!d.objectStoreNames.contains('items')) d.createObjectStore('items',{keyPath:'id'});
+        if(!d.objectStoreNames.contains('images')) d.createObjectStore('images',{keyPath:'id'});
+      };
+      rq.onsuccess=()=>{ dbBank=rq.result; resolve(); }; rq.onerror=()=>reject(rq.error);
+    });
+  }
+
+  const tx = (s,m='readonly') => dbBank.transaction(s,m).objectStore(s);
+  const getAllItems = () => new Promise(r=>{ tx('items').getAll().onsuccess=e=>r(e.target.result||[]) });
+  const putItem = i => new Promise(r=>{ tx('items','readwrite').put(i).onsuccess=()=>r(true) });
+
+  const putImg = blob => {
+    if(!blob) return Promise.resolve('');
+    const id='IMG_'+Math.random().toString(36).slice(2);
+    return new Promise(r=>{ tx('images','readwrite').add({id,blob}).onsuccess=()=>r(id) });
+  };
+  const getImgUrl = id => {
+    if(!id) return Promise.resolve('');
+    return new Promise(r=>{
+      tx('images').get(id).onsuccess=e=>{ const rec=e.target.result; r(rec?URL.createObjectURL(rec.blob):''); }
+    });
+  };
+
+  // ====== 2. 데이터 & 렌더링 ======
+  async function refreshData(resetPage = true){
+    const all = await getAllItems(); state.items = all; 
+    const sheets = [...new Set(all.map(x=>x.sheet).filter(Boolean))].sort((a,b) => {
+      const diff = getSheetIdx(a) - getSheetIdx(b); return diff !== 0 ? diff : naturalSort(a, b);
+    });
+    
+    let checked = isInitialLoad ? new Set(['기출']) : new Set(Array.from($('sheetFilter').querySelectorAll('input:checked')).map(i=>i.value));
+    isInitialLoad = false;
+    
+    $('sheetFilter').innerHTML = sheets.map(s=>`<label class="chip-label"><input type="checkbox" value="${s}" ${checked.has(s)?'checked':''} style="display:none"><span>#${s}</span></label>`).join('');
+    $('sheetFilter').querySelectorAll('input').forEach(chk => { chk.onchange = () => { updateDropdowns(); applyFilter(); }; });
+    updateDropdowns(); applyFilter(resetPage);
+  }
+
+  function updateDropdowns(){
+    const checked = Array.from($('sheetFilter').querySelectorAll('input:checked')).map(i=>i.value);
+    const relevant = checked.length ? state.items.filter(i => checked.includes(i.sheet)) : state.items;
+    const updateSel = (id, key, desc) => {
+      const el = $(id), cv = el.value;
+      const opts = [...new Set(relevant.map(x => String(x[key]||'').trim()).filter(Boolean))].sort(naturalSort);
+      if(desc) opts.reverse();
+      el.innerHTML = '<option value="">전체</option>' + opts.map(v=>`<option value="${v}">${v}</option>`).join('');
+      el.value = opts.includes(cv) ? cv : "";
+    };
+    updateSel('filterRound', 'round', true); updateSel('filterCategory', 'category', false); updateSel('filterType', 'type', false);
+  }
+
+  function applyFilter(resetPage = true){
+    const kw = $('searchInput').value.trim().toLowerCase();
+    const r = $('filterRound').value, c = $('filterCategory').value, t = $('filterType').value;
+    const sheets = Array.from($('sheetFilter').querySelectorAll('input:checked')).map(i=>i.value);
+    
+    state.filtered = state.items.filter(item => {
+      if(sheets.length && !sheets.includes(item.sheet)) return false;
+      if(r && String(item.round)!==r) return false;
+      if(c && String(item.category)!==c) return false;
+      if(t && String(item.type)!==t) return false;
+      if(kw && !String(item.problem||'').toLowerCase().includes(kw)) return false;
+      return true;
+    });
+    doSort(); if(resetPage) state.page = 1; renderTable();
+    if ($('tab-analyze').classList.contains('active') && $('analyzeInput').value.trim() !== '') runAnalysis();
+  }
+
+  function doSort(){
+    state.filtered.sort((a,b) => {
+      // 열 클릭 정렬인 경우 해당 필드로 자연 정렬
+      if(state.sortKey) return (state.sortOrder==='asc'?1:-1) * naturalSort(a[state.sortKey]||'', b[state.sortKey]||'');
+      // 기본 정렬 (시트 -> 회차 -> 종목 -> 유형 -> 문제내용 자연 정렬 추가)
+      const s = getSheetIdx(a.sheet) - getSheetIdx(b.sheet); if(s!==0) return s;
+      return naturalSort(b.round||'', a.round||'') || 
+             naturalSort(a.category||'', b.category||'') || 
+             naturalSort(a.type||'', b.type||'') || 
+             naturalSort(a.problem||'', b.problem||'');
+    });
+  }
+
+  // 전체 선택 체크박스 업데이트
+  function updateChkAll(){
+    const chkAll = $('chkAll');
+    if(!chkAll) return;
+    if(state.filtered.length === 0) chkAll.checked = false;
+    else chkAll.checked = state.filtered.every(item => state.selectedIds.has(item.id));
+  }
+
+  // 선택된 카운트 UI 업데이트
+  function updateSelectedCount() {
+    const el = $('selectedCount');
+    if(el) el.textContent = state.selectedIds.size + '건';
+  }
+
+  // 개별 체크박스 토글 함수
+  window.toggleSelect = (id, checked) => {
+    if(checked) state.selectedIds.add(id);
+    else state.selectedIds.delete(id);
+    
+    const tr = document.querySelector(`tr[data-id="${id}"]`);
+    if(tr) {
+        if(checked) tr.classList.add('selected-row');
+        else tr.classList.remove('selected-row');
+    }
+    updateChkAll();
+    updateSelectedCount();
+  };
+
+  function renderTable(){
+    const maxPage = Math.ceil(state.filtered.length/state.pageSize) || 1;
+    state.page = Math.min(state.page, maxPage);
+    const list = state.filtered.slice((state.page-1)*state.pageSize, state.page*state.pageSize);
+    
+    $('resultCount').textContent = state.filtered.length + '건';
+    $('pageInfo').textContent = `${state.page} / ${maxPage}`;
+    
+    const kw = $('searchInput').value.trim();
+    const hl = txt => {
+      let s = escapeHtml(txt);
+      if(kw) kw.split(/\s+/).filter(Boolean).forEach(k => s = s.replace(new RegExp(k.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'), 'gi'), m=>`<mark class="highlight">${m}</mark>`));
+      return s.replace(/\n/g, '<br>');
+    };
+
+    $('dataBody').innerHTML = list.length ? list.map(item => {
+      const isSelected = state.selectedIds.has(item.id);
+      return `
+      <tr data-id="${item.id}" onclick="loadItem('${item.id}')" class="${isSelected ? 'selected-row' : ''}">
+        <td onclick="event.stopPropagation();" style="text-align:center;">
+          <input type="checkbox" style="width:16px; height:16px; cursor:pointer;" onchange="toggleSelect('${item.id}', this.checked)" ${isSelected ? 'checked' : ''}>
+        </td>
+        <td>${escapeHtml(item.sheet)}</td><td>${escapeHtml(item.round)}</td>
+        <td>${escapeHtml(item.category)}</td><td>${escapeHtml(item.type)}</td>
+        <td class="problem">${hl(item.problem)}</td>
+      </tr>`
+    }).join('') : `<tr><td colspan="6" style="padding:80px; text-align:center; color:#9ca3af; font-size:15px;">해당 조건의 문제가 없습니다.</td></tr>`;
+
+    updateChkAll();
+    updateSelectedCount();
+  }
+
+  // ====== 3. 폼 & 탭 이동 자동화 ======
+  window.loadItem = async (id) => {
+    const item = state.items.find(x=>x.id===id); if(!item) return; state.editing = item;
+    
+    $('fSheet').value = item.sheet || '';
+    $('fRound').value = item.round || '';
+    $('fCategory').value = item.category || '';
+    $('fType').value = item.type || '';
+    $('fProblem').value = (item.problem||'').replace(/<br\s*\/?>/gi, '\n');
+    
+    const url1 = await getImgUrl(item.img1Id); $('prev1').src = url1; $('previewContainer1').style.display = url1 ? 'flex' : 'none';
+    const url2 = await getImgUrl(item.img2Id); $('prev2').src = url2; $('previewContainer2').style.display = url2 ? 'flex' : 'none';
+    $('rmImg1').checked = false; $('rmImg2').checked = false; $('fImg1').value = ''; $('fImg2').value = '';
+
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.target === 'tab-edit'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-edit'));
+  };
+
+  $('btn-cancel').onclick = () => { 
+    state.editing=null; ['fSheet','fRound','fCategory','fType','fProblem','fImg1','fImg2'].forEach(id=>$(id).value='');
+    $('previewContainer1').style.display = 'none'; $('previewContainer2').style.display = 'none';
+    $('rmImg1').checked = false; $('rmImg2').checked = false;
+  };
+
+  $('btn-save').onclick = async () => {
+    const sheet = $('fSheet').value.trim(), problem = $('fProblem').value.trim();
+    if(!sheet || !problem) return toast('⚠️ 시트분류와 문제는 필수 항목입니다.');
+    
+    let i1 = state.editing?.img1Id, i2 = state.editing?.img2Id;
+    if($('rmImg1').checked) i1 = ''; if($('rmImg2').checked) i2 = '';
+    const f1 = $('fImg1').files[0], f2 = $('fImg2').files[0];
+    if(f1) i1 = await putImg(f1); if(f2) i2 = await putImg(f2);
+    
+    await putItem({ 
+      id: state.editing?.id || 'I'+Math.random().toString(36).slice(2), 
+      sheet, round:$('fRound').value, category:$('fCategory').value, type:$('fType').value, problem,
+      img1Id:i1, img2Id:i2, ts: new Date().toISOString() 
+    });
+    toast('✅ 성공적으로 저장되었습니다.'); await refreshData(false);
+  };
+  window.onkeydown = e => { if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); $('btn-save').click(); } };
+
+  // 이미지 줌/클립보드
+  const zoomModal = $('imageZoomModal'), zoomImg = $('zoomImg');
+  const openZoom = (src) => { if(!src) return; zoomImg.src = src; zoomModal.style.display = 'flex'; };
+  zoomModal.onclick = () => { zoomModal.style.display = 'none'; zoomImg.src = ''; };
+  $('previewContainer1').onclick = () => openZoom($('prev1').src);
+  $('previewContainer2').onclick = () => openZoom($('prev2').src);
+
+  const updatePreview = (input, imgId, containerId, rmId) => {
+    if(input.files && input.files[0]) { $(imgId).src = URL.createObjectURL(input.files[0]); $(containerId).style.display = 'flex'; $(rmId).checked = false; }
+  };
+  $('fImg1').onchange = e => updatePreview(e.target, 'prev1', 'previewContainer1', 'rmImg1');
+  $('fImg2').onchange = e => updatePreview(e.target, 'prev2', 'previewContainer2', 'rmImg2');
+
+  document.addEventListener('paste', async (e) => {
+    const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+    let blob = null;
+    for(let i=0; i<items.length; i++) { if(items[i].type.indexOf('image') !== -1) { blob = items[i].getAsFile(); break; } }
+    if(blob) {
+      e.preventDefault(); 
+      const convertToPng = (srcBlob) => new Promise(resolve => {
+        const img = new Image(); img.onload = () => { const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; c.getContext('2d').drawImage(img,0,0); c.toBlob(b => resolve(b), 'image/png'); }; img.src = URL.createObjectURL(srcBlob);
+      });
+      try {
+        const pngBlob = await convertToPng(blob); const file = new File([pngBlob], `clipboard_${Date.now()}.png`, { type: 'image/png' });
+        const inp1 = $('fImg1'), inp2 = $('fImg2');
+        let targetInput = null, previewId = null, rmId = null;
+        if(!inp1.files.length && !(state.editing?.img1Id && !$('rmImg1').checked)) { targetInput = inp1; previewId = 'prev1'; rmId = 'rmImg1'; }
+        else if(!inp2.files.length && !(state.editing?.img2Id && !$('rmImg2').checked)) { targetInput = inp2; previewId = 'prev2'; rmId = 'rmImg2'; }
+
+        if(targetInput) {
+          const dt = new DataTransfer(); dt.items.add(file); targetInput.files = dt.files;
+          $(rmId).checked = false; $(previewId).src = URL.createObjectURL(file); $(previewId).parentNode.style.display = 'flex'; toast('📋 클립보드 이미지 첨부됨');
+        } else { toast('⚠️ 이미지 첨부 슬롯 부족'); }
+      } catch(err) { toast('❌ 이미지 처리 오류'); }
+    }
+  });
+
+  // ====== 4. 삭제, 엑셀, JSON 백업/복원 ======
+
+  // 선택된 항목 삭제
+  $('btn-delete-selected').onclick = async () => {
+    if(state.selectedIds.size === 0) return toast('⚠️ 삭제할 문제를 체크해주세요.');
+    if(!confirm(`선택한 ${state.selectedIds.size}개의 문제를 삭제하시겠습니까?`)) return;
+
+    const transaction = dbBank.transaction(['items'], 'readwrite');
+    const store = transaction.objectStore('items');
+    
+    state.selectedIds.forEach(id => store.delete(id));
+
+    transaction.oncomplete = async () => {
+      toast('✅ 성공적으로 삭제되었습니다.');
+      state.selectedIds.clear();
+      await refreshData();
+    };
+    transaction.onerror = () => toast('❌ 삭제 처리 중 오류가 발생했습니다.');
+  };
+
+  // JSON 백업 (현재 필터링 된 내역 내보내기)
+  $('btn-json-export').onclick = () => {
+    if(state.filtered.length === 0) return toast('⚠️ 백업할 데이터가 없습니다.');
+    
+    // 전체 항목 대신 현재 필터링된 데이터(state.filtered)를 백업합니다.
+    const data = JSON.stringify(state.filtered, null, 2);
+    const blob = new Blob([data], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `TopicBank_JSON_Backup_${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+  };
+
+  // JSON 복원 (가져오기 & 병합 처리)
+  $('btn-json-import').onclick = () => $('jsonFileInput').click();
+  $('jsonFileInput').onchange = async e => {
+    const file = e.target.files[0];
+    if(!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const importedData = JSON.parse(event.target.result);
+        if(!Array.isArray(importedData)) throw new Error("올바른 JSON 백업 파일이 아닙니다.");
+
+        let added = 0;
+        let updated = 0;
+        const transaction = dbBank.transaction(['items'], 'readwrite');
+        const store = transaction.objectStore('items');
+        
+        // 기존 데이터를 캐싱하여 비교 ("동일 카테고리 내 동일 내용" 기준)
+        const existingItems = state.items;
+
+        importedData.forEach(importItem => {
+          // 카테고리와 본문 내용이 완전히 일치하는 항목 찾기
+          const match = existingItems.find(ex => ex.category === importItem.category && ex.problem === importItem.problem);
+
+          if (match) {
+            // 동일 항목이 있으면 기존 ID 유지한 채로 내용 덮어쓰기
+            const updatedItem = { ...importItem, id: match.id, ts: new Date().toISOString() };
+            store.put(updatedItem);
+            updated++;
+          } else {
+            // 동일 항목이 없으면 신규 ID 발급 후 추가
+            if (!importItem.id) importItem.id = 'IMP_J_' + Math.random().toString(36).slice(2);
+            importItem.ts = new Date().toISOString();
+            store.put(importItem);
+            added++;
+          }
+        });
+
+        transaction.oncomplete = () => {
+          toast(`✅ 복원 완료 (추가: ${added}건, 덮어쓰기: ${updated}건)`);
+          $('jsonFileInput').value = '';
+          refreshData();
+        };
+        transaction.onerror = () => {
+          toast('❌ 데이터 복원 중 오류가 발생했습니다.');
+          $('jsonFileInput').value = '';
+        }
+      } catch (err) {
+        alert('JSON 파일 파싱 실패: ' + err.message);
+        $('jsonFileInput').value = '';
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  // 엑셀 내보내기
+  $('btn-export').onclick = async () => {
+    const wb = new ExcelJS.Workbook();
+    const grouped = state.filtered.reduce((acc, cur) => { const sName = cur.sheet || '기타'; if(!acc[sName]) acc[sName] = []; acc[sName].push(cur); return acc; }, {});
+    for (const [sheetName, items] of Object.entries(grouped)) {
+      const ws = wb.addWorksheet(sheetName);
+      ws.columns = [ { header: '회차', key: 'round', width: 10 }, { header: '종목', key: 'category', width: 15 }, { header: '유형', key: 'type', width: 10 }, { header: '문제', key: 'problem', width: 80 } ];
+      items.forEach(it => ws.addRow({ round: it.round, category: it.category, type: it.type, problem: it.problem }));
+      ws.eachRow((row) => { row.eachCell({ includeEmpty: true }, (cell) => { cell.alignment = { vertical: 'top', wrapText: true }; }); });
+    }
+    const buf = await wb.xlsx.writeBuffer(); const blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `기출문제_백업_${new Date().toISOString().slice(0,10)}.xlsx`; a.click();
+  };
+
+  // 엑셀 가져오기
+  $('btn-open').onclick = () => $('fileInput').click();
+  $('fileInput').onchange = async e => {
+    const f = e.target.files[0]; if(!f) return; const wb = new ExcelJS.Workbook();
+    try {
+      await wb.xlsx.load(await f.arrayBuffer()); 
+      let added = 0; let skipped = 0; 
+      const transaction = dbBank.transaction(['items'], 'readwrite'); 
+      const store = transaction.objectStore('items');
+      const existingItems = [...state.items]; // 중복 판별을 위한 캐시 복사본
+
+      // 서식이 포함된 셀 데이터를 안전하게 텍스트로 변환하는 헬퍼 함수
+      const getCellValue = (val) => {
+        if (val === null || val === undefined) return '';
+        if (typeof val === 'object') {
+          if (val.richText) return val.richText.map(rt => rt.text).join(''); // 리치 텍스트 처리
+          if (val.text) return val.text; // 하이퍼링크 등
+          if (val.result !== undefined) return val.result; // 수식 결과
+        }
+        return String(val);
+      };
+
+      wb.worksheets.forEach(ws => {
+        ws.eachRow((row, rn) => {
+          if (rn === 1) return; // 헤더 스킵
+          const vals = row.values; 
+          // vals[4]가 존재하는지 체크 (문제가 있는 열)
+          if (vals && getCellValue(vals[4])) {
+            const sheet = ws.name;
+            // String() 대신 getCellValue()를 사용하여 안전하게 추출
+            const round = getCellValue(vals[1]).trim();
+            const category = getCellValue(vals[2]).trim();
+            const type = getCellValue(vals[3]).trim();
+            const problem = getCellValue(vals[4]).trim();
+
+            // 기존 DB 데이터 또는 현재 추가 중인 데이터와 완벽히 동일한지 검사
+            const isDuplicate = existingItems.some(ex => 
+                ex.sheet === sheet && 
+                ex.round === round && 
+                ex.category === category && 
+                ex.type === type && 
+                ex.problem === problem
+            );
+
+            if (isDuplicate) {
+              skipped++; // 이미 동일한 데이터가 존재하면 스킵
+            } else {
+              const newItem = { 
+                id: 'IMP_' + Math.random().toString(36).slice(2), 
+                sheet, round, category, type, problem, 
+                ts: new Date().toISOString() 
+              };
+              store.put(newItem); 
+              added++;
+              existingItems.push(newItem); // 같은 엑셀 파일 내에 있는 중복 데이터도 막기 위해 임시 배열에 추가
+            }
+          }
+        });
+      });
+      transaction.oncomplete = () => { 
+        toast(`✅ 가져오기 완료 (신규 추가: ${added}건, 중복 제외: ${skipped}건)`); 
+        refreshData(); 
+      };
+    } catch(err){ alert('실패: ' + err.message); } 
+    $('fileInput').value='';
+  };
+
+  // ====== 5. 키워드 분석 ======
+  const STOP_WORDS = ['대하여', '설명하시오', '기술하시오', '특징', '개념', '장단점', '필요성', '구성요소', '문제', '설명하고', '정의', '비교', '관해', '관하여', '대해', '유형', '절차', '방안', '요소', '이유', '차이점', '비교하시오'];
+  window.runAnalysis = function() {
+    const kw = $('analyzeInput').value.trim().toLowerCase();
+    if(!kw) return toast('분석할 단어를 입력하세요.');
+    const matches = state.filtered.filter(item => String(item.problem).toLowerCase().includes(kw));
+    if(matches.length === 0) return toast('해당 단어가 포함된 문제가 없습니다.');
+
+    const catCnt = {}, typeCnt = {}; let allText = '';
+    matches.forEach(m => {
+      if(m.category) catCnt[m.category] = (catCnt[m.category] || 0) + 1;
+      if(m.type) typeCnt[m.type] = (typeCnt[m.type] || 0) + 1;
+      allText += ' ' + String(m.problem).replace(/<[^>]*>?/gm, ' '); 
+    });
+
+    const getTopHtml = (obj, targetType) => Object.entries(obj).sort((a,b)=>b[1]-a[1]).slice(0,3).map(x => `<div class="stat-row" onclick="navigateAnalysis('${targetType}', '${escapeHtml(x[0])}')"><span>${escapeHtml(x[0])}</span><strong>${x[1]}건</strong></div>`).join('') || '<div style="color:#9ca3af; font-size:13px;">데이터 없음</div>';
+
+    $('analyzeTotal').textContent = `${matches.length}건`;
+    $('analyzeTopCat').innerHTML = getTopHtml(catCnt, 'category');
+    $('analyzeTopType').innerHTML = getTopHtml(typeCnt, 'type');
+
+    const wordCnt = {};
+    allText.replace(/[^\w가-힣\s]/g, ' ').split(/\s+/).forEach(t => {
+      let clean = t.trim().replace(/(은|는|이|가|을|를|과|와|의|로|으로|에|에서|부터|까지|도|만)$/, ''); const lower = clean.toLowerCase();
+      if(clean.length > 1 && !lower.includes(kw) && kw !== lower && !STOP_WORDS.includes(lower)) wordCnt[clean] = (wordCnt[clean] || 0) + 1;
+    });
+
+    $('analyzeWordCloud').innerHTML = Object.entries(wordCnt).sort((a,b)=>b[1]-a[1]).slice(0,12).map(x => `<div class="word-tag" onclick="navigateAnalysis('keyword', '${escapeHtml(x[0])}')">${escapeHtml(x[0])} <span>${x[1]}</span></div>`).join('');
+    $('analyzeResult').style.display = 'flex';
+  };
+
+  window.navigateAnalysis = function(targetType, targetValue) {
+      if (targetType === 'category') $('filterCategory').value = targetValue;
+      else if (targetType === 'type') $('filterType').value = targetValue;
+      else if (targetType === 'keyword' && !$('searchInput').value.includes(targetValue)) $('searchInput').value += ' ' + targetValue;
+      applyFilter(); toast('필터가 적용되었습니다.');
+  };
+  $('btn-analyze').onclick = runAnalysis; $('analyzeInput').onkeypress = e => { if(e.key === 'Enter') runAnalysis(); };
+
+  // ====== 6. PDF 인덱싱 ======
+  const DB_SEARCH = 'ITPESearchDB'; let dbSearch = null; let pdfFiles = [];
+  async function openSearchDB(){
+    const r = indexedDB.open(DB_SEARCH, 1);
+    r.onupgradeneeded = e => { if(!e.target.result.objectStoreNames.contains('files')) e.target.result.createObjectStore('files',{keyPath:'path'}); };
+    r.onsuccess=e=>{ dbSearch=e.target.result; loadPdfFiles(); };
+  }
+  async function loadPdfFiles(){
+    dbSearch.transaction('files').objectStore('files').getAll().onsuccess = e => {
+      pdfFiles = e.target.result || []; $('pdfCount').textContent = pdfFiles.length + ' files';
+      if(pdfFiles.length) { $('pdfStatus').textContent = '✅ 연동 완료'; $('pdfStatus').style.color = 'var(--brand)'; }
+    };
+  }
+  $('btn-scan-dir').onclick = async () => {
+    try {
+      const dir = await window.showDirectoryPicker(); const list = [];
+      async function walk(h, p){
+        for await (const e of h.values()){
+          const cp = p ? p+'\\'+e.name : e.name;
+          if(e.kind==='file' && e.name.toLowerCase().endsWith('.pdf')) list.push({name:e.name, path:cp, handle:e}); else if(e.kind==='directory') await walk(e, cp);
+        }
+      }
+      await walk(dir, '');
+      const s = dbSearch.transaction('files','readwrite').objectStore('files'); await new Promise(r=>s.clear().onsuccess=r); list.forEach(f=>s.put(f));
+      pdfFiles = list; toast('PDF 폴더 스캔 완료'); loadPdfFiles();
+    } catch(e){ console.error(e); }
+  };
+  $('pdfQuery').oninput = e => {
+    const kw = e.target.value.toLowerCase(); const list = $('pdfResultList'); list.innerHTML = ''; if(!kw) return;
+    pdfFiles.filter(f=>f.name.toLowerCase().includes(kw)).forEach(f=>{
+      const d = document.createElement('div'); d.className = 'pdf-item';
+      d.innerHTML = `<div style="font-size:14px; font-weight:600; margin-bottom:6px; color:var(--text-main);">${f.name}</div><div style="font-size:12px; color:var(--text-muted); word-break:break-all;">${f.path}</div>`;
+      d.onclick = async () => {
+        try {
+            if ((await f.handle.queryPermission({ mode: 'read' })) !== 'granted') {
+                if ((await f.handle.requestPermission({ mode: 'read' })) !== 'granted') return toast('권한 거부됨');
+            }
+            const file = await f.handle.getFile(); window.open(URL.createObjectURL(new Blob([file], { type: 'application/pdf' })));
+        } catch(err) { toast('PDF 파일 열기 실패'); }
+      }; list.appendChild(d);
+    });
+  };
+
+  // ====== 7. 시험지 뷰어 (선택된 항목만 출력) ======
+  $('btn-view-exam').onclick = () => {
+    if(state.selectedIds.size === 0) return toast('⚠️ 시험지에 추가할 문제를 먼저 체크해주세요.');
+
+    const r = $('filterRound').value || '통합';
+    const c = $('filterCategory').value || '통합';
+    const t = $('filterType').value || '통합';
+    
+    // 장바구니에 담긴(체크된) 문제만 필터링
+    const selectedItems = state.items.filter(item => state.selectedIds.has(item.id));
+    
+    // 정렬 (메인 리스트의 기본 정렬과 완벽히 동일하게 적용)
+    selectedItems.sort((a,b) => {
+      const s = getSheetIdx(a.sheet) - getSheetIdx(b.sheet); if(s!==0) return s;
+      return naturalSort(b.round||'', a.round||'') || 
+             naturalSort(a.category||'', b.category||'') || 
+             naturalSort(a.type||'', b.type||'') || 
+             naturalSort(a.problem||'', b.problem||'');
+    });
+
+    const count = selectedItems.length;
+
+    $('examGyosiText').textContent = t.includes('교시') ? t : (t === '통합' ? '교시: 통합' : `교시: ${t}`);
+    $('examSubTitleText').innerHTML = r === '통합' ? `통합회차 (100분)` : `제${r}회 (100분)`;
+    $('examJongmok').textContent = c;
+    $('examCountInfo').textContent = count;
+
+    // 문제 본문에 이미 번호가 포함되어 있으므로 추가 넘버링(idx + 1)을 제거
+    $('examQuestionsBody').innerHTML = selectedItems.map((item) => `
+      <div class="exam-question-item">
+        <div class="exam-question-text">${escapeHtml(item.problem).replace(/\n/g, '<br>')}</div>
+      </div>
+    `).join('');
+    
+    $('examPaperModal').style.display = 'flex';
+  };
+  $('btnCloseExam').onclick = () => $('examPaperModal').style.display = 'none';
+
+  // Events & Init
+  ['searchInput','filterRound','filterCategory','filterType'].forEach(id=>$(id).onchange=()=>applyFilter());
+  $('searchInput').onkeypress=e=>{if(e.key==='Enter')applyFilter()};
+  $('btn-search').onclick=()=>applyFilter();
+  $('btn-reset').onclick=()=>{ ['searchInput','filterRound','filterCategory','filterType'].forEach(id=>$(id).value=''); applyFilter(true); };
+  $('pageSizeSel').onchange=e=>{ state.pageSize=parseInt(e.target.value); applyFilter(true); };
+  $('prevPage').onclick=()=>{if(state.page>1){state.page--;renderTable();}};
+  $('nextPage').onclick=()=>{state.page++;renderTable();};
+  document.querySelectorAll('th[data-sort]').forEach(th => th.onclick = () => { 
+    state.sortOrder = state.sortKey === th.dataset.sort ? (state.sortOrder === 'asc' ? 'desc' : 'asc') : 'asc'; state.sortKey = th.dataset.sort; doSort(); renderTable(); 
+  });
+  
+  // 전체 선택 체크박스 이벤트 (현재 필터링된 목록 기준)
+  $('chkAll').onchange = e => {
+    const checked = e.target.checked;
+    state.filtered.forEach(item => {
+      if(checked) state.selectedIds.add(item.id);
+      else state.selectedIds.delete(item.id);
+    });
+    renderTable(); // UI 업데이트
+  };
+  
+  document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active'); $(t.dataset.target).classList.add('active');
+  });
+
+  (async ()=>{ await openBankDB(); await refreshData(); await openSearchDB(); })();
+})();
+</script>
+</body>
+</html>

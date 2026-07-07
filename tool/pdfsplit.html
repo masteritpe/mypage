@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF 분할 규칙</title>
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Pretendard', 'sans-serif'] },
+                    colors: { 
+                        brand: { 50: '#f0fdfa', 100: '#ccfbf1', 500: '#14b8a6', 600: '#0d9488', 900: '#134e4a' },
+                        excel: { focus: '#10b981', bg: '#ecfdf5' }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        body { font-family: 'Pretendard', sans-serif; background-color: #f8fafc; color: #1e293b; color-scheme: light; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; border: 2px solid transparent; background-clip: padding-box; }
+        ::-webkit-scrollbar-thumb:hover { background-color: #94a3b8; }
+
+        .toast-enter { animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .toast-leave { animation: fadeOut 0.3s ease-out forwards; }
+        @keyframes slideIn { from { transform: translateY(100%) scale(0.9); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
+        @keyframes fadeOut { from { transform: scale(0.95); opacity: 1; } to { transform: scale(0.9); opacity: 0; } }
+
+        .sheet-container {
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.03);
+            border-radius: 12px;
+            background: white;
+            border: 1px solid #e2e8f0;
+        }
+
+        table { border-collapse: separate; border-spacing: 0; }
+        
+        th {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(8px);
+            border-bottom: 1px solid #cbd5e1;
+            border-right: 1px solid #e2e8f0;
+            font-size: 13px;
+            font-weight: 700;
+            color: #475569;
+            letter-spacing: -0.01em;
+        }
+
+        td { border-bottom: 1px solid #f1f5f9; border-right: 1px solid #e2e8f0; }
+        tr:last-child td { border-bottom: none; }
+        
+        th.row-num-header { position: sticky; left: 0; z-index: 20; background: #f8fafc; border-right: 1px solid #cbd5e1; }
+        td.row-num { position: sticky; left: 0; z-index: 10; background: #f8fafc; border-right: 1px solid #cbd5e1; color: #94a3b8; text-align: center; font-size: 12px; font-weight: 600; transition: background 0.2s; }
+        tr:hover td.row-num { background: #e2e8f0; color: #475569; }
+
+        .spreadsheet-cell {
+            width: 100%;
+            min-height: 42px;
+            padding: 10px 14px;
+            outline: none;
+            font-size: 14px;
+            font-weight: 500;
+            color: #1e293b;
+            white-space: pre-wrap;
+            word-break: break-all;
+            cursor: text;
+            transition: background-color 0.1s;
+        }
+
+        .spreadsheet-cell:empty:before {
+            content: attr(placeholder);
+            color: #cbd5e1;
+            pointer-events: none;
+            font-weight: 400;
+        }
+        
+        .spreadsheet-cell:focus {
+            box-shadow: inset 0 0 0 2px #10b981;
+            background-color: #ecfdf5;
+            z-index: 5;
+            position: relative;
+        }
+    </style>
+</head>
+<body class="min-h-screen p-2 sm:p-4 flex flex-col items-center">
+
+    <div class="w-full max-w-6xl mb-3 flex items-center text-sm text-slate-600 bg-white px-4 py-3 rounded-lg border border-slate-200 shadow-sm">
+        <i data-lucide="info" class="w-4 h-4 text-slate-400 mr-2"></i>
+        <span>페이지 입력 예: <strong class="text-slate-800">1~2</strong> 또는 <strong class="text-slate-800">1-3</strong> 또는 <strong class="text-slate-800">4</strong></span>
+        <span class="mx-3 text-slate-300">|</span>
+        <span>엑셀로 추출하여 관리할 수 있습니다.</span>
+    </div>
+
+    <div class="w-full max-w-6xl h-[calc(100vh-6rem)] flex-1 flex flex-col overflow-hidden sheet-container">
+        
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 border-b border-slate-200 bg-white shrink-0 gap-4">
+            <div>
+                <h2 class="font-bold text-xl text-slate-800 flex items-center gap-2 tracking-tight">
+                    <div class="p-1.5 bg-brand-50 rounded-lg"><i data-lucide="scissors" class="w-5 h-5 text-brand-600"></i></div>
+                    PDF 분할 규칙
+                </h2>
+            </div>
+            
+            <div class="flex items-center gap-2">
+                <button id="btn-settings" class="px-3.5 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg font-semibold text-sm hover:bg-slate-50 hover:border-slate-300 transition-all flex items-center gap-1.5" title="템플릿 설정">
+                    <i data-lucide="settings" class="w-4 h-4 text-slate-400"></i> 환경설정
+                </button>
+                <button id="btn-add-row" class="px-3.5 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg font-semibold text-sm hover:bg-slate-50 hover:border-slate-300 transition-all flex items-center gap-1.5" title="단축키: Ctrl + L">
+                    <i data-lucide="plus" class="w-4 h-4 text-slate-400"></i> 행 추가
+                </button>
+                <button id="btn-clear-all" class="px-3.5 py-2 bg-white border border-red-200 text-red-600 rounded-lg font-semibold text-sm hover:bg-red-50 hover:border-red-300 transition-all flex items-center gap-1.5" title="모든 규칙 삭제">
+                    <i data-lucide="trash-2" class="w-4 h-4"></i> 일괄 삭제
+                </button>
+                <div class="h-5 w-px bg-slate-200 mx-1"></div>
+                <button id="btn-save-all" class="px-5 py-2 bg-slate-800 text-white rounded-lg font-semibold text-sm hover:bg-slate-700 transition-all flex items-center gap-1.5 shadow-sm active:scale-95" title="단축키: Ctrl + S">
+                    <i data-lucide="save" class="w-4 h-4 opacity-80"></i> 저장
+                </button>
+                <button id="btn-export-excel" class="px-4 py-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg font-semibold text-sm hover:bg-emerald-100 transition-all flex items-center gap-1.5 shadow-sm active:scale-95">
+                    <i data-lucide="file-spreadsheet" class="w-4 h-4 opacity-80"></i> 엑셀
+                </button>
+            </div>
+        </div>
+
+        <div class="flex-1 overflow-auto bg-slate-50/50 relative">
+            <table class="w-full text-left bg-white whitespace-nowrap">
+                <thead class="sticky top-0 z-20">
+                    <tr>
+                        <th class="py-3 px-2 w-12 text-center row-num-header">#</th>
+                        <th class="py-3 px-4 w-48 min-w-[150px]">페이지</th>
+                        <th class="py-3 px-4 w-full min-w-[300px]">분할명(PDF)</th>
+                        <th class="py-3 px-2 w-16 text-center border-r-0">삭제</th>
+                    </tr>
+                </thead>
+                <tbody id="grid-body">
+                </tbody>
+            </table>
+            
+            <div id="empty-state" class="hidden flex flex-col items-center justify-center p-16 text-slate-400">
+                <div class="p-4 bg-slate-100 rounded-full mb-4">
+                    <i data-lucide="file-minus-2" class="w-8 h-8 text-slate-300"></i>
+                </div>
+                <p class="text-sm font-semibold text-slate-500">설정된 분할 규칙이 없습니다</p>
+                <p class="text-xs mt-1">행을 추가하여 작성을 시작하세요.</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="settings-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100] hidden items-center justify-center opacity-0 transition-opacity duration-200">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden transform scale-95 transition-transform duration-200" id="settings-modal-content">
+            <div class="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <h3 class="font-bold text-slate-800 flex items-center gap-2">
+                    <i data-lucide="settings-2" class="w-4 h-4 text-slate-500"></i> 분할명 템플릿 설정
+                </h3>
+                <button id="btn-close-settings" class="text-slate-400 hover:text-slate-600 transition-colors">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="p-5 space-y-4">
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1.5">앞 단어 (Prefix)</label>
+                    <input type="text" id="input-prefix" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all" placeholder="예: [문서] ">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1.5">뒤 단어 (Postfix)</label>
+                    <input type="text" id="input-postfix" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all" placeholder="예: _최종본">
+                </div>
+                <p class="text-xs text-slate-500 leading-relaxed break-keep">행을 추가할 때 이곳에 설정된 단어가 <strong>분할명</strong> 앞뒤로 자동 입력됩니다. 비워두면 기존처럼 빈 칸으로 생성됩니다.</p>
+            </div>
+            <div class="px-5 py-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-2">
+                <button id="btn-cancel-settings" class="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">취소</button>
+                <button id="btn-save-settings" class="px-4 py-2 text-sm font-medium text-white bg-slate-800 rounded-lg hover:bg-slate-700 transition-colors shadow-sm">저장</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-container" class="fixed bottom-6 right-6 z-[1000] flex flex-col gap-3 pointer-events-none"></div>
+
+    <script>
+        lucide.createIcons();
+
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            let bgColor = type === 'error' ? 'bg-red-500' : (type === 'warning' ? 'bg-amber-500' : 'bg-slate-800');
+            let icon = type === 'error' ? 'alert-circle' : (type === 'warning' ? 'alert-triangle' : 'check-circle');
+            
+            toast.className = `${bgColor} text-white px-5 py-3.5 rounded-xl shadow-lg text-sm font-semibold flex items-center gap-2.5 toast-enter pointer-events-auto`;
+            toast.innerHTML = `<i data-lucide="${icon}" class="w-4 h-4"></i> ${message}`;
+            container.appendChild(toast);
+            lucide.createIcons();
+            
+            setTimeout(() => {
+                toast.classList.remove('toast-enter'); toast.classList.add('toast-leave');
+                setTimeout(() => toast.remove(), 300); 
+            }, 2000);
+        }
+
+        const DB_NAME = "PDFSplitRuleDB"; 
+        const DETAILS_STORE = "split_rules"; 
+        let db;
+
+        const initDB = () => new Promise((resolve, reject) => {
+            const request = indexedDB.open(DB_NAME, 1); 
+            request.onupgradeneeded = (e) => { 
+                if (!e.target.result.objectStoreNames.contains(DETAILS_STORE)) {
+                    e.target.result.createObjectStore(DETAILS_STORE, { keyPath: "id", autoIncrement: true }); 
+                }
+            };
+            request.onsuccess = (e) => { db = e.target.result; resolve(db); }; 
+            request.onerror = (e) => reject(e.target.error);
+        });
+
+        const getAllDetails = () => new Promise((resolve, reject) => {
+            const request = db.transaction(DETAILS_STORE, "readonly").objectStore(DETAILS_STORE).getAll();
+            request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+        });
+        const clearDB = () => new Promise((resolve, reject) => {
+            const request = db.transaction(DETAILS_STORE, "readwrite").objectStore(DETAILS_STORE).clear();
+            request.onsuccess = () => resolve(); request.onerror = () => reject(request.error);
+        });
+        const addMultipleToDB = (dataArray) => new Promise((resolve, reject) => {
+            const tx = db.transaction(DETAILS_STORE, "readwrite");
+            const store = tx.objectStore(DETAILS_STORE);
+            dataArray.forEach(data => store.add(data));
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+        });
+
+        const gridBody = document.getElementById('grid-body');
+        const emptyState = document.getElementById('empty-state');
+        const btnAddRow = document.getElementById('btn-add-row');
+        const btnClearAll = document.getElementById('btn-clear-all');
+        const btnSaveAll = document.getElementById('btn-save-all');
+        const btnExportExcel = document.getElementById('btn-export-excel');
+
+        function createRowHTML(data = null) {
+            const pageRange = data ? (data.pageRange || '') : '';
+            
+            let splitName = '';
+            if (data) {
+                // 기존 저장된 데이터가 있는 경우
+                splitName = data.splitName || '';
+            } else {
+                // 새로 행을 추가하는 경우 localStorage에서 설정값을 가져와 자동 완성
+                const prefix = localStorage.getItem('pdfSplitPrefix') || '';
+                const postfix = localStorage.getItem('pdfSplitPostfix') || '';
+                splitName = `${prefix}${postfix}`;
+            }
+
+            const tr = document.createElement('tr');
+            tr.className = "hover:bg-slate-50/50 transition-colors group";
+            tr.innerHTML = `
+                <td class="row-num select-none"></td>
+                <td class="p-0 align-top">
+                    <div contenteditable="true" spellcheck="false" class="spreadsheet-cell text-center" data-type="pageRange" placeholder="예: 1~2">${pageRange}</div>
+                </td>
+                <td class="p-0 align-top">
+                    <div contenteditable="true" spellcheck="false" class="spreadsheet-cell" data-type="splitName" placeholder="입력">${splitName}</div>
+                </td>
+                <td class="p-0 text-center align-middle border-r-0">
+                    <button class="btn-delete-row w-8 h-8 mx-auto rounded-md text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors flex items-center justify-center" title="행 삭제">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </button>
+                </td>
+            `;
+            return tr;
+        }
+
+        function updateRowNumbers() {
+            const rows = gridBody.querySelectorAll('tr');
+            const total = rows.length;
+            
+            // 시각적으로 제일 위에 있는 행이 가장 큰 번호, 아래로 갈수록 작아짐
+            rows.forEach((row, index) => {
+                row.querySelector('.row-num').textContent = total - index;
+            });
+            
+            if(rows.length === 0) {
+                emptyState.classList.remove('hidden');
+                emptyState.classList.add('flex');
+            } else {
+                emptyState.classList.add('hidden');
+                emptyState.classList.remove('flex');
+            }
+        }
+
+        async function renderGrid() {
+            try {
+                gridBody.innerHTML = '';
+                const details = await getAllDetails();
+                
+                if(details.length === 0) {
+                    gridBody.appendChild(createRowHTML(null));
+                } else {
+                    details.sort((a,b) => a.id - b.id).forEach((d) => {
+                        gridBody.appendChild(createRowHTML(d));
+                    });
+                }
+                updateRowNumbers();
+                lucide.createIcons();
+            } catch(e) { console.error(e); }
+        }
+
+        btnAddRow.addEventListener('click', () => {
+            const newRow = createRowHTML(null);
+            // 목록 상단에 추가
+            gridBody.insertBefore(newRow, gridBody.firstChild);
+            
+            updateRowNumbers();
+            lucide.createIcons();
+            
+            const firstCell = newRow.querySelector('[data-type="pageRange"]');
+            if(firstCell) focusCell(firstCell, 'end');
+            
+            // 상단으로 스크롤 이동
+            gridBody.parentElement.parentElement.scrollTop = 0;
+        });
+
+        btnClearAll.addEventListener('click', async () => {
+            if(confirm('모든 분할 규칙을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없으며 데이터가 즉시 초기화됩니다.')) {
+                try {
+                    await clearDB();
+                    gridBody.innerHTML = '';
+                    gridBody.appendChild(createRowHTML(null));
+                    updateRowNumbers();
+                    lucide.createIcons();
+                    showToast('모든 규칙이 삭제되었습니다.', 'success');
+                } catch(e) {
+                    showToast('삭제 중 오류가 발생했습니다.', 'error');
+                }
+            }
+        });
+
+        gridBody.addEventListener('click', (e) => {
+            const deleteBtn = e.target.closest('.btn-delete-row');
+            if(deleteBtn) {
+                deleteBtn.closest('tr').remove();
+                updateRowNumbers();
+            }
+        });
+
+        btnSaveAll.addEventListener('click', async () => {
+            const rows = gridBody.querySelectorAll('tr');
+            const dataToSave = [];
+            
+            rows.forEach(row => {
+                const pageRange = row.querySelector('[data-type="pageRange"]').innerHTML.trim();
+                const splitName = row.querySelector('[data-type="splitName"]').innerHTML.trim();
+                
+                if(pageRange !== '' || splitName !== '') {
+                    dataToSave.push({ pageRange, splitName, updatedAt: new Date().getTime() });
+                }
+            });
+
+            try {
+                btnSaveAll.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin opacity-80"></i> 저장 중...`;
+                lucide.createIcons();
+                
+                await clearDB(); 
+                if(dataToSave.length > 0) await addMultipleToDB(dataToSave); 
+                
+                showToast(`총 ${dataToSave.length}개의 규칙이 저장되었습니다.`);
+            } catch(e) {
+                showToast('저장 중 오류가 발생했습니다.', 'error');
+            } finally {
+                btnSaveAll.innerHTML = `<i data-lucide="save" class="w-4 h-4 opacity-80"></i> 저장`;
+                lucide.createIcons();
+                renderGrid(); 
+            }
+        });
+
+        btnExportExcel.addEventListener('click', async () => {
+            try {
+                const details = await getAllDetails();
+                if(details.length === 0) { showToast('저장된 규칙이 없습니다.', 'warning'); return; }
+
+                const cleanText = (html) => {
+                    if (!html) return '';
+                    let text = html;
+                    text = text.replace(/[\r\n\t]+/g, ' ');
+                    text = text.replace(/<br\s*[\/]?>/gi, '\n');
+                    text = text.replace(/<\/div>/gi, '\n');
+                    text = text.replace(/<\/p>/gi, '\n');
+                    text = text.replace(/<[^>]*>?/gm, '');
+                    text = text.replace(/&nbsp;/g, ' ');
+                    text = text.replace(/&lt;/g, '<');
+                    text = text.replace(/&gt;/g, '>');
+                    text = text.replace(/&amp;/g, '&');
+                    text = text.replace(/&quot;/g, '"');
+                    text = text.replace(/&#39;/g, "'");
+                    text = text.replace(/\u200B/g, '');
+                    text = text.replace(/ {2,}/g, ' ');
+                    
+                    return text.split('\n').map(line => line.trim()).filter(line => line !== '').join('\n');
+                };
+
+                // 화면 표시 순서가 내림차순이므로 역순(오름차순)으로 정렬하여 엑셀 출력
+                const sortedDetails = details.sort((a, b) => a.id - b.id).reverse();
+
+                const excelData = sortedDetails.map(d => ({
+                    '페이지': cleanText(d.pageRange),
+                    '분할명(PDF)': cleanText(d.splitName)
+                }));
+
+                const worksheet = XLSX.utils.json_to_sheet(excelData);
+                const workbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(workbook, worksheet, "분할규칙");
+
+                XLSX.writeFile(workbook, `PDF_SplitRules_${new Date().getTime()}.xlsx`);
+                showToast('엑셀 파일이 오름차순으로 다운로드되었습니다!', 'success');
+            } catch(error) { showToast('엑셀 생성 중 오류가 발생했습니다.', 'error'); }
+        });
+
+        function getCaretPosition(element) {
+            let caretOffset = 0;
+            const doc = element.ownerDocument || element.document;
+            const win = doc.defaultView || doc.parentWindow;
+            if (typeof win.getSelection !== "undefined") {
+                const sel = win.getSelection();
+                if (sel.rangeCount > 0) {
+                    const range = win.getSelection().getRangeAt(0);
+                    const preCaretRange = range.cloneRange();
+                    preCaretRange.selectNodeContents(element);
+                    preCaretRange.setEnd(range.endContainer, range.endOffset);
+                    caretOffset = preCaretRange.toString().length;
+                }
+            }
+            return caretOffset;
+        }
+
+        function focusCell(cell, pos = 'end') {
+            cell.focus();
+            if (typeof window.getSelection !== "undefined" && typeof document.createRange !== "undefined") {
+                const range = document.createRange();
+                range.selectNodeContents(cell);
+                if (pos === 'end') range.collapse(false);
+                else range.collapse(true);
+                const sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange(range);
+            }
+        }
+
+        document.addEventListener('paste', (e) => {
+            const el = e.target;
+            if (el && el.classList && el.classList.contains('spreadsheet-cell')) {
+                e.preventDefault(); 
+                const text = (e.originalEvent || e).clipboardData.getData('text/plain');
+                document.execCommand('insertText', false, text);
+            }
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key.toLowerCase() === 's') {
+                e.preventDefault();
+                btnSaveAll.click();
+                return;
+            }
+            
+            if (e.ctrlKey && e.key.toLowerCase() === 'l') {
+                e.preventDefault();
+                btnAddRow.click();
+                return;
+            }
+
+            const el = document.activeElement;
+            if (!el.classList.contains('spreadsheet-cell')) return;
+
+            const td = el.closest('td');
+            const tr = el.closest('tr');
+            const cellIndex = Array.from(tr.children).indexOf(td);
+
+            const moveHorizontal = (direction) => {
+                if (direction === 'next') {
+                    let nextTd = td.nextElementSibling;
+                    while (nextTd && !nextTd.querySelector('.spreadsheet-cell')) {
+                        nextTd = nextTd.nextElementSibling;
+                    }
+                    if (nextTd) {
+                        focusCell(nextTd.querySelector('.spreadsheet-cell'), 'start');
+                    } else {
+                        let nextTr = tr.nextElementSibling;
+                        if (!nextTr) { 
+                            nextTr = createRowHTML(null);
+                            tr.insertAdjacentElement('afterend', nextTr);
+                            updateRowNumbers();
+                            lucide.createIcons();
+                        }
+                        if (nextTr) focusCell(nextTr.children[1].querySelector('.spreadsheet-cell'), 'start');
+                    }
+                } else {
+                    let prevTd = td.previousElementSibling;
+                    while (prevTd && !prevTd.querySelector('.spreadsheet-cell')) {
+                        prevTd = prevTd.previousElementSibling;
+                    }
+                    if (prevTd) {
+                        focusCell(prevTd.querySelector('.spreadsheet-cell'), 'end');
+                    } else {
+                        const prevTr = tr.previousElementSibling;
+                        if (prevTr) {
+                            const cells = prevTr.querySelectorAll('.spreadsheet-cell');
+                            if (cells.length > 0) focusCell(cells[cells.length-1], 'end');
+                        }
+                    }
+                }
+            };
+
+            if (e.key === 'Enter' && e.altKey) {
+                e.preventDefault();
+                const selection = window.getSelection();
+                const range = selection.getRangeAt(0);
+                const br = document.createElement('br');
+                const zeroWidthSpace = document.createTextNode('\u200B');
+                
+                range.deleteContents();
+                range.insertNode(zeroWidthSpace);
+                range.insertNode(br);
+                range.setStartAfter(zeroWidthSpace);
+                range.setEndAfter(zeroWidthSpace);
+                selection.removeAllRanges();
+                selection.addRange(range);
+                return;
+            }
+
+            if (e.key === 'Enter' && !e.shiftKey && !e.altKey) {
+                e.preventDefault();
+                let nextTr = tr.nextElementSibling;
+                if (!nextTr) {
+                    nextTr = createRowHTML(null);
+                    tr.insertAdjacentElement('afterend', nextTr);
+                    updateRowNumbers();
+                    lucide.createIcons();
+                }
+                if (nextTr) {
+                    const targetCell = nextTr.children[cellIndex].querySelector('.spreadsheet-cell');
+                    if (targetCell) focusCell(targetCell, 'end');
+                }
+                return;
+            }
+
+            if (e.key === 'Enter' && e.shiftKey) {
+                e.preventDefault();
+                const prevTr = tr.previousElementSibling;
+                if (prevTr) {
+                    const targetCell = prevTr.children[cellIndex].querySelector('.spreadsheet-cell');
+                    if (targetCell) focusCell(targetCell, 'end');
+                }
+                return;
+            }
+
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                moveHorizontal(e.shiftKey ? 'prev' : 'next');
+                return;
+            }
+
+            if (e.key === 'ArrowLeft') {
+                const caretPos = getCaretPosition(el);
+                if (caretPos === 0) {
+                    e.preventDefault();
+                    moveHorizontal('prev');
+                    return;
+                }
+            }
+            if (e.key === 'ArrowRight') {
+                const caretPos = getCaretPosition(el);
+                if (caretPos === el.textContent.length) {
+                    e.preventDefault();
+                    moveHorizontal('next');
+                    return;
+                }
+            }
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                const prevTr = tr.previousElementSibling;
+                if (prevTr) {
+                    const targetCell = prevTr.children[cellIndex].querySelector('.spreadsheet-cell');
+                    if (targetCell) focusCell(targetCell, 'end');
+                }
+                return;
+            }
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                const nextTr = tr.nextElementSibling;
+                if (nextTr) {
+                    const targetCell = nextTr.children[cellIndex].querySelector('.spreadsheet-cell');
+                    if (targetCell) focusCell(targetCell, 'end');
+                }
+                return;
+            }
+        });
+
+        const btnSettings = document.getElementById('btn-settings');
+        const modal = document.getElementById('settings-modal');
+        const modalContent = document.getElementById('settings-modal-content');
+        const btnCloseSettings = document.getElementById('btn-close-settings');
+        const btnCancelSettings = document.getElementById('btn-cancel-settings');
+        const btnSaveSettings = document.getElementById('btn-save-settings');
+        const inputPrefix = document.getElementById('input-prefix');
+        const inputPostfix = document.getElementById('input-postfix');
+
+        function openModal() {
+            inputPrefix.value = localStorage.getItem('pdfSplitPrefix') || '';
+            inputPostfix.value = localStorage.getItem('pdfSplitPostfix') || '';
+            
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            requestAnimationFrame(() => {
+                modal.classList.remove('opacity-0');
+                modalContent.classList.remove('scale-95');
+            });
+        }
+
+        function closeModal() {
+            modal.classList.add('opacity-0');
+            modalContent.classList.add('scale-95');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            }, 200);
+        }
+
+        btnSettings.addEventListener('click', openModal);
+        btnCloseSettings.addEventListener('click', closeModal);
+        btnCancelSettings.addEventListener('click', closeModal);
+        
+        btnSaveSettings.addEventListener('click', () => {
+            localStorage.setItem('pdfSplitPrefix', inputPrefix.value);
+            localStorage.setItem('pdfSplitPostfix', inputPostfix.value);
+            showToast('환경설정이 저장되었습니다.');
+            closeModal();
+        });
+
+        window.addEventListener('DOMContentLoaded', async () => { 
+            await initDB(); 
+            renderGrid(); 
+        });
+    </script>
+</body>
+</html>

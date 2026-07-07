@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDF Unlock</title>
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  </script>
+  
+  <script src="https://cdn.jsdelivr.net/npm/@cantoo/pdf-lib@2.6.5/dist/pdf-lib.min.js"></script>
+
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  
+  <style>
+    :root {
+      --bg-body: #F9FAFB;
+      --bg-surface: #FFFFFF;
+      --border-light: #F3F4F6;
+      --border-base: #E5E7EB;
+      --text-main: #111827;
+      --text-muted: #6B7280;
+      --primary: #3B82F6; 
+      --primary-hover: #2563EB;
+      --secondary: #FFFFFF;
+      --secondary-hover: #F9FAFB;
+      --danger: #EF4444;
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+      --radius-md: 8px;
+      --radius-lg: 12px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background: var(--bg-body);
+      color: var(--text-main);
+      margin: 0;
+      padding: 40px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .dashboard-header { max-width: 100%; margin: 0 auto 24px auto; }
+    .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .title-area { display: flex; align-items: center; gap: 12px; }
+    .title-area i { font-size: 28px; color: var(--primary); }
+    h2 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+    
+    .actions { display: flex; gap: 10px; }
+    input[type="file"] { display: none; }
+    
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 10px 18px; border-radius: var(--radius-md);
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      border: 1px solid transparent;
+    }
+    .btn-primary { background: var(--primary); color: white; box-shadow: var(--shadow-sm); }
+    .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
+    .btn-primary:disabled { background: #9CA3AF; cursor: not-allowed; transform: none; box-shadow: none; }
+    .btn-outline { background: var(--secondary); color: var(--text-main); border-color: var(--border-base); box-shadow: var(--shadow-sm); }
+    .btn-outline:hover:not(:disabled) { background: var(--secondary-hover); border-color: #D1D5DB; }
+    .btn-outline:disabled { color: var(--text-muted); cursor: not-allowed; background: #F3F4F6; }
+
+    .instructions {
+      display: flex; gap: 20px; align-items: center; font-size: 13px; color: var(--text-muted);
+      background: var(--bg-surface); padding: 12px 20px; border-radius: var(--radius-md); border: 1px solid var(--border-base);
+    }
+
+    #workspace {
+      max-width: 100%; margin: 0 auto;
+      display: grid; grid-template-columns: 450px 1fr; gap: 24px;
+      align-items: start;
+    }
+
+    /* Left Panel */
+    .panel {
+      background: var(--bg-surface); border: 1px solid var(--border-base);
+      border-radius: var(--radius-lg); padding: 20px; box-shadow: var(--shadow-md);
+    }
+    .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .panel-title { font-weight: 700; font-size: 16px; }
+    
+    .form-group { margin-bottom: 24px; }
+    .form-label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 8px; color: var(--text-main); }
+    .input-with-button { display: flex; gap: 8px; }
+    .input-with-button input { 
+        flex: 1; padding: 10px 12px; border: 1px solid var(--border-base); 
+        border-radius: var(--radius-md); font-family: inherit; font-size: 14px; transition: 0.2s;
+    }
+    .input-with-button input:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+    .input-with-button input:disabled { background: #F3F4F6; cursor: not-allowed; }
+
+    .status-box {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        padding: 32px 20px; border: 2px dashed var(--border-base); border-radius: var(--radius-md);
+        background: #F9FAFB; text-align: center; gap: 12px; font-size: 14px; color: var(--text-muted);
+        transition: 0.3s;
+    }
+    .status-box i { font-size: 32px; }
+    .status-box.success { border-color: #10B981; background: #ECFDF5; color: #065F46; }
+    .status-box.success i { color: #10B981; }
+    .status-box.error { border-color: #EF4444; background: #FEF2F2; color: #991B1B; }
+    .status-box.error i { color: #EF4444; }
+
+    /* Right Panel (Preview) */
+    .preview-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border-base); }
+    
+    #preview-area {
+        display: flex; justify-content: center; align-items: center;
+        min-height: 280px; background: #f3f4f6; border-radius: var(--radius-md);
+        border: 1px solid var(--border-base); overflow: hidden; padding: 20px;
+    }
+    .preview-img { max-width: 100%; max-height: 400px; object-fit: contain; box-shadow: var(--shadow-md); border: 1px solid var(--border-base); }
+    
+    .empty-msg { text-align: center; color: var(--text-muted); display: flex; flex-direction: column; align-items: center; gap: 12px; font-size: 14px; }
+    .empty-msg i { font-size: 32px; color: #D1D5DB; }
+
+    #toast {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      background: #111827; color: white; padding: 10px 20px; border-radius: 99px; font-size: 14px;
+      box-shadow: var(--shadow-md); opacity: 0; visibility: hidden; transition: 0.3s; z-index: 3000;
+    }
+    #toast.show { opacity: 1; visibility: visible; }
+  </style>
+</head>
+<body>
+
+  <div class="dashboard-header">
+    <div class="header-top">
+      <div class="title-area">
+        <i class="ph ph-lock-key-open"></i>
+        <h2>PDF Unlock</h2>
+      </div>
+      
+      <div class="actions">
+        <button class="btn btn-outline" style="color: var(--danger); border-color: var(--danger);" onclick="resetAll()">
+          <i class="ph ph-arrow-counter-clockwise"></i> 초기화
+        </button>
+        
+        <label for="upload-pdf" class="btn btn-outline">
+          <i class="ph ph-file-pdf"></i> 보호된 PDF 불러오기
+        </label>
+        <input type="file" id="upload-pdf" accept=".pdf" />
+      </div>
+    </div>
+
+    <div class="instructions">
+      <span><i class="ph ph-info"></i> 원본 PDF의 <strong>해상도와 품질을 100% 유지</strong>하며 보안(암호)만 제거합니다. 모든 작업은 브라우저에서 안전하게 처리됩니다.</span>
+    </div>
+  </div>
+
+  <div id="workspace">
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">보안 해제 설정</div>
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label">비밀번호 입력</label>
+        <div class="input-with-button">
+          <input type="password" id="pdf-password" placeholder="PDF 비밀번호를 입력하세요" disabled />
+          <button class="btn btn-outline" id="btn-verify" onclick="verifyPassword()" disabled>
+            <i class="ph ph-check-circle"></i> 검증
+          </button>
+        </div>
+      </div>
+
+      <div class="status-box" id="lock-status">
+        <i class="ph ph-lock"></i>
+        <p>비밀번호가 걸려있는 PDF 파일을 먼저 업로드해주세요.</p>
+      </div>
+    </div>
+
+    <div class="panel" style="background: var(--bg-body);">
+      <div class="preview-header">
+        <div class="panel-title" id="original-file-name">원본 파일: 선택되지 않음</div>
+        <button class="btn btn-primary" onclick="removePasswordAndSave()" id="btn-save" disabled>
+          <i class="ph ph-download-simple"></i> 암호 해제 및 저장
+        </button>
+      </div>
+      
+      <div id="preview-area">
+        <div class="empty-msg">
+          <i class="ph ph-eye-slash"></i>
+          비밀번호를 확인하면 1페이지 미리보기가 표시됩니다.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast">저장되었습니다!</div>
+
+  <script>
+    let originalPdfFile = null;
+    let verifiedPassword = "";
+
+    // [초기화]
+    function resetAll() {
+      originalPdfFile = null;
+      verifiedPassword = "";
+
+      document.getElementById('upload-pdf').value = '';
+      document.getElementById('original-file-name').innerHTML = `원본 파일: 선택되지 않음`;
+      
+      const pwdInput = document.getElementById('pdf-password');
+      pwdInput.value = '';
+      pwdInput.disabled = true;
+      
+      document.getElementById('btn-verify').disabled = true;
+      document.getElementById('btn-save').disabled = true;
+
+      updateStatus("비밀번호가 걸려있는 PDF 파일을 먼저 업로드해주세요.", "", "ph-lock");
+
+      document.getElementById('preview-area').innerHTML = `
+        <div class="empty-msg">
+          <i class="ph ph-eye-slash"></i>
+          비밀번호를 확인하면 1페이지 미리보기가 표시됩니다.
+        </div>
+      `;
+
+      showToast("모든 설정이 초기화되었습니다.");
+    }
+
+    // [1] 원본 PDF 업로드 처리
+    document.getElementById('upload-pdf').addEventListener('change', async function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      originalPdfFile = file;
+      document.getElementById('original-file-name').innerHTML = `<i class="ph ph-file-pdf"></i> ${file.name}`;
+      document.getElementById('pdf-password').disabled = false;
+      document.getElementById('btn-verify').disabled = false;
+      document.getElementById('pdf-password').value = '';
+      document.getElementById('btn-save').disabled = true;
+      verifiedPassword = "";
+
+      try {
+        const fileBuffer = await originalPdfFile.arrayBuffer(); 
+        
+        // pdf.js를 사용해 잠금 여부 1차 판별
+        try {
+            await pdfjsLib.getDocument({ data: new Uint8Array(fileBuffer) }).promise;
+            
+            updateStatus("읽기 암호가 없는 파일입니다. 바로 새로 저장하여 권한 암호를 초기화할 수 있습니다.", "success", "ph-lock-open");
+            document.getElementById('btn-save').disabled = false;
+            renderPreview(""); 
+            
+        } catch (err) {
+            if (err.name === "PasswordException") {
+                updateStatus("비밀번호로 보호된 PDF입니다. 좌측에 비밀번호를 입력해주세요.", "error", "ph-lock-key");
+                document.getElementById('pdf-password').focus();
+            } else {
+                throw err;
+            }
+        }
+      } catch (err) {
+        console.error(err);
+        alert('PDF 파일을 읽는 중 오류가 발생했습니다.');
+      }
+    });
+
+    // 엔터키 지원
+    document.getElementById('pdf-password').addEventListener('keypress', function (e) {
+        if (e.key === 'Enter' && !this.disabled) verifyPassword();
+    });
+
+    // [2] 비밀번호 검증 (pdf.js 사용)
+    async function verifyPassword() {
+        if (!originalPdfFile) return;
+        const pwdInput = document.getElementById('pdf-password').value;
+        
+        try {
+            const fileBuffer = await originalPdfFile.arrayBuffer(); 
+            const loadingTask = pdfjsLib.getDocument({ 
+                data: new Uint8Array(fileBuffer), 
+                password: pwdInput 
+            });
+            await loadingTask.promise; // 암호가 맞으면 통과
+            
+            verifiedPassword = pwdInput;
+            updateStatus("비밀번호가 확인되었습니다! 우측의 [암호 해제 및 저장]을 클릭하세요.", "success", "ph-check-circle");
+            document.getElementById('btn-save').disabled = false;
+            
+            showToast("비밀번호 확인 완료");
+            renderPreview(pwdInput);
+            
+        } catch (err) {
+            if (err.name === "PasswordException") {
+                updateStatus("비밀번호가 올바르지 않습니다. 다시 입력해주세요.", "error", "ph-warning-circle");
+                document.getElementById('btn-save').disabled = true;
+                document.getElementById('preview-area').innerHTML = `
+                  <div class="empty-msg"><i class="ph ph-eye-slash"></i> 비밀번호 불일치</div>
+                `;
+            } else {
+                console.error(err);
+                alert("파일을 검증하는 중 오류가 발생했습니다.");
+            }
+        }
+    }
+
+    // 상태 박스 UI 업데이트
+    function updateStatus(message, type, iconClass) {
+        const box = document.getElementById('lock-status');
+        box.className = `status-box ${type}`;
+        box.innerHTML = `<i class="ph ${iconClass}"></i><p style="margin:0; font-weight: 500;">${message}</p>`;
+    }
+
+    // [3] 미리보기 렌더링
+    async function renderPreview(password = "") {
+        if (!originalPdfFile) return;
+        const previewArea = document.getElementById('preview-area');
+        previewArea.innerHTML = '<div class="empty-msg"><i class="ph ph-spinner ph-spin"></i> 문서 분석 중...</div>';
+        
+        try {
+            const fileBuffer = await originalPdfFile.arrayBuffer(); 
+            const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(fileBuffer), password: password });
+            const pdf = await loadingTask.promise;
+            const page = await pdf.getPage(1); 
+            
+            const viewport = page.getViewport({ scale: 1.0 });
+            const canvas = document.createElement('canvas');
+            canvas.className = 'preview-img';
+            
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            
+            ctx.fillStyle = "white";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+            
+            previewArea.innerHTML = '';
+            previewArea.appendChild(canvas);
+            
+        } catch (e) {
+            console.error(e);
+            previewArea.innerHTML = '<div class="empty-msg"><i class="ph ph-warning-circle"></i> 미리보기를 생성할 수 없습니다.</div>';
+        }
+    }
+
+    // [4] 파일 암호 제거 및 로컬 저장 (수정됨)
+    async function removePasswordAndSave() {
+        if (!originalPdfFile) return;
+        
+        try {
+            const fileBuffer = await originalPdfFile.arrayBuffer(); 
+            // 복호화를 지원하는 @cantoo/pdf-lib 사용
+            const pdfDoc = await PDFLib.PDFDocument.load(fileBuffer, { 
+                password: verifiedPassword
+            });
+            
+            // 다시 save()하면 잠금이 해제된 상태의 배열이 생성됨
+            const pdfBytes = await pdfDoc.save();
+            const safeName = originalPdfFile.name.replace('.pdf', '') + '_unlocked.pdf';
+            
+            // Blob과 <a> 태그를 사용한 안전한 다운로드 방식
+            const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            
+            a.style.display = 'none';
+            a.href = url;
+            a.download = safeName;
+            
+            document.body.appendChild(a);
+            a.click();
+            
+            // 메모리 정리
+            setTimeout(() => {
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            }, 100);
+            
+            showToast("성공적으로 암호가 해제된 PDF가 저장되었습니다.");
+            
+        } catch (err) {
+            console.error(err);
+            alert('저장 중 오류가 발생했습니다. ' + err.message);
+        }
+    }
+
+    let toastTimeout;
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      toast.innerText = message;
+      toast.classList.add('show');
+      
+      clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        toast.classList.remove('show');
+      }, 3000);
+    }
+  </script>
+</body>
+</html>

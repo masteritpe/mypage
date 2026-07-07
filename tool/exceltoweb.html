@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Excel to Web</title>
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  
+  <style>
+    :root {
+      --bg-body: #F9FAFB;
+      --bg-surface: #FFFFFF;
+      --border-light: #F3F4F6;
+      --border-base: #E5E7EB;
+      --text-main: #111827;
+      --text-muted: #6B7280;
+      --primary: #111827;       
+      --primary-hover: #374151;
+      --secondary: #FFFFFF;
+      --secondary-hover: #F9FAFB;
+      --selection-bg: #F3F4F6;  
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+      --radius-md: 8px;
+      --radius-lg: 12px;
+    }
+
+    /* 기본 리셋 & 폰트 */
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background: var(--bg-body);
+      color: var(--text-main);
+      margin: 0;
+      padding: 40px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* 상단 헤더 & 컨트롤 레이아웃 */
+    .dashboard-header {
+      max-width: 100%;
+      margin: 0 auto 24px auto;
+    }
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .title-area {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .title-area i { font-size: 28px; color: var(--text-main); }
+    h2 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+    
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+
+    /* 모던 버튼 스타일 */
+    input[type="file"] { display: none; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 10px 18px; border-radius: var(--radius-md);
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      border: 1px solid transparent;
+    }
+    .btn-primary {
+      background: var(--primary); color: white;
+      box-shadow: var(--shadow-sm);
+    }
+    .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
+    
+    .btn-outline {
+      background: var(--secondary); color: var(--text-main);
+      border-color: var(--border-base); box-shadow: var(--shadow-sm);
+    }
+    .btn-outline:hover { background: var(--secondary-hover); border-color: #D1D5DB; }
+
+    .instructions {
+      display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+      font-size: 13px; color: var(--text-muted);
+      background: var(--bg-surface); padding: 12px 20px;
+      border-radius: var(--radius-md); border: 1px solid var(--border-base);
+    }
+    .instructions span { display: inline-flex; align-items: center; gap: 6px; }
+    .instructions i { font-size: 16px; }
+    
+    /* 아이콘 클릭 호버 스타일 */
+    .clickable-icon { cursor: pointer; transition: color 0.2s; }
+    .clickable-icon:hover { color: var(--primary) !important; }
+
+    /* 컬럼 필터 (Pill 스타일 칩) */
+    #column-toggles {
+      display: none; flex-wrap: wrap; gap: 8px; align-items: center;
+      margin-bottom: 20px; max-width: 100%; margin-left: auto; margin-right: auto;
+    }
+    .toggle-title { font-size: 13px; font-weight: 600; color: var(--text-muted); margin-right: 8px; }
+    .col-toggle {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 13px; font-weight: 500; color: var(--text-main);
+      background: var(--bg-surface); padding: 6px 14px;
+      border-radius: 99px; cursor: pointer;
+      border: 1px solid var(--border-base);
+      transition: all 0.2s; user-select: none;
+      box-shadow: var(--shadow-sm);
+    }
+    .col-toggle:hover { border-color: #D1D5DB; background: var(--bg-body); }
+    .col-toggle input { display: none; } 
+    .col-toggle.hidden-col { 
+      background: transparent; border-color: dashed var(--border-base);
+      color: #9CA3AF; box-shadow: none; opacity: 0.6;
+    }
+    .col-toggle i { font-size: 14px; }
+
+    /* 모던 테이블 래퍼 */
+    #table-wrapper {
+      max-width: 100%; margin: 0 auto;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-base);
+      border-radius: var(--radius-lg);
+      overflow: auto;
+      max-height: calc(100vh - 220px);
+      box-shadow: var(--shadow-md);
+      user-select: none;
+      position: relative;
+    }
+
+    /* 커스텀 스크롤바 */
+    #table-wrapper::-webkit-scrollbar { width: 8px; height: 8px; }
+    #table-wrapper::-webkit-scrollbar-track { background: transparent; }
+    #table-wrapper::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 4px; }
+    #table-wrapper::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
+
+    /* 테이블 레이아웃 수정 (컬럼 리사이징 최적화 및 뼈대 유지) */
+    table {
+      border-collapse: separate; border-spacing: 0;
+      width: max-content; min-width: 100%;
+      font-size: 15px; text-align: left;
+    }
+    
+    th, td {
+      padding: 12px 16px;
+      min-width: 40px; /* 빈 셀이라도 화면에 노출되도록 보장 */
+      height: 42px;    /* 뼈대 붕괴 방지 */
+      white-space: pre-wrap; 
+      word-break: break-all;
+      cursor: cell; position: relative;
+      border-bottom: 1px solid var(--border-light);
+      border-right: 1px solid var(--border-light);
+      transition: background 0.15s ease;
+      line-height: 1.5;
+    }
+    th:last-child, td:last-child { border-right: none; }
+    tr:last-child td { border-bottom: none; }
+
+    th {
+      font-weight: 600; color: var(--text-muted);
+      position: sticky; top: 0; z-index: 10;
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(8px); 
+      -webkit-backdrop-filter: blur(8px);
+    }
+    
+    /* 체크박스 전용 컬럼 스타일 */
+    .chk-col {
+      width: 44px; min-width: 44px; text-align: center; padding: 0 !important; cursor: default;
+      background-color: var(--bg-surface); border-right: 1px solid var(--border-base) !important;
+    }
+    .row-chk { cursor: pointer; width: 16px; height: 16px; margin-top: 5px; }
+
+    /* 컬럼 리사이저 스타일 추가 */
+    .resizer {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 6px;
+      cursor: col-resize;
+      user-select: none;
+      height: 100%;
+      z-index: 15;
+      transition: background-color 0.2s ease;
+    }
+    .resizer:hover, .resizer.resizing {
+      background-color: var(--primary);
+    }
+
+    .selected-cell {
+      background-color: var(--selection-bg) !important;
+    }
+    .selected-cell::after {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+      border: 1px solid #D1D5DB; pointer-events: none;
+    }
+
+    /* 복사 완료 표시 셀 스타일 */
+    .copied-cell {
+      background-color: #D1FAE5 !important;
+    }
+
+    [contenteditable="true"] {
+      outline: none;
+      background-color: var(--bg-surface) !important;
+      cursor: text; user-select: text;
+    }
+    [contenteditable="true"]::after {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+      box-shadow: inset 0 0 0 2px var(--primary); pointer-events: none; z-index: 5;
+    }
+    
+    .empty-msg {
+      padding: 80px 20px; text-align: center; color: var(--text-muted);
+      display: flex; flex-direction: column; align-items: center; gap: 12px;
+    }
+    .empty-msg i { font-size: 40px; color: #D1D5DB; }
+
+    /* 환경설정 모달 스타일 */
+    .modal-overlay {
+      display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.4); z-index: 9999;
+      align-items: center; justify-content: center;
+      backdrop-filter: blur(2px);
+    }
+    .modal-content {
+      background: var(--bg-surface); padding: 24px; border-radius: var(--radius-lg);
+      width: 100%; max-width: 400px; box-shadow: var(--shadow-md);
+      animation: modalFadeIn 0.2s ease;
+    }
+    @keyframes modalFadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .modal-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 20px; font-size: 18px; font-weight: 700;
+    }
+    .modal-close { cursor: pointer; color: var(--text-muted); font-size: 20px; }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+    .form-group select {
+      width: 100%; padding: 10px; border: 1px solid var(--border-base);
+      border-radius: var(--radius-md); outline: none; font-family: inherit; font-size: 14px;
+    }
+    .form-group select:focus { border-color: var(--primary); }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
+  </style>
+</head>
+<body>
+
+  <div class="dashboard-header">
+    <div class="header-top">
+      <div class="title-area">
+        <i class="ph ph-table"></i>
+        <h2>Excel to Web</h2>
+      </div>
+      
+      <div class="actions">
+        <select id="sheet-selector" class="btn btn-outline" style="display: none; cursor: pointer; outline: none;"></select>
+        
+        <label for="upload-excel" class="btn btn-primary">
+          <i class="ph ph-upload-simple"></i> 파일 불러오기
+        </label>
+        <input type="file" id="upload-excel" accept=".xlsx, .xls, .csv" />
+        
+        <button class="btn btn-outline" onclick="applySelectionToPreview()">
+          <i class="ph ph-crop"></i> 영역 자르기
+        </button>
+
+        <button class="btn btn-outline" onclick="openSettings()">
+          <i class="ph ph-gear"></i> 환경설정
+        </button>
+
+        <button class="btn btn-primary" onclick="exportExcel()">
+          <i class="ph ph-download-simple"></i> 엑셀 출력
+        </button>
+      </div>
+    </div>
+
+    <div class="instructions">
+      <span><i class="ph ph-mouse-left"></i> 클릭: 조용히 복사</span>
+      <span style="color: #D1D5DB;">|</span>
+      <span><i class="ph ph-cursor-click"></i> 더블클릭: 텍스트 수정</span>
+      <span style="color: #D1D5DB;">|</span>
+      <span><i class="ph ph-arrows-out"></i> 드래그: 영역 자동 복사 (이후 자르기 가능)</span>
+      <span style="color: #D1D5DB;">|</span>
+      <span><i class="ph ph-arrows-left-right"></i> 경계선 드래그: 너비 조절</span>
+      <span style="color: #D1D5DB;">|</span>
+      <span title="클릭 시 전체 숨김 해제"><i class="ph ph-check-square clickable-icon" onclick="uncheckAll()"></i> 체크박스: 행 숨기기</span>
+      <span style="color: #D1D5DB;">|</span>
+      <span><i class="ph ph-link"></i> 설정 연동: 특정 컬럼 클릭 시 자동 복사</span>
+    </div>
+  </div>
+
+  <div id="column-toggles"></div>
+
+  <div id="table-wrapper">
+    <div class="empty-msg">
+      <i class="ph ph-folder-open"></i>
+      엑셀이나 CSV 파일을 업로드하여 작업을 시작하세요
+    </div>
+  </div>
+
+  <div id="settings-modal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span><i class="ph ph-gear"></i> 환경설정 (컬럼 연동)</span>
+        <i class="ph ph-x modal-close" onclick="closeSettings()"></i>
+      </div>
+      <div class="form-group">
+        <label for="link-source">기준 컬럼 (클릭할 컬럼)</label>
+        <select id="link-source">
+          <option value="-1">사용 안 함</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="link-target">대상 컬럼 (자동 복사될 컬럼)</label>
+        <select id="link-target">
+          <option value="-1">사용 안 함</option>
+        </select>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeSettings()">취소</button>
+        <button class="btn btn-primary" onclick="saveSettings()">저장</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let isDragging = false;
+    let startCell = null;
+    let endCell = null;
+    const wrapper = document.getElementById('table-wrapper');
+    const toggleContainer = document.getElementById('column-toggles');
+    
+    let currentWorkbook = null; 
+    const sheetSelector = document.getElementById('sheet-selector');
+
+    let linkedSourceColIndex = -1;
+    let linkedTargetColIndex = -1;
+
+    document.getElementById('upload-excel').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const fileName = file.name.toLowerCase();
+
+      if (fileName.endsWith('.csv')) {
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+          try {
+            currentWorkbook = XLSX.read(evt.target.result, {type: 'string'});
+            processWorkbook();
+          } catch (error) {
+            alert('CSV 파일을 파싱하는 데 실패했습니다.');
+          } finally {
+            e.target.value = ''; 
+          }
+        };
+        reader.readAsText(file, 'euc-kr');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        try {
+          const data = new Uint8Array(evt.target.result);
+          currentWorkbook = XLSX.read(data, {type: 'array'});
+          processWorkbook();
+        } catch (error) {
+          const textReader = new FileReader();
+          textReader.onload = function(e2) {
+            try {
+              currentWorkbook = XLSX.read(e2.target.result, {type: 'string'});
+              processWorkbook();
+            } catch (err2) {
+              alert('엑셀 파일을 읽을 수 없습니다.');
+            }
+          };
+          textReader.readAsText(file, 'euc-kr');
+        } finally {
+          e.target.value = ''; 
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    });
+
+    function processWorkbook() {
+      if (!currentWorkbook || !currentWorkbook.SheetNames.length) return;
+      
+      sheetSelector.innerHTML = '';
+      currentWorkbook.SheetNames.forEach(sheetName => {
+        const option = document.createElement('option');
+        option.value = sheetName;
+        option.textContent = `📄 ${sheetName}`;
+        sheetSelector.appendChild(option);
+      });
+
+      sheetSelector.style.display = currentWorkbook.SheetNames.length > 0 ? 'inline-flex' : 'none';
+      loadSheetData(currentWorkbook.SheetNames[0]);
+    }
+
+    sheetSelector.addEventListener('change', function(e) {
+      const selectedSheetName = e.target.value;
+      loadSheetData(selectedSheetName);
+    });
+
+    function loadSheetData(sheetName) {
+      if (!currentWorkbook) return;
+      const worksheet = currentWorkbook.Sheets[sheetName];
+      
+      let jsonData = XLSX.utils.sheet_to_json(worksheet, {header: 1, defval: ''});
+      
+      // [최후의 보루 로직] 메타데이터 오류로 라이브러리가 데이터를 못 찾을 경우 강제 추출 시작
+      let hasRealData = false;
+      if (jsonData && jsonData.length > 0) {
+        for (let r = 0; r < jsonData.length; r++) {
+          if (jsonData[r] && jsonData[r].some(cell => cell !== undefined && cell !== null && String(cell).trim() !== '')) {
+            hasRealData = true;
+            break;
+          }
+        }
+      }
+
+      // 데이터가 없다고 판단되면 수동으로 셀 좌표(A1, B2 등)를 모두 뜯어와서 배열 재구성
+      if (!hasRealData) {
+        jsonData = [];
+        let maxR = -1, maxC = -1;
+        
+        for (let key in worksheet) {
+          if (!key || key.startsWith('!')) continue; 
+          try {
+            const cellAddr = XLSX.utils.decode_cell(key);
+            if (cellAddr.r > maxR) maxR = cellAddr.r;
+            if (cellAddr.c > maxC) maxC = cellAddr.c;
+          } catch(e) {}
+        }
+
+        if (maxR >= 0 && maxC >= 0) {
+          for (let r = 0; r <= maxR; r++) {
+            let row = [];
+            for (let c = 0; c <= maxC; c++) {
+              const cellRef = XLSX.utils.encode_cell({r: r, c: c});
+              const cell = worksheet[cellRef];
+              let val = '';
+              if (cell) {
+                val = cell.w !== undefined ? cell.w : (cell.v !== undefined ? cell.v : '');
+              }
+              row.push(val);
+            }
+            jsonData.push(row);
+          }
+        }
+      }
+      
+      linkedSourceColIndex = -1;
+      linkedTargetColIndex = -1;
+      
+      renderTable(jsonData);
+    }
+
+    function renderTable(data) {
+      if (!data || data.length === 0) {
+        wrapper.innerHTML = `
+          <div class="empty-msg">
+            <i class="ph ph-folder-open"></i>
+            데이터가 없습니다.
+          </div>`;
+        toggleContainer.style.display = 'none';
+        return;
+      }
+
+      let maxCols = 0;
+      data.forEach(row => {
+        if (row && row.length > maxCols) maxCols = row.length;
+      });
+
+      let html = '<table>';
+      let isFirstRow = true;
+
+      data.forEach((row, rowIndex) => {
+        let isEmptyRow = true;
+        for (let i = 0; i < maxCols; i++) {
+          if (row[i] !== undefined && row[i] !== null && String(row[i]).replace(/\s/g, '') !== '') {
+            isEmptyRow = false;
+            break;
+          }
+        }
+        // 첫 번째 행(헤더)은 구조 유지를 위해 강제로 출력
+        if (isEmptyRow && !isFirstRow) return;
+
+        html += '<tr>';
+        
+        if (isFirstRow) {
+          html += `<th class="chk-col"><i class="ph ph-check-square clickable-icon" title="클릭 시 전체 숨김 해제" onclick="uncheckAll()" style="font-size: 18px; color: var(--text-muted);"></i></th>`;
+        } else {
+          html += `<td class="chk-col" contenteditable="false"><input type="checkbox" class="row-chk" onchange="hideRow(this)"></td>`;
+        }
+
+        for (let i = 0; i < maxCols; i++) {
+          const cell = row[i];
+          let text = '';
+          
+          if (cell instanceof Date) {
+            text = cell.getUTCFullYear() + '-' + 
+                   String(cell.getUTCMonth() + 1).padStart(2, '0') + '-' + 
+                   String(cell.getUTCDate()).padStart(2, '0');
+          } else if (cell !== undefined && cell !== null) {
+            text = String(cell);
+          }
+          
+          text = text.replace(/\r/g, '\n').replace(/\n+/g, '\n').trim(); 
+          text = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+          if (isFirstRow) {
+            html += `<th>${text}<div class="resizer"></div></th>`;
+          } else {
+            html += `<td>${text}</td>`;
+          }
+        }
+        html += '</tr>';
+        isFirstRow = false;
+      });
+      html += '</table>';
+      
+      wrapper.innerHTML = html;
+      clearSelection();
+      updateColumnToggles();
+      initResizers();
+    }
+
+    // --- 아래부터는 기능 스크립트 그대로 유지 ---
+
+    function initResizers() {
+      const ths = document.querySelectorAll('th');
+      ths.forEach(th => {
+        const resizer = th.querySelector('.resizer');
+        if (!resizer) return;
+        
+        let x = 0;
+        let w = 0;
+
+        const mouseDownHandler = function(e) {
+          e.stopPropagation();
+          x = e.clientX;
+          const styles = window.getComputedStyle(th);
+          w = parseInt(styles.width, 10);
+
+          document.addEventListener('mousemove', mouseMoveHandler);
+          document.addEventListener('mouseup', mouseUpHandler);
+          resizer.classList.add('resizing');
+          document.body.style.cursor = 'col-resize';
+        };
+
+        const mouseMoveHandler = function(e) {
+          const dx = e.clientX - x;
+          const newWidth = Math.max(40, w + dx); 
+          th.style.width = `${newWidth}px`;
+          th.style.minWidth = `${newWidth}px`;
+          th.style.maxWidth = `${newWidth}px`;
+        };
+
+        const mouseUpHandler = function() {
+          document.removeEventListener('mousemove', mouseMoveHandler);
+          document.removeEventListener('mouseup', mouseUpHandler);
+          resizer.classList.remove('resizing');
+          document.body.style.cursor = '';
+        };
+
+        resizer.addEventListener('mousedown', mouseDownHandler);
+        resizer.addEventListener('dblclick', (e) => e.stopPropagation()); 
+      });
+    }
+
+    function openSettings() {
+      const table = document.querySelector('table');
+      if (!table) {
+        alert('먼저 엑셀 파일을 업로드해주세요.');
+        return;
+      }
+
+      const sourceSelect = document.getElementById('link-source');
+      const targetSelect = document.getElementById('link-target');
+      
+      sourceSelect.innerHTML = '<option value="-1">사용 안 함</option>';
+      targetSelect.innerHTML = '<option value="-1">사용 안 함</option>';
+      
+      const headerRow = table.rows[0];
+      for (let c = 0; c < headerRow.cells.length; c++) {
+        if (headerRow.cells[c].classList.contains('chk-col')) continue;
+        
+        const clonedCell = headerRow.cells[c].cloneNode(true);
+        const resizer = clonedCell.querySelector('.resizer');
+        if (resizer) resizer.remove();
+        
+        let text = clonedCell.innerText.trim() || `Column ${c}`;
+        
+        sourceSelect.innerHTML += `<option value="${c}" ${c === linkedSourceColIndex ? 'selected' : ''}>${text}</option>`;
+        targetSelect.innerHTML += `<option value="${c}" ${c === linkedTargetColIndex ? 'selected' : ''}>${text}</option>`;
+      }
+      
+      document.getElementById('settings-modal').style.display = 'flex';
+    }
+
+    function closeSettings() {
+      document.getElementById('settings-modal').style.display = 'none';
+    }
+
+    function saveSettings() {
+      linkedSourceColIndex = parseInt(document.getElementById('link-source').value);
+      linkedTargetColIndex = parseInt(document.getElementById('link-target').value);
+      closeSettings();
+    }
+
+    function hideRow(checkbox) {
+      if (checkbox.checked) {
+        checkbox.closest('tr').style.display = 'none';
+      }
+    }
+
+    function uncheckAll() {
+      const checkboxes = document.querySelectorAll('.row-chk');
+      let restoredCount = 0;
+      checkboxes.forEach(cb => {
+        if (cb.checked) {
+          cb.checked = false;
+          const row = cb.closest('tr');
+          if (row && row.style.display === 'none') {
+            row.style.display = ''; 
+            restoredCount++;
+          }
+        }
+      });
+      
+      if (restoredCount > 0) {
+        clearSelection();
+      }
+    }
+
+    function exportExcel() {
+      const table = document.querySelector('table');
+      if (!table) {
+        alert('출력할 데이터가 없습니다.');
+        return;
+      }
+      
+      const wsData = [];
+      for (let r = 0; r < table.rows.length; r++) {
+        const row = table.rows[r];
+        if (row.style.display === 'none') continue; 
+        
+        const rowData = [];
+        for (let c = 0; c < row.cells.length; c++) {
+          const cell = row.cells[c];
+          if (cell.classList.contains('chk-col')) continue; 
+          if (cell.style.display === 'none') continue; 
+          
+          const clonedCell = cell.cloneNode(true);
+          const resizer = clonedCell.querySelector('.resizer');
+          if (resizer) resizer.remove();
+          
+          rowData.push(clonedCell.innerText.trim());
+        }
+        wsData.push(rowData);
+      }
+      
+      if (wsData.length === 0) {
+        alert('출력할 유효한 데이터가 없습니다.');
+        return;
+      }
+
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      XLSX.utils.book_append_sheet(wb, ws, "Exported Data");
+      XLSX.writeFile(wb, "Excel_to_Web_Export.xlsx");
+    }
+
+    function updateColumnToggles() {
+      const table = document.querySelector('table');
+      if (!table || table.rows.length === 0) {
+        toggleContainer.style.display = 'none';
+        return;
+      }
+      
+      let html = '<div class="toggle-title"><i class="ph ph-eye"></i> 표시 컬럼</div>';
+      const headerRow = table.rows[0]; 
+      
+      for (let c = 0; c < headerRow.cells.length; c++) {
+        if (headerRow.cells[c].classList.contains('chk-col')) continue; 
+
+        const clonedCell = headerRow.cells[c].cloneNode(true);
+        const resizer = clonedCell.querySelector('.resizer');
+        if (resizer) resizer.remove();
+        
+        let text = clonedCell.innerText.trim();
+        if (!text) text = `Column ${c}`;
+        if (text.length > 15) text = text.substring(0, 15) + '...'; 
+        
+        const isVisible = headerRow.cells[c].style.display !== 'none';
+        const icon = isVisible ? 'ph-check-circle' : 'ph-circle';
+        
+        html += `
+          <label class="col-toggle ${isVisible ? '' : 'hidden-col'}">
+            <input type="checkbox" ${isVisible ? 'checked' : ''} onchange="toggleColumn(${c}, this)">
+            <i class="ph ${icon}"></i> ${text}
+          </label>
+        `;
+      }
+      toggleContainer.innerHTML = html;
+      toggleContainer.style.display = 'flex';
+    }
+
+    function toggleColumn(colIndex, checkbox) {
+      const isVisible = checkbox.checked;
+      const table = document.querySelector('table');
+      if (!table) return;
+      
+      for (let r = 0; r < table.rows.length; r++) {
+        const cell = table.rows[r].cells[colIndex];
+        if (cell) cell.style.display = isVisible ? '' : 'none';
+      }
+      
+      const label = checkbox.parentElement;
+      const icon = label.querySelector('i');
+      if (isVisible) {
+        label.classList.remove('hidden-col');
+        icon.className = 'ph ph-check-circle';
+      } else {
+        label.classList.add('hidden-col');
+        icon.className = 'ph ph-circle';
+      }
+    }
+
+    function getCoords(cell) {
+      return { r: cell.parentElement.rowIndex, c: cell.cellIndex };
+    }
+
+    wrapper.addEventListener('mousedown', (e) => {
+      if (e.target.classList.contains('resizer')) return;
+
+      const editingCell = document.querySelector('[contenteditable="true"]');
+      if (editingCell && editingCell !== e.target.closest('td, th')) {
+        editingCell.blur();
+      }
+
+      const cell = e.target.closest('td, th');
+      if (!cell || cell.hasAttribute('contenteditable')) return; 
+      if (cell.classList.contains('chk-col')) return; 
+      if (e.button !== 0) return; 
+
+      e.preventDefault(); 
+      isDragging = true;
+      startCell = getCoords(cell);
+      endCell = startCell;
+      highlightSelection();
+    });
+
+    wrapper.addEventListener('mouseover', (e) => {
+      if (!isDragging) return;
+      const cell = e.target.closest('td, th');
+      if (!cell || cell.classList.contains('chk-col')) return; 
+      endCell = getCoords(cell);
+      highlightSelection();
+    });
+
+    window.addEventListener('mouseup', (e) => {
+      if (!isDragging) return;
+      isDragging = false;
+      
+      if (startCell && endCell && startCell.r === endCell.r && startCell.c === endCell.c) {
+        const cell = e.target.closest('td, th');
+        if (cell && !cell.classList.contains('chk-col') && !e.target.classList.contains('resizer')) {
+          
+          const isHeader = cell.tagName === 'TH';
+
+          if (!isHeader && linkedSourceColIndex !== -1 && linkedTargetColIndex !== -1 && startCell.c === linkedSourceColIndex) {
+            const clonedCell = cell.cloneNode(true);
+            const resizer = clonedCell.querySelector('.resizer');
+            if (resizer) resizer.remove();
+            
+            const targetText = clonedCell.innerText.trim();
+            const table = document.querySelector('table');
+            let copyData = [];
+            const cellsToHighlight = [];
+
+            for (let r = 1; r < table.rows.length; r++) { 
+              const row = table.rows[r];
+              if (!row || row.style.display === 'none') continue;
+
+              const sCell = row.cells[linkedSourceColIndex];
+              if (sCell && sCell.innerText.trim() === targetText) {
+                const tCell = row.cells[linkedTargetColIndex];
+                if (tCell && tCell.style.display !== 'none') {
+                  copyData.push(tCell.innerText.trim());
+                  cellsToHighlight.push(tCell);
+                }
+              }
+            }
+
+            if (copyData.length > 0) {
+              navigator.clipboard.writeText(copyData.join("\n")).then(() => {
+                cellsToHighlight.forEach(c => {
+                  c.classList.add('selected-cell', 'copied-cell');
+                });
+                setTimeout(() => {
+                  cellsToHighlight.forEach(c => {
+                    c.classList.remove('selected-cell', 'copied-cell');
+                  });
+                }, 300);
+              });
+            }
+            clearSelection(); 
+            return; 
+          }
+
+          const clonedCell = cell.cloneNode(true);
+          const resizer = clonedCell.querySelector('.resizer');
+          if (resizer) resizer.remove();
+          
+          const textToCopy = clonedCell.innerText.trim();
+          if (textToCopy) {
+            navigator.clipboard.writeText(textToCopy);
+            cell.classList.add('copied-cell'); 
+          }
+        }
+        clearSelection(); 
+      } 
+      else if (startCell && endCell) {
+        const table = document.querySelector('table');
+        if (!table) return;
+
+        const minRow = Math.min(startCell.r, endCell.r);
+        const maxRow = Math.max(startCell.r, endCell.r);
+        const minCol = Math.min(startCell.c, endCell.c);
+        const maxCol = Math.max(startCell.c, endCell.c);
+
+        let copyData = "";
+
+        for (let r = minRow; r <= maxRow; r++) {
+          const row = table.rows[r];
+          if (!row || row.style.display === 'none') continue;
+
+          let rowText = [];
+          for (let c = minCol; c <= maxCol; c++) {
+            const cell = row.cells[c];
+            if (!cell || cell.classList.contains('chk-col') || cell.style.display === 'none') continue;
+
+            const clonedCell = cell.cloneNode(true);
+            const resizer = clonedCell.querySelector('.resizer');
+            if (resizer) resizer.remove();
+
+            rowText.push(clonedCell.innerText.trim());
+          }
+          if (rowText.length > 0) {
+            copyData += rowText.join("\t") + "\n";
+          }
+        }
+
+        if (copyData) {
+          navigator.clipboard.writeText(copyData.trimEnd()).then(() => {
+            document.querySelectorAll('.selected-cell').forEach(c => c.classList.add('copied-cell'));
+            setTimeout(() => {
+              document.querySelectorAll('.copied-cell').forEach(c => c.classList.remove('copied-cell'));
+            }, 300);
+          });
+        }
+      }
+    });
+
+    wrapper.addEventListener('dblclick', (e) => {
+      if (e.target.classList.contains('resizer')) return;
+
+      const cell = e.target.closest('td, th');
+      if (!cell || cell.classList.contains('chk-col')) return;
+      
+      cell.setAttribute('contenteditable', 'true');
+      cell.focus();
+      
+      const range = document.createRange();
+      range.selectNodeContents(cell.childNodes[0]); 
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    });
+
+    wrapper.addEventListener('blur', (e) => {
+      const cell = e.target;
+      if (cell.tagName === 'TD' || cell.tagName === 'TH') {
+        cell.removeAttribute('contenteditable');
+        window.getSelection().removeAllRanges();
+      }
+    }, true); 
+
+    wrapper.addEventListener('keydown', (e) => {
+      const editingCell = document.querySelector('[contenteditable="true"]');
+      if (!editingCell) return;
+
+      if (e.key === 'Enter') {
+        if (e.altKey) {
+          e.preventDefault(); 
+          const selection = window.getSelection();
+          if (selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            const textNode = document.createTextNode('\n');
+            range.deleteContents();
+            range.insertNode(textNode);
+            range.setStartAfter(textNode);
+            range.collapse(true);
+            selection.removeAllRanges();
+            selection.addRange(range);
+          }
+        } else {
+          e.preventDefault(); 
+          editingCell.blur(); 
+        }
+      }
+    });
+
+    function highlightSelection() {
+      document.querySelectorAll('.selected-cell').forEach(c => c.classList.remove('selected-cell'));
+      if (!startCell || !endCell) return;
+      
+      const table = document.querySelector('table');
+      if (!table) return;
+
+      const minRow = Math.min(startCell.r, endCell.r);
+      const maxRow = Math.max(startCell.r, endCell.r);
+      const minCol = Math.min(startCell.c, endCell.c);
+      const maxCol = Math.max(startCell.c, endCell.c);
+
+      for (let r = minRow; r <= maxRow; r++) {
+        const row = table.rows[r];
+        if (!row || row.style.display === 'none') continue; 
+        for (let c = minCol; c <= maxCol; c++) {
+          const cell = row.cells[c];
+          if (cell) cell.classList.add('selected-cell');
+        }
+      }
+    }
+
+    function clearSelection() {
+      document.querySelectorAll('.selected-cell').forEach(c => c.classList.remove('selected-cell'));
+      startCell = null;
+      endCell = null;
+    }
+
+    function applySelectionToPreview() {
+      if (!startCell || !endCell) {
+        alert('먼저 남기고 싶은 표 영역을 마우스 드래그로 선택해주세요.');
+        return;
+      }
+      
+      const table = document.querySelector('table');
+      if (!table) return;
+
+      const minRow = Math.min(startCell.r, endCell.r);
+      const maxRow = Math.max(startCell.r, endCell.r);
+      const minCol = Math.min(startCell.c, endCell.c);
+      const maxCol = Math.max(startCell.c, endCell.c);
+
+      for (let r = table.rows.length - 1; r >= 0; r--) {
+        if (r < minRow || r > maxRow) {
+          table.deleteRow(r);
+        } else {
+          const row = table.rows[r];
+          for (let c = row.cells.length - 1; c >= 0; c--) {
+            const cell = row.cells[c];
+            if (cell && cell.classList.contains('chk-col')) continue; 
+
+            if (c < minCol || c > maxCol) {
+              row.deleteCell(c);
+            }
+          }
+        }
+      }
+      clearSelection();
+      updateColumnToggles();
+    }
+  </script>
+</body>
+</html>

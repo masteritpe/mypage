@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>기출문제 풀이</title>
+    
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    
+    <link href="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.snow.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.js"></script>
+    
+    <style>
+        /* === 1. Reset & Variables === */
+        :root {
+            --bg-body: #F9FAFB;
+            --bg-surface: #FFFFFF;
+            --border-light: #F3F4F6;
+            --border-base: #E5E7EB;
+            --text-main: #111827;
+            --text-muted: #6B7280;
+            --primary: #111827;       
+            --primary-hover: #374151;
+            --accent: #2563EB;
+            --accent-hover: #1D4ED8;
+            --secondary: #FFFFFF;
+            --secondary-hover: #F9FAFB;
+            --danger: #EF4444;
+            --success: #10B981;
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+            --radius-sm: 6px;
+            --radius-md: 8px;
+            
+            --font-ui: 'Pretendard', system-ui, -apple-system, sans-serif;
+        }
+
+        * { box-sizing: border-box; outline: none; margin: 0; padding: 0; transition: border-color 0.2s, background-color 0.2s, color 0.2s; }
+        body, html { 
+            background: var(--bg-body); color: var(--text-main);
+            font-family: var(--font-ui); font-size: 14px;
+            height: 100vh; overflow: hidden; -webkit-font-smoothing: antialiased; 
+        }
+        #app-container { display: flex; flex-direction: column; height: 100vh; }
+
+        /* === 2. Header === */
+        header { 
+            background: var(--bg-surface); border-bottom: 1px solid var(--border-base); 
+            padding: 0 32px; position: sticky; top: 0; z-index: 50; 
+            display: flex; justify-content: space-between; align-items: center; 
+            height: 64px; flex-shrink: 0; box-shadow: var(--shadow-sm);
+        }
+        .logo { font-weight: 800; font-size: 18px; color: var(--primary); display: flex; align-items: center; gap: 8px; letter-spacing: -0.02em; }
+        .logo i { color: var(--accent); font-size: 24px; }
+        .header-actions { display: flex; gap: 8px; align-items: center; }
+        .divider { width: 1px; height: 20px; background: var(--border-base); margin: 0 6px; }
+
+        /* 몰입 모드 (Ctrl+H) 적용 시 */
+        body.immersive-mode header { display: none !important; }
+        body.immersive-mode #main-content { height: 100vh !important; }
+
+        /* === 3. Buttons & Inputs === */
+        .btn { 
+            padding: 8px 14px; border-radius: var(--radius-sm); font-weight: 600; cursor: pointer; border: none; 
+            display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-family: inherit;
+        }
+        .btn i { font-size: 16px; }
+        .btn-icon-only { padding: 6px; justify-content: center; background: transparent; border: 1px solid transparent; color: var(--text-muted); border-radius: var(--radius-sm); }
+        .btn-icon-only:hover { background: var(--border-light); color: var(--primary); }
+
+        .btn-primary { background: var(--primary); color: white; box-shadow: var(--shadow-sm); }
+        .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
+        .btn-secondary { background: var(--secondary); border: 1px solid var(--border-base); color: var(--text-main); box-shadow: var(--shadow-sm); }
+        .btn-secondary:hover { background: var(--secondary-hover); border-color: #D1D5DB; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+
+        .input-base {
+            height: 34px; padding: 0 10px; border: 1px solid var(--border-base); border-radius: var(--radius-sm); 
+            font-family: inherit; font-size: 13px; color: var(--text-main); outline: none; transition: 0.2s; background: transparent;
+        }
+        .input-base:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); background: #fff; }
+
+        /* Navigation Group */
+        .nav-group { display: flex; align-items: center; gap: 2px; background: var(--bg-surface); padding: 4px; border: 1px solid var(--border-base); border-radius: var(--radius-md); box-shadow: var(--shadow-sm); }
+
+        /* === 4. Main Layout === */
+        #main-content { display: flex; flex-grow: 1; overflow: hidden; height: calc(100vh - 64px); }
+
+        /* PDF Panel (75%) */
+        #pdf-viewer-panel { flex: 7.5; display: flex; flex-direction: column; border-right: 1px solid var(--border-base); background: #525659; position: relative; }
+        #pdf-scroll-container { flex: 1; overflow: auto; display: flex; justify-content: center; align-items: flex-start; padding: 20px; min-height: 0; }
+        #pdf-render { display: none; box-shadow: 0 4px 15px rgba(0,0,0,0.3); background-color: white; }
+        #pdf-placeholder { color: #fff; margin-top: 150px; text-align: center; opacity: 0.7; }
+        #pdf-placeholder i { font-size: 48px; margin-bottom: 15px; color: #fff; }
+        
+        .pdf-toolbar { height: 48px; background: var(--bg-surface); border-top: 1px solid var(--border-base); display: flex; justify-content: space-between; align-items: center; padding: 0 16px; flex-shrink: 0; z-index: 10; }
+
+        /* Editor Panel (25%) */
+        #editor-panel { flex: 2.5; display: flex; flex-direction: column; background: var(--bg-body); position: relative; min-width: 320px; }
+        
+        /* Toolbar 한 줄 배치 최적화 */
+        .editor-toolbar { 
+            padding: 10px 16px; background: var(--bg-surface); border-bottom: 1px solid var(--border-base); 
+            display: flex; justify-content: space-between; align-items: center; z-index: 20; 
+            box-shadow: var(--shadow-sm); gap: 4px; flex-wrap: nowrap; overflow-x: auto;
+        }
+        
+        .editor-scroll-area { flex: 1; overflow-y: auto; padding: 16px; }
+        .paper-container { background: var(--bg-surface); padding: 24px; border-radius: var(--radius-md); box-shadow: var(--shadow-md); border: 1px solid var(--border-base); display: flex; flex-direction: column; gap: 20px; min-height: 100%; }
+        
+        /* Exam & Seq Header Inputs */
+        .exam-input-group { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 2px solid var(--border-base); }
+        .exam-input { flex: 1; border: none; font-size: 16px; font-weight: 700; color: var(--primary); background: transparent; outline: none; min-width: 0; }
+        .exam-input:focus { color: var(--accent); }
+        .seq-input { width: 60px; text-align: center; border: none; font-size: 16px; font-weight: 700; color: var(--accent); background: #EFF6FF; border-radius: 4px; padding: 4px 0; outline: none; flex-shrink: 0;}
+        .seq-input:focus { background: #DBEAFE; }
+
+        /* Quill Editor Styling Overrides */
+        .section-label { font-size: 13px; font-weight: 700; color: var(--text-muted); display: flex; align-items: center; gap: 6px; padding-bottom: 6px; border-bottom: 1px solid var(--border-light); margin-bottom: 8px; }
+        .section-label i { color: var(--accent); font-size: 16px; }
+        
+        .ql-container { font-family: var(--font-ui) !important; font-size: 14px; background: var(--bg-body); border: 1px solid var(--border-base) !important; border-radius: var(--radius-sm); transition: all 0.2s; }
+        .ql-editor { min-height: 100px; line-height: 1.6; color: var(--text-main); padding: 12px; }
+        .ql-container:hover { border-color: #D1D5DB !important; }
+        .ql-container.ql-active { background: var(--bg-surface); border-color: var(--accent) !important; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+        .ql-toolbar { display: none !important; }
+
+        /* Attachments */
+        .attachments-container { display: flex; flex-direction: column; gap: 12px; }
+        .attachment-card { border: 1px solid var(--border-base); border-radius: var(--radius-md); background: var(--bg-surface); display: none; overflow: hidden; }
+        .card-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px dashed var(--border-base); font-size: 12px; color: var(--text-muted); background: var(--bg-body); }
+        .card-header span { font-weight: 600; display: flex; align-items: center; gap: 4px; }
+        .card-body { padding: 12px; display: flex; justify-content: center; align-items: center; background: #fafafa; position: relative; cursor: pointer; }
+        .card-body img { max-width: 100%; max-height: 250px; object-fit: contain; border-radius: 4px; border: 1px solid var(--border-base); background: #fff; }
+        
+        .add-image-btn { width: 100%; padding: 12px; border: 2px dashed var(--border-base); border-radius: var(--radius-md); background: transparent; color: var(--text-muted); cursor: pointer; font-size: 12px; font-weight: 600; transition: 0.2s; display: flex; justify-content: center; align-items: center; gap: 6px; }
+        .add-image-btn:hover { border-color: var(--accent); color: var(--accent); background: #EFF6FF; }
+
+        /* Memo Sidebar */
+        .side-panel-slide { position: fixed; top: 0; right: -380px; width: 380px; height: 100vh; z-index: 2000; box-shadow: -4px 0 15px rgba(0,0,0,0.1); transition: right 0.3s cubic-bezier(0.25, 1, 0.5, 1); display: flex; flex-direction: column; background: var(--bg-surface); border-left: 1px solid var(--border-base); }
+        .side-panel-slide.open { right: 0; }
+        .memo-header { padding: 16px 24px; border-bottom: 1px solid var(--border-base); display: flex; justify-content: space-between; align-items: center; background: var(--bg-body); }
+        #memo-textarea { flex: 1; border: none; padding: 24px; background: transparent; resize: none; font-family: inherit; font-size: 14px; line-height: 1.6; color: var(--text-main); outline: none; }
+        
+        /* Modal & Toast */
+        .modal-overlay { display: none; position: fixed; z-index: 9999; inset: 0; background-color: rgba(17, 24, 39, 0.9); justify-content: center; align-items: center; backdrop-filter: blur(2px); }
+        .modal-content { max-width: 90%; max-height: 90vh; border-radius: var(--radius-md); box-shadow: 0 10px 25px rgba(0,0,0,0.5); border: 2px solid #fff; }
+        .close-modal { position: absolute; top: 20px; right: 30px; color: #fff; font-size: 32px; cursor: pointer; transition: 0.2s; }
+        .close-modal:hover { color: var(--danger); }
+
+        #toast-area { position: fixed; right: 24px; bottom: 24px; z-index: 10000; display: flex; flex-direction: column; gap: 10px; }
+        .toast { display: flex; align-items: center; gap: 10px; background: var(--primary); color: #fff; border-radius: var(--radius-md); padding: 12px 20px; box-shadow: var(--shadow-md); font-size: 13px; font-weight: 500; animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+        .toast.ok { border-left: 4px solid var(--success); } .toast.warn { border-left: 4px solid var(--warning-text); } .toast.bad { border-left: 4px solid var(--danger); }
+        @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        .dueum-highlight { background-color: #0d3a9e !important; color: #ffffff !important; padding: 1px 4px; border-radius: 3px; font-weight: 700; }
+        textarea.hidden-source { display: none; }
+    </style>
+</head>
+<body>
+    <div id="app-container">
+        <header>
+            <div class="logo"><i class="ph-fill ph-book-open-text"></i> 기출문제 풀이</div>
+            <div class="header-actions">
+                <button class="btn btn-secondary" id="btn-memo">
+                    <i class="ph-fill ph-lightbulb" style="color:#EAB308;"></i> 아이디어 보드
+                </button>
+                <div class="divider"></div>
+                <button id="load-pdf-btn" class="btn btn-primary">
+                    <i class="ph ph-file-pdf"></i> 문제지 PDF 열기
+                </button>
+            </div>
+        </header>
+
+        <main id="main-content">
+            <section id="pdf-viewer-panel">
+                <div id="pdf-scroll-container">
+                    <div id="pdf-placeholder">
+                        <i class="ph-fill ph-file-arrow-up"></i>
+                        <p>상단의 <strong>'문제지 PDF 열기'</strong> 버튼을 클릭하세요.</p>
+                    </div>
+                    <canvas id="pdf-render"></canvas>
+                </div>
+                <div class="pdf-toolbar">
+                    <div style="display: flex; gap: 4px;">
+                        <button id="zoom-out-btn" class="btn btn-icon-only" title="축소"><i class="ph ph-magnifying-glass-minus"></i></button>
+                        <button id="zoom-in-btn" class="btn btn-icon-only" title="확대"><i class="ph ph-magnifying-glass-plus"></i></button>
+                        <button id="fit-width-btn" class="btn btn-secondary" style="margin-left: 8px;">폭 맞춤</button>
+                    </div>
+                    <div style="display: flex; gap: 4px; align-items: center;">
+                        <input type="number" id="page-num-input" class="input-base" style="width: 50px; text-align: center; padding:0;" value="0" min="1">
+                        <span id="page-total-label" style="font-size:13px; color:var(--text-muted); margin: 0 8px 0 4px;">/ 0</span>
+                        <button id="go-page-btn" class="btn btn-secondary">이동</button>
+                    </div>
+                    <div style="display: flex; gap: 4px;">
+                        <button id="prev-page-btn" class="btn btn-icon-only" disabled><i class="ph ph-caret-left"></i></button>
+                        <button id="next-page-btn" class="btn btn-icon-only" disabled><i class="ph ph-caret-right"></i></button>
+                    </div>
+                </div>
+            </section>
+
+            <section id="editor-panel">
+                <div class="editor-toolbar">
+                    <div style="display:flex; gap:4px; flex-shrink: 0;">
+                        <button class="btn btn-secondary btn-icon-only" id="btn-new" title="새 문서 (Ctrl+Alt+N)"><i class="ph ph-file-plus"></i></button>
+                        <button class="btn btn-primary" id="btn-save" title="저장 (Ctrl+S)" style="padding: 6px 12px;"><i class="ph ph-floppy-disk"></i> 저장</button>
+                        <button class="btn btn-icon-only" id="btn-delete" title="현재 문서 삭제" style="color: var(--danger);"><i class="ph ph-trash"></i></button>
+                    </div>
+                    
+                    <div class="nav-group" style="flex-shrink: 0;">
+                        <input id="seq-jump" type="text" class="input-base" style="width: 55px; height: 28px; text-align: center; font-weight: 600; border: none; background: #F3F4F6; padding:0;" placeholder="1-1">
+                        <button class="btn btn-icon-only" id="btn-seq-load" title="연번으로 검색" style="padding:4px;"><i class="ph ph-magnifying-glass" style="color: var(--text-main); font-weight:bold;"></i></button>
+                        <div style="width:1px; height:16px; background:var(--border-base); margin:0 2px;"></div>
+                        <button class="btn btn-icon-only" id="btn-nav-prev" title="이전 문제" style="padding:4px;"><i class="ph ph-arrow-left"></i></button>
+                        <button class="btn btn-icon-only" id="btn-nav-next" title="다음 문제" style="padding:4px;"><i class="ph ph-arrow-right"></i></button>
+                    </div>
+                </div>
+
+                <div class="editor-scroll-area">
+                    <div class="paper-container">
+                        
+                        <div class="exam-input-group">
+                            <input id="examInput" type="text" class="exam-input" placeholder="시험/과목명" autocomplete="off" />
+                            <span style="color: var(--border-base); font-size: 18px; font-weight: 300;">/</span>
+                            <input id="examSeqInput" type="text" class="seq-input" placeholder="1-1" title="연번 (예: 1-1)" />
+                        </div>
+
+                        <div>
+                            <div class="section-label"><i class="ph-fill ph-chalkboard-teacher"></i> 강의 멘트 / 해설 스크립트</div>
+                            <textarea id="script" class="hidden-source"></textarea>
+                            <div id="editor-script"></div>
+                        </div>
+
+                        <div>
+                            <div class="section-label"><i class="ph-fill ph-brain"></i> 풀이 전략 / 접근법</div>
+                            <textarea id="strategy" class="hidden-source"></textarea>
+                            <div id="editor-strategy"></div>
+                        </div>
+
+                        <div>
+                            <div class="section-label"><i class="ph-fill ph-shield-check"></i> 대응 방안 / 오답 함정 분석</div>
+                            <textarea id="countermeasure" class="hidden-source"></textarea>
+                            <div id="editor-countermeasure"></div>
+                        </div>
+
+                        <div style="margin-top:4px;">
+                            <div class="section-label" style="border:none; padding:0;"><i class="ph-fill ph-images"></i> 참고 이미지 / 화면 캡처</div>
+                            <div style="display:none;">
+                                <input type="file" id="imgFile1" accept="image/*"><input type="checkbox" id="img1-remove">
+                                <input type="file" id="imgFile2" accept="image/*"><input type="checkbox" id="img2-remove">
+                                <input type="file" id="imgFile3" accept="image/*"><input type="checkbox" id="img3-remove">
+                            </div>
+                            <div class="attachments-container" id="attachments-container">
+                                <div class="attachment-card" id="card-1">
+                                    <div class="card-header"><span><i class="ph ph-image"></i> 첨부 1</span><button class="btn-icon-only card-delete-btn" id="btn-del-img-1" type="button"><i class="ph ph-x"></i></button></div>
+                                    <div class="card-body" id="card-body-1"><img id="img-preview-1" src=""></div>
+                                </div>
+                                <div class="attachment-card" id="card-2">
+                                    <div class="card-header"><span><i class="ph ph-image"></i> 첨부 2</span><button class="btn-icon-only card-delete-btn" id="btn-del-img-2" type="button"><i class="ph ph-x"></i></button></div>
+                                    <div class="card-body" id="card-body-2"><img id="img-preview-2" src=""></div>
+                                </div>
+                                <div class="attachment-card" id="card-3">
+                                    <div class="card-header"><span><i class="ph ph-image"></i> 첨부 3</span><button class="btn-icon-only card-delete-btn" id="btn-del-img-3" type="button"><i class="ph ph-x"></i></button></div>
+                                    <div class="card-body" id="card-body-3"><img id="img-preview-3" src=""></div>
+                                </div>
+                                <button class="add-image-btn" id="btn-add-image" type="button"><i class="ph ph-plus-circle"></i> 이미지 추가 (붙여넣기 지원)</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div id="memo-sidebar" class="side-panel-slide">
+        <div class="memo-header">
+            <div style="font-weight:700; color:var(--primary); font-size:15px; display:flex; align-items:center; gap:6px;">
+                <i class="ph-fill ph-lightbulb" style="color:#EAB308;"></i> 아이디어 보드
+            </div>
+            <button class="btn btn-icon-only" id="btn-close-memo"><i class="ph ph-x"></i></button>
+        </div>
+        <textarea id="memo-textarea" placeholder="강의 준비 중 번뜩이는 아이디어나 임시 메모를 자유롭게 기록하세요. 브라우저에 자동 저장됩니다."></textarea>
+    </div>
+
+    <div id="img-modal" class="modal-overlay">
+        <span class="close-modal">&times;</span>
+        <img class="modal-content" id="modal-img">
+    </div>
+    
+    <div id="toast-area"></div>
+
+    <script>
+        // 폰트 사이즈 1px 단위 정밀 조절 허용
+        const SizeStyle = Quill.import('attributors/style/size');
+        SizeStyle.whitelist = null;
+        Quill.register(SizeStyle, true);
+
+        // 연번 파싱 유틸리티 (예: "1-10" -> [1, 10])
+        function parseSeq(seqStr) {
+            if (!seqStr) return [1, 1];
+            let parts = String(seqStr).split('-');
+            let p = parseInt(parts[0]) || 1;
+            let n = parseInt(parts[1]) || 1;
+            return [p, n];
+        }
+
+        // DB 및 유틸리티 설정
+        const DB_NAME = 'PastPapersDB_v5'; 
+        const DB_VERSION = 1;
+        
+        const AppCore = {
+            db: null,
+            openDB: () => new Promise((resolve, reject) => {
+                const req = indexedDB.open(DB_NAME, DB_VERSION);
+                req.onupgradeneeded = (e) => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains('papers')) db.createObjectStore('papers', { keyPath: 'id' });
+                    if (!db.objectStoreNames.contains('images')) db.createObjectStore('images', { keyPath: 'id' });
+                };
+                req.onsuccess = (e) => { AppCore.db = e.target.result; resolve(); };
+                req.onerror = (e) => reject(e.target.error);
+            }),
+            uid: () => Date.now().toString(36) + Math.random().toString(36).substr(2),
+            nowISO: () => new Date().toISOString(),
+            getAllItems: () => new Promise(resolve => {
+                const req = AppCore.db.transaction('papers', 'readonly').objectStore('papers').getAll();
+                req.onsuccess = () => {
+                    let results = req.result || [];
+                    // 생성된 시간(ts) 기준으로 정렬
+                    results.sort((a,b) => new Date(a.ts) - new Date(b.ts));
+                    resolve(results);
+                };
+            }),
+            putItem: (item) => new Promise(resolve => {
+                const tx = AppCore.db.transaction('papers', 'readwrite');
+                tx.objectStore('papers').put(item);
+                tx.oncomplete = () => resolve();
+            }),
+            deleteItem: (id) => new Promise(resolve => {
+                const tx = AppCore.db.transaction('papers', 'readwrite');
+                tx.objectStore('papers').delete(id);
+                tx.oncomplete = () => resolve();
+            }),
+            putImageBlob: (blob) => new Promise(resolve => {
+                const id = 'img_' + AppCore.uid();
+                const tx = AppCore.db.transaction('images', 'readwrite');
+                tx.objectStore('images').put({ id: id, blob: blob });
+                tx.oncomplete = () => resolve(id);
+            }),
+            getImageDataURL: (id) => new Promise(resolve => {
+                const req = AppCore.db.transaction('images', 'readonly').objectStore('images').get(id);
+                req.onsuccess = () => {
+                    if (req.result && req.result.blob) {
+                        const reader = new FileReader();
+                        reader.onload = (e) => resolve(e.target.result);
+                        reader.readAsDataURL(req.result.blob);
+                    } else resolve('');
+                };
+            }),
+            nextSeq: (exam, items) => {
+                const examItems = items.filter(i => i.exam === exam);
+                if(examItems.length === 0) return '1-1';
+
+                examItems.sort((a,b) => {
+                    let [pa, na] = parseSeq(a.seq);
+                    let [pb, nb] = parseSeq(b.seq);
+                    if (pa !== pb) return pa - pb;
+                    return na - nb;
+                });
+
+                const lastSeq = examItems[examItems.length - 1].seq;
+                let [period, num] = parseSeq(lastSeq);
+
+                // 1교시는 13문제, 2/3/4교시는 6문제 규칙 적용
+                if (period === 1) {
+                    if (num >= 13) return '2-1';
+                    return `1-${num + 1}`;
+                } else {
+                    if (num >= 6) return `${period + 1}-1`;
+                    return `${period}-${num + 1}`;
+                }
+            },
+            toast: (msg, type="ok") => {
+                const area = document.getElementById('toast-area');
+                const t = document.createElement('div');
+                t.className = `toast ${type}`;
+                let icon = type==='ok' ? 'ph-check-circle' : (type==='warn' ? 'ph-warning' : 'ph-x-circle');
+                t.innerHTML = `<i class="ph-fill ${icon}" style="font-size:18px;"></i> ${msg}`;
+                area.appendChild(t);
+                setTimeout(() => { t.style.opacity = '0'; setTimeout(()=>t.remove(), 300); }, 1000);
+            }
+        };
+
+        // 메인 애플리케이션 로직
+        (async function(){
+            const $ = (s) => document.querySelector(s);
+            let currentState = { editingId: null, items: [] };
+            const quillEditors = {};
+
+            async function init() {
+                try {
+                    await AppCore.openDB();
+                    await refreshData();
+                    setupWysiwygEditors();
+                    setupImageSlots();
+                    setupHotkeys();
+                    setupPasteHandler(); 
+                    setupMemo();
+                    
+                    if (currentState.items.length > 0) {
+                        loadItem(currentState.items[currentState.items.length - 1]);
+                    } else {
+                        clearForm();
+                    }
+                    AppCore.toast("에디터 초기화 완료", "ok");
+                } catch(e) { AppCore.toast("DB 초기화 오류", "bad"); }
+
+                $('.close-modal').onclick = () => $('#img-modal').style.display = 'none';
+                $('#img-modal').onclick = (e) => { if(e.target === $('#img-modal')) $('#img-modal').style.display = 'none'; };
+            }
+
+            function setupMemo() {
+                const memoText = $('#memo-textarea');
+                memoText.value = localStorage.getItem("PastPapers_memo") || "";
+                memoText.oninput = () => localStorage.setItem("PastPapers_memo", memoText.value);
+                $('#btn-memo').onclick = () => $('#memo-sidebar').classList.add("open");
+                $('#btn-close-memo').onclick = () => $('#memo-sidebar').classList.remove("open");
+            }
+
+            function setupPasteHandler() {
+                document.addEventListener('paste', (e) => {
+                    const activeEl = document.activeElement;
+                    if (activeEl && (activeEl.classList.contains('ql-editor') || activeEl.tagName === 'INPUT')) return;
+                    const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+                    for (let i = 0; i < items.length; i++) {
+                        if (items[i].type.indexOf("image") !== -1) {
+                            e.preventDefault(); addFileToEmptySlot(items[i].getAsFile()); break;
+                        }
+                    }
+                });
+            }
+
+            function addFileToEmptySlot(file) {
+                for (let i = 1; i <= 3; i++) {
+                    const card = $(`#card-${i}`);
+                    if (card.style.display === 'none' || !card.style.display) {
+                        const dt = new DataTransfer(); dt.items.add(file);
+                        $(`#imgFile${i}`).files = dt.files; $(`#img${i}-remove`).checked = false;
+                        updateSlotUI(i, true); AppCore.toast(`이미지 첨부 슬롯 ${i}번에 추가됨`, 'ok'); return;
+                    }
+                }
+                AppCore.toast('이미지 슬롯(3개)이 모두 찼습니다.', 'warn');
+            }
+
+            function setupWysiwygEditors() {
+                const customBindings = {
+                    bold: { key: 'B', shortKey: true, handler: function(range, context) { this.quill.format('bold', !context.format.bold); } },
+                    italic: { key: 'I', shortKey: true, handler: function(range, context) { this.quill.format('italic', !context.format.italic); } },
+                    underline: { key: 'U', shortKey: true, handler: function(range, context) { this.quill.format('underline', !context.format.underline); } },
+                    strike: { key: '0', shortKey: true, handler: function(range, context) { this.quill.format('strike', !context.format.strike); } },
+                    redText: { key: 'R', shortKey: true, altKey: true, handler: function() { this.quill.format('color', '#d93025'); } },
+                    blueText: { key: 'B', shortKey: true, altKey: true, handler: function() { this.quill.format('color', '#1a73e8'); } },
+                    greenText: { key: 'G', shortKey: true, altKey: true, handler: function() { this.quill.format('color', '#10B981'); } },
+                    clearFormat: { key: 'X', shortKey: true, shiftKey: true, handler: function(range) { this.quill.removeFormat(range.index, range.length); } },
+                    hl1: { key: '1', shortKey: true, handler: function() { this.quill.format('background', '#ffe0b2'); } },
+                    hl2: { key: '2', shortKey: true, handler: function() { this.quill.format('background', '#bbdefb'); } },
+                    hl3: { key: '3', shortKey: true, handler: function() { this.quill.format('background', '#fff9c4'); } },
+                    hl4: { key: '4', shortKey: true, handler: function() { this.quill.format('background', '#c8e6c9'); } },
+                    hl5: { key: '5', shortKey: true, handler: function() { this.quill.format('background', '#f8bbd0'); } },
+                    hl6: { key: '6', shortKey: true, handler: function() { this.quill.format('background', '#d7ccc8'); } },
+                    hl7: { key: '7', shortKey: true, handler: function() { this.quill.format('background', '#e0e0e0'); } },
+                    dueum: { key: 'M', shortKey: true, altKey: true, handler: function() {
+                        this.quill.format('background', '#0d3a9e'); this.quill.format('color', '#ffffff'); this.quill.format('bold', true);
+                    }}
+                };
+
+                ['script', 'strategy', 'countermeasure'].forEach(id => {
+                    const ta = $(`#${id}`);
+                    const div = $(`#editor-${id}`);
+                    
+                    const quill = new Quill(div, {
+                        theme: 'snow',
+                        modules: {
+                            toolbar: false, table: true,
+                            keyboard: { bindings: customBindings },
+                            clipboard: { matchVisual: false }
+                        }
+                    });
+
+                    quill.root.setAttribute('spellcheck', false);
+                    
+                    // Placeholder 설정
+                    let placeholderText = '내용을 작성해주세요.';
+                    if (id === 'script') placeholderText = '해설 멘트나 대본을 자유롭게 작성하세요.';
+                    else if (id === 'strategy') placeholderText = '문제의 핵심 키워드, 접근법 등 풀이 전략을 작성하세요.';
+                    else if (id === 'countermeasure') placeholderText = '오답 함정이나 팁을 작성하세요.';
+                    quill.root.setAttribute('data-placeholder', placeholderText);
+
+                    quill.on('selection-change', range => div.classList.toggle('ql-active', !!range));
+                    quill.on('text-change', () => ta.value = quill.getSemanticHTML());
+                    
+                    const changeFontSize = (delta) => {
+                        const range = quill.getSelection();
+                        if (!range || range.length === 0) return;
+                        const format = quill.getFormat(range);
+                        let currentSize = 14; 
+                        if (format.size) currentSize = parseInt(format.size.replace('px', '')) || 14;
+                        let newSize = Math.max(8, currentSize + delta);
+                        quill.format('size', newSize + 'px');
+                    };
+
+                    quill.root.addEventListener('wheel', (e) => {
+                        if (e.ctrlKey || e.metaKey) { e.preventDefault(); changeFontSize(e.deltaY < 0 ? 1 : -1); }
+                    }, { passive: false });
+
+                    quill.root.addEventListener('keydown', (e) => {
+                        if ((e.ctrlKey || e.metaKey) && (e.key === '=' || e.key === '+' || e.key === '-')) {
+                            e.preventDefault(); changeFontSize(e.key === '-' ? -1 : 1);
+                        }
+                    });
+
+                    quillEditors[id] = quill;
+                });
+            }
+
+            function setEditorContent(id, htmlVal) {
+                const ta = $(`#${id}`); if(ta) ta.value = htmlVal || '';
+                if(quillEditors[id]) quillEditors[id].clipboard.dangerouslyPasteHTML(htmlVal || '');
+            }
+
+            // 🔥 단축키 통합 설정 (Ctrl+S, Ctrl+Alt+N, Ctrl+H 포함)
+            function setupHotkeys() {
+                document.addEventListener('keydown', (e) => {
+                    const isCtrl = e.ctrlKey || e.metaKey;
+
+                    // 저장 (Ctrl+S)
+                    if (isCtrl && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 's') { 
+                        e.preventDefault(); 
+                        save(); 
+                        return; 
+                    }
+
+                    // 새 문서 (Ctrl+Alt+N)
+                    if (isCtrl && e.altKey && !e.shiftKey && e.key.toLowerCase() === 'n') {
+                        e.preventDefault();
+                        $('#btn-new').click();
+                        return;
+                    }
+
+                    // 몰입 모드 (Ctrl+H)
+                    if (isCtrl && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'h') {
+                        e.preventDefault();
+                        document.body.classList.toggle('immersive-mode');
+                        // 리사이즈 이벤트를 발생시켜 PDF.js가 화면 크기 변화를 감지하도록 함
+                        setTimeout(() => window.dispatchEvent(new Event('resize')), 150);
+                        return;
+                    }
+
+                    // 에디터 외부에서 화살표 탐색
+                    if (document.activeElement && !document.activeElement.classList.contains('ql-editor') && document.activeElement.tagName !== 'INPUT') {
+                        if (isCtrl) {
+                            if (e.key === 'ArrowLeft') { e.preventDefault(); navigate(-1); }
+                            if (e.key === 'ArrowRight') { e.preventDefault(); navigate(1); }
+                        } else {
+                            if (e.key === 'ArrowLeft') { e.preventDefault(); $('#prev-page-btn').click(); }
+                            if (e.key === 'ArrowRight') { e.preventDefault(); $('#next-page-btn').click(); }
+                        }
+                    }
+                });
+            }
+
+            function setupImageSlots() {
+                $('#btn-add-image').onclick = () => {
+                    for(let i=1; i<=3; i++) {
+                        if ($(`#card-${i}`).style.display === 'none' || !$(`#card-${i}`).style.display) { $(`#imgFile${i}`).click(); return; }
+                    }
+                    AppCore.toast('최대 3개의 이미지만 추가 가능합니다.', 'warn');
+                };
+
+                for(let i=1; i<=3; i++) {
+                    const fileInput = $(`#imgFile${i}`);
+                    $(`#btn-del-img-${i}`).onclick = (e) => { e.stopPropagation(); fileInput.value = ''; $(`#img${i}-remove`).checked = true; updateSlotUI(i, false); };
+                    $(`#card-body-${i}`).onclick = () => { const img = $(`#img-preview-${i}`); if(img.src) { $('#modal-img').src = img.src; $('#img-modal').style.display = 'flex'; }};
+                    fileInput.onchange = () => { if(fileInput.files[0]) updateSlotUI(i, true); };
+                }
+            }
+
+            async function updateSlotUI(idx, hasData, imageId = null) {
+                const card = $(`#card-${idx}`); const preview = $(`#img-preview-${idx}`);
+                if(hasData) {
+                    card.style.display = 'block';
+                    if (imageId) preview.src = await AppCore.getImageDataURL(imageId);
+                    else {
+                        const fileInput = $(`#imgFile${idx}`);
+                        if (fileInput.files[0]) {
+                            const reader = new FileReader();
+                            reader.onload = (e) => preview.src = e.target.result;
+                            reader.readAsDataURL(fileInput.files[0]);
+                        }
+                    }
+                } else { card.style.display = 'none'; preview.src = ''; }
+            }
+
+            async function refreshData() { currentState.items = await AppCore.getAllItems(); }
+
+            // 양식 초기화 (자동으로 다음 문제 번호 부여)
+            function clearForm() {
+                currentState.editingId = null;
+                const currentExam = $('#examInput').value.trim() || '138회 정보관리';
+                $('#examInput').value = currentExam;
+                
+                const nextSeqStr = AppCore.nextSeq(currentExam, currentState.items);
+                $('#examSeqInput').value = nextSeqStr;
+                $('#seq-jump').value = nextSeqStr;
+                
+                setEditorContent('script', '');
+                setEditorContent('strategy', '');
+                setEditorContent('countermeasure', '');
+                
+                for(let i=1; i<=3; i++) { $(`#imgFile${i}`).value = ''; $(`#img${i}-remove`).checked = false; updateSlotUI(i, false); }
+                AppCore.toast(`새 문서가 준비되었습니다. (단축키: Ctrl+Alt+N)`, 'ok');
+            }
+
+            // 검색 아이콘 클릭 로직 개선
+            async function loadBySeq(exam, seq) {
+                if(!exam || !seq) return AppCore.toast('시험명과 번호를 확인하세요.', 'warn');
+                await refreshData();
+                const target = currentState.items.find(it => it.exam === exam.trim() && it.seq === seq.trim());
+                if(target) { 
+                    loadItem(target); 
+                    AppCore.toast(`[${seq}] 번호가 로드되었습니다.`, 'ok'); 
+                } else {
+                    // 없으면 해당 번호로 새 문서를 준비해 줌
+                    currentState.editingId = null;
+                    $('#examInput').value = exam.trim();
+                    $('#examSeqInput').value = seq.trim();
+                    $('#seq-jump').value = seq.trim();
+                    setEditorContent('script', ''); setEditorContent('strategy', ''); setEditorContent('countermeasure', '');
+                    for(let i=1; i<=3; i++) { $(`#imgFile${i}`).value = ''; $(`#img${i}-remove`).checked = false; updateSlotUI(i, false); }
+                    AppCore.toast(`[${seq}] 작성 준비 완료`, 'ok');
+                }
+            }
+
+            async function loadItem(it) {
+                currentState.editingId = it.id;
+                $('#examInput').value = it.exam; $('#examSeqInput').value = it.seq; $('#seq-jump').value = it.seq;
+                setEditorContent('script', it.script); setEditorContent('strategy', it.strategy); setEditorContent('countermeasure', it.countermeasure);
+                for(let i=1; i<=3; i++) {
+                    $(`#imgFile${i}`).value = ''; $(`#img${i}-remove`).checked = false;
+                    updateSlotUI(i, !!it[`img${i}Id`], it[`img${i}Id`]);
+                }
+            }
+
+            async function save() {
+                const exam = $('#examInput').value.trim();
+                if(!exam) return AppCore.toast('시험/과목명은 필수입니다.', 'bad');
+
+                try {
+                    let seq = $('#examSeqInput').value.trim();
+                    if (!seq) {
+                        seq = AppCore.nextSeq(exam, currentState.items);
+                        $('#examSeqInput').value = seq;
+                        $('#seq-jump').value = seq;
+                    }
+
+                    const item = {
+                        id: currentState.editingId || AppCore.uid(),
+                        exam, seq,
+                        script: $('#script').value, strategy: $('#strategy').value, countermeasure: $('#countermeasure').value,
+                        ts: currentState.editingId ? currentState.items.find(x => x.id === currentState.editingId)?.ts : AppCore.nowISO()
+                    };
+
+                    const oldItem = currentState.items.find(x => x.id === item.id);
+                    for(let i=1; i<=3; i++) {
+                        const file = $(`#imgFile${i}`).files[0];
+                        if(file) item[`img${i}Id`] = await AppCore.putImageBlob(file);
+                        else if($(`#img${i}-remove`).checked) item[`img${i}Id`] = '';
+                        else item[`img${i}Id`] = oldItem ? oldItem[`img${i}Id`] : '';
+                    }
+
+                    await AppCore.putItem(item);
+                    await refreshData();
+                    loadItem(currentState.items.find(x => x.id === item.id));
+                    AppCore.toast('저장되었습니다.', 'ok');
+                } catch(e) { AppCore.toast('저장 실패', 'bad'); }
+            }
+
+            async function deleteCurrent() {
+                if(!currentState.editingId) return AppCore.toast('삭제할 문서가 없습니다.', 'warn');
+                if(!confirm('현재 문서를 정말 삭제하시겠습니까?')) return;
+                
+                await AppCore.deleteItem(currentState.editingId);
+                AppCore.toast('문서가 삭제되었습니다.', 'ok');
+                
+                await refreshData();
+                if(currentState.items.length > 0) {
+                    loadItem(currentState.items[currentState.items.length - 1]);
+                } else { clearForm(); }
+            }
+
+            // 이전/다음(화살표) 탐색 로직 개선
+            function navigate(delta) {
+                const exam = $('#examInput').value.trim();
+                if(!exam) return AppCore.toast('시험/과목명을 먼저 입력해주세요.', 'warn');
+
+                const examItems = currentState.items.filter(x => x.exam === exam).sort((a,b) => {
+                    let [pa, na] = parseSeq(a.seq);
+                    let [pb, nb] = parseSeq(b.seq);
+                    if (pa !== pb) return pa - pb;
+                    return na - nb;
+                });
+                
+                if(examItems.length === 0) return AppCore.toast('저장된 문서가 없습니다.', 'warn');
+
+                let currentSeq = $('#examSeqInput').value.trim();
+                let idx = examItems.findIndex(x => x.id === currentState.editingId);
+                
+                if(idx === -1) {
+                    idx = examItems.findIndex(x => x.seq === currentSeq);
+                }
+
+                if (idx === -1) {
+                    if (delta > 0) return AppCore.toast('현재 작성중인 문서가 마지막입니다.', 'warn');
+                    else idx = examItems.length; // 이전 버튼 누르면 마지막 저장 문서로
+                }
+
+                let nextIdx = idx + delta;
+                
+                if(nextIdx >= 0 && nextIdx < examItems.length) {
+                    loadItem(examItems[nextIdx]);
+                } else if (nextIdx >= examItems.length) {
+                    // 마지막에서 다음 누르면 새 문서 자동 준비
+                    currentState.editingId = null;
+                    $('#examInput').value = exam;
+                    const nextSeqStr = AppCore.nextSeq(exam, currentState.items);
+                    $('#examSeqInput').value = nextSeqStr;
+                    $('#seq-jump').value = nextSeqStr;
+                    setEditorContent('script', ''); setEditorContent('strategy', ''); setEditorContent('countermeasure', '');
+                    for(let i=1; i<=3; i++) { $(`#imgFile${i}`).value = ''; $(`#img${i}-remove`).checked = false; updateSlotUI(i, false); }
+                    AppCore.toast(`[${nextSeqStr}] 작성 준비 완료`, 'ok');
+                } else {
+                    AppCore.toast('첫 번째 문서입니다.', 'warn');
+                }
+            }
+
+            $('#btn-new').onclick = clearForm;
+            $('#btn-save').onclick = save;
+            $('#btn-delete').onclick = deleteCurrent;
+            $('#btn-seq-load').onclick = () => loadBySeq($('#examInput').value, $('#seq-jump').value);
+            $('#seq-jump').onkeydown = (e) => { if(e.key === 'Enter') $('#btn-seq-load').click(); };
+            $('#btn-nav-prev').onclick = () => navigate(-1);
+            $('#btn-nav-next').onclick = () => navigate(1);
+
+            // PDF Viewer 로직
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+            const pdfApp = { pdfDoc: null, pageNum: 1, scale: 1.2, pageRendering: false, pageNumPending: null };
+            const els = { canvas: $('#pdf-render'), container: $('#pdf-scroll-container'), input: $('#page-num-input') };
+
+            $('#load-pdf-btn').onclick = () => {
+                const input = document.createElement('input'); input.type = 'file'; input.accept = 'application/pdf';
+                input.onchange = (e) => {
+                    const file = e.target.files[0]; if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = function() {
+                        pdfjsLib.getDocument(new Uint8Array(this.result)).promise.then(doc => {
+                            pdfApp.pdfDoc = doc; pdfApp.pageNum = 1;
+                            $('#pdf-placeholder').style.display = 'none'; $('#pdf-render').style.display = 'block';
+                            fitWidth();
+                        });
+                    };
+                    reader.readAsArrayBuffer(file);
+                };
+                input.click();
+            };
+
+            function renderPage(num) {
+                pdfApp.pageRendering = true; els.input.value = num;
+                pdfApp.pdfDoc.getPage(num).then(page => {
+                    const vp = page.getViewport({ scale: pdfApp.scale * 2 });
+                    const cssVp = page.getViewport({ scale: pdfApp.scale });
+                    els.canvas.height = vp.height; els.canvas.width = vp.width;
+                    els.canvas.style.height = `${cssVp.height}px`; els.canvas.style.width = `${cssVp.width}px`;
+                    page.render({ canvasContext: els.canvas.getContext('2d'), viewport: vp }).promise.then(() => {
+                        pdfApp.pageRendering = false;
+                        if(pdfApp.pageNumPending !== null) { renderPage(pdfApp.pageNumPending); pdfApp.pageNumPending = null; }
+                    });
+                });
+                $('#page-total-label').textContent = `/ ${pdfApp.pdfDoc.numPages}`;
+                $('#prev-page-btn').disabled = num <= 1; $('#next-page-btn').disabled = num >= pdfApp.pdfDoc.numPages;
+            }
+
+            function queueRenderPage(num) { if(pdfApp.pageRendering) pdfApp.pageNumPending = num; else renderPage(num); }
+            function fitWidth() { if(!pdfApp.pdfDoc) return; pdfApp.pdfDoc.getPage(pdfApp.pageNum).then(page => { pdfApp.scale = (els.container.clientWidth - 40) / page.getViewport({ scale: 1 }).width; renderPage(pdfApp.pageNum); }); }
+
+            $('#prev-page-btn').onclick = () => { if(pdfApp.pageNum > 1) queueRenderPage(--pdfApp.pageNum); };
+            $('#next-page-btn').onclick = () => { if(pdfApp.pageNum < pdfApp.pdfDoc.numPages) queueRenderPage(++pdfApp.pageNum); };
+            $('#zoom-in-btn').onclick = () => { if(pdfApp.pdfDoc) { pdfApp.scale += 0.2; renderPage(pdfApp.pageNum); }};
+            $('#zoom-out-btn').onclick = () => { if(pdfApp.pdfDoc && pdfApp.scale > 0.4) { pdfApp.scale -= 0.2; renderPage(pdfApp.pageNum); }};
+            $('#fit-width-btn').onclick = fitWidth;
+            $('#go-page-btn').onclick = () => { const n = parseInt(els.input.value); if(n > 0 && n <= pdfApp.pdfDoc.numPages) { pdfApp.pageNum = n; queueRenderPage(n); }};
+            els.input.onkeydown = (e) => { if(e.key === 'Enter') $('#go-page-btn').click(); };
+            window.addEventListener('resize', () => { if(pdfApp.pdfDoc) setTimeout(fitWidth, 200); });
+
+            init();
+        })();
+    </script>
+</body>
+</html>

@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Upscaler</title>
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Pretendard', 'sans-serif'] },
+                    colors: { brand: { 50: '#eff6ff', 100: '#dbeafe', 500: '#3b82f6', 600: '#2563eb', 900: '#1e3a8a' } }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        body { font-family: 'Pretendard', sans-serif; background-color: #f8fafc; color: #1e293b; overflow: hidden; }
+        
+        .checkerboard {
+            background-color: #f1f5f9;
+            background-image: 
+                linear-gradient(45deg, #e2e8f0 25%, transparent 25%), 
+                linear-gradient(-45deg, #e2e8f0 25%, transparent 25%), 
+                linear-gradient(45deg, transparent 75%, #e2e8f0 75%), 
+                linear-gradient(-45deg, transparent 75%, #e2e8f0 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+        }
+
+        /* 스크롤바 커스텀 */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        /* 트랜지션 유틸리티 */
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="h-screen flex">
+
+    <aside class="w-80 bg-white border-r border-slate-200 flex flex-col h-full shadow-[4px_0_24px_rgba(0,0,0,0.02)] z-20">
+        <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+            <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                <i data-lucide="library" class="w-5 h-5 text-brand-600"></i> Image Upscaler
+            </h2>
+            <button id="btnNew" class="p-2 bg-slate-50 text-slate-600 rounded-lg hover:bg-slate-100 transition-colors" title="새로 만들기">
+                <i data-lucide="plus" class="w-4 h-4"></i>
+            </button>
+        </div>
+        
+        <div class="p-3 border-b border-slate-100 bg-slate-50">
+            <div class="relative">
+                <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
+                <input type="text" id="searchInput" placeholder="타이틀 또는 파일명 검색" class="w-full pl-9 pr-3 py-2 text-[13px] bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:outline-none shadow-sm transition-shadow">
+            </div>
+        </div>
+
+        <div id="historyList" class="flex-1 overflow-y-auto p-3 space-y-2">
+            <div class="flex flex-col items-center justify-center h-full text-slate-400 space-y-3">
+                <i data-lucide="inbox" class="w-8 h-8 opacity-50"></i>
+                <p class="text-sm font-medium">저장된 작업이 없습니다.</p>
+            </div>
+        </div>
+    </aside>
+
+    <main class="flex-1 flex flex-col h-full relative z-10 bg-slate-50">
+        
+        <header class="bg-white border-b border-slate-200 px-6 py-5 shadow-sm z-10 flex flex-col gap-5">
+            <div class="flex justify-between items-center gap-6">
+                
+                <div class="flex-1 flex gap-4">
+                    <div class="flex-1 max-w-xs">
+                        <label class="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">이미지 업로드</label>
+                        <input type="file" id="imageInput" accept="image/*" class="text-sm text-slate-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-brand-50 file:text-brand-600 hover:file:bg-brand-100 cursor-pointer transition-colors w-full">
+                    </div>
+                    <div class="flex-1 max-w-sm">
+                        <label class="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">타이틀 설정</label>
+                        <input type="text" id="titleInput" placeholder="이미지를 업로드하세요" class="w-full px-3 py-2.5 text-sm bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none shadow-sm font-semibold disabled:bg-slate-100 disabled:text-slate-400 transition-shadow" disabled>
+                    </div>
+                </div>
+                
+                <div class="flex gap-2">
+                    <button id="btnSaveDB" class="px-4 py-2.5 bg-white border border-slate-300 text-slate-700 font-bold text-sm rounded-xl hover:bg-slate-50 transition-all shadow-sm flex items-center gap-2 disabled:opacity-50" title="단축키: Ctrl + S" disabled>
+                        <i data-lucide="save" class="w-4 h-4"></i> 보관함 저장
+                    </button>
+                    <button id="btnDownload" class="px-5 py-2.5 bg-slate-900 text-white font-bold text-sm rounded-xl hover:bg-slate-800 transition-all shadow-md flex items-center gap-2 disabled:opacity-50" disabled>
+                        <i data-lucide="download" class="w-4 h-4"></i> 다운로드
+                    </button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-5 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100 items-end">
+                <div class="col-span-1">
+                    <label class="block text-[13px] font-bold text-slate-700 mb-1.5">렌더링 품질</label>
+                    <select id="smoothingInput" class="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:outline-none shadow-sm cursor-pointer disabled:bg-slate-100" disabled>
+                        <option value="smooth">부드럽게</option>
+                        <option value="pixelated">픽셀 유지</option>
+                    </select>
+                </div>
+
+                <div class="col-span-1 relative">
+                    <label class="block text-[13px] font-bold text-slate-700 mb-1.5">배율(x)</label>
+                    <input type="number" id="scaleInput" value="1.00" min="0.1" max="20" step="0.1" class="w-full pl-3 pr-8 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none shadow-sm font-semibold disabled:bg-slate-100" disabled>
+                    <span class="absolute right-3 top-8 text-xs font-bold text-slate-400 pointer-events-none">x</span>
+                </div>
+
+                <div class="flex items-center justify-center pb-2 opacity-30">
+                    <i data-lucide="link" class="w-5 h-5"></i>
+                </div>
+
+                <div class="col-span-1 relative">
+                    <label class="block text-[13px] font-bold text-slate-700 mb-1.5">가로 폭(px)</label>
+                    <input type="number" id="widthInput" value="0" min="1" step="1" class="w-full pl-3 pr-8 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none shadow-sm font-semibold disabled:bg-slate-100" disabled>
+                    <span class="absolute right-3 top-8 text-xs font-bold text-slate-400 pointer-events-none">px</span>
+                </div>
+
+                <div class="col-span-1 relative">
+                    <label class="block text-[13px] font-bold text-slate-700 mb-1.5">세로 높이(px)</label>
+                    <input type="number" id="heightInput" value="0" min="1" step="1" class="w-full pl-3 pr-8 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none shadow-sm font-semibold disabled:bg-slate-100" disabled>
+                    <span class="absolute right-3 top-8 text-xs font-bold text-slate-400 pointer-events-none">px</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="flex-1 overflow-auto checkerboard relative p-8 flex items-center justify-center group" id="canvasContainer">
+            <div id="emptyState" class="absolute inset-0 flex flex-col items-center justify-center text-slate-400 pointer-events-none z-0">
+                <div class="w-20 h-20 mb-4 rounded-full bg-white shadow-sm flex items-center justify-center border border-slate-100">
+                    <i data-lucide="image-plus" class="w-10 h-10 text-slate-300"></i>
+                </div>
+                <p class="font-medium text-sm">이미지를 업로드하거나 목록에서 선택해주세요</p>
+            </div>
+            
+            <canvas id="canvas" class="hidden max-w-none shadow-[0_8px_30px_rgb(0,0,0,0.1)] bg-transparent rounded-sm transition-transform duration-200"></canvas>
+            
+            <div id="resolutionBadge" class="hidden absolute top-4 left-4 bg-slate-900/80 backdrop-blur text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow-sm items-center gap-1.5 z-10">
+                <i data-lucide="info" class="w-3.5 h-3.5"></i>
+                <span id="resText"></span>
+            </div>
+        </div>
+    </main>
+
+    <div id="toast" class="fixed bottom-6 right-6 transform translate-y-20 opacity-0 transition-all duration-300 bg-slate-800 text-white px-5 py-3 rounded-xl shadow-xl text-sm font-bold z-[100] flex items-center gap-2"></div>
+
+    <script>
+        lucide.createIcons();
+
+        // --- DOM 요소 참조 ---
+        const els = {
+            imageInput: document.getElementById('imageInput'),
+            titleInput: document.getElementById('titleInput'), 
+            searchInput: document.getElementById('searchInput'), 
+            scaleInput: document.getElementById('scaleInput'),
+            widthInput: document.getElementById('widthInput'),
+            heightInput: document.getElementById('heightInput'),
+            smoothingInput: document.getElementById('smoothingInput'),
+            btnSaveDB: document.getElementById('btnSaveDB'),
+            btnDownload: document.getElementById('btnDownload'),
+            btnNew: document.getElementById('btnNew'),
+            canvas: document.getElementById('canvas'),
+            ctx: document.getElementById('canvas').getContext('2d'),
+            emptyState: document.getElementById('emptyState'),
+            resolutionBadge: document.getElementById('resolutionBadge'),
+            resText: document.getElementById('resText'),
+            historyList: document.getElementById('historyList'),
+            toast: document.getElementById('toast')
+        };
+
+        // --- 전역 상태 관리 ---
+        const state = {
+            originalImage: new Image(),
+            isLoaded: false,
+            fileName: 'image',
+            origW: 0,
+            origH: 0,
+            currentScale: 1.0,
+            originalDataUrl: null,
+            currentId: null 
+        };
+
+        // --- 코어 로직: 입력값 동기화 및 캔버스 렌더링 ---
+        
+        function updateInputs(source) {
+            if (!state.isLoaded) return;
+
+            let s = parseFloat(els.scaleInput.value) || 1;
+            let w = parseInt(els.widthInput.value) || state.origW;
+            let h = parseInt(els.heightInput.value) || state.origH;
+
+            if (source === 'scale') {
+                w = Math.round(state.origW * s);
+                h = Math.round(state.origH * s);
+                els.widthInput.value = w;
+                els.heightInput.value = h;
+            } else if (source === 'width') {
+                s = w / state.origW;
+                h = Math.round(state.origH * s);
+                els.scaleInput.value = s.toFixed(2);
+                els.heightInput.value = h;
+            } else if (source === 'height') {
+                s = h / state.origH;
+                w = Math.round(state.origW * s);
+                els.scaleInput.value = s.toFixed(2);
+                els.widthInput.value = w;
+            }
+
+            state.currentScale = s;
+            renderCanvas(w, h);
+        }
+
+        function renderCanvas(targetW, targetH) {
+            els.canvas.width = targetW;
+            els.canvas.height = targetH;
+
+            if (els.smoothingInput.value === 'smooth') {
+                els.ctx.imageSmoothingEnabled = true;
+                els.ctx.imageSmoothingQuality = 'high';
+            } else {
+                els.ctx.imageSmoothingEnabled = false;
+            }
+
+            els.ctx.clearRect(0, 0, targetW, targetH);
+            els.ctx.drawImage(state.originalImage, 0, 0, targetW, targetH);
+            
+            els.resText.textContent = `현재: ${targetW} x ${targetH} px (원본: ${state.origW} x ${state.origH})`;
+        }
+
+        function loadImageData(dataUrl, fileName, resetValues = true) {
+            state.originalImage.onload = () => {
+                state.isLoaded = true;
+                state.origW = state.originalImage.width;
+                state.origH = state.originalImage.height;
+                state.fileName = fileName;
+                state.originalDataUrl = dataUrl;
+
+                els.emptyState.classList.add('hidden');
+                els.canvas.classList.remove('hidden');
+                els.resolutionBadge.classList.remove('hidden');
+                els.resolutionBadge.classList.add('flex');
+
+                [els.titleInput, els.scaleInput, els.widthInput, els.heightInput, els.smoothingInput, els.btnSaveDB, els.btnDownload].forEach(el => el.disabled = false);
+
+                if (resetValues) {
+                    els.scaleInput.value = "1.00";
+                    els.widthInput.value = state.origW;
+                    els.heightInput.value = state.origH;
+                    updateInputs('scale');
+                } else {
+                    updateInputs('scale'); 
+                }
+            };
+            state.originalImage.src = dataUrl;
+        }
+
+        // --- 이벤트 리스너 ---
+
+        // 키보드 단축키 (Ctrl+S / Cmd+S)
+        window.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+                e.preventDefault(); // 브라우저 기본 저장(웹페이지 저장) 방지
+                
+                if (!els.btnSaveDB.disabled) {
+                    els.btnSaveDB.click();
+                } else {
+                    showToast('저장할 이미지가 업로드되지 않았습니다.', 'alert-circle');
+                }
+            }
+        });
+
+        els.imageInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                state.currentId = null; 
+                const pureFileName = file.name.split('.')[0];
+                els.titleInput.value = pureFileName; 
+                loadImageData(event.target.result, pureFileName, true);
+            };
+            reader.readAsDataURL(file);
+        });
+
+        els.scaleInput.addEventListener('input', () => updateInputs('scale'));
+        els.widthInput.addEventListener('input', () => updateInputs('width'));
+        els.heightInput.addEventListener('input', () => updateInputs('height'));
+        els.smoothingInput.addEventListener('change', () => updateInputs('scale')); 
+
+        els.btnDownload.addEventListener('click', () => {
+            if (!state.isLoaded) return;
+            const dataUrl = els.canvas.toDataURL('image/png', 1.0);
+            const link = document.createElement('a');
+            const scaleStr = parseFloat(els.scaleInput.value).toFixed(1);
+            
+            const downloadName = els.titleInput.value.trim() || state.fileName;
+            link.download = `${downloadName}_${scaleStr}x_${els.smoothingInput.value}.png`;
+            
+            link.href = dataUrl;
+            link.click();
+            showToast('이미지가 성공적으로 저장되었습니다.', 'check');
+        });
+
+        els.searchInput.addEventListener('input', (e) => {
+            renderHistoryList(e.target.value);
+        });
+
+        els.btnNew.addEventListener('click', () => {
+            state.isLoaded = false;
+            state.currentId = null;
+            state.originalDataUrl = null;
+            els.imageInput.value = '';
+            els.titleInput.value = ''; 
+            
+            els.emptyState.classList.remove('hidden');
+            els.canvas.classList.add('hidden');
+            els.resolutionBadge.classList.add('hidden');
+            els.resolutionBadge.classList.remove('flex');
+            
+            [els.titleInput, els.scaleInput, els.widthInput, els.heightInput, els.smoothingInput, els.btnSaveDB, els.btnDownload].forEach(el => {
+                el.disabled = true;
+            });
+            els.scaleInput.value = "1.00";
+            els.widthInput.value = "0";
+            els.heightInput.value = "0";
+            
+            renderHistoryList(els.searchInput.value);
+        });
+
+        // --- IndexedDB 및 사이드바 로직 ---
+        const DB_NAME = "ImageZoomDB";
+        const STORE_NAME = "history";
+        let db;
+
+        const initDB = () => new Promise((resolve, reject) => {
+            const request = indexedDB.open(DB_NAME, 1); 
+            request.onupgradeneeded = (e) => {
+                if (!e.target.result.objectStoreNames.contains(STORE_NAME)) {
+                    e.target.result.createObjectStore(STORE_NAME, { keyPath: "id", autoIncrement: true });
+                }
+            };
+            request.onsuccess = (e) => { db = e.target.result; resolve(db); };
+            request.onerror = (e) => reject(e.target.error);
+        });
+
+        function generateThumbnail(dataUrl) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    const MAX = 80;
+                    let w = img.width, h = img.height;
+                    if (w > h) { h *= MAX / w; w = MAX; } else { w *= MAX / h; h = MAX; }
+                    canvas.width = w; canvas.height = h;
+                    ctx.drawImage(img, 0, 0, w, h);
+                    resolve(canvas.toDataURL('image/jpeg', 0.8));
+                };
+                img.src = dataUrl;
+            });
+        }
+
+        els.btnSaveDB.addEventListener('click', async () => {
+            if (!state.isLoaded || !state.originalDataUrl) return;
+            
+            const thumbUrl = await generateThumbnail(state.originalDataUrl);
+            const titleVal = els.titleInput.value.trim() || state.fileName; 
+            
+            const record = {
+                title: titleVal, 
+                fileName: state.fileName, 
+                originalDataUrl: state.originalDataUrl,
+                thumbnail: thumbUrl,
+                scale: parseFloat(els.scaleInput.value),
+                mode: els.smoothingInput.value,
+                updatedAt: new Date().getTime()
+            };
+
+            if (state.currentId) record.id = state.currentId;
+
+            const tx = db.transaction(STORE_NAME, "readwrite");
+            const store = tx.objectStore(STORE_NAME);
+            const request = state.currentId ? store.put(record) : store.add(record);
+
+            request.onsuccess = (e) => {
+                state.currentId = e.target.result; 
+                showToast('보관함에 저장되었습니다.', 'library');
+                renderHistoryList(els.searchInput.value);
+            };
+        });
+
+        async function renderHistoryList(searchQuery = '') {
+            if (!db) return;
+            const request = db.transaction(STORE_NAME, "readonly").objectStore(STORE_NAME).getAll();
+            
+            request.onsuccess = () => {
+                let items = request.result;
+                els.historyList.innerHTML = '';
+
+                if (searchQuery.trim() !== '') {
+                    const query = searchQuery.toLowerCase();
+                    items = items.filter(item => {
+                        const titleMatch = item.title && item.title.toLowerCase().includes(query);
+                        const fileMatch = item.fileName && item.fileName.toLowerCase().includes(query);
+                        return titleMatch || fileMatch;
+                    });
+                }
+
+                if (items.length === 0) {
+                    els.historyList.innerHTML = `
+                        <div class="flex flex-col items-center justify-center h-full text-slate-400 space-y-3 pt-10">
+                            <i data-lucide="${searchQuery ? 'search-x' : 'inbox'}" class="w-8 h-8 opacity-50"></i>
+                            <p class="text-sm font-medium">${searchQuery ? '검색 결과가 없습니다.' : '저장된 작업이 없습니다.'}</p>
+                        </div>`;
+                    lucide.createIcons();
+                    return;
+                }
+
+                items.sort((a,b) => b.updatedAt - a.updatedAt).forEach(item => {
+                    const isActive = state.currentId === item.id;
+                    const date = new Date(item.updatedAt).toLocaleDateString('ko-KR', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+                    const displayTitle = item.title || item.fileName;
+                    
+                    const div = document.createElement('div');
+                    div.className = `group flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all border ${isActive ? 'bg-brand-50 border-brand-200 shadow-sm' : 'bg-white border-transparent hover:border-slate-200 hover:shadow-sm'}`;
+                    
+                    div.innerHTML = `
+                        <div class="w-12 h-12 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden flex-shrink-0 flex items-center justify-center">
+                            <img src="${item.thumbnail}" class="max-w-full max-h-full object-contain">
+                        </div>
+                        <div class="flex-1 min-w-0" onclick="loadHistoryItem(${item.id})">
+                            <h3 class="text-sm font-bold text-slate-800 truncate leading-tight">${displayTitle}</h3>
+                            <p class="text-[11px] text-slate-400 truncate mt-0.5" title="원본 파일명">${item.fileName}</p>
+                            <div class="flex items-center gap-2 mt-1">
+                                <span class="text-[10px] font-semibold text-brand-600 bg-brand-100 px-1.5 py-0.5 rounded">${item.scale}x</span>
+                                <span class="text-[10px] text-slate-400">${date}</span>
+                            </div>
+                        </div>
+                        <button onclick="deleteHistoryItem(${item.id}, event)" class="w-8 h-8 rounded-lg text-slate-400 flex items-center justify-center hover:bg-red-50 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0" title="삭제">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    `;
+                    els.historyList.appendChild(div);
+                });
+                lucide.createIcons();
+            };
+        }
+
+        window.loadHistoryItem = function(id) {
+            const request = db.transaction(STORE_NAME, "readonly").objectStore(STORE_NAME).get(id);
+            request.onsuccess = () => {
+                const data = request.result;
+                if(!data) return;
+                
+                state.currentId = data.id;
+                
+                els.titleInput.value = data.title || data.fileName; 
+                els.scaleInput.value = data.scale;
+                els.smoothingInput.value = data.mode;
+                
+                loadImageData(data.originalDataUrl, data.fileName, false); 
+                renderHistoryList(els.searchInput.value); 
+            };
+        };
+
+        window.deleteHistoryItem = function(id, event) {
+            event.stopPropagation();
+            if(confirm('이 작업을 보관함에서 삭제하시겠습니까?')) {
+                const request = db.transaction(STORE_NAME, "readwrite").objectStore(STORE_NAME).delete(id);
+                request.onsuccess = () => {
+                    if (state.currentId === id) els.btnNew.click(); 
+                    renderHistoryList(els.searchInput.value); 
+                    showToast('삭제되었습니다.', 'trash');
+                };
+            }
+        };
+
+        let toastTimeout;
+        function showToast(msg, icon) {
+            els.toast.innerHTML = `<i data-lucide="${icon}" class="w-4 h-4"></i> ${msg}`;
+            lucide.createIcons();
+            els.toast.classList.remove('translate-y-20', 'opacity-0');
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                els.toast.classList.add('translate-y-20', 'opacity-0');
+            }, 2500);
+        }
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            try {
+                await initDB();
+                renderHistoryList();
+            } catch (e) {
+                console.error("DB Initialization failed", e);
+            }
+        });
+
+    </script>
+</body>
+</html>

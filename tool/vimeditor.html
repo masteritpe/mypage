@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vim Notepad</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/joungkyun/font-d2coding/d2coding.css">
+<style>
+    /* === 전체 레이아웃 (Vim 스타일 다크 테마) === */
+    body, html {
+        margin: 0; padding: 0; width: 100%; height: 100%;
+        background-color: #1E1E1E;
+        font-family: 'Noto Sans KR', sans-serif;
+        display: flex; overflow: hidden; color: #D4D4D4;
+    }
+
+    /* === 사이드바 === */
+    .sidebar {
+        width: 250px;
+        background: #252526;
+        border-right: 1px solid #333;
+        display: flex; flex-direction: column;
+        padding: 20px 15px; box-sizing: border-box;
+        z-index: 100;
+    }
+
+    .sidebar h2 {
+        font-size: 0.9rem; font-weight: 500; margin-top: 0; 
+        color: #858585; letter-spacing: 1px; text-transform: uppercase;
+        margin-bottom: 20px;
+    }
+
+    .menu-btn {
+        background: transparent; color: #CCC;
+        border: 1px solid #444; padding: 8px 12px; border-radius: 4px;
+        margin-bottom: 10px; cursor: pointer;
+        font-family: inherit; font-size: 0.85rem; font-weight: 400;
+        transition: all 0.2s ease; text-align: left;
+    }
+    .menu-btn:hover { background: #2A2D2E; border-color: #555; }
+    
+    .note-list { flex: 1; overflow-y: auto; margin-top: 10px; }
+    .note-list::-webkit-scrollbar { width: 6px; }
+    .note-list::-webkit-scrollbar-thumb { background: #464646; }
+
+    .note-item {
+        padding: 10px; margin-bottom: 5px; cursor: pointer; 
+        border-radius: 4px; transition: background 0.2s;
+        border-left: 3px solid transparent;
+    }
+    .note-item:hover { background: #2A2D2E; }
+    .note-item.active { background: #37373D; border-left-color: #007ACC; }
+    .note-item strong { display: block; font-size: 0.85rem; font-weight: 500; color: #E8E8E8; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .note-item .note-date { font-size: 0.7rem; color: #858585; }
+    
+    .note-actions { display: flex; justify-content: flex-end; margin-top: 4px; }
+    .delete-btn { 
+        background: none; border: none; color: #F48771; 
+        cursor: pointer; font-size: 0.7rem; padding: 2px 6px; 
+        border-radius: 3px; opacity: 0.6; transition: 0.2s;
+    }
+    .delete-btn:hover { opacity: 1; background: rgba(244, 135, 113, 0.1); }
+
+    /* === 메인 작업 영역 === */
+    .workspace {
+        flex: 1; display: flex; flex-direction: column;
+        background: #1E1E1E; position: relative;
+    }
+
+    /* === 에디터 컨테이너 === */
+    .editor-wrapper {
+        flex: 1; position: relative; overflow: hidden;
+        padding: 10px 0 0 10px;
+    }
+
+    /* === 입력부 === */
+    textarea, .shadow-tracker {
+        width: 100%; height: 100%;
+        padding: 20px 30px; box-sizing: border-box;
+        /* D2Coding 폰트 적용 */
+        font-family: 'D2Coding', monospace;
+        font-size: 16px; line-height: 1.6;
+        white-space: pre-wrap; word-wrap: break-word;
+    }
+
+    textarea {
+        background: transparent; border: none; outline: none; resize: none;
+        color: transparent; /* 텍스트는 그림자가 보여줌 */
+        caret-color: transparent; /* 기본 커서 숨김 */
+        z-index: 10; position: absolute; top: 0; left: 0;
+    }
+    textarea::placeholder { color: transparent; }
+    textarea::-webkit-scrollbar { width: 10px; }
+    textarea::-webkit-scrollbar-thumb { background: #464646; }
+
+    /* === 렌더링 텍스트 (Vim 커서 포함) === */
+    .shadow-tracker {
+        position: absolute; top: 0; left: 0;
+        color: #D4D4D4; 
+        pointer-events: none; z-index: 1;
+        overflow: hidden;
+    }
+
+    /* 커서 스타일링 */
+    .cursor {
+        display: inline-block;
+        position: relative;
+    }
+    /* NORMAL 모드 커서 (블록) */
+    .cursor.normal {
+        background-color: #D4D4D4;
+        color: #1E1E1E; /* 반전 효과 */
+    }
+    /* INSERT 모드 커서 (얇은 선) */
+    .cursor.insert {
+        border-left: 2px solid #D4D4D4;
+        background-color: transparent;
+        color: inherit;
+        margin-left: -2px;
+        animation: blink 1s step-end infinite;
+    }
+    @keyframes blink { 50% { border-color: transparent; } }
+
+    /* === 상태 표시줄 (Status Bar) === */
+    .status-bar {
+        height: 25px; background: #007ACC; color: #FFF;
+        display: flex; align-items: center; padding: 0 20px;
+        /* 상태 표시줄도 D2Coding 적용 */
+        font-family: 'D2Coding', monospace; font-size: 14px;
+        z-index: 20;
+    }
+    .status-bar.insert-mode { background: #449D44; }
+    .status-bar.command-mode { background: #CA5100; }
+    
+    .status-mode { font-weight: bold; margin-right: 20px; }
+    .status-msg { flex: 1; }
+    .status-pos { font-size: 13px; }
+
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+    <h2>Vim Notepad</h2>
+    <button class="menu-btn" onclick="createNewNote()">📄 New File</button>
+    <div class="note-list" id="noteList"></div>
+</aside>
+
+<main class="workspace">
+    <div class="editor-wrapper">
+        <textarea id="editor" spellcheck="false" autofocus></textarea>
+        <div id="shadowTracker" class="shadow-tracker"></div>
+    </div>
+    <div id="statusBar" class="status-bar">
+        <span class="status-mode" id="statusMode">-- NORMAL --</span>
+        <span class="status-msg" id="statusMsg"></span>
+        <span class="status-pos" id="statusPos">1,1</span>
+    </div>
+</main>
+
+<script>
+    const textarea = document.getElementById('editor');
+    const shadowTracker = document.getElementById('shadowTracker');
+    const statusBar = document.getElementById('statusBar');
+    const statusMode = document.getElementById('statusMode');
+    const statusMsg = document.getElementById('statusMsg');
+    const statusPos = document.getElementById('statusPos');
+    const noteListEl = document.getElementById('noteList');
+
+    // Vim State
+    let mode = 'NORMAL'; // 'NORMAL', 'INSERT', 'COMMAND'
+    let commandBuffer = ''; // dd, :w 등을 위한 버퍼
+    let currentNoteId = null;
+
+    // 초기화 메시지
+    textarea.value = "[기본 조작법]\n- i : Insert 모드로 진입 (글쓰기)\n- Esc : Normal 모드로 복귀\n- h, j, k, l : 좌, 하, 상, 우 이동 (Normal 모드)\n- x : 현재 글자 삭제\n- dd : 현재 줄 삭제\n- :w + Enter : 문서 저장\n\n";
+
+    // --- 화면 렌더링 및 커서 표시 ---
+    function render() {
+        const text = textarea.value;
+        let pos = textarea.selectionStart;
+
+        // NORMAL 모드에서는 문자열 끝(줄바꿈 제외)을 넘어가지 않도록 조정 (Vim 특징)
+        if (mode === 'NORMAL' && text.length > 0 && pos === text.length) {
+            pos = text.length - 1;
+            textarea.selectionStart = pos;
+            textarea.selectionEnd = pos;
+        }
+
+        const textBefore = text.substring(0, pos);
+        let charAtPos = text.substring(pos, pos + 1);
+        const textAfter = text.substring(pos + 1);
+
+        // 빈 줄이거나 파일 끝일 때 임시 공백 문자로 커서 영역 확보
+        if (charAtPos === '' || charAtPos === '\n') {
+            charAtPos = (mode === 'NORMAL') ? ' ' + charAtPos : charAtPos;
+        }
+
+        const escapeHtml = (str) => str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+        // 커서 HTML 생성
+        const cursorHtml = `<span id="cursorSpan" class="cursor ${mode.toLowerCase()}">${escapeHtml(charAtPos)}</span>`;
+        
+        shadowTracker.innerHTML = escapeHtml(textBefore).replace(/\n/g, '<br>') + 
+                                  cursorHtml + 
+                                  escapeHtml(textAfter.substring(charAtPos.length === 2 ? 1 : 0)).replace(/\n/g, '<br>');
+
+        // 스크롤 동기화
+        shadowTracker.scrollTop = textarea.scrollTop;
+
+        // 상태바 위치 업데이트 (줄, 칸 계산)
+        const lines = textBefore.split('\n');
+        const row = lines.length;
+        const col = lines[lines.length - 1].length + 1;
+        statusPos.textContent = `${row},${col}`;
+    }
+
+    // --- 상태 표시줄 업데이트 ---
+    function updateStatusBar(msg = '') {
+        statusMode.textContent = `-- ${mode} --`;
+        statusBar.className = `status-bar ${mode.toLowerCase()}-mode`;
+        
+        if (mode === 'COMMAND') {
+            statusMsg.textContent = ':' + commandBuffer;
+        } else {
+            statusMsg.textContent = msg;
+        }
+    }
+
+    // --- Vim 로직 처리 ---
+    textarea.addEventListener('keydown', (e) => {
+        // Esc 키: 무조건 NORMAL 모드로 귀환
+        if (e.key === 'Escape') {
+            mode = 'NORMAL';
+            commandBuffer = '';
+            // Insert에서 Normal로 갈 때 커서를 한 칸 앞으로 (Vim 기본 동작)
+            if (textarea.selectionStart > 0) {
+                textarea.selectionStart--;
+                textarea.selectionEnd = textarea.selectionStart;
+            }
+            updateStatusBar();
+            render();
+            e.preventDefault();
+            return;
+        }
+
+        if (mode === 'NORMAL') {
+            e.preventDefault(); // 기본 타이핑 방지
+            handleNormalMode(e);
+        } else if (mode === 'COMMAND') {
+            e.preventDefault(); // 기본 타이핑 방지
+            handleCommandMode(e);
+        } else if (mode === 'INSERT') {
+            // INSERT 모드는 기본 textarea 동작 허용 (단, 렌더링을 위해 setTimeout 사용)
+            setTimeout(render, 0);
+        }
+    });
+
+    // 방향키 이동이나 클릭 시 렌더링 업데이트
+    textarea.addEventListener('keyup', render);
+    textarea.addEventListener('click', () => {
+        if (mode === 'COMMAND') mode = 'NORMAL';
+        updateStatusBar();
+        render();
+    });
+    textarea.addEventListener('scroll', () => shadowTracker.scrollTop = textarea.scrollTop);
+
+    function handleNormalMode(e) {
+        const key = e.key;
+        const pos = textarea.selectionStart;
+        const text = textarea.value;
+
+        // 1. 단일 키 명령어
+        switch(key) {
+            case 'i': // Insert at cursor
+                mode = 'INSERT';
+                break;
+            case 'a': // Append after cursor
+                textarea.selectionStart++;
+                textarea.selectionEnd = textarea.selectionStart;
+                mode = 'INSERT';
+                break;
+            case 'o': // Open new line below
+                const nextNewline = text.indexOf('\n', pos);
+                const insertPos = nextNewline === -1 ? text.length : nextNewline;
+                textarea.value = text.substring(0, insertPos) + '\n' + text.substring(insertPos);
+                textarea.selectionStart = insertPos + 1;
+                textarea.selectionEnd = insertPos + 1;
+                mode = 'INSERT';
+                break;
+            case 'h': // Left
+            case 'ArrowLeft':
+                textarea.selectionStart = Math.max(0, pos - 1);
+                textarea.selectionEnd = textarea.selectionStart;
+                break;
+            case 'l': // Right
+            case 'ArrowRight':
+                // 줄바꿈을 넘어가지 않도록 간이 처리
+                if (text[pos] !== '\n') {
+                    textarea.selectionStart = Math.min(text.length, pos + 1);
+                    textarea.selectionEnd = textarea.selectionStart;
+                }
+                break;
+            case 'j': // Down (간이 구현: 다음 줄바꿈을 찾아 대략 이동)
+            case 'ArrowDown':
+                const currentLineStartJ = text.lastIndexOf('\n', pos - 1) + 1;
+                const colJ = pos - currentLineStartJ;
+                const nextLineStart = text.indexOf('\n', pos) + 1;
+                if (nextLineStart > 0) {
+                    const nextLineEnd = text.indexOf('\n', nextLineStart);
+                    const safeEnd = nextLineEnd === -1 ? text.length : nextLineEnd;
+                    textarea.selectionStart = Math.min(nextLineStart + colJ, safeEnd);
+                    textarea.selectionEnd = textarea.selectionStart;
+                }
+                break;
+            case 'k': // Up
+            case 'ArrowUp':
+                const currentLineStartK = text.lastIndexOf('\n', pos - 1);
+                if (currentLineStartK > 0) {
+                    const colK = pos - (currentLineStartK + 1);
+                    const prevLineStart = text.lastIndexOf('\n', currentLineStartK - 1) + 1;
+                    textarea.selectionStart = Math.min(prevLineStart + colK, currentLineStartK);
+                    textarea.selectionEnd = textarea.selectionStart;
+                } else if (currentLineStartK === 0) { // 첫 줄에서 위로 갈 때 맨 앞으로
+                    textarea.selectionStart = 0;
+                    textarea.selectionEnd = 0;
+                }
+                break;
+            case 'x': // Delete character
+                if (pos < text.length && text[pos] !== '\n') {
+                    textarea.value = text.substring(0, pos) + text.substring(pos + 1);
+                    textarea.selectionStart = pos;
+                    textarea.selectionEnd = pos;
+                }
+                break;
+            case ':': // Enter Command Mode
+                mode = 'COMMAND';
+                commandBuffer = '';
+                break;
+            case 'd': // dd 처리를 위한 버퍼
+                if (commandBuffer === 'd') {
+                    // 현재 줄 삭제 (dd)
+                    const lineStart = text.lastIndexOf('\n', pos - 1) + 1;
+                    let lineEnd = text.indexOf('\n', pos);
+                    if (lineEnd === -1) lineEnd = text.length; else lineEnd++;
+                    textarea.value = text.substring(0, lineStart) + text.substring(lineEnd);
+                    textarea.selectionStart = lineStart;
+                    textarea.selectionEnd = lineStart;
+                    commandBuffer = '';
+                    updateStatusBar('1 line deleted');
+                } else {
+                    commandBuffer = 'd';
+                }
+                break;
+            default:
+                if (commandBuffer === 'd' && key !== 'd') commandBuffer = ''; // 버퍼 리셋
+                break;
+        }
+
+        updateStatusBar();
+        render();
+    }
+
+    function handleCommandMode(e) {
+        if (e.key === 'Enter') {
+            executeCommand(commandBuffer);
+            mode = 'NORMAL';
+            commandBuffer = '';
+        } else if (e.key === 'Backspace') {
+            commandBuffer = commandBuffer.slice(0, -1);
+            if (commandBuffer.length === 0 && e.key === 'Backspace') {
+                mode = 'NORMAL'; // 명령어 다 지우면 Normal 복귀
+            }
+        } else if (e.key.length === 1) { // 문자 입력
+            commandBuffer += e.key;
+        }
+        updateStatusBar();
+    }
+
+    function executeCommand(cmd) {
+        if (cmd === 'w' || cmd === 'wq') {
+            saveNote();
+            updateStatusBar(`"${getNoteTitle()}" written`);
+        } else {
+            updateStatusBar(`Not an editor command: ${cmd}`);
+        }
+        setTimeout(() => { if (mode === 'NORMAL') updateStatusBar(); }, 3000); // 3초 후 메시지 초기화
+    }
+
+
+    // --- 파일 관리 ---
+    function getNotes() { return JSON.parse(localStorage.getItem('vim_notes') || '[]'); }
+    function saveNotes(notes) { localStorage.setItem('vim_notes', JSON.stringify(notes)); }
+    function getNoteTitle() { return textarea.value.split('\n')[0].substring(0, 15) || 'Untitled'; }
+
+    function renderNoteList() {
+        const notes = getNotes();
+        noteListEl.innerHTML = '';
+        if(notes.length === 0) {
+            noteListEl.innerHTML = '<div style="color:#555; text-align:center; margin-top:20px; font-size: 0.8rem;">No files.</div>';
+            return;
+        }
+        notes.forEach(note => {
+            const div = document.createElement('div');
+            div.className = `note-item ${currentNoteId === note.id ? 'active' : ''}`;
+            const title = note.content.split('\n')[0].substring(0, 15) || 'Untitled';
+            
+            div.innerHTML = `
+                <div onclick="loadNote(${note.id})">
+                    <strong>${title}</strong>
+                    <div class="note-date">${new Date(note.timestamp).toLocaleString()}</div>
+                </div>
+                <div class="note-actions">
+                    <button class="delete-btn" onclick="deleteNote(event, ${note.id})">Del</button>
+                </div>
+            `;
+            noteListEl.appendChild(div);
+        });
+    }
+
+    function createNewNote() {
+        currentNoteId = null;
+        textarea.value = '';
+        mode = 'NORMAL';
+        textarea.focus();
+        updateStatusBar();
+        render();
+        renderNoteList();
+    }
+
+    function saveNote() {
+        const content = textarea.value.trim();
+        if (!content) return;
+
+        let notes = getNotes();
+        if (currentNoteId) {
+            const index = notes.findIndex(n => n.id === currentNoteId);
+            if (index > -1) { notes[index].content = content; notes[index].timestamp = Date.now(); }
+        } else {
+            const newNote = { id: Date.now(), content: content, timestamp: Date.now() };
+            notes.unshift(newNote);
+            currentNoteId = newNote.id;
+        }
+        saveNotes(notes);
+        renderNoteList();
+    }
+
+    function loadNote(id) {
+        const notes = getNotes();
+        const note = notes.find(n => n.id === id);
+        if (note) {
+            currentNoteId = note.id;
+            textarea.value = note.content;
+            mode = 'NORMAL';
+            textarea.focus();
+            textarea.selectionStart = 0; textarea.selectionEnd = 0;
+            updateStatusBar();
+            render();
+            renderNoteList();
+        }
+    }
+
+    function deleteNote(event, id) {
+        event.stopPropagation();
+        if(confirm('Delete file?')) {
+            let notes = getNotes();
+            notes = notes.filter(n => n.id !== id);
+            saveNotes(notes);
+            if (currentNoteId === id) createNewNote();
+            renderNoteList();
+        }
+    }
+
+    // 초기화 실행
+    renderNoteList();
+    render();
+    textarea.focus();
+</script>
+</body>
+</html>

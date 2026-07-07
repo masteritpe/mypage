@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>File Viewer</title>
+  
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  
+  <style>
+    :root {
+      --bg-body: #F9FAFB;
+      --bg-surface: #FFFFFF;
+      --border-light: #F3F4F6;
+      --border-base: #E5E7EB;
+      --text-main: #111827;
+      --text-muted: #6B7280;
+      --primary: #3B82F6; 
+      --primary-hover: #2563EB;
+      --primary-bg: #EFF6FF;
+      --secondary: #FFFFFF;
+      --secondary-hover: #F9FAFB;
+      --danger: #EF4444;
+      --success: #10B981;
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+      --radius-md: 8px;
+      --radius-lg: 12px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background: var(--bg-body);
+      color: var(--text-main);
+      margin: 0;
+      padding: 40px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .dashboard-header { max-width: 100%; margin: 0 auto 24px auto; }
+    .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .title-area { display: flex; align-items: center; gap: 12px; }
+    .title-area i { font-size: 28px; color: var(--primary); }
+    h2 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+    
+    .actions { display: flex; gap: 10px; }
+    
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 10px 18px; border-radius: var(--radius-md);
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      border: 1px solid transparent;
+    }
+    .btn-primary { background: var(--primary); color: white; box-shadow: var(--shadow-sm); }
+    .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
+    .btn-primary:disabled { background: #9CA3AF; cursor: not-allowed; transform: none; }
+    .btn-outline { background: var(--secondary); color: var(--text-main); border-color: var(--border-base); box-shadow: var(--shadow-sm); }
+    .btn-outline:hover { background: var(--secondary-hover); border-color: #D1D5DB; }
+
+    .instructions {
+      display: flex; gap: 20px; align-items: center; font-size: 13px; color: var(--text-muted);
+      background: var(--bg-surface); padding: 12px 20px; border-radius: var(--radius-md); border: 1px solid var(--border-base);
+    }
+
+    #workspace {
+      max-width: 100%; margin: 0 auto;
+      display: grid; grid-template-columns: 350px 1fr; gap: 24px;
+      align-items: start;
+    }
+
+    /* Left Panel */
+    .panel {
+      background: var(--bg-surface); border: 1px solid var(--border-base);
+      border-radius: var(--radius-lg); padding: 20px; box-shadow: var(--shadow-md);
+    }
+    .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .panel-title { font-weight: 700; font-size: 16px; }
+    
+    .folder-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+    .folder-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px; background: var(--bg-surface); border: 1px solid var(--border-base); border-radius: var(--radius-md);
+      font-size: 14px; font-weight: 600; cursor: pointer; transition: 0.2s;
+    }
+    .folder-item:hover { background: #F9FAFB; border-color: #D1D5DB; }
+    .folder-item.active { background: var(--primary-bg); border-color: var(--primary); color: var(--primary); }
+
+    /* Right Panel */
+    .preview-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border-base); }
+    .preview-grid { display: flex; flex-direction: column; gap: 8px; }
+    
+    .file-card {
+      border: 1px solid var(--border-base); border-radius: var(--radius-md); padding: 12px 16px;
+      background: var(--bg-surface); display: flex; align-items: center; gap: 12px; transition: 0.2s;
+      cursor: pointer; /* 클릭 가능함을 표시 */
+    }
+    .file-card:hover { border-color: var(--primary); box-shadow: var(--shadow-sm); }
+    
+    /* 파일 확인 완료(선택) 상태 */
+    .file-card.checked {
+      background: #ECFDF5; /* 연한 초록색 배경 */
+      border-color: var(--success); /* 초록색 테두리 */
+    }
+    
+    .file-icon { font-size: 24px; color: var(--text-muted); }
+    .file-card.checked .file-icon { color: var(--success); } /* 선택시 아이콘도 초록색으로 */
+    
+    .file-info { flex: 1; overflow: hidden; display: flex; flex-direction: column; gap: 4px; }
+    .file-name { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    
+    .file-meta { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--text-muted); }
+    .meta-tag { background: #F3F4F6; padding: 2px 6px; border-radius: 4px; font-weight: 500; }
+    .meta-tag.type-info { background: #E0E7FF; color: #4338CA; } /* 정보관리 */
+    .meta-tag.type-sys { background: #ECFDF5; color: #047857; } /* 컴퓨터시스템응용 */
+
+    .empty-msg { padding: 40px 20px; text-align: center; color: var(--text-muted); display: flex; flex-direction: column; align-items: center; gap: 12px; }
+    .empty-msg i { font-size: 32px; color: #D1D5DB; }
+
+    #toast {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      background: #111827; color: white; padding: 10px 20px; border-radius: 99px; font-size: 14px;
+      box-shadow: var(--shadow-md); opacity: 0; visibility: hidden; transition: 0.3s; z-index: 3000;
+    }
+    #toast.show { opacity: 1; visibility: visible; }
+  </style>
+</head>
+<body>
+
+  <div class="dashboard-header">
+    <div class="header-top">
+      <div class="title-area">
+        <i class="ph ph-folder-open"></i>
+        <h2>File Viewer</h2>
+      </div>
+      
+      <div class="actions">
+        <button class="btn btn-outline" style="color: var(--danger); border-color: var(--danger);" onclick="resetAll()">
+          <i class="ph ph-arrow-counter-clockwise"></i> 초기화
+        </button>
+        <button class="btn btn-outline" onclick="selectFolder()">
+          <i class="ph ph-folder-open"></i> 작업 폴더 선택
+        </button>
+      </div>
+    </div>
+
+    <div class="instructions">
+      <span><i class="ph ph-info"></i> 작업 폴더를 선택하면 하위 폴더별 파일 조회가 가능합니다. 파일을 클릭하여 확인 상태로 표시할 수 있습니다.</span>
+      <span style="color: #D1D5DB;">|</span>
+      <span><i class="ph ph-sort-ascending"></i> <strong>정렬 기준:</strong> 유형(정보관리➔컴퓨터시스템응용) ➔ 교시 ➔ 번호</span>
+    </div>
+  </div>
+
+  <div id="workspace">
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">폴더 및 분류 목록</div>
+      </div>
+      <ul class="folder-list" id="folder-list">
+        <li class="empty-msg" style="padding: 20px 0;">
+          우측 상단에서 폴더를 선택해주세요.
+        </li>
+      </ul>
+    </div>
+
+    <div class="panel" style="background: var(--bg-body);">
+      <div class="preview-header">
+        <div class="panel-title" id="selected-view-title">선택된 항목: 없음</div>
+      </div>
+      
+      <div id="preview-area" class="preview-grid">
+        <div class="empty-msg">
+          <i class="ph ph-magnifying-glass"></i>
+          작업 폴더를 선택하여 조회를 시작하세요.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast">메시지</div>
+
+  <script>
+    let currentDirHandle = null;
+    let subFolders = []; // 발견된 하위 폴더들
+    let currentView = null; // 선택된 폴더명
+
+    // 초기화
+    function resetAll() {
+      currentDirHandle = null;
+      subFolders = [];
+      currentView = null;
+
+      document.getElementById('selected-view-title').innerHTML = `선택된 항목: 없음`;
+      document.getElementById('folder-list').innerHTML = `<li class="empty-msg" style="padding: 20px 0;">우측 상단에서 폴더를 선택해주세요.</li>`;
+      document.getElementById('preview-area').innerHTML = `
+        <div class="empty-msg">
+          <i class="ph ph-magnifying-glass"></i> 작업 폴더를 선택하여 조회를 시작하세요.
+        </div>`;
+      showToast("초기화되었습니다.");
+    }
+
+    // 작업 폴더 선택
+    async function selectFolder() {
+      try {
+        currentDirHandle = await window.showDirectoryPicker({ mode: 'read' });
+        await scanRootDirectory();
+      } catch (err) {
+        if (err.name !== 'AbortError') console.error(err);
+      }
+    }
+
+    // 루트 디렉토리 스캔 (하위 폴더만 수집)
+    async function scanRootDirectory() {
+      subFolders = [];
+
+      for await (const entry of currentDirHandle.values()) {
+        if (entry.kind === 'directory') {
+          subFolders.push(entry.name);
+        }
+      }
+      
+      // 하위 폴더명 알파벳 정렬
+      subFolders.sort((a, b) => a.localeCompare(b));
+      
+      renderLeftPanel();
+
+      // 스캔 직후 첫번째 폴더 띄우기
+      if (subFolders.length > 0) {
+        viewFolder(subFolders[0]);
+      } else {
+        document.getElementById('preview-area').innerHTML = `<div class="empty-msg"><i class="ph ph-check-circle"></i> 하위 폴더가 없습니다.</div>`;
+      }
+    }
+
+    // 좌측 패널 렌더링
+    function renderLeftPanel() {
+      const listEl = document.getElementById('folder-list');
+      listEl.innerHTML = '';
+
+      // 하위 폴더 목록
+      subFolders.forEach(folderName => {
+        const li = document.createElement('li');
+        li.className = `folder-item ${currentView === folderName ? 'active' : ''}`;
+        li.onclick = () => viewFolder(folderName);
+        li.innerHTML = `
+          <span><i class="ph ph-folder" style="margin-right: 8px;"></i>${folderName}</span>
+        `;
+        listEl.appendChild(li);
+      });
+
+      if (subFolders.length === 0) {
+        listEl.innerHTML = `<li class="empty-msg" style="padding: 20px 0;">항목이 없습니다.</li>`;
+      }
+    }
+
+    // 파일 이름에서 정렬 기준 메타데이터 추출 (_유형_교시_번호)
+    function extractSortMeta(filename) {
+      // 정규식: _(유형)_(\d+)교시_(\d+)번
+      const regex = /_([^_]+)_(\d+)교시_(\d+)번/;
+      const match = filename.match(regex);
+      
+      if (match) {
+        return {
+          type: match[1], // 정보관리, 컴퓨터시스템응용 등
+          session: parseInt(match[2], 10), // 1, 2, 3, 4
+          num: parseInt(match[3], 10), // 1, 2, 3...
+          valid: true
+        };
+      }
+      return { valid: false };
+    }
+
+    // 커스텀 정렬 로직 (정보관리 > 컴퓨터시스템응용 / 교시 순 / 번호 순)
+    function customSort(a, b) {
+      const metaA = extractSortMeta(a.name);
+      const metaB = extractSortMeta(b.name);
+
+      // 둘 다 포맷에 맞지 않으면 이름 오름차순 정렬
+      if (!metaA.valid && !metaB.valid) return a.name.localeCompare(b.name);
+      // 포맷에 맞는 파일을 위로 올림
+      if (!metaA.valid) return 1;
+      if (!metaB.valid) return -1;
+
+      // 1. 유형 정렬 (정보관리 우선)
+      const typeWeight = { '정보관리': 1, '컴퓨터시스템응용': 2 };
+      const weightA = typeWeight[metaA.type] || 99;
+      const weightB = typeWeight[metaB.type] || 99;
+      
+      if (weightA !== weightB) return weightA - weightB;
+
+      // 2. 교시 정렬
+      if (metaA.session !== metaB.session) return metaA.session - metaB.session;
+
+      // 3. 번호 정렬
+      return metaA.num - metaB.num;
+    }
+
+    // 우측 패널: 하위 폴더 내 파일 조회 및 정렬
+    async function viewFolder(folderName) {
+      currentView = folderName;
+      renderLeftPanel(); // active 갱신
+
+      document.getElementById('selected-view-title').innerHTML = `<i class="ph ph-folder-open"></i> ${folderName} 폴더 내용물`;
+
+      const previewAreaEl = document.getElementById('preview-area');
+      previewAreaEl.innerHTML = `<div class="empty-msg"><i class="ph ph-spinner ph-spin"></i> 파일 목록을 불러오는 중...</div>`;
+
+      try {
+        const dirHandle = await currentDirHandle.getDirectoryHandle(folderName);
+        let files = [];
+
+        for await (const entry of dirHandle.values()) {
+          if (entry.kind === 'file') {
+            files.push(entry);
+          }
+        }
+
+        // 파일 정렬 수행
+        files.sort(customSort);
+
+        if (files.length === 0) {
+          previewAreaEl.innerHTML = `<div class="empty-msg"><i class="ph ph-files"></i> 폴더가 비어있습니다.</div>`;
+          return;
+        }
+
+        previewAreaEl.innerHTML = '';
+        files.forEach(fileHandle => {
+          const iconClass = getFileIcon(fileHandle.name);
+          const meta = extractSortMeta(fileHandle.name);
+          
+          let metaHtml = '';
+          if (meta.valid) {
+            const typeClass = meta.type.includes('정보관리') ? 'type-info' : (meta.type.includes('시스템') ? 'type-sys' : '');
+            metaHtml = `
+              <div class="file-meta">
+                <span class="meta-tag ${typeClass}">${meta.type}</span>
+                <span class="meta-tag">${meta.session}교시</span>
+                <span class="meta-tag">${meta.num}번</span>
+              </div>
+            `;
+          }
+
+          const card = document.createElement('div');
+          card.className = 'file-card';
+          card.innerHTML = `
+            <div class="file-icon"><i class="ph ${iconClass}"></i></div>
+            <div class="file-info">
+              <div class="file-name" title="${fileHandle.name}">${fileHandle.name}</div>
+              ${metaHtml}
+            </div>
+          `;
+          
+          // 파일 항목 클릭 시 'checked' 클래스 토글 (배경색 변경)
+          card.onclick = function() {
+            this.classList.toggle('checked');
+          };
+          
+          previewAreaEl.appendChild(card);
+        });
+
+      } catch (err) {
+        console.error(err);
+        previewAreaEl.innerHTML = `<div class="empty-msg"><i class="ph ph-warning"></i> 폴더를 읽을 수 없습니다.</div>`;
+      }
+    }
+
+    // 유틸: 확장자에 따른 아이콘 반환
+    function getFileIcon(filename) {
+      const ext = filename.split('.').pop().toLowerCase();
+      if (ext === 'pdf') return "ph-file-pdf";
+      if (['png', 'jpg', 'jpeg', 'gif'].includes(ext)) return "ph-image";
+      return "ph-file";
+    }
+
+    // 유틸: 토스트 메시지
+    let toastTimeout;
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      toast.innerText = message;
+      toast.classList.add('show');
+      
+      clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        toast.classList.remove('show');
+      }, 3000);
+    }
+  </script>
+</body>
+</html>
