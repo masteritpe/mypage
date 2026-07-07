@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>시험 타이머</title>
+  
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+  <style>
+    :root {
+      /* keynote.html 원본 변수 */
+      --bg-body: #F9FAFB;
+      --bg-surface: #FFFFFF;
+      --border-light: #F3F4F6;
+      --border-base: #E5E7EB;
+      --border-dark: #D1D5DB;
+      --text-main: #111827;
+      --text-muted: #6B7280;
+      --primary: #111827;
+      --primary-hover: #374151;
+      --secondary: #FFFFFF;
+      --secondary-hover: #F9FAFB;
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+      --radius-md: 8px;
+      --radius-lg: 12px;
+
+      /* 추가 변수 (상태 색상) */
+      --status-exam-bg: #EFF6FF;
+      --status-exam-text: #2563EB;
+      --status-break-bg: #ECFDF5;
+      --status-break-text: #059669;
+      --status-wait-bg: #F3F4F6;
+      --status-wait-text: #6B7280;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background: var(--bg-body); color: var(--text-main); margin: 0; padding: 0;
+      -webkit-font-smoothing: antialiased; display: flex; flex-direction: column; min-height: 100vh;
+    }
+
+    /* 탑바 */
+    .top-bar { 
+      position: sticky; top: 0; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(8px); 
+      height: 64px; min-height: 64px; padding: 0 30px; border-bottom: 1px solid var(--border-base); 
+      display: flex; justify-content: space-between; align-items: center; z-index: 10; 
+    }
+    .app-title { font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 8px; margin: 0; }
+    
+    /* 메인 컨텐츠 영역 */
+    .form-wrapper { padding: 40px; max-width: 800px; margin: 0 auto; width: 100%; display: flex; flex-direction: column; gap: 24px; }
+    .keynote-card { background: var(--bg-surface); border: 1px solid var(--border-base); border-radius: var(--radius-lg); padding: 32px; box-shadow: var(--shadow-md); }
+    
+    .card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; border-bottom: 2px solid var(--primary); padding-bottom: 12px; }
+    .card-title { font-size: 20px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+
+    /* 시계 및 현황 UI */
+    .clock-display { font-size: 56px; font-weight: 800; letter-spacing: -1px; text-align: center; font-variant-numeric: tabular-nums; margin: 10px 0; color: var(--primary); }
+    .date-display { text-align: center; font-size: 16px; color: var(--text-muted); font-weight: 500; margin-bottom: 30px; }
+    
+    .status-badge { 
+      display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 20px; 
+      font-size: 15px; font-weight: 700; margin: 0 auto;
+    }
+    .status-badge.exam { background: var(--status-exam-bg); color: var(--status-exam-text); border: 1px solid #BFDBFE; }
+    .status-badge.break { background: var(--status-break-bg); color: var(--status-break-text); border: 1px solid #A7F3D0; }
+    .status-badge.wait { background: var(--status-wait-bg); color: var(--status-wait-text); border: 1px solid var(--border-dark); }
+
+    .progress-container { margin-top: 30px; background: var(--bg-body); border-radius: var(--radius-lg); padding: 24px; border: 1px solid var(--border-base); }
+    .progress-header { display: flex; justify-content: space-between; font-size: 14px; font-weight: 600; margin-bottom: 12px; color: var(--text-main); }
+    .progress-bar-bg { width: 100%; height: 12px; background: var(--border-base); border-radius: 6px; overflow: hidden; position: relative; }
+    .progress-bar-fill { height: 100%; width: 0%; border-radius: 6px; transition: width 1s linear, background-color 0.3s; }
+    .progress-bar-fill.exam { background: #3B82F6; }
+    .progress-bar-fill.break { background: #10B981; }
+    .progress-bar-fill.wait { background: #9CA3AF; }
+
+    /* 흔들림 현상을 방지하기 위해 시간 표시 영역 디자인 변경 */
+    .time-remaining { 
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      font-size: 13px; 
+      font-weight: 500; 
+      color: var(--text-muted); 
+      margin-top: 8px; 
+      font-variant-numeric: tabular-nums; /* 숫자 폭 고정 */
+    }
+    .time-remaining .seg-time {
+      color: var(--primary); 
+      font-weight: 700;
+      width: 175px; /* 너비 고정 */
+      text-align: right;
+    }
+    .time-remaining .divider {
+      margin: 0 10px; 
+      color: var(--border-dark);
+    }
+    .time-remaining .total-time {
+      width: 140px; /* 너비 고정 */
+      text-align: right;
+    }
+
+    /* 세그먼트 마커 */
+    #segmentContainer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+    .segment-marker { position: absolute; top: 0; bottom: 0; width: 2px; background: rgba(255, 255, 255, 0.5); z-index: 5; }
+
+    /* 타임라인 (스케줄표) */
+    .schedule-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+    .schedule-item { 
+      display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; 
+      border-radius: var(--radius-md); border: 1px solid var(--border-light); background: var(--bg-surface);
+      transition: all 0.2s;
+    }
+    .schedule-item.past { opacity: 0.5; background: var(--bg-body); }
+    .schedule-item.current { border-color: var(--primary); background: var(--primary); color: white; box-shadow: var(--shadow-md); transform: scale(1.01); }
+    .schedule-item.current .schedule-time, .schedule-item.current .schedule-duration { color: #D1D5DB; }
+    
+    .schedule-info { display: flex; align-items: center; gap: 16px; }
+    .schedule-name { font-size: 16px; font-weight: 700; }
+    .schedule-time { font-size: 14px; color: var(--text-muted); font-variant-numeric: tabular-nums; font-weight: 500; }
+    .schedule-duration { font-size: 13px; font-weight: 600; color: var(--text-muted); background: var(--bg-body); padding: 4px 10px; border-radius: 12px; }
+    
+    .schedule-item.current .schedule-duration { background: rgba(255,255,255,0.2); color: white; }
+    .schedule-item.past .schedule-duration { background: transparent; padding: 0; }
+  </style>
+</head>
+<body>
+
+  <header class="top-bar">
+    <div class="app-title">
+      <i class="ph-fill ph-timer"></i> 시험 타이머
+    </div>
+    <div style="font-size: 14px; font-weight: 600; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
+      <i class="ph-fill ph-calendar-blank"></i> <span id="headerDate">로딩중...</span>
+    </div>
+  </header>
+
+  <main class="form-wrapper">
+    <div class="keynote-card" style="text-align: center;">
+      <div id="dateDisplay" class="date-display">로딩중...</div>
+      <div id="clockDisplay" class="clock-display">00:00:00</div>
+      
+      <div id="statusBadge" class="status-badge wait">
+        <i class="ph-bold ph-spinner-gap"></i> 상태 계산중...
+      </div>
+
+      <div class="progress-container">
+        <div class="progress-header">
+          <span id="progressTitle">진행도</span>
+          <span id="progressPercent">0%</span>
+        </div>
+        <div class="progress-bar-bg">
+          <div id="progressBar" class="progress-bar-fill wait"></div>
+          <div id="segmentContainer"></div>
+        </div>
+        <div id="timeRemaining" class="time-remaining">남은 시간: --분 --초</div>
+      </div>
+    </div>
+
+    <div class="keynote-card">
+      <div class="card-header">
+        <div class="card-title"><i class="ph-fill ph-list-numbers"></i> 전체 시험 시간표 (총 400분)</div>
+      </div>
+      <ul id="scheduleList" class="schedule-list">
+        </ul>
+    </div>
+  </main>
+
+  <script>
+    // 기술사 시험 표준 스케줄 (총 4교시, 교시당 100분)
+    const scheduleData = [
+      { id: 0, name: "입실 및 준비", start: "08:30", end: "09:00", type: "wait" },
+      { id: 1, name: "1교시", start: "09:00", end: "10:40", type: "exam" },
+      { id: 2, name: "휴식", start: "10:40", end: "11:00", type: "break" },
+      { id: 3, name: "2교시", start: "11:00", end: "12:40", type: "exam" },
+      { id: 4, name: "점심시간", start: "12:40", end: "13:40", type: "break" },
+      { id: 5, name: "3교시", start: "13:40", end: "15:20", type: "exam" },
+      { id: 6, name: "휴식", start: "15:20", end: "15:40", type: "break" },
+      { id: 7, name: "4교시", start: "15:40", end: "17:20", type: "exam" }
+    ];
+
+    // 시간을 Date 객체로 변환 (오늘 날짜 기준)
+    function parseTime(timeStr) {
+      const [hours, minutes] = timeStr.split(':').map(Number);
+      const date = new Date();
+      date.setHours(hours, minutes, 0, 0);
+      return date;
+    }
+
+    const parsedSchedule = scheduleData.map(item => ({
+      ...item,
+      startTime: parseTime(item.start),
+      endTime: parseTime(item.end),
+      duration: (parseTime(item.end) - parseTime(item.start)) / 60000 // 분 단위
+    }));
+
+    function formatTimeNum(num) {
+      return num.toString().padStart(2, '0');
+    }
+
+    function renderScheduleList() {
+      const listEl = document.getElementById('scheduleList');
+      listEl.innerHTML = '';
+
+      parsedSchedule.forEach(item => {
+        const li = document.createElement('li');
+        li.id = `schedule-item-${item.id}`;
+        li.className = 'schedule-item';
+        
+        let icon = item.type === 'exam' ? 'ph-pencil-simple' : (item.type === 'break' ? 'ph-coffee' : 'ph-chair');
+
+        li.innerHTML = `
+          <div class="schedule-info">
+            <i class="ph-fill ${icon}" style="font-size: 20px;"></i>
+            <div>
+              <div class="schedule-name">${item.name}</div>
+              <div class="schedule-time">${item.start} - ${item.end}</div>
+            </div>
+          </div>
+          <div class="schedule-duration">${item.duration}분</div>
+        `;
+        listEl.appendChild(li);
+      });
+    }
+
+    let currentActiveId = null;
+
+    function updateDashboard() {
+      const now = new Date();
+      
+      // 상단 날짜 및 시계 업데이트
+      const days = ['일', '월', '화', '수', '목', '금', '토'];
+      const dateString = `${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일 (${days[now.getDay()]})`;
+      document.getElementById('headerDate').innerText = dateString;
+      document.getElementById('dateDisplay').innerText = dateString;
+      
+      document.getElementById('clockDisplay').innerText = 
+        `${formatTimeNum(now.getHours())}:${formatTimeNum(now.getMinutes())}:${formatTimeNum(now.getSeconds())}`;
+
+      // 현재 진행 상태 파악
+      let currentItem = null;
+      let status = 'wait'; // wait, exam, break, end
+      let statusText = '시험 대기중';
+      let icon = 'ph-clock-countdown';
+
+      if (now < parsedSchedule[0].startTime) {
+        statusText = '시험 시작 전 (대기중)';
+      } else if (now >= parsedSchedule[parsedSchedule.length - 1].endTime) {
+        status = 'wait';
+        statusText = '모든 시험이 종료되었습니다';
+        icon = 'ph-flag-checkered';
+      } else {
+        // 진행 중인 교시 찾기
+        currentItem = parsedSchedule.find(item => now >= item.startTime && now < item.endTime);
+        if (currentItem) {
+          status = currentItem.type;
+          statusText = `${currentItem.name} 진행중`;
+          icon = currentItem.type === 'exam' ? 'ph-pencil-line' : (currentItem.type === 'break' ? 'ph-coffee' : 'ph-spinner');
+        }
+      }
+
+      // 뱃지 업데이트
+      const badge = document.getElementById('statusBadge');
+      badge.className = `status-badge ${status}`;
+      badge.innerHTML = `<i class="ph-bold ${icon}"></i> ${statusText}`;
+
+      // 프로그레스 바 및 타임라인 업데이트
+      let progressPercent = 0;
+      const progressBar = document.getElementById('progressBar');
+      const timeRemainingEl = document.getElementById('timeRemaining');
+      const segmentContainer = document.getElementById('segmentContainer');
+      
+      // 스케줄 리스트 스타일 초기화
+      document.querySelectorAll('.schedule-item').forEach(el => {
+        el.classList.remove('current', 'past');
+      });
+
+      if (currentItem) {
+        // 리스트 하이라이트
+        document.getElementById(`schedule-item-${currentItem.id}`).classList.add('current');
+        parsedSchedule.forEach(item => {
+          if (now >= item.endTime) {
+            document.getElementById(`schedule-item-${item.id}`).classList.add('past');
+          }
+        });
+
+        // 세그먼트 마커 그리기
+        if (currentActiveId !== currentItem.id) {
+          currentActiveId = currentItem.id;
+          segmentContainer.innerHTML = '';
+
+          if (currentItem.type === 'exam') {
+            let interval = 0;
+            if (currentItem.id === 1) interval = 10;
+            else if ([3, 5, 7].includes(currentItem.id)) interval = 25;
+
+            if (interval > 0) {
+              const totalMins = currentItem.duration;
+              const numMarkers = Math.floor(totalMins / interval);
+              for (let i = 1; i < numMarkers; i++) {
+                const pct = (i * interval / totalMins) * 100;
+                const marker = document.createElement('div');
+                marker.className = 'segment-marker';
+                marker.style.left = `${pct}%`;
+                segmentContainer.appendChild(marker);
+              }
+            }
+          }
+        }
+
+        // 프로그레스 퍼센트 계산
+        const totalMs = currentItem.endTime - currentItem.startTime;
+        const elapsedMs = now - currentItem.startTime;
+        progressPercent = Math.min(100, Math.max(0, (elapsedMs / totalMs) * 100));
+        
+        // 전체 남은 시간 계산
+        const remainMs = currentItem.endTime - now;
+        const remainMins = Math.floor(remainMs / 60000);
+        const remainSecs = Math.floor((remainMs % 60000) / 1000);
+
+        // 세그먼트 남은 시간 계산
+        let segmentRemainText = '';
+        if (currentItem.type === 'exam') {
+          let interval = 0;
+          if (currentItem.id === 1) interval = 10;
+          else if ([3, 5, 7].includes(currentItem.id)) interval = 25;
+
+          if (interval > 0) {
+            const intervalMs = interval * 60000;
+            const currentSegmentIdx = Math.floor(elapsedMs / intervalMs);
+            const segmentEndMs = (currentSegmentIdx + 1) * intervalMs;
+            
+            // 마지막 세그먼트가 전체 종료 시간을 초과하지 않도록 처리
+            const segmentRemainMs = Math.min(segmentEndMs - elapsedMs, remainMs);
+
+            if (segmentRemainMs > 0) {
+              const segRemainMins = Math.floor(segmentRemainMs / 60000);
+              const segRemainSecs = Math.floor((segmentRemainMs % 60000) / 1000);
+              
+              // span에 고정 너비용 class 적용
+              segmentRemainText = `
+                <span class="seg-time">세그먼트 남은 시간: ${formatTimeNum(segRemainMins)}분 ${formatTimeNum(segRemainSecs)}초</span>
+                <span class="divider">|</span>
+              `;
+            }
+          }
+        }
+
+        document.getElementById('progressTitle').innerText = currentItem.name;
+        progressBar.className = `progress-bar-fill ${status}`;
+        
+        // UI 업데이트 (flex를 통해 좌우 정렬 및 너비 고정 적용)
+        timeRemainingEl.innerHTML = `${segmentRemainText}<span class="total-time">총 남은 시간: ${formatTimeNum(remainMins)}분 ${formatTimeNum(remainSecs)}초</span>`;
+        timeRemainingEl.style.display = 'flex';
+
+      } else {
+        // 시험 전, 휴식, 또는 종료 후
+        if (currentActiveId !== null) {
+          currentActiveId = null;
+          segmentContainer.innerHTML = '';
+        }
+
+        document.getElementById('progressTitle').innerText = statusText;
+        progressBar.className = `progress-bar-fill wait`;
+        if (now >= parsedSchedule[parsedSchedule.length - 1].endTime) {
+          progressPercent = 100;
+          parsedSchedule.forEach(item => {
+            document.getElementById(`schedule-item-${item.id}`).classList.add('past');
+          });
+        } else {
+          progressPercent = 0;
+        }
+        timeRemainingEl.style.display = 'none';
+      }
+
+      document.getElementById('progressPercent').innerText = `${progressPercent.toFixed(1)}%`;
+      progressBar.style.width = `${progressPercent}%`;
+    }
+
+    // 초기화
+    renderScheduleList();
+    updateDashboard();
+    
+    // 1초마다 갱신
+    setInterval(updateDashboard, 1000);
+  </script>
+</body>
+</html>
