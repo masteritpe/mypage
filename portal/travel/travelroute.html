@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1, viewport-fit=cover">
+<title>Travel Route</title>
+<link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<style>
+    /* --- 디자인 시스템 --- */
+    :root {
+        --primary: #00bfa5; 
+        --primary-dark: #00897b;
+        --primary-light: #e0f2f1;
+        --bg: #f5f7f9;
+        --card-bg: #ffffff;
+        --text-main: #212529;
+        --text-sub: #868e96;
+        --border: #f1f3f5;
+        --danger: #ff6b6b;
+        --shadow: 0 8px 20px rgba(0,0,0,0.04);
+        --sat: env(safe-area-inset-top);
+        --sab: env(safe-area-inset-bottom);
+    }
+    
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+        margin: 0; padding: 0;
+        background-color: var(--bg);
+        font-family: 'Pretendard', sans-serif;
+        color: var(--text-main);
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    /* --- 헤더 --- */
+    header {
+        background: rgba(255,255,255,0.9);
+        backdrop-filter: blur(10px);
+        padding: calc(12px + var(--sat)) 20px 12px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid var(--border);
+        z-index: 100;
+        flex-shrink: 0;
+    }
+    .logo { font-size: 1.2rem; font-weight: 800; color: var(--primary-dark); display: flex; align-items: center; gap: 8px; }
+    .header-btn {
+        background: none; border: none; padding: 8px;
+        font-size: 1.1rem; color: var(--text-sub);
+        cursor: pointer; transition: 0.2s;
+        border-radius: 8px;
+    }
+    .header-btn:hover { background: var(--bg); color: var(--text-main); }
+    .pc-only-btn {
+        background: var(--primary); color: white;
+        border: none; padding: 8px 16px; border-radius: 8px;
+        font-weight: 600; font-size: 0.9rem; cursor: pointer;
+        display: flex; align-items: center; gap: 6px;
+    }
+    .pc-only-btn:hover { background: var(--primary-dark); }
+    
+    @media (max-width: 768px) { .pc-only { display: none; } }
+
+    /* --- Day Navigation --- */
+    .day-nav {
+        display: flex;
+        gap: 8px;
+        padding: 12px 20px;
+        background: var(--bg);
+        overflow-x: auto;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+    .day-pill {
+        background: white;
+        border: 1px solid var(--border);
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--text-sub);
+        cursor: pointer;
+        transition: 0.2s;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+    }
+    .day-pill.active {
+        background: var(--primary);
+        color: white;
+        border-color: var(--primary);
+        box-shadow: 0 4px 8px rgba(0,191,165,0.3);
+    }
+
+    /* --- 메인 컨테이너 --- */
+    .container {
+        flex: 1;
+        overflow-y: auto;
+        padding: 20px;
+        max-width: 600px;
+        margin: 0 auto;
+        width: 100%;
+        padding-bottom: 100px; /* FAB 공간 확보 */
+    }
+
+    /* --- Distance Info Panel --- */
+    #distance-info {
+        background: var(--card-bg);
+        border-radius: 20px;
+        box-shadow: var(--shadow);
+        border: 1px solid var(--border);
+        padding: 20px 24px;
+        margin-bottom: 24px;
+        display: none;
+        animation: fadeIn 0.3s ease;
+    }
+    .dist-header { display: flex; justify-content: space-between; align-items: center; }
+    .dist-label { font-size: 0.9rem; color: var(--text-sub); font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+    .dist-value-wrap { display: flex; align-items: baseline; gap: 4px; }
+    .dist-value { font-size: 2rem; font-weight: 800; color: var(--primary); letter-spacing: -0.5px; }
+    .dist-unit { font-size: 1rem; color: var(--text-sub); font-weight: 600; }
+    .dist-icon-box {
+        width: 52px; height: 52px;
+        background: var(--primary-light);
+        border-radius: 16px;
+        display: flex; align-items: center; justify-content: center;
+        color: var(--primary-dark); font-size: 1.4rem;
+    }
+    
+    /* --- Route Card --- */
+    .route-card {
+        background: var(--card-bg);
+        border-radius: 16px;
+        padding: 20px;
+        margin-bottom: 16px;
+        box-shadow: var(--shadow);
+        border: 1px solid var(--border);
+        position: relative;
+        animation: slideUp 0.3s ease-out;
+    }
+
+    .route-flow { position: relative; }
+    
+    .point { display: flex; gap: 16px; position: relative; z-index: 1; }
+    .point-icon {
+        width: 40px; height: 40px;
+        background: var(--bg);
+        border-radius: 12px;
+        display: flex; align-items: center; justify-content: center;
+        color: var(--text-sub);
+        flex-shrink: 0;
+        font-size: 1.1rem;
+    }
+    .point.origin .point-icon { background: var(--primary-light); color: var(--primary-dark); }
+    .point.dest .point-icon { background: #ffebee; color: var(--danger); }
+    
+    .point-info { flex: 1; min-width: 0; padding-top: 2px; }
+    .point-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; }
+    .point-name { font-weight: 700; font-size: 1.05rem; color: var(--text-main); line-height: 1.4; word-break: break-word; }
+    .point-time { font-size: 0.85rem; color: var(--primary); font-weight: 600; background: var(--primary-light); padding: 2px 8px; border-radius: 6px; display: inline-block; margin-top: 4px; }
+
+    .point-actions { display: flex; gap: 4px; margin-left: 8px; }
+    .action-btn { background: none; border: none; color: var(--text-sub); padding: 4px; cursor: pointer; border-radius: 4px; font-size: 0.9rem; }
+    .action-btn:hover { background: var(--bg); color: var(--primary); }
+    .action-btn.del:hover { color: var(--danger); }
+
+    /* 연결선 & 거리 배지 */
+    .route-line-container {
+        display: flex;
+        align-items: center;
+        margin: 4px 0 4px 20px;
+        padding: 16px 0;
+        min-height: 40px;
+    }
+    .line {
+        width: 2px;
+        height: 100%;
+        background: #e9ecef;
+        position: absolute;
+        left: 20px;
+        top: 40px;
+        bottom: 40px;
+        z-index: 0;
+    }
+    .transport-icons {
+        margin-left: 40px;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+    }
+    .dist-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
+        color: var(--text-sub);
+        font-size: 0.75rem;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-weight: 600;
+    }
+    .dist-badge i { font-size: 0.7rem; }
+
+    /* 지도 버튼 영역 */
+    .map-links {
+        display: flex; gap: 8px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border);
+    }
+    .map-btn {
+        flex: 1;
+        display: flex; align-items: center; justify-content: center; gap: 6px;
+        padding: 10px;
+        background: var(--bg);
+        border-radius: 10px;
+        text-decoration: none;
+        color: var(--text-main);
+        font-size: 0.9rem; font-weight: 600;
+        transition: 0.2s;
+    }
+    .map-btn:hover { background: #e9ecef; transform: translateY(-2px); }
+
+    /* Empty State */
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--text-sub); }
+    .empty-state i { font-size: 3rem; margin-bottom: 16px; opacity: 0.3; }
+
+    /* FAB & Modals */
+    .fab {
+        position: fixed; bottom: calc(20px + var(--sab)); right: 20px;
+        width: 56px; height: 56px;
+        background: var(--primary); color: white;
+        border: none; border-radius: 50%;
+        box-shadow: 0 4px 12px rgba(0,191,165,0.4);
+        font-size: 1.5rem; cursor: pointer; z-index: 900;
+        transition: transform 0.2s;
+    }
+    .fab:hover { transform: scale(1.1); }
+
+    .modal-overlay {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.5); z-index: 1000;
+        display: none; align-items: center; justify-content: center;
+        backdrop-filter: blur(4px);
+    }
+    .modal-content {
+        background: white; width: 90%; max-width: 360px;
+        border-radius: 20px; padding: 24px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+    .modal-title { margin: 0 0 20px; font-size: 1.2rem; font-weight: 700; }
+    .input-group { margin-bottom: 16px; }
+    .input-label { display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-sub); margin-bottom: 8px; }
+    .input-box {
+        width: 100%; padding: 12px; border: 1px solid var(--border);
+        border-radius: 10px; font-size: 1rem; outline: none; transition: 0.2s;
+    }
+    .input-box:focus { border-color: var(--primary); }
+    
+    .coord-inputs { display: flex; gap: 8px; }
+    .coord-inputs .input-box { font-family: monospace; font-size: 0.9rem; }
+
+    .modal-btns { display: flex; gap: 8px; margin-top: 24px; }
+    .btn { flex: 1; padding: 12px; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; }
+    .btn-cancel { background: var(--bg); color: var(--text-sub); }
+    .btn-save { background: var(--primary); color: white; }
+
+    /* Scrollbar */
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+    .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes popIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+</style>
+</head>
+<body>
+
+<header>
+    <div class="logo"><i class="fas fa-route"></i> Travel Route</div>
+    <div style="display:flex; gap:8px;">
+        <button type="button" class="pc-only-btn pc-only" onclick="document.getElementById('excel-input').click()">
+            <i class="fas fa-file-excel"></i> 엑셀 입력
+        </button>
+        <button type="button" class="header-btn" onclick="document.getElementById('json-input').click()"><i class="fas fa-folder-open"></i></button>
+        <button type="button" class="header-btn" onclick="exportJSON()"><i class="fas fa-share-nodes"></i></button>
+        <button type="button" class="header-btn" onclick="resetAll()"><i class="fas fa-trash-alt" style="color:var(--danger)"></i></button>
+    </div>
+    <input type="file" id="json-input" accept=".json" hidden onchange="importJSON(this)">
+    <input type="file" id="excel-input" accept=".xlsx,.xls,.csv" hidden onchange="handleExcel(this)">
+</header>
+
+<div class="day-nav hide-scrollbar" id="day-nav"></div>
+
+<div class="container hide-scrollbar" id="main-container">
+    <div id="distance-info">
+        <div class="dist-header">
+            <div>
+                <div class="dist-label"><i class="far fa-calendar-check"></i> <span id="dist-date-label">Day N</span> 총 이동 거리</div>
+                <div class="dist-value-wrap">
+                    <span id="total-dist" class="dist-value">0.0</span>
+                    <span class="dist-unit">km</span>
+                </div>
+            </div>
+            <div class="dist-icon-box"><i class="fas fa-map-marked-alt"></i></div>
+        </div>
+    </div>
+    <div id="app"></div>
+</div>
+
+<button type="button" class="fab" onclick="openAddModal()"><i class="fas fa-plus"></i></button>
+
+<div class="modal-overlay" id="add-modal">
+    <div class="modal-content">
+        <h3 class="modal-title">새 경로 추가</h3>
+        <div class="input-group">
+            <label class="input-label">탭 이름(날짜)</label>
+            <input type="text" id="manual-date" class="input-box" placeholder="예: Day 1">
+        </div>
+        <div class="input-group">
+            <label class="input-label">장소명</label>
+            <input type="text" id="manual-place" class="input-box" placeholder="예: 오사카 성">
+        </div>
+        <div class="input-group">
+            <label class="input-label">좌표(선택: 거리 계산용)</label>
+            <div class="coord-inputs">
+                <input type="number" id="manual-lat" class="input-box" placeholder="위도 (34...)" step="any">
+                <input type="number" id="manual-lon" class="input-box" placeholder="경도 (135...)" step="any">
+            </div>
+        </div>
+        <div class="input-group">
+            <label class="input-label">시간(선택)</label>
+            <input type="time" id="manual-time" class="input-box">
+        </div>
+        <div class="modal-btns">
+            <button type="button" class="btn btn-cancel" onclick="closeModal('add-modal')">취소</button>
+            <button type="button" class="btn btn-save" onclick="addManualRoute()">추가하기</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="edit-modal">
+    <div class="modal-content">
+        <h3 class="modal-title">장소 수정</h3>
+        <input type="hidden" id="edit-id">
+        <div class="input-group">
+            <label class="input-label">장소 이름</label>
+            <input type="text" id="edit-place" class="input-box">
+        </div>
+        <div class="input-group">
+            <label class="input-label">좌표(거리 계산용)</label>
+            <div class="coord-inputs">
+                <input type="number" id="edit-lat" class="input-box" placeholder="위도" step="any">
+                <input type="number" id="edit-lon" class="input-box" placeholder="경도" step="any">
+            </div>
+        </div>
+        <div class="input-group">
+            <label class="input-label">시간(선택)</label>
+            <input type="time" id="edit-time" class="input-box">
+        </div>
+        <div class="modal-btns">
+            <button type="button" class="btn btn-cancel" onclick="closeModal('edit-modal')">취소</button>
+            <button type="button" class="btn btn-save" onclick="saveEdit()">저장</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- 좌표 데이터베이스 ---
+    const COORD_MAP = {
+        "간사이 국제공항 (KIX)": {lat: 34.4350, lon: 135.2440},
+        "난바역 (Namba Station)": {lat: 34.6671, lon: 135.4991},
+        "APA Hotel Namba-Eki Higashi": {lat: 34.6653, lon: 135.5036},
+        "훗쿄쿠세이 신사이바시 본점 (Hokkyokusei)": {lat: 34.6714, lon: 135.4996},
+        "오사카코역 (Osakako Station)": {lat: 34.6548, lon: 135.4300},
+        "해유관 (Osaka Aquarium Kaiyukan)": {lat: 34.6545, lon: 135.4289},
+        "글리코상 (Glico Sign)": {lat: 34.6691, lon: 135.5008},
+        "치보 (Chibo)": {lat: 34.6685, lon: 135.5013},
+        "돈키호테 도톤보리점 (Don Quijote)": {lat: 34.6696, lon: 135.5026},
+        "요도야바시역 (Yodoyabashi Station)": {lat: 34.6908, lon: 135.5006},
+        "후시미 이나리 신사": {lat: 34.9671, lon: 135.7727},
+        "오멘 (Omen)": {lat: 34.9940, lon: 135.7830},
+        "청수사 (Kiyomizu-dera)": {lat: 34.9948, lon: 135.7850},
+        "기온 시조역 (Gion-Shijo Station)": {lat: 35.0037, lon: 135.7720},
+        "교토 가와라마치역 (Kyoto-Kawaramachi)": {lat: 35.0039, lon: 135.7698},
+        "돈까스 KYK 한큐32번가점 (Hankyu Grand Bldg 28F)": {lat: 34.7031, lon: 135.4979},
+        "우메다역 (Umeda Station)": {lat: 34.7031, lon: 135.4979},
+        "다니마치욘초메역": {lat: 34.6853, lon: 135.5165},
+        "오사카 성 천수각 (Osaka Castle)": {lat: 34.6874, lon: 135.5258},
+        "지넨 스시 (Jinen)": {lat: 34.6710, lon: 135.5030},
+        "오렌지 스트리트": {lat: 34.6715, lon: 135.4945},
+        "mipig cafe Osaka (Shinsaibashi)": {lat: 34.6730, lon: 135.4960},
+        "에비스초역 (Ebisucho Station)": {lat: 34.6547, lon: 135.5055},
+        "츠텐카쿠 (Tsutenkaku)": {lat: 34.6525, lon: 135.5063},
+        "쿠시카츠 다루마": {lat: 34.6517, lon: 135.5065},
+        "MEGA Don Quijote Shinsekai": {lat: 34.6508, lon: 135.5063},
+        "츠루동탄 소에몬초점 (Tsurutontan)": {lat: 34.6688, lon: 135.5048},
+        "나라 공원": {lat: 34.6850, lon: 135.8430},
+        "쿠츠로기야 (Kutsurogiya)": {lat: 34.7964, lon: 135.2475},
+        "기타노 이진칸 거리": {lat: 34.7025, lon: 135.1915},
+        "메리켄 파크 (Meriken Park)": {lat: 34.6823, lon: 135.1867},
+        "고베 하버랜드 (Kobe Harborland)": {lat: 34.6795, lon: 135.1800},
+        "도톤보리": {lat: 34.6687, lon: 135.5013},
+        "이치란 도톤보리점": {lat: 34.6695, lon: 135.5020},
+        "리틀 오사카": {lat: 34.6690, lon: 135.5010},
+        "간사이 국제공항": {lat: 34.4350, lon: 135.2440}
+    };
+
+    // --- State & Utils ---
+    let fullData = [];
+    let uniqueDays = [];
+    let currentDay = '';
+
+    function generateUUID() { return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random()*16|0; return (c==='x'?r:(r&0x3|0x8)).toString(16); }); }
+    function saveToLocal() { localStorage.setItem('travelRouteData_v3', JSON.stringify(fullData)); }
+    function loadFromLocal() {
+        const saved = localStorage.getItem('travelRouteData_v3');
+        if(saved) processData(JSON.parse(saved));
+        else renderEmptyState();
+    }
+    function resetAll() { if(confirm("모든 데이터를 삭제하시겠습니까?")) { localStorage.removeItem('travelRouteData_v3'); fullData = []; renderEmptyState(); location.reload(); } }
+
+    // --- Excel Handling ---
+    function handleExcel(input) {
+        const file = input.files[0];
+        if(!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, {type: 'array'});
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet);
+            processData(jsonData);
+        };
+        reader.readAsArrayBuffer(file);
+        input.value = '';
+    }
+
+    // --- Data Processing ---
+    function processData(newData) {
+        const cleanedData = newData.map(r => ({
+            ...r,
+            '_id': r._id || generateUUID(),
+            '장소': r['장소'] ? r['장소'].toString().trim() : '',
+            '날짜': r['날짜'] ? r['날짜'].toString().trim() : 'Unscheduled',
+            '시간': r['시간'] ? r['시간'].toString().trim() : '',
+            'lat': r['lat'] || null,
+            'lon': r['lon'] || null
+        })).filter(r => r['장소'] !== '');
+
+        fullData = cleanedData; 
+        
+        const days = new Set(fullData.map(r => r['날짜']));
+        uniqueDays = [...days].sort((a, b) => {
+            const numA = parseInt(a.replace(/\D/g, '')) || 0;
+            const numB = parseInt(b.replace(/\D/g, '')) || 0;
+            return numA - numB || a.localeCompare(b);
+        });
+
+        saveToLocal();
+
+        if (uniqueDays.length > 0) {
+            if (!uniqueDays.includes(currentDay)) {
+                currentDay = uniqueDays[0];
+            }
+            renderDayNav();
+            renderRoutes();
+        } else {
+            renderEmptyState();
+        }
+    }
+
+    // --- UI Rendering ---
+    function renderDayNav() {
+        const nav = document.getElementById('day-nav');
+        nav.innerHTML = '';
+        uniqueDays.forEach(day => {
+            const btn = document.createElement('button');
+            btn.className = `day-pill ${day === currentDay ? 'active' : ''}`;
+            btn.textContent = day;
+            btn.onclick = () => { currentDay = day; renderDayNav(); renderRoutes(); };
+            nav.appendChild(btn);
+        });
+    }
+
+    function renderEmptyState() {
+        document.getElementById('app').innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-map-marked-alt"></i>
+                <h3>일정이 비어있습니다</h3>
+                <p>엑셀 파일을 불러오거나<br>우측 하단 + 버튼으로 추가하세요.</p>
+            </div>
+        `;
+        document.getElementById('distance-info').style.display = 'none';
+        document.getElementById('day-nav').innerHTML = '';
+    }
+
+    // --- Distance Logic ---
+    function haversine(lat1, lon1, lat2, lon2) {
+        const R = 6371; 
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180; 
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2); 
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+        return R * c; 
+    }
+
+    function getCoords(item) {
+        // 1. 아이템 자체에 저장된 좌표 우선 (수동 수정된 값)
+        if(item.lat && item.lon) {
+            return { lat: parseFloat(item.lat), lon: parseFloat(item.lon) };
+        }
+
+        const placeName = item['장소'];
+        if(!placeName) return null;
+
+        // 2. DB 검색
+        if (COORD_MAP[placeName]) return COORD_MAP[placeName];
+        
+        const primary = placeName.split('|')[0].trim();
+        if (COORD_MAP[primary]) return COORD_MAP[primary];
+        
+        for (const key in COORD_MAP) {
+            if (placeName.includes(key) || key.includes(primary)) return COORD_MAP[key];
+        }
+        return null;
+    }
+
+    function renderRoutes() {
+        const app = document.getElementById('app');
+        const distEl = document.getElementById('distance-info');
+        const totalDistEl = document.getElementById('total-dist');
+        const dateLabel = document.getElementById('dist-date-label');
+        
+        app.innerHTML = '';
+
+        const dailyRows = fullData
+            .filter(r => r['날짜'] === currentDay)
+            .sort((a, b) => {
+                if (a['시간'] && b['시간']) return a['시간'].localeCompare(b['시간']);
+                return 0; 
+            });
+
+        if(dailyRows.length === 0) {
+            distEl.style.display = 'none';
+            app.innerHTML = '<div class="empty-state">이 날짜에 일정이 없습니다.</div>';
+            return;
+        }
+
+        distEl.style.display = 'block';
+        if(dateLabel) dateLabel.textContent = currentDay;
+
+        if(dailyRows.length === 1) {
+            totalDistEl.textContent = "0.0";
+            app.innerHTML = createSingleCard(dailyRows[0]);
+            return;
+        }
+
+        let totalDist = 0;
+        let prevRow = dailyRows[0];
+        
+        for (let i = 1; i < dailyRows.length; i++) {
+            const currRow = dailyRows[i];
+            const p1 = getCoords(prevRow); 
+            const p2 = getCoords(currRow);
+            let segmentDist = 0;
+            
+            if (p1 && p2) {
+                segmentDist = haversine(p1.lat, p1.lon, p2.lat, p2.lon);
+                totalDist += segmentDist;
+            }
+            
+            app.appendChild(createRouteCard(prevRow, currRow, segmentDist));
+            prevRow = currRow;
+        }
+        
+        totalDistEl.textContent = totalDist.toFixed(1);
+    }
+
+    function createSingleCard(item) {
+        return `
+            <div class="route-card">
+                 <div class="point origin">
+                    <div class="point-icon"><i class="fas fa-map-pin"></i></div>
+                    <div class="point-info">
+                        <div class="point-header">
+                            <div class="point-name">${item['장소']}</div>
+                            ${createActions(item._id)}
+                        </div>
+                        <div class="point-time">${item['시간'] || '시간 미정'}</div>
+                    </div>
+                </div>
+                <div style="margin-top:16px; text-align:center; color:var(--text-sub); font-size:0.9rem;">
+                    👇 다음 장소를 추가하면 경로가 생성됩니다.
+                </div>
+            </div>
+        `;
+    }
+
+    function createRouteCard(origin, dest, dist) {
+        const oName = origin['장소'];
+        const dName = dest['장소'];
+        const getLink = (mode) => `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(oName)}&destination=${encodeURIComponent(dName)}&travelmode=${mode}`;
+        
+        const timeBadge = (t) => t ? `<div class="point-time">${t}</div>` : '';
+        const distBadge = dist >= 0.1 ? `<span class="dist-badge"><i class="fas fa-ruler-horizontal"></i> ${dist.toFixed(1)}km</span>` : '';
+
+        const card = document.createElement('div');
+        card.className = 'route-card';
+        card.innerHTML = `
+            <div class="route-flow">
+                <div class="point origin">
+                    <div class="point-icon"><i class="fas fa-circle-dot"></i></div>
+                    <div class="point-info">
+                        <div class="point-header">
+                            <div class="point-name">${oName}</div>
+                            ${createActions(origin._id)}
+                        </div>
+                        ${timeBadge(origin['시간'])}
+                    </div>
+                </div>
+                
+                <div class="route-line-container">
+                    <div class="line"></div>
+                    <div class="transport-icons">
+                        ${distBadge}
+                    </div>
+                </div>
+
+                <div class="point dest">
+                    <div class="point-icon"><i class="fas fa-location-dot"></i></div>
+                    <div class="point-info">
+                        <div class="point-header">
+                            <div class="point-name">${dName}</div>
+                            ${createActions(dest._id)}
+                        </div>
+                        ${timeBadge(dest['시간'])}
+                    </div>
+                </div>
+            </div>
+
+            <div class="map-links">
+                <a href="${getLink('transit')}" target="_blank" class="map-btn"><i class="fas fa-bus"></i> 대중교통</a>
+                <a href="${getLink('walking')}" target="_blank" class="map-btn"><i class="fas fa-walking"></i> 도보</a>
+                <a href="${getLink('driving')}" target="_blank" class="map-btn"><i class="fas fa-car"></i> 택시</a>
+            </div>
+        `;
+        return card;
+    }
+
+    function createActions(id) {
+        return `
+            <div class="point-actions">
+                <button class="action-btn" onclick="openEditModal('${id}')"><i class="fas fa-pen"></i></button>
+                <button class="action-btn del" onclick="deletePoint('${id}')"><i class="fas fa-trash"></i></button>
+            </div>
+        `;
+    }
+
+    // --- Modal & Editing ---
+    function openAddModal() {
+        document.getElementById('add-modal').style.display = 'flex';
+        document.getElementById('manual-date').value = currentDay || 'Day 1';
+        document.getElementById('manual-place').value = '';
+        document.getElementById('manual-lat').value = '';
+        document.getElementById('manual-lon').value = '';
+        document.getElementById('manual-time').value = '';
+    }
+    function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+    
+    function addManualRoute() {
+        const date = document.getElementById('manual-date').value;
+        const place = document.getElementById('manual-place').value;
+        const lat = document.getElementById('manual-lat').value;
+        const lon = document.getElementById('manual-lon').value;
+        const time = document.getElementById('manual-time').value;
+        
+        if(!place) return alert('장소명을 입력하세요.');
+        
+        fullData.push({ 
+            _id: generateUUID(), 
+            '날짜': date, 
+            '장소': place, 
+            '시간': time,
+            'lat': lat ? parseFloat(lat) : null,
+            'lon': lon ? parseFloat(lon) : null
+        });
+        processData(fullData); 
+        closeModal('add-modal');
+    }
+
+    function openEditModal(id) {
+        const item = fullData.find(d => d._id === id);
+        if(!item) return;
+        document.getElementById('edit-id').value = id;
+        document.getElementById('edit-place').value = item['장소'];
+        document.getElementById('edit-time').value = item['시간'];
+        
+        // --- 좌표 로딩 개선 로직 ---
+        let lat = item.lat;
+        let lon = item.lon;
+        
+        // 저장된 좌표가 없으면 DB 검색
+        if(!lat || !lon) {
+            const coords = getCoords(item);
+            if(coords) {
+                lat = coords.lat;
+                lon = coords.lon;
+            }
+        }
+        
+        document.getElementById('edit-lat').value = lat || '';
+        document.getElementById('edit-lon').value = lon || '';
+        document.getElementById('edit-modal').style.display = 'flex';
+    }
+
+    function saveEdit() {
+        const id = document.getElementById('edit-id').value;
+        const place = document.getElementById('edit-place').value;
+        const lat = document.getElementById('edit-lat').value;
+        const lon = document.getElementById('edit-lon').value;
+        const time = document.getElementById('edit-time').value;
+        
+        const idx = fullData.findIndex(d => d._id === id);
+        if(idx > -1) {
+            fullData[idx]['장소'] = place;
+            fullData[idx]['시간'] = time;
+            fullData[idx]['lat'] = lat ? parseFloat(lat) : null;
+            fullData[idx]['lon'] = lon ? parseFloat(lon) : null;
+            
+            processData(fullData);
+            closeModal('edit-modal');
+        }
+    }
+
+    function deletePoint(id) {
+        if(confirm('삭제하시겠습니까?')) {
+            fullData = fullData.filter(d => d._id !== id);
+            processData(fullData);
+        }
+    }
+
+    // JSON Export (파일명에 날짜 추가)
+    function exportJSON() {
+        const date = new Date();
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const fileName = `travel_route_${year}-${month}-${day}.json`;
+
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(fullData));
+        const downloadAnchorNode = document.createElement('a');
+        downloadAnchorNode.setAttribute("href", dataStr);
+        downloadAnchorNode.setAttribute("download", fileName);
+        document.body.appendChild(downloadAnchorNode);
+        downloadAnchorNode.click();
+        downloadAnchorNode.remove();
+    }
+
+    function importJSON(input) {
+        const file = input.files[0];
+        if(!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => processData(JSON.parse(e.target.result));
+        reader.readAsText(file);
+    }
+
+    window.onload = loadFromLocal;
+    window.onclick = function(event) {
+        if (event.target.classList.contains('modal-overlay')) {
+            event.target.style.display = "none";
+        }
+    }
+</script>
+
+</body>
+</html>

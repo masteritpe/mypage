@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SCAMPER를 활용한 Brain Writing 학습</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
+    
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.23.10/babel.min.js"></script>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+
+    <script src="./firebase-config.js"></script>
+
+    <style>
+        body { 
+            font-family: 'Jua', sans-serif; 
+            background-color: #f0fdfa; 
+            color: #4a4a4a; 
+            overflow-x: auto; 
+        }
+        
+        .report-page {
+            width: 210mm;
+            min-height: 297mm;
+            background: #ffffff;
+            box-sizing: border-box;
+            background-image: radial-gradient(#fde68a 1px, transparent 1px);
+            background-size: 20px 20px;
+            position: relative;
+        }
+
+        .print-mode {
+            border: none !important;
+            box-shadow: none !important;
+            border-radius: 0 !important;
+        }
+
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-thumb { background: #fbbf24; border-radius: 10px; }
+        
+        .journal-lines {
+            background-image: repeating-linear-gradient(transparent, transparent 31px, #fde68a 31px, #fde68a 32px);
+            line-height: 32px;
+            padding-top: 8px;
+        }
+    </style>
+</head>
+<body class="py-8 px-4 flex flex-col items-center min-h-screen">
+    <div id="root" class="w-full flex flex-col items-center"></div>
+
+    <script type="text/babel">
+        // 💡 수정된 부분: 하드코딩된 설정 객체를 삭제하고 window.firebaseConfig를 사용합니다.
+        if (!firebase.apps.length) {
+            firebase.initializeApp(window.firebaseConfig);
+        }
+        const db = firebase.firestore();
+
+        const { useState, useRef } = React;
+
+        const App = () => {
+            const [isEntered, setIsEntered] = useState(false);
+            const [isLoading, setIsLoading] = useState(false);
+            const [isPrinting, setIsPrinting] = useState(false);
+
+            const [studentInfo, setStudentInfo] = useState({ classNum: '1', studentName: '' });
+            const [situation, setSituation] = useState('');
+            const [problem, setProblem] = useState('');
+            
+            // 번호 동기화를 위한 배열 상태 (4줄)
+            const [ideaNumbers, setIdeaNumbers] = useState(['', '', '', '']);
+            // SCAMPER 항목별 아이디어 내용 (각 4줄씩)
+            const [scamper, setScamper] = useState({
+                S: ['', '', '', ''], C: ['', '', '', ''], A: ['', '', '', ''], 
+                M: ['', '', '', ''], P: ['', '', '', ''], E: ['', '', '', ''], R: ['', '', '', '']
+            });
+
+            const [finalIdea, setFinalIdea] = useState({
+                candidatesCount: '',
+                criteria: { 적합성: false, 현실성: false, 창의성: false, 영향: false, 지속성: false },
+                name: '', description: '', reason: ''
+            });
+            const [presentation, setPresentation] = useState({ prob: '', sol: '', effect: '' });
+
+            const toggleCriteria = (key) => setFinalIdea(prev => ({ 
+                ...prev, criteria: { ...prev.criteria, [key]: !prev.criteria[key] } 
+            }));
+
+            // 기존 단일 텍스트 데이터를 배열 데이터(4줄 고정)로 안전하게 변환하는 함수
+            const formatScamperData = (obj) => {
+                if (!obj) return { S:['','','',''], C:['','','',''], A:['','','',''], M:['','','',''], P:['','','',''], E:['','','',''], R:['','','',''] };
+                const formatted = {};
+                for (let key of ['S', 'C', 'A', 'M', 'P', 'E', 'R']) {
+                    if (Array.isArray(obj[key])) {
+                        formatted[key] = [obj[key][0] || '', obj[key][1] || '', obj[key][2] || '', obj[key][3] || ''];
+                    } else {
+                        formatted[key] = [obj[key] || '', '', '', ''];
+                    }
+                }
+                return formatted;
+            };
+
+            const handleEnter = async () => {
+                if (!studentInfo.studentName) return alert("이름을 입력해주세요!");
+                setIsLoading(true);
+                try {
+                    const docId = `${studentInfo.classNum}반_${studentInfo.studentName}`;
+                    const docSnap = await db.collection("scamper_reports").doc(docId).get();
+
+                    if (docSnap.exists) {
+                        const data = docSnap.data();
+                        setSituation(data.situation || '');
+                        setProblem(data.problem || '');
+                        setIdeaNumbers(data.ideaNumbers || ['', '', '', '']);
+                        setScamper(formatScamperData(data.scamper));
+                        setFinalIdea(data.finalIdea || { candidatesCount:'', criteria:{ 적합성:false, 현실성:false, 창의성:false, 영향:false, 지속성:false }, name:'', description:'', reason:'' });
+                        setPresentation(data.presentation || { prob:'', sol:'', effect:'' });
+                        alert("📂 이전 학습 기록을 불러왔습니다!");
+                    } else {
+                        setSituation('');
+                        setProblem('');
+                        setIdeaNumbers(['', '', '', '']);
+                        setScamper({ S:['','','',''], C:['','','',''], A:['','','',''], M:['','','',''], P:['','','',''], E:['','','',''], R:['','','',''] });
+                        setFinalIdea({ candidatesCount:'', criteria:{ 적합성:false, 현실성:false, 창의성:false, 영향:false, 지속성:false }, name:'', description:'', reason:'' });
+                        setPresentation({ prob:'', sol:'', effect:'' });
+                        alert("✨ 새로운 연구를 시작합니다!");
+                    }
+                    setIsEntered(true);
+                } catch (e) { alert("오류 발생: " + e.message); }
+                setIsLoading(false);
+            };
+
+            const handleSave = async () => {
+                setIsLoading(true);
+                try {
+                    const docId = `${studentInfo.classNum}반_${studentInfo.studentName}`;
+                    await db.collection("scamper_reports").doc(docId).set({
+                        studentInfo, situation, problem, ideaNumbers, scamper, finalIdea, presentation,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    alert("성공적으로 저장되었습니다! ☁️");
+                } catch (e) { alert("저장 실패: " + e.message); }
+                setIsLoading(false);
+            };
+
+            const downloadPDF = () => {
+                setIsPrinting(true);
+                setTimeout(async () => {
+                    const { jsPDF } = window.jspdf;
+                    const pdf = new jsPDF('p', 'mm', 'a4');
+                    const pdfWidth = pdf.internal.pageSize.getWidth(); 
+                    const pdfHeight = pdf.internal.pageSize.getHeight(); 
+
+                    const page1 = document.getElementById('pdf-page-1');
+                    const canvas1 = await html2canvas(page1, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+                    const imgData1 = canvas1.toDataURL('image/jpeg', 1.0);
+                    pdf.addImage(imgData1, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+
+                    const page2 = document.getElementById('pdf-page-2');
+                    if(page2) {
+                        pdf.addPage();
+                        const canvas2 = await html2canvas(page2, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+                        const imgData2 = canvas2.toDataURL('image/jpeg', 1.0);
+                        pdf.addImage(imgData2, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+                    }
+
+                    pdf.save(`SCAMPER_연구일지_${studentInfo.classNum}반_${studentInfo.studentName}.pdf`);
+                    setIsPrinting(false);
+                }, 100);
+            };
+
+            const renderInput = (value, onChange, placeholder, isSingleLine = false, heightClass = "h-[136px]") => {
+                if (isPrinting) {
+                    return <div className={`w-full ${isSingleLine ? '' : heightClass} text-[15px] text-gray-700 whitespace-pre-wrap break-words px-2 pt-1`}>{value || ' '}</div>;
+                }
+                if (isSingleLine) {
+                    return <input type="text" value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} className="w-full bg-transparent border-b border-gray-300 focus:outline-none focus:border-teal-500 text-[15px] text-gray-700 px-2 py-1" />;
+                }
+                return <textarea value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} className={`w-full ${heightClass} bg-transparent resize-none border-none focus:outline-none text-[15px] text-gray-700 journal-lines px-2 pt-1 placeholder:text-gray-400 overflow-hidden`} />;
+            };
+
+            if (!isEntered) {
+                return (
+                    <div className="flex flex-col items-center justify-center mt-8 w-full max-w-md bg-white pt-8 pb-10 px-8 rounded-[36px] shadow-2xl border-[6px] border-[#6ee7b7] relative overflow-hidden">
+                        <div className="z-10 flex flex-col items-center w-full">
+                            <div className="bg-teal-50 border-2 border-teal-100 p-3 rounded-full mb-3">
+                                <span className="text-[44px] leading-none block">🔬</span>
+                            </div>
+                            <h1 className="text-[32px] text-[#0f766e] mb-2 font-bold">발명 연구소 입장</h1>
+                            <p className="text-gray-600 mb-8 text-center text-[17px]">본인의 정보를 입력하고 연구를 시작하세요!</p>
+                            
+                            <div className="w-full flex flex-col gap-5">
+                                <div className="flex flex-col">
+                                    <label className="text-[#0f766e] font-bold mb-1.5 ml-1 text-[15px]">반 선택</label>
+                                    <select value={studentInfo.classNum} onChange={e => setStudentInfo({...studentInfo, classNum: e.target.value})}
+                                            className="border-[3px] border-teal-100 p-3.5 rounded-2xl text-xl text-gray-700 focus:outline-none focus:border-[#2dd4bf] bg-teal-50/30 transition-colors">
+                                        {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n}반</option>)}
+                                    </select>
+                                </div>
+                                <div className="flex flex-col mb-2">
+                                    <label className="text-[#0f766e] font-bold mb-1.5 ml-1 text-[15px]">이름</label>
+                                    <input type="text" placeholder="이름을 입력하세요" value={studentInfo.studentName} onChange={e => setStudentInfo({...studentInfo, studentName: e.target.value})} 
+                                           className="border-[3px] border-teal-100 p-3.5 rounded-2xl text-xl text-gray-700 focus:outline-none focus:border-[#2dd4bf] bg-teal-50/30 transition-colors" />
+                                </div>
+                                <button onClick={handleEnter} disabled={isLoading} className="w-full bg-[#14b8a6] hover:bg-[#0d9488] text-white font-bold text-[22px] py-4 rounded-2xl shadow-lg transition-all active:scale-95 mt-2">
+                                    {isLoading ? '연구 기록 찾는 중...' : '연구 시작하기 🚀'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            const SCAMPER_FIELDS = [
+                { id: 'S', label: '대체하기 (S)', title: '무엇으로 대체할 수 있을까요?', emoji: '🔄' },
+                { id: 'C', label: '결합하기 (C)', title: '어떤 것들을 결합할 수 있을까요?', emoji: '➕' },
+                { id: 'A', label: '응용하기 (A)', title: '다른 곳의 아이디어를 응용한다면?', emoji: '💡' },
+                { id: 'M', label: '수정하기 (M)', title: '모양, 색깔, 크기를 어떻게 바꿀까요?', emoji: '🛠️' },
+                { id: 'P', label: '다른 용도 (P)', title: '전혀 다른 어떤 용도로 쓸 수 있을까요?', emoji: '♻️' },
+                { id: 'E', label: '제거하기 (E)', title: '불필요해서 빼버릴 수 있는 것은?', emoji: '✂️' },
+                { id: 'R', label: '재배열하기 (R)', title: '순서나 위치를 바꾼다면?', emoji: '🔀' }
+            ];
+
+            return (
+                <div className="w-full flex flex-col items-center gap-6">
+                    <div className="w-full max-w-[210mm] flex flex-wrap justify-between items-center bg-white p-4 rounded-3xl shadow-md border-4 border-teal-200 gap-4">
+                        <div className="flex items-center gap-2">
+                            <span className="text-4xl">💡</span>
+                            <h1 className="text-2xl text-teal-600 pt-1">아이디어 톡톡 연구소</h1>
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={() => setIsEntered(false)} className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-2xl font-bold">🚪 나가기</button>
+                            <button onClick={handleSave} disabled={isLoading} className="bg-teal-500 hover:bg-teal-400 text-white px-4 py-2 rounded-2xl font-bold">☁️ 저장</button>
+                            <button onClick={downloadPDF} disabled={isPrinting} className={`text-white px-4 py-2 rounded-2xl font-bold ${isPrinting ? 'bg-gray-400' : 'bg-orange-400 hover:bg-orange-500'}`}>🖨️ PDF 출력</button>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col gap-8 w-full max-w-[210mm]">
+                        <div id="pdf-page-1" className={`report-page p-[10mm] border-4 rounded-3xl flex flex-col relative overflow-hidden ${isPrinting ? 'print-mode' : 'border-teal-400 shadow-2xl'}`}>
+                            <div className="flex justify-between items-end border-b-4 border-yellow-400 pb-4 mb-4 relative z-10">
+                                <div>
+                                    <h2 className="text-3xl text-teal-600 font-bold">🌍 SCAMPER를 활용한 Brain Writing 학습</h2>
+                                    <p className="text-lg text-orange-500 mt-2">상상력을 발휘해 나만의 멋진 아이디어를 기록해봐요 ✨</p>
+                                </div>
+                                <div className="bg-yellow-50 p-2 px-4 rounded-2xl border-2 border-yellow-200 text-teal-800 font-bold text-xl">
+                                    {studentInfo.classNum}반 | {studentInfo.studentName}
+                                </div>
+                            </div>
+                            <div className="flex-1 flex flex-col gap-4 relative z-10">
+                                <div className="bg-white border-2 border-teal-300 rounded-2xl p-4 flex flex-col gap-3">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xl">🎯</span>
+                                        <span className="text-[14px] font-bold px-2 py-0.5 rounded-full bg-teal-100 text-teal-700">1단계</span>
+                                        <h3 className="text-[16px] text-gray-700 font-bold">상황 선택 및 문제 정의</h3>
+                                    </div>
+                                    <div className="flex flex-wrap gap-6 ml-8 bg-gray-50 p-2 rounded-xl border border-gray-200">
+                                        <span className="font-bold text-teal-700">선택 상황:</span>
+                                        {['물 부족', '식량 부족', '에너지 부족'].map(opt => (
+                                            <label key={opt} className="flex items-center gap-1 cursor-pointer">
+                                                <input type="radio" value={opt} checked={situation === opt} onChange={(e) => setSituation(e.target.value)} className="text-teal-600" />
+                                                <span className="text-[15px]">{opt}</span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                    <div className="flex items-center gap-3 ml-8 w-[calc(100%-2rem)]">
+                                        <span className="font-bold text-teal-700 whitespace-nowrap">문제 정의:</span>
+                                        <div className="flex-1">
+                                            {renderInput(problem, setProblem, "해결할 문제를 한 문장으로 적어보세요.", true)}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="bg-teal-50 border-2 border-teal-200 rounded-3xl p-4">
+                                    <h3 className="text-xl text-teal-700 mb-3 ml-2 font-bold">🧩 2단계: SCAMPER 아이디어 전개</h3>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        {SCAMPER_FIELDS.map(q => (
+                                            <div key={q.id} className="bg-white border-2 border-teal-300 rounded-2xl p-3 flex flex-col">
+                                                <div className="flex items-start gap-2 mb-2">
+                                                    <span className="text-xl">{q.emoji}</span>
+                                                    <div>
+                                                        <span className="text-[13px] font-bold px-2 py-0.5 rounded-full bg-teal-100 text-teal-700">{q.label}</span>
+                                                        <h3 className="text-[14px] text-gray-700 mt-1">{q.title}</h3>
+                                                    </div>
+                                                </div>
+                                                <div className="bg-gray-50 rounded-xl border border-gray-200 p-2 h-[154px] flex flex-col justify-between shadow-inner">
+                                                    {[0, 1, 2, 3].map(idx => (
+                                                        <div key={idx} className="flex items-center gap-2 border-b border-yellow-300 pb-1.5 last:border-0 h-[30px]">
+                                                            {isPrinting ? (
+                                                                <div className="w-8 h-[24px] bg-gray-200 flex items-center justify-center text-[13px] font-bold text-gray-700 rounded-md shrink-0">
+                                                                    {ideaNumbers[idx]}
+                                                                </div>
+                                                            ) : (
+                                                                <input
+                                                                    type="text"
+                                                                    value={ideaNumbers[idx]}
+                                                                    onChange={(e) => {
+                                                                        const newNumbers = [...ideaNumbers];
+                                                                        newNumbers[idx] = e.target.value;
+                                                                        setIdeaNumbers(newNumbers);
+                                                                    }}
+                                                                    className="w-8 h-[24px] bg-gray-200 text-center text-[13px] font-bold text-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-400 shrink-0"
+                                                                />
+                                                            )}
+                                                            {isPrinting ? (
+                                                                <div className="flex-1 text-[14px] text-gray-700 overflow-hidden whitespace-nowrap px-1">
+                                                                    {scamper[q.id][idx]}
+                                                                </div>
+                                                            ) : (
+                                                                <input
+                                                                    type="text"
+                                                                    value={scamper[q.id][idx]}
+                                                                    onChange={(e) => {
+                                                                        const newScamper = { ...scamper };
+                                                                        newScamper[q.id][idx] = e.target.value;
+                                                                        setScamper(newScamper);
+                                                                    }}
+                                                                    className="flex-1 bg-transparent text-[14px] text-gray-700 focus:outline-none px-1"
+                                                                />
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="pdf-page-2" className={`report-page p-[10mm] border-4 rounded-3xl flex flex-col relative overflow-hidden ${isPrinting ? 'print-mode' : 'border-orange-400 shadow-2xl'}`}>
+                            <div className="flex justify-between items-end border-b-4 border-orange-400 pb-4 mb-4 relative z-10">
+                                <h2 className="text-2xl text-orange-600 font-bold">🚀 SCAMPER를 활용한 Brain Writing 학습 - 결과 정리</h2>
+                                <div className="bg-orange-50 p-2 px-4 rounded-2xl border-2 border-orange-200 text-orange-800 font-bold text-lg">
+                                    {studentInfo.classNum}반 | {studentInfo.studentName}
+                                </div>
+                            </div>
+                            <div className="flex-1 flex flex-col relative z-10">
+                                <div className="bg-orange-50 border-2 border-orange-200 rounded-3xl p-5 h-full flex flex-col">
+                                    <h3 className="text-2xl text-orange-600 mb-4 font-bold">🏆 3단계: 나의 최종 결정</h3>
+                                    <div className="grid grid-cols-2 gap-4 flex-1">
+                                        <div className="bg-white border-2 border-orange-300 rounded-2xl p-5 flex flex-col gap-3">
+                                            <div className="inline-flex items-center self-start gap-2 bg-orange-100 px-4 py-1.5 rounded-full text-orange-800 font-bold text-lg mb-1">
+                                                <span>💡</span> 최종 아이디어 정리
+                                            </div>
+                                            
+                                            <div className="flex items-center gap-2 text-orange-900 font-bold text-[18px] px-2">
+                                                <span>후보 개수:</span>
+                                                {isPrinting ? (
+                                                    <span className="w-12 text-center inline-block">{finalIdea.candidatesCount || ' '}</span>
+                                                ) : (
+                                                    <input type="number"
+                                                           value={finalIdea.candidatesCount}
+                                                           onChange={e => setFinalIdea({...finalIdea, candidatesCount: e.target.value})}
+                                                           className="w-12 bg-transparent border-b-2 border-gray-400 focus:outline-none focus:border-orange-500 text-center text-gray-700"
+                                                    />
+                                                )}
+                                                <span>개</span>
+                                            </div>
+
+                                            <div className="bg-orange-50/50 rounded-xl p-3 border border-orange-100 flex flex-wrap items-center gap-x-4 gap-y-2">
+                                                <span className="text-orange-900 font-bold text-[16px]">선정 기준:</span>
+                                                {['적합성', '현실성', '창의성', '영향', '지속성'].map(criterion => (
+                                                    <label key={criterion} className="flex items-center gap-1.5 cursor-pointer text-gray-700 font-bold text-[14px]">
+                                                        <input type="checkbox"
+                                                               checked={finalIdea.criteria[criterion]}
+                                                               onChange={() => toggleCriteria(criterion)}
+                                                               className="w-4 h-4 accent-orange-500 rounded"
+                                                               disabled={isPrinting}
+                                                        />
+                                                        {criterion}
+                                                    </label>
+                                                ))}
+                                            </div>
+
+                                            <div className="bg-gray-50 rounded-xl p-3 flex flex-col gap-3 flex-1 border border-gray-100 border-dashed">
+                                                <div><span className="text-[14px] font-bold text-orange-700">이름</span>{renderInput(finalIdea.name, (val) => setFinalIdea({...finalIdea, name: val}), "이름", true)}</div>
+                                                <div className="flex-1"><span className="text-[14px] font-bold text-orange-700">설명</span>{renderInput(finalIdea.description, (val) => setFinalIdea({...finalIdea, description: val}), "설명", false, "h-[65px]")}</div>
+                                                <div className="flex-1"><span className="text-[14px] font-bold text-orange-700">이유</span>{renderInput(finalIdea.reason, (val) => setFinalIdea({...finalIdea, reason: val}), "이유", false, "h-[65px]")}</div>
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-white border-2 border-orange-300 rounded-2xl p-5 flex flex-col gap-6">
+                                            <div className="text-orange-800 font-bold">🎤 발표 요약 메모</div>
+                                            <div className="bg-gray-50 rounded-xl p-4 flex flex-col gap-6 flex-1">
+                                                <div><span className="font-bold text-orange-800 text-[15px]">📌 문제</span>{renderInput(presentation.prob, (val) => setPresentation({...presentation, prob: val}), "요약", true)}</div>
+                                                <div><span className="font-bold text-orange-800 text-[15px]">💡 해결</span>{renderInput(presentation.sol, (val) => setPresentation({...presentation, sol: val}), "요약", true)}</div>
+                                                <div><span className="font-bold text-orange-800 text-[15px]">🌟 효과</span>{renderInput(presentation.effect, (val) => setPresentation({...presentation, effect: val}), "요약", true)}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>마을 경제활동 정하기</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        :root {
+            /* 주황색 테마 */
+            --main-color: #ff4500;
+            --light-color: #fff0eb;
+            --border-color: #ffbba6;
+            --header-bg: #ffd1c2;
+        }
+
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Pretendard', 'Malgun Gothic', sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            background-color: #ffffff;
+            width: 100%;
+            max-width: 800px;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+            position: relative;
+        }
+
+        /* 조 정보 입력 영역 */
+        .group-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 30px;
+            background-color: var(--light-color);
+            padding: 15px;
+            border-radius: 8px;
+            border: 2px solid var(--border-color);
+        }
+
+        .info-label {
+            font-size: 1.15rem;
+            color: var(--main-color);
+            font-weight: bold;
+            white-space: nowrap; 
+            flex-shrink: 0; 
+        }
+
+        .info-select, .info-input {
+            flex: 1;
+            min-width: 0; 
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 1.05rem;
+            outline: none;
+            color: #333;
+            background-color: #fff;
+            font-family: inherit;
+            text-align: center;
+        }
+
+        .info-select { cursor: pointer; }
+
+        .info-select:focus, .info-input:focus {
+            border-color: var(--main-color);
+            box-shadow: 0 0 5px rgba(255, 69, 0, 0.3);
+        }
+
+        /* 수행과제 타이틀 영역 */
+        .task-header {
+            display: flex;
+            border-top: 2px solid var(--main-color);
+            border-bottom: 2px solid var(--main-color);
+            margin-bottom: 30px;
+        }
+
+        .task-tag {
+            background-color: var(--header-bg);
+            padding: 10px 20px;
+            font-weight: bold;
+            font-size: 1.1rem;
+            border-right: 1px solid var(--main-color);
+            white-space: nowrap;
+        }
+
+        .task-title {
+            padding: 10px 20px;
+            font-weight: bold;
+            font-size: 1.1rem;
+            flex: 1;
+        }
+
+        /* 공통 블록 속성 (PDF 잘림 방지용) */
+        .section-block {
+            margin-bottom: 25px;
+            overflow: hidden; 
+        }
+        
+        .activity-title {
+            font-size: 1.15rem;
+            font-weight: bold;
+            color: var(--main-color);
+            margin-bottom: 12px;
+            border-bottom: 1px dashed var(--border-color);
+            padding-bottom: 5px;
+        }
+
+        /* 질문 및 답변 영역 */
+        .question-text {
+            font-size: 1.05rem;
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #222;
+        }
+
+        .question-subtext {
+            font-size: 0.95rem;
+            font-weight: normal;
+            color: #555;
+            margin-bottom: 10px;
+            display: block;
+        }
+
+        .answer-area {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 1rem;
+            font-family: inherit;
+            resize: none; /* 자동 조절되므로 수동 조절 막음 */
+            outline: none;
+            line-height: 1.5;
+            overflow-y: hidden;
+        }
+
+        .answer-area:focus {
+            border-color: var(--main-color);
+            box-shadow: 0 0 5px rgba(255, 69, 0, 0.3);
+        }
+        
+        /* 체크박스 스타일 */
+        .checkbox-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+
+        .checkbox-label input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            margin-right: 10px;
+            cursor: pointer;
+            accent-color: var(--main-color);
+        }
+
+        /* PDF 다운로드 버튼 CSS */
+        .download-btn {
+            width: 100%;
+            padding: 15px;
+            background-color: #333;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            margin-top: 20px;
+        }
+
+        .download-btn:hover {
+            background-color: #555;
+        }
+
+        /* PDF 캡처용 특수 스타일 */
+        .pdf-mode { box-shadow: none !important; }
+        
+        .pdf-text-replacement {
+            display: inline-block;
+            width: 100%;
+            padding: 8px 0;
+            font-family: inherit;
+            box-sizing: border-box;
+        }
+
+        .pdf-checkbox-replacement {
+            display: inline-block;
+            width: 20px;
+            font-size: 1.1rem;
+            font-family: inherit;
+            color: #333;
+        }
+
+        .pdf-textarea-replacement {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            font-family: inherit;
+            box-sizing: border-box;
+            white-space: pre-wrap;
+            word-break: break-all;
+            border: 1px solid transparent; 
+            min-height: 45px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container" id="captureArea">
+    
+    <div class="group-info">
+        <span class="info-label">나의 조는?</span>
+        <select class="info-select" id="groupSelect">
+            <option value="" disabled selected>조 선택(A~F)</option>
+            <option value="A조">A조</option>
+            <option value="B조">B조</option>
+            <option value="C조">C조</option>
+            <option value="D조">D조</option>
+            <option value="E조">E조</option>
+            <option value="F조">F조</option>
+        </select>
+        <input type="text" class="info-input" id="groupName" placeholder="조 이름 입력">
+    </div>
+
+    <div class="task-header">
+        <div class="task-tag">수행과제3-1</div>
+        <div class="task-title">마을 경제활동 정하기</div>
+    </div>
+
+    <div class="section-block">
+        <div class="activity-title">활동 1. 우리 마을의 주력 산업 정하기</div>
+        <span class="question-subtext">우리 모둠이 선택한 대표 산업에 체크해 보세요.</span>
+        
+        <div class="checkbox-group">
+            <label class="checkbox-label"><input type="checkbox"> 관광 산업</label>
+            <label class="checkbox-label"><input type="checkbox"> 수산업 및 관련 공업</label>
+            <label class="checkbox-label"><input type="checkbox"> 친환경 농업과 유통</label>
+            <label class="checkbox-label"><input type="checkbox"> 목장 산업과 유통</label>
+            <label class="checkbox-label"><input type="checkbox"> 식품·과자 공장</label>
+            <label class="checkbox-label"><input type="checkbox"> 에너지 생산 산업</label>
+        </div>
+    </div>
+
+    <div class="section-block">
+        <div class="question-text">왜 이 산업을 선택했나요?</div>
+        <textarea class="answer-area" rows="2" placeholder="답변을 입력하세요..."></textarea>
+    </div>
+
+    <div class="section-block">
+        <div class="question-text">우리 섬의 어떤 자연환경과 잘 어울리나요?</div>
+        <textarea class="answer-area" rows="2" placeholder="답변을 입력하세요..."></textarea>
+    </div>
+
+    <div class="section-block">
+        <div class="question-text">주민들에게 어떤 도움이 될까요?</div>
+        <textarea class="answer-area" rows="2" placeholder="답변을 입력하세요..."></textarea>
+    </div>
+
+    <div class="section-block">
+        <div class="activity-title" style="margin-top: 15px;">활동 2. 우리 마을 산업 계획하기</div>
+        
+        <div class="question-text">1. 사람들이 이 마을에 왜 오고 싶어할까?</div>
+        <textarea class="answer-area" rows="1"></textarea>
+    </div>
+    <div class="section-block">
+        <div class="question-text">2. 주민들은 어떤 일을 하며 살아갈까?</div>
+        <textarea class="answer-area" rows="1"></textarea>
+    </div>
+    <div class="section-block">
+        <div class="question-text">3. 전기가 가장 많이 필요한 곳은 어디일까?</div>
+        <textarea class="answer-area" rows="1"></textarea>
+    </div>
+    <div class="section-block">
+        <div class="question-text">4. 산업 이름: <span style="font-weight:normal; font-size:0.95rem; color:#555;">예) 바람빛 해상풍력 마을</span></div>
+        <textarea class="answer-area" rows="1"></textarea>
+    </div>
+    <div class="section-block">
+        <div class="question-text">5. 산업 위치: <span style="font-weight:normal; font-size:0.95rem; color:#555;">예) 바닷가 / 산 근처 / 평야 / 항구 주변 등</span></div>
+        <textarea class="answer-area" rows="1"></textarea>
+    </div>
+    <div class="section-block">
+        <div class="question-text">6. 필요한 시설: <span style="font-weight:normal; font-size:0.95rem; color:#555;">예) 공장, 발전소, 농장, 항구, 체험장 등</span></div>
+        <textarea class="answer-area" rows="1"></textarea>
+    </div>
+    <div class="section-block">
+        <div class="question-text">7. 주민들이 하는 일: <span style="font-weight:normal; font-size:0.95rem; color:#555;">예) 물고기 잡기, 발전소 관리, 관광 안내 등</span></div>
+        <textarea class="answer-area" rows="1"></textarea>
+    </div>
+    <div class="section-block">
+        <div class="question-text">8. 관광 요소 체험: <span style="font-weight:normal; font-size:0.95rem; color:#555;">예) 활동, 축제, 전망대, 먹거리 등</span></div>
+        <textarea class="answer-area" rows="1"></textarea>
+    </div>
+    <div class="section-block">
+        <div class="question-text">9. 많이 사용할 것 같은 에너지: <span style="font-weight:normal; font-size:0.95rem; color:#555;">예) 전기 / 태양열 / 풍력 / 바이오가스 등</span></div>
+        <textarea class="answer-area" rows="1"></textarea>
+    </div>
+
+    <div class="section-block">
+        <div class="activity-title" style="margin-top: 15px;">활동 3. 산업과 에너지 연결하기</div>
+        <span class="question-subtext" style="color:#000; font-weight:bold;">마을 활동 필요한 에너지와 물은 어떻게 공급할까?</span>
+        
+        <div class="question-text">공장 운영:</div>
+        <textarea class="answer-area" rows="1"></textarea>
+    </div>
+    <div class="section-block">
+        <div class="question-text">전기차 운행:</div>
+        <textarea class="answer-area" rows="1"></textarea>
+    </div>
+    <div class="section-block">
+        <div class="question-text">관광 시설 운영:</div>
+        <textarea class="answer-area" rows="1"></textarea>
+    </div>
+    <div class="section-block">
+        <div class="question-text">농업·목장 운영:</div>
+        <textarea class="answer-area" rows="1"></textarea>
+    </div>
+    <div class="section-block">
+        <div class="question-text">우리 모둠 추가 아이디어 ✏️</div>
+        <textarea class="answer-area" rows="1" placeholder="추가 아이디어를 입력하세요..."></textarea>
+    </div>
+
+    <div class="section-block">
+        <div class="activity-title" style="margin-top: 15px;">활동 4. 친환경 마을 만들기</div>
+        <span class="question-subtext">우리 마을이 자연을 보호하며 운영되기 위한 방법을 생각해 봅시다.</span>
+        
+        <div class="checkbox-group">
+            <label class="checkbox-label"><input type="checkbox"> 전기차만 사용하기</label>
+            <label class="checkbox-label"><input type="checkbox"> 일회용품 줄이기</label>
+            <label class="checkbox-label"><input type="checkbox"> 쓰레기 재활용하기</label>
+            <label class="checkbox-label"><input type="checkbox"> 태양광 가로등 설치하기</label>
+            <label class="checkbox-label"><input type="checkbox"> 자전거 도로 만들기</label>
+            <label class="checkbox-label"><input type="checkbox"> 빗물 다시 사용하기</label>
+            <label class="checkbox-label"><input type="checkbox"> 나무 많이 심기</label>
+        </div>
+    </div>
+    
+    <div class="section-block">
+        <div class="question-text">우리 모둠의 특별한 친환경 아이디어</div>
+        <span class="question-subtext">예) "관광객이 텀블러를 가져오면 할인해 준다."</span>
+        <textarea class="answer-area" rows="2" placeholder="아이디어를 입력하세요..."></textarea>
+    </div>
+    
+    <button type="button" id="downloadBtn" class="download-btn">PDF로 다운로드</button>
+</div>
+
+<script>
+    // 텍스트 영역(Textarea) 자동 높이 조절
+    document.querySelectorAll('textarea').forEach(textarea => {
+        textarea.addEventListener('input', function() {
+            this.style.height = 'auto'; 
+            this.style.height = this.scrollHeight + 'px'; 
+        });
+    });
+
+    // 스마트 줄바꿈 적용 및 PDF 다운로드 기능
+    document.getElementById('downloadBtn').addEventListener('click', async function(e) {
+        e.preventDefault(); 
+        const currentScrollY = window.scrollY; 
+        const captureArea = document.getElementById('captureArea');
+        const downloadBtn = this;
+
+        downloadBtn.style.visibility = 'hidden';
+        captureArea.classList.add('pdf-mode');
+
+        const formElements = captureArea.querySelectorAll('input, select, textarea');
+        const replacements = [];
+        const originalMargins = []; 
+
+        // 1. 폼 요소를 텍스트/기호로 변환 (체크박스 완벽 지원)
+        formElements.forEach(el => {
+            let replacementElement;
+            const tagName = el.tagName.toLowerCase();
+            const type = el.type ? el.type.toLowerCase() : '';
+
+            if (tagName === 'textarea') {
+                replacementElement = document.createElement('div');
+                replacementElement.className = 'pdf-textarea-replacement';
+                replacementElement.textContent = el.value;
+                if(el.value === "") replacementElement.innerHTML = "&nbsp;"; 
+            } else if (type === 'checkbox') {
+                // 체크박스를 유니코드 특수문자로 교체하여 PDF 잘림/렌더링 오류 원천 차단
+                replacementElement = document.createElement('span');
+                replacementElement.className = 'pdf-checkbox-replacement';
+                replacementElement.innerHTML = el.checked ? '☑' : '☐';
+            } else {
+                replacementElement = document.createElement('span');
+                replacementElement.className = 'pdf-text-replacement';
+                
+                if (tagName === 'select') {
+                    replacementElement.innerText = el.value === "" ? "" : el.options[el.selectedIndex].text;
+                } else {
+                    replacementElement.innerText = el.value;
+                }
+            }
+
+            // 스타일 복사 (체크박스 제외)
+            if(type !== 'checkbox') {
+                const computedStyle = window.getComputedStyle(el);
+                replacementElement.style.fontSize = computedStyle.fontSize;
+                replacementElement.style.color = computedStyle.color;
+            }
+            
+            // 상단 인적사항 정렬
+            if(el.classList.contains('info-input') || el.classList.contains('info-select')) {
+                replacementElement.style.textAlign = 'center';
+                replacementElement.style.padding = '0 10px';
+                replacementElement.style.width = 'auto';
+                replacementElement.style.flex = '1';
+                
+                if(tagName === 'select' && el.value === "") {
+                    replacementElement.innerText = "조 선택(A~F)";
+                    replacementElement.style.color = '#aaa';
+                }
+            }
+
+            el.parentNode.insertBefore(replacementElement, el);
+            const originalDisplay = el.style.display;
+            el.style.display = 'none';
+
+            replacements.push({ element: el, replacement: replacementElement, originalDisplay: originalDisplay });
+        });
+
+        // 렌더링 대기
+        await new Promise(r => setTimeout(r, 50));
+
+        // 2. 스마트 잘림 방지 로직 (페이지 넘어가는 블록 띄우기)
+        const PAGE_HEIGHT_PX = captureArea.offsetWidth * (277 / 190); 
+        const blocks = captureArea.querySelectorAll('.section-block');
+        
+        blocks.forEach(block => {
+            const rect = block.getBoundingClientRect();
+            const captureRect = captureArea.getBoundingClientRect();
+            
+            const top = rect.top - captureRect.top;
+            const bottom = top + block.offsetHeight;
+
+            // 여유 공간 확보 (20px)
+            const safeTop = top + 20; 
+            const safeBottom = bottom + 20;
+
+            const pageNumTop = Math.floor(safeTop / PAGE_HEIGHT_PX);
+            const pageNumBottom = Math.floor(safeBottom / PAGE_HEIGHT_PX);
+
+            // 경계선을 넘어가면 다음 페이지 상단으로 강제 밀기
+            if (pageNumTop !== pageNumBottom) {
+                const targetTop = pageNumBottom * PAGE_HEIGHT_PX + 20; 
+                const shift = targetTop - top;
+                
+                const currentMargin = parseFloat(window.getComputedStyle(block).marginTop) || 0;
+                originalMargins.push({ element: block, margin: block.style.marginTop }); 
+                
+                block.style.marginTop = (currentMargin + shift) + 'px';
+            }
+        });
+
+        await new Promise(r => setTimeout(r, 50));
+
+        // 3. 캡처 및 PDF 생성
+        html2canvas(captureArea, {
+            scale: 2, 
+            useCORS: true,
+            backgroundColor: '#ffffff'
+        }).then(canvas => {
+            const imgData = canvas.toDataURL('image/png');
+            const { jsPDF } = window.jspdf;
+            
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = pdf.internal.pageSize.getHeight();
+            
+            const margin = 10; 
+            const finalWidth = pdfWidth - (margin * 2);
+            const finalHeight = (canvas.height * finalWidth) / canvas.width;
+
+            let position = margin;
+            let heightLeft = finalHeight;
+            const printedAmount = pdfHeight - (margin * 2);
+
+            pdf.addImage(imgData, 'PNG', margin, position, finalWidth, finalHeight);
+            
+            // 상하단 마스킹
+            pdf.setFillColor(255, 255, 255);
+            pdf.rect(0, 0, pdfWidth, margin, 'F'); 
+            pdf.rect(0, pdfHeight - margin, pdfWidth, margin, 'F'); 
+
+            heightLeft -= printedAmount;
+
+            while (heightLeft > 0) {
+                position -= printedAmount; 
+                
+                pdf.addPage();
+                pdf.addImage(imgData, 'PNG', margin, position, finalWidth, finalHeight);
+                
+                pdf.setFillColor(255, 255, 255);
+                pdf.rect(0, 0, pdfWidth, margin, 'F'); 
+                pdf.rect(0, pdfHeight - margin, pdfWidth, margin, 'F'); 
+                
+                heightLeft -= printedAmount;
+            }
+            
+            // 파일명 설정 (수행과제3-1_A조_이름.pdf)
+            const groupSelectValue = replacements.find(r => r.element.id === 'groupSelect')?.element.value !== "" 
+                ? replacements.find(r => r.element.id === 'groupSelect')?.element.options[replacements.find(r => r.element.id === 'groupSelect').element.selectedIndex].text : '';
+            const groupNameInput = replacements.find(r => r.element.id === 'groupName')?.replacement.innerText.trim() || '';
+            
+            const nameParts = [];
+            if (groupSelectValue) nameParts.push(groupSelectValue);
+            if (groupNameInput) nameParts.push(groupNameInput);
+            
+            const safeName = nameParts.length > 0 ? nameParts.join('_') : '이름없음';
+            const finalFileName = `수행과제3-1_${safeName}.pdf`;
+            
+            pdf.save(finalFileName);
+            
+        }).finally(() => {
+            // UI 복구
+            replacements.forEach(rep => {
+                rep.replacement.parentNode.removeChild(rep.replacement);
+                rep.element.style.display = rep.originalDisplay;
+            });
+
+            originalMargins.forEach(item => {
+                item.element.style.marginTop = item.margin;
+            });
+
+            captureArea.classList.remove('pdf-mode');
+            downloadBtn.style.visibility = 'visible';
+            window.scrollTo(0, currentScrollY);
+        });
+    });
+</script>
+
+</body>
+</html>

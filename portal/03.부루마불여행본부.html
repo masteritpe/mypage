@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>🎲 부루마불 여행본부</title>
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+    /* --- 부루마불 테마 스타일 (Game Board UI) --- */
+    :root {
+        /* 보드판 컬러 팔레트 */
+        --board-bg: #0f4c3a;       /* 딥 그린 (보드판 바닥) */
+        --board-pattern: rgba(255,255,255,0.05);
+        --card-bg: #ffffff;
+        --sidebar-bg: #e9ecef;     /* 사이드바 배경 */
+        
+        /* 포인트 컬러 */
+        --gold: #ffb300;           /* 황금열쇠 컬러 */
+        --red: #e03131;            /* 호텔/빌딩 컬러 */
+        --blue: #1971c2;           /* 파란색 랜드마크 */
+        --text-main: #212529;
+        
+        --sidebar-width: 280px;
+        --header-height: 70px;
+        --font-title: 'Jua', sans-serif;
+        --font-body: 'Noto Sans KR', sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body { 
+        margin: 0; 
+        font-family: var(--font-body); 
+        background-color: var(--board-bg);
+        /* 보드판 느낌의 격자 패턴 */
+        background-image: linear-gradient(var(--board-pattern) 1px, transparent 1px),
+                          linear-gradient(90deg, var(--board-pattern) 1px, transparent 1px);
+        background-size: 40px 40px;
+        color: var(--text-main); 
+        font-size: 14px; 
+        height: 100vh; 
+        overflow: hidden; 
+    }
+
+    /* Layout */
+    .app { display: flex; flex-direction: column; height: 100%; }
+    
+    /* Header: 출발지 느낌 */
+    header { 
+        background: #fff; 
+        border-bottom: 4px solid var(--gold); /* 황금색 라인 */
+        padding: 0 24px; 
+        height: var(--header-height); 
+        display: flex; 
+        justify-content: space-between; 
+        align-items: center; 
+        flex-shrink: 0; 
+        z-index: 100; 
+        box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    }
+    
+    h1 { 
+        font-family: var(--font-title);
+        font-size: 26px; 
+        margin: 0; 
+        color: var(--board-bg); 
+        display: flex; 
+        align-items: center; 
+        gap: 10px; 
+        text-shadow: 1px 1px 0px rgba(0,0,0,0.1);
+    }
+
+    /* 비행기 애니메이션 */
+    .plane-icon { animation: fly 3s infinite alternate ease-in-out; }
+    @keyframes fly { from { transform: translateY(0); } to { transform: translateY(-5px); } }
+    
+    /* Main Area */
+    main { flex: 1; display: flex; overflow: hidden; padding: 15px; gap: 15px; }
+    
+    /* Sidebar: 여권/보드판 메뉴 영역 */
+    aside { 
+        width: var(--sidebar-width); 
+        background: rgba(255, 255, 255, 0.95); 
+        border-radius: 12px;
+        display: flex; 
+        flex-direction: column; 
+        padding: 20px; 
+        gap: 20px; 
+        flex-shrink: 0; 
+        overflow-y: auto; 
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        border: 2px solid #ced4da;
+    }
+
+    /* 카테고리 패널: 보드판 구역 느낌 */
+    .panel { background: transparent; margin-bottom: 5px; }
+    .panel-title { 
+        font-family: var(--font-title);
+        color: var(--board-bg);
+        font-size: 16px; 
+        margin-bottom: 8px; 
+        display: flex; align-items: center; gap: 6px;
+        border-bottom: 2px dashed #adb5bd;
+        padding-bottom: 4px;
+    }
+    
+    .nav-menu { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+    
+    /* 메뉴 아이템: 씨앗증서(카드) 스타일 */
+    .nav-item { 
+        padding: 10px 14px; 
+        border-radius: 8px; 
+        cursor: pointer; 
+        font-weight: 500; 
+        color: #495057; 
+        display: flex; 
+        align-items: center; 
+        gap: 10px; 
+        transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* 통통 튀는 효과 */
+        background: white;
+        border: 1px solid #dee2e6;
+        box-shadow: 0 2px 0 #ced4da; /* 입체감 */
+    }
+    
+    .nav-item:hover { 
+        transform: translateY(-3px); /* 위로 뜸 */
+        box-shadow: 0 5px 0 var(--gold); /* 그림자 색상 변경 */
+        border-color: var(--gold);
+        color: #000; 
+    }
+    
+    .nav-item.active { 
+        background: #e7f5ff; 
+        color: var(--blue); 
+        font-weight: 700; 
+        border: 2px solid var(--blue);
+        box-shadow: 0 4px 0 #1864ab;
+    }
+    
+    .nav-icon { font-size: 18px; }
+
+    /* Content Area: 게임판 중앙 */
+    .content { 
+        flex: 1; 
+        display: flex; 
+        flex-direction: column; 
+        overflow: hidden; 
+        background: #fff; 
+        border-radius: 12px;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+        border: 4px solid #fff;
+    }
+    
+    /* Toolbar */
+    .toolbar { 
+        display: flex; 
+        gap: 10px; 
+        align-items: center; 
+        background: #f8f9fa; 
+        padding: 10px 20px; 
+        border-bottom: 1px solid var(--border); 
+        height: 56px; 
+        flex-shrink: 0; 
+    }
+    
+    .page-title { 
+        font-family: var(--font-title);
+        font-size: 18px; 
+        color: var(--text-main); 
+        display: flex; 
+        align-items: center; 
+        gap: 8px; 
+    }
+    
+    /* Iframe */
+    .iframe-container { flex: 1; width: 100%; height: 100%; border: none; background: #fff; }
+    
+    /* Buttons: 게임 버튼 스타일 */
+    .btn { 
+        padding: 0 16px; 
+        height: 34px; 
+        border-radius: 20px; /* 둥글게 */
+        border: none; 
+        background: #e9ecef; 
+        color: #495057; 
+        font-family: var(--font-title);
+        font-size: 14px; 
+        cursor: pointer; 
+        display: inline-flex; 
+        align-items: center; 
+        justify-content: center; 
+        gap: 6px; 
+        transition: all 0.2s;
+        box-shadow: 0 2px 0 #adb5bd;
+    }
+    .btn:hover { transform: translateY(-1px); box-shadow: 0 3px 0 #868e96; }
+    .btn:active { transform: translateY(1px); box-shadow: 0 1px 0 #868e96; }
+    
+    .btn-primary { background: var(--blue); color: #fff; box-shadow: 0 2px 0 #1864ab; }
+    .btn-primary:hover { background: #1c7ed6; }
+    
+    .btn-gold { background: var(--gold); color: #000; box-shadow: 0 2px 0 #e67700; }
+    .btn-gold:hover { background: #ffc03d; }
+    
+    /* Toast: 황금열쇠 카드 스타일 */
+    .toast { 
+        position: fixed; 
+        bottom: 30px; 
+        left: 50%; 
+        transform: translateX(-50%) translateY(100px); 
+        background: #fff; 
+        border: 2px solid var(--gold);
+        color: #333; 
+        padding: 15px 30px; 
+        border-radius: 12px; 
+        font-family: var(--font-title);
+        font-size: 16px; 
+        opacity: 0; 
+        pointer-events: none; 
+        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+        z-index: 9999; 
+        box-shadow: 0 10px 25px rgba(255, 166, 0, 0.4);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .toast::before { content: '🗝️'; font-size: 20px; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #adb5bd; border-radius: 4px; }
+
+    @media (max-width: 768px) {
+        main { padding: 0; }
+        aside { position: absolute; left: 0; top: var(--header-height); bottom: 0; z-index: 1000; border-radius: 0; display: none; }
+        aside.mobile-open { display: flex; }
+        .content { border-radius: 0; border: none; }
+        .mobile-menu-btn { display: block !important; }
+    }
+    .mobile-menu-btn { display: none; background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text); margin-right: 10px; }
+</style>
+</head>
+<body>
+
+<div class="app">
+    <header>
+        <div style="display:flex; align-items:center;">
+            <button class="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
+            <h1>
+                <span class="plane-icon">✈️</span> 
+                부루마불 여행본부
+            </h1>
+        </div>
+        <div>
+            <span style="font-size:24px;">🎲</span>
+        </div>
+    </header>
+
+    <main>
+        <aside id="sidebar">
+            </aside>
+
+        <div class="content">
+            <div class="toolbar">
+                <span class="page-title" id="current-page-title">📂 어디로 떠나볼까요?</span>
+                <span style="flex:1"></span>
+                <button class="btn" id="btn-fullscreen" onclick="toggleFullscreen()" style="display:none;">
+                    ⛶ 전체화면
+                </button>
+                <button class="btn" id="btn-new-window" onclick="openCurrentInNewWindow()" style="display:none;">
+                    🔗 새창열기
+                </button>
+                <button class="btn btn-primary" onclick="refreshIframe()" id="btn-refresh" style="display:none;">
+                    🔄 새로고침
+                </button>
+            </div>
+            <iframe id="main-iframe" class="iframe-container" src="about:blank"></iframe>
+        </div>
+    </main>
+</div>
+
+<div class="toast" id="toast">
+    <span>알림 메시지가 도착했습니다!</span>
+</div>
+
+<script>
+/* 부루마불 데이터 구조 
+    - 각 카테고리를 'Zone'으로 표현
+*/
+const menuData = {
+    "🛫 여행 계획 (Travel Zone)": [
+        { title: "여행 계획표 (Plan)", src: "travel/travelplan.html", icon: "🗺️" },
+        { title: "여행 동선 (Route)", src: "travel/travelroute.html", icon: "🚩" },		
+        { title: "여행 노트 (Note)", src: "travel/travelnote.html", icon: "📝" },
+        { title: "여행 카드 (Card)", src: "travel/travelcard.html", icon: "🏰" },
+        { title: "좌표 확인", src: "travel/coordsearch.html", icon: "🧭" }		
+    ],
+    "⭐️ 즐겨찾기 (Landmark)": [
+        { title: "Site", src: "", icon: "☕" }
+    ]	
+};
+
+// 현재 활성화된 URL 저장
+let currentSrc = "";
+
+// 초기화
+window.onload = function() {
+    renderSidebar();
+    
+    // 첫 페이지 로드 시 '주사위 굴리기' 효과 처럼 약간의 딜레이 후 로드 (원하면 제거 가능)
+    const firstGroup = Object.keys(menuData)[0];
+    const firstItem = menuData[firstGroup][0];
+    loadPage(firstItem.src, firstItem.title, firstItem.icon, 'nav-0-0');
+    
+    showToast("부루마불 여행본부에 오신 것을 환영합니다! 🎲");
+};
+
+// 사이드바 렌더링 함수
+function renderSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    sidebar.innerHTML = '';
+    
+    let groupIndex = 0;
+    for (const [category, items] of Object.entries(menuData)) {
+        const panel = document.createElement('div');
+        panel.className = 'panel';
+        
+        const title = document.createElement('div');
+        title.className = 'panel-title';
+        title.innerHTML = category; // 이모지 포함이라 innerHTML
+        panel.appendChild(title);
+        
+        const ul = document.createElement('ul');
+        ul.className = 'nav-menu';
+        
+        items.forEach((item, itemIndex) => {
+            const li = document.createElement('li');
+            li.className = 'nav-item';
+            li.id = `nav-${groupIndex}-${itemIndex}`;
+            
+            li.onclick = () => {
+                if (item.src.startsWith("http://") || item.src.startsWith("https://")) {
+                    window.open(item.src, '_blank'); 
+                    showToast(`'${item.title}'(으)로 이동합니다! 🚀`);
+                } else {
+                    loadPage(item.src, item.title, item.icon, li.id); 
+                }
+            };
+            
+            li.innerHTML = `
+                <span class="nav-icon">${item.icon}</span>
+                <span>${item.title}</span>
+            `;
+            ul.appendChild(li);
+        });
+        
+        panel.appendChild(ul);
+        sidebar.appendChild(panel);
+        groupIndex++;
+    }
+}
+
+// 페이지 로드 함수
+function loadPage(src, title, icon, navId) {
+    const iframe = document.getElementById('main-iframe');
+    const titleEl = document.getElementById('current-page-title');
+    const btnNew = document.getElementById('btn-new-window');
+    const btnRefresh = document.getElementById('btn-refresh');
+    const btnFull = document.getElementById('btn-fullscreen');
+
+    iframe.src = src;
+    currentSrc = src;
+    
+    titleEl.innerHTML = `<span style="font-size:22px; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.2));">${icon}</span> ${title}`;
+    
+    btnNew.style.display = 'inline-flex';
+    btnRefresh.style.display = 'inline-flex';
+    btnFull.style.display = 'inline-flex';
+
+    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+    const activeNav = document.getElementById(navId);
+    if(activeNav) activeNav.classList.add('active');
+
+    if(window.innerWidth <= 768) {
+        document.getElementById('sidebar').classList.remove('mobile-open');
+    }
+}
+
+function openCurrentInNewWindow() {
+    if(currentSrc) window.open(currentSrc, '_blank');
+}
+
+function refreshIframe() {
+    const iframe = document.getElementById('main-iframe');
+    iframe.src = iframe.src;
+    showToast("페이지를 새로고침 했습니다. 🔄");
+}
+
+function toggleFullscreen() {
+    const iframe = document.getElementById('main-iframe');
+    if (!document.fullscreenElement) {
+        if(iframe.requestFullscreen) iframe.requestFullscreen();
+        else if(iframe.webkitRequestFullscreen) iframe.webkitRequestFullscreen();
+    } else {
+        if(document.exitFullscreen) document.exitFullscreen();
+    }
+}
+
+function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('mobile-open');
+}
+
+function showToast(message) {
+    const toast = document.getElementById("toast");
+    // 메시지 텍스트 갱신 (스팬 찾아서)
+    toast.querySelector('span').textContent = message;
+    
+    toast.classList.remove("show"); // 기존 애니메이션 리셋용
+    void toast.offsetWidth; // 리플로우 강제
+    toast.classList.add("show");
+    
+    setTimeout(() => {
+        toast.classList.remove("show");
+    }, 2500);
+}
+</script>
+
+</body>
+</html>

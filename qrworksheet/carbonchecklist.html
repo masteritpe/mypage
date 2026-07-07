@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>탄소발자국 체크리스트</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
+    
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.23.10/babel.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <style>
+        body { 
+            font-family: 'Jua', sans-serif; 
+            background-color: #fffbeb; 
+            color: #4a4a4a; 
+            overflow-x: auto; 
+        }
+        
+        #report-container {
+            width: 210mm;
+            min-height: 297mm;
+            margin: 0 auto;
+            background: #ffffff;
+            box-sizing: border-box;
+            background-image: radial-gradient(#fde68a 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { opacity: 1; }
+        
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-thumb { background: #fbbf24; border-radius: 10px; }
+    </style>
+</head>
+<body className="py-8 px-4 flex flex-col items-center">
+    <div id="root" className="w-full flex flex-col items-center"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo, useRef } = React;
+
+        /* --- 데이터 세팅 --- */
+        const INITIAL_ITEMS = [
+            { id: 1, action: "🥩 육류(100g) 이상 먹기", unit: 1.5 },
+            { id: 2, action: "🚗 자가용 차량 등하교(왕복 10km)", unit: 3 },
+            { id: 3, action: "🎮 영상/게임 스트리밍 1시간 이상", unit: 0.5 },
+            { id: 4, action: "❄️ 에어컨/히터 4시간 이상 사용", unit: 2 },
+            { id: 5, action: "🥤 일회용 컵/플라스틱 하루 1개 이상", unit: 0.1 },
+            { id: 6, action: "🚌 대중교통버스 2회 이상 이용", unit: 0.2 },
+            { id: 7, action: "🧊 냉장고 문 열기 5회", unit: 0.2 },
+            { id: 8, action: "🍜 라면, 가공식품, 과자 먹기 1회", unit: 0.3 },
+            { id: 9, action: "💧 생수, 음료 등 PET 1병 사용", unit: 0.2 },
+            { id: 10, action: "📱 TV 1시간+, 스마트폰 3시간+", unit: 0.1 },
+            { id: 11, action: "🛗 엘리베이터 1회 사용", unit: 0.03 },
+            { id: 12, action: "💡 불필요한 조명/IT기기 10분 켜두기", unit: 0.025 },
+            { id: 13, action: "👕 세탁기 1회(적은 양)", unit: 0.6 },
+            { id: 14, action: "🍛 음식물 쓰레기(잔반) 남기기", unit: 0.14 },
+            { id: 15, action: "🚿 샤워 10분/욕조 이용", unit: 0.2 },
+            { id: 16, action: "📦 택배·쇼핑 과다 포장재 1건", unit: 0.2 },
+            { id: 17, action: "🛍️ 비닐봉투/포장지 1개 사용", unit: 0.06 },
+            { id: 18, action: "🖨️ 인쇄물·프린트 1장 뽑기", unit: 0.005 },
+            { id: 19, action: "🚰 양치·세수 할 때 물 틀어두기", unit: 0.004 },
+            { id: 20, action: "👟 옷/신발 새로 구매 1회", unit: 6.0 }
+        ];
+
+        const COUNTRY_DATA = [
+            { label: '호주', value: 15.4, emoji: '🦘' },
+            { label: '미국', value: 14.4, emoji: '🗽' },
+            { label: '한국', value: 11.8, emoji: '🐯' },
+            { label: '인도', value: 1.8, emoji: '🐘' },
+            { label: '케냐', value: 0.3, emoji: '🦒' },
+            { label: '에티오피아', value: 0.1, emoji: '☕' }
+        ];
+
+        const App = () => {
+            const [counts, setCounts] = useState(Object.fromEntries(INITIAL_ITEMS.map(i => [i.id, 0])));
+            const [studentInfo, setStudentInfo] = useState({ class: '', number: '', name: '' });
+            const [pledge, setPledge] = useState(''); 
+            const [isPrinting, setIsPrinting] = useState(false);
+            const reportRef = useRef();
+
+            const handleCountChange = (id, val) => {
+                const n = parseInt(val) || 0;
+                setCounts(prev => ({ ...prev, [id]: n < 0 ? 0 : n }));
+            };
+
+            const handleInfoChange = (field, val) => {
+                setStudentInfo(prev => ({ ...prev, [field]: val }));
+            };
+
+            const totalEmission = useMemo(() => {
+                const total = INITIAL_ITEMS.reduce((sum, item) => sum + (item.unit * (counts[item.id] || 0)), 0);
+                return parseFloat(total.toFixed(2));
+            }, [counts]);
+
+            const downloadPDF = () => {
+                setIsPrinting(true);
+                
+                setTimeout(async () => {
+                    const element = reportRef.current;
+                    const canvas = await html2canvas(element, { 
+                        scale: 2,
+                        useCORS: true, 
+                        backgroundColor: '#ffffff'
+                    });
+                    
+                    const imgData = canvas.toDataURL('image/jpeg', 1.0);
+                    const { jsPDF } = window.jspdf;
+                    
+                    const pdf = new jsPDF('p', 'mm', 'a4');
+                    const pdfWidth = pdf.internal.pageSize.getWidth(); 
+                    const pdfHeight = pdf.internal.pageSize.getHeight(); 
+                    
+                    const imgRatio = canvas.width / canvas.height;
+                    let renderWidth = pdfWidth;
+                    let renderHeight = pdfWidth / imgRatio;
+                    
+                    if (renderHeight > pdfHeight) {
+                        renderHeight = pdfHeight;
+                        renderWidth = pdfHeight * imgRatio;
+                    }
+                    
+                    const xMargin = (pdfWidth - renderWidth) / 2;
+                    
+                    pdf.addImage(imgData, 'JPEG', xMargin, 0, renderWidth, renderHeight);
+
+                    // ✨ 파일 이름에 반, 번호, 이름 적용 로직 추가
+                    const fileNameParts = [];
+                    if (studentInfo.class) fileNameParts.push(`${studentInfo.class}반`);
+                    if (studentInfo.number) fileNameParts.push(`${studentInfo.number}번`);
+                    if (studentInfo.name) fileNameParts.push(studentInfo.name);
+                    
+                    const fileSuffix = fileNameParts.length > 0 ? fileNameParts.join('_') : '친구';
+                    pdf.save(`탄소발자국체크리스트_${fileSuffix}.pdf`);
+                    
+                    setIsPrinting(false);
+                }, 100);
+            };
+
+            const chartData = useMemo(() => {
+                let data = [...COUNTRY_DATA];
+                data.splice(3, 0, { label: '나(Me)', value: totalEmission, isMe: true, emoji: '🙋' });
+                return data;
+            }, [totalEmission]);
+
+            const maxChartVal = Math.max(...chartData.map(d => d.value), 16);
+
+            return (
+                <div className="w-full flex flex-col items-center gap-6">
+                    
+                    {/* 상단 액션바 */}
+                    <div className="w-full max-w-[210mm] flex justify-between items-center bg-white p-4 rounded-3xl shadow-md border-4 border-orange-200">
+                        <div className="flex items-center gap-2">
+                            <span className="text-4xl">🌍</span>
+                            <h1 className="text-2xl text-orange-500 pt-1">지구 지킴이 연구소</h1>
+                        </div>
+                        <button 
+                            onClick={downloadPDF}
+                            disabled={isPrinting}
+                            className={`flex items-center gap-2 text-white px-6 py-3 rounded-2xl text-lg transition-all shadow-md
+                                ${isPrinting ? 'bg-gray-400 cursor-not-allowed' : 'bg-teal-500 hover:bg-teal-400 active:scale-95'}`}
+                        >
+                            🖨️ {isPrinting ? 'PDF 생성 중...' : 'PDF 저장'}
+                        </button>
+                    </div>
+
+                    {/* PDF 출력 영역 */}
+                    <div ref={reportRef} id="report-container" className={`p-[12mm] border-4 rounded-3xl flex flex-col justify-between relative overflow-hidden ${isPrinting ? 'border-none shadow-none' : 'border-teal-400 shadow-2xl'}`}>
+                        
+                        <div className="flex justify-between items-end border-b-4 border-orange-400 pb-5 relative z-10">
+                            <div>
+                                <h2 className="text-4xl text-teal-600 tracking-wide flex items-center gap-2">
+                                    🌱 Check Check 탄소발자국
+                                </h2>
+                                <p className="text-xl text-orange-500 mt-2 ml-2">지구를 지키기 위한 나의 하루 기록장 ✍️</p>
+                            </div>
+                            <div className="flex gap-3 bg-orange-50 p-3 rounded-2xl border-2 border-orange-200 shadow-sm">
+                                <div className="flex flex-col items-center">
+                                    <label className="text-sm text-orange-600">반</label>
+                                    <input 
+                                        type="text" placeholder="예: 1" 
+                                        value={studentInfo.class} onChange={(e) => handleInfoChange('class', e.target.value)}
+                                        className={`bg-transparent w-16 text-center text-xl text-teal-700 focus:outline-none placeholder:text-orange-300 ${isPrinting ? 'border-none' : 'border-b-2 border-orange-300'}`}
+                                    />
+                                </div>
+                                <div className="flex flex-col items-center">
+                                    <label className="text-sm text-orange-600">번호</label>
+                                    <input 
+                                        type="text" placeholder="번호" 
+                                        value={studentInfo.number} onChange={(e) => handleInfoChange('number', e.target.value)}
+                                        className={`bg-transparent w-12 text-center text-xl text-teal-700 focus:outline-none placeholder:text-orange-300 ${isPrinting ? 'border-none' : 'border-b-2 border-orange-300'}`}
+                                    />
+                                </div>
+                                <div className="flex flex-col items-center">
+                                    <label className="text-sm text-orange-600">이름</label>
+                                    <input 
+                                        type="text" placeholder="내 이름" 
+                                        value={studentInfo.name} onChange={(e) => handleInfoChange('name', e.target.value)}
+                                        className={`bg-transparent w-24 text-center text-xl text-teal-700 focus:outline-none placeholder:text-orange-300 ${isPrinting ? 'border-none' : 'border-b-2 border-orange-300'}`}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex-1 grid grid-cols-1 md:grid-cols-12 gap-6 mt-6 relative z-10">
+                            
+                            {/* 왼쪽: 메인 테이블 */}
+                            <div className="md:col-span-7">
+                                <div className="bg-white rounded-2xl border-2 border-teal-200 overflow-hidden shadow-sm">
+                                    <table className="w-full text-left border-collapse">
+                                        <thead className="bg-teal-400 text-white">
+                                            <tr>
+                                                <th className="py-2 px-2 w-10 text-center text-lg">#</th>
+                                                <th className="py-2 px-3 text-lg">나의 행동 예시</th>
+                                                <th className="py-2 px-2 text-center w-20 text-lg">횟수</th>
+                                                <th className="py-2 px-3 text-right w-24 text-lg">배출량(kg)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-teal-100">
+                                            {INITIAL_ITEMS.map((item, idx) => (
+                                                <tr key={item.id} className={counts[item.id] > 0 ? "bg-orange-50" : "hover:bg-teal-50"}>
+                                                    <td className="py-2 px-2 text-center text-teal-300 text-sm">{item.id}</td>
+                                                    <td className="py-2 px-3 text-gray-700 text-[15px]">{item.action}</td>
+                                                    <td className="py-2 px-2 text-center">
+                                                        {!isPrinting ? (
+                                                            <input 
+                                                                type="number"
+                                                                value={counts[item.id] === 0 ? '' : counts[item.id]}
+                                                                onChange={(e) => handleCountChange(item.id, e.target.value)}
+                                                                className="w-12 border-2 border-orange-200 rounded-lg text-center text-orange-600 focus:outline-none focus:border-orange-400 bg-white text-base py-0.5"
+                                                                placeholder="0"
+                                                            />
+                                                        ) : (
+                                                            <span className="text-orange-600 text-lg">{counts[item.id] || 0}</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="py-2 px-3 text-right text-teal-600 text-base">
+                                                        {(item.unit * (counts[item.id] || 0)).toFixed(2)}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            {/* 오른쪽 영역 */}
+                            <div className="md:col-span-5 flex flex-col gap-4">
+                                
+                                {/* 총합 박스 */}
+                                <div className="bg-orange-400 text-white rounded-3xl p-6 shadow-lg relative overflow-hidden border-4 border-orange-300">
+                                    <div className="absolute top-2 right-2 text-5xl opacity-20">🔥</div>
+                                    <div className="text-xl text-orange-100 mb-1">오늘 나의 탄소 배출량은?</div>
+                                    <div className="flex items-baseline gap-2">
+                                        <span className="text-6xl text-white drop-shadow-md">{totalEmission}</span>
+                                        <span className="text-2xl text-orange-100">kg</span>
+                                    </div>
+                                </div>
+
+                                {/* 막대 그래프 영역 */}
+                                <div className="bg-white border-4 border-teal-400 rounded-3xl p-5 shadow-sm flex flex-col">
+                                    <h3 className="text-xl text-teal-700 mb-4 text-center">📊 다른 나라 친구들과 비교해봐요!</h3>
+                                    
+                                    <div className="relative mt-2">
+                                        {/* 그래프 선반 */}
+                                        <div className="flex items-end h-40 gap-1 border-l-4 border-b-4 border-gray-200 pl-2 pt-6 relative">
+                                            
+                                            {/* Y축 라벨 */}
+                                            <div className="absolute -left-8 top-0 text-xs text-gray-400 text-right w-6">{maxChartVal.toFixed(0)}</div>
+                                            <div className="absolute -left-8 top-1/2 text-xs text-gray-400 text-right w-6 transform -translate-y-1/2">{(maxChartVal/2).toFixed(1)}</div>
+                                            <div className="absolute -left-8 bottom-0 text-xs text-gray-400 text-right w-6 translate-y-1/2">0</div>
+
+                                            {/* 바 렌더링 */}
+                                            {chartData.map((d, i) => {
+                                                const heightPercent = Math.max((d.value / maxChartVal) * 100, 2); 
+                                                return (
+                                                    <div key={i} className="flex flex-col items-center justify-end flex-1 h-full relative group">
+                                                        <div className={`text-[13px] mb-0.5 whitespace-nowrap transition-all ${d.isMe ? 'text-orange-600 font-bold' : 'text-teal-600'}`}>
+                                                            {d.value.toFixed(1)}
+                                                        </div>
+                                                        <div className="text-[20px] leading-none z-10 mb-[-5px] drop-shadow-sm">{d.emoji}</div>
+                                                        <div 
+                                                            className={`w-full max-w-[32px] rounded-t-md transition-all duration-500 
+                                                                ${d.isMe ? 'bg-orange-400 shadow-[0_0_8px_rgba(251,146,60,0.5)]' : 'bg-teal-300'}
+                                                            `}
+                                                            style={{ height: `${heightPercent}%` }}
+                                                        ></div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                        
+                                        {/* X축 나라 라벨 */}
+                                        <div className="flex items-start gap-1 pl-2 mt-2">
+                                            {chartData.map((d, i) => (
+                                                <div key={i} className={`flex-1 text-center text-[12px] leading-tight break-keep ${d.isMe ? 'text-orange-600 font-bold' : 'text-gray-500'}`}>
+                                                    {d.label}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 다짐 메모 영역 */}
+                                <div className="flex-1 bg-yellow-50 border-4 border-yellow-300 rounded-3xl p-5 flex flex-col relative">
+                                    <div className="absolute -top-4 -right-2 text-4xl">✨</div>
+                                    <h4 className="text-xl text-yellow-700 mb-2 text-center">
+                                        ✏️ 지구를 위한 나의 다짐
+                                    </h4>
+                                    <div className="flex-1 flex flex-col mt-2 bg-white/60 rounded-xl border-2 border-yellow-400 border-dashed p-3">
+                                        {!isPrinting ? (
+                                            <textarea 
+                                                value={pledge}
+                                                onChange={(e) => setPledge(e.target.value)}
+                                                placeholder="지구를 보호하기 위한 나만의 다짐을 자유롭게 적어보세요!&#13;&#10;(예: 가까운 거리는 걸어 다니겠습니다.)"
+                                                className="w-full h-full min-h-[120px] bg-transparent resize-none border-none focus:outline-none text-gray-700 text-[17px] leading-relaxed placeholder:text-yellow-600/50"
+                                            />
+                                        ) : (
+                                            <div className="w-full h-full min-h-[120px] bg-transparent text-gray-700 text-[17px] leading-relaxed whitespace-pre-wrap break-words">
+                                                {pledge}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

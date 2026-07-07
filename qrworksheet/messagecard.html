@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>메시지 카드: 미래의 발명가에게</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
+    
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.23.10/babel.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <style>
+        body { 
+            font-family: 'Jua', sans-serif; 
+            /* 싱그러운 초록 초원 테마 배경 */
+            background-color: #f0fdf4; 
+            color: #064e3b; 
+            overflow-x: auto; 
+        }
+        
+        #report-container {
+            width: 210mm;
+            min-height: 297mm;
+            margin: 0 auto;
+            background-color: #f7fee7;
+            box-sizing: border-box;
+            /* 풀밭 느낌의 패턴 */
+            background-image: radial-gradient(#bef264 1px, transparent 1px);
+            background-size: 30px 30px;
+            position: relative;
+        }
+
+        /* 하단 초원 이미지 효과 (CSS) */
+        .grass-bottom {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 60px;
+            background: linear-gradient(transparent, #d9f99d);
+            border-bottom-left-radius: 20px;
+            border-bottom-right-radius: 20px;
+            z-index: 1;
+        }
+
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-thumb { background: #22c55e; border-radius: 10px; }
+        
+        .journal-lines {
+            background-image: repeating-linear-gradient(transparent, transparent 31px, #d9f99d 31px, #d9f99d 32px);
+            line-height: 32px;
+            padding-top: 8px;
+        }
+    </style>
+</head>
+<body className="py-8 px-4 flex flex-col items-center">
+    <div id="root" className="w-full flex flex-col items-center"></div>
+
+    <script type="text/babel">
+        const { useState, useRef } = React;
+
+        const App = () => {
+            const [studentInfo, setStudentInfo] = useState({ 
+                groupNum: '', 
+                teamName: '' 
+            });
+            const [answers, setAnswers] = useState({
+                q1: '',
+                q2: '',
+                q3: ''
+            });
+            const [isPrinting, setIsPrinting] = useState(false);
+            const reportRef = useRef();
+
+            const handleInfoChange = (field, val) => {
+                setStudentInfo(prev => ({ ...prev, [field]: val }));
+            };
+
+            const handleAnswerChange = (part, val) => {
+                setAnswers(prev => ({ ...prev, [part]: val }));
+            };
+
+            const downloadPDF = () => {
+                setIsPrinting(true);
+                
+                setTimeout(async () => {
+                    const element = reportRef.current;
+                    const canvas = await html2canvas(element, { 
+                        scale: 2,
+                        useCORS: true, 
+                        backgroundColor: '#f7fee7'
+                    });
+                    
+                    const imgData = canvas.toDataURL('image/jpeg', 1.0);
+                    const { jsPDF } = window.jspdf;
+                    
+                    const pdf = new jsPDF('p', 'mm', 'a4');
+                    const pdfWidth = pdf.internal.pageSize.getWidth(); 
+                    const pdfHeight = pdf.internal.pageSize.getHeight(); 
+                    
+                    const imgRatio = canvas.width / canvas.height;
+                    let renderWidth = pdfWidth;
+                    let renderHeight = pdfWidth / imgRatio;
+                    
+                    if (renderHeight > pdfHeight) {
+                        renderHeight = pdfHeight;
+                        renderWidth = pdfHeight * imgRatio;
+                    }
+                    
+                    const xMargin = (pdfWidth - renderWidth) / 2;
+                    
+                    pdf.addImage(imgData, 'JPEG', xMargin, 0, renderWidth, renderHeight);
+
+                    const fileName = studentInfo.teamName ? studentInfo.teamName : '미래발명가';
+                    pdf.save(`사파리탐험_메시지카드_${fileName}.pdf`);
+                    
+                    setIsPrinting(false);
+                }, 100);
+            };
+
+            const renderTextArea = (part, placeholder, minHeight = "min-h-[100px]") => {
+                if (isPrinting) {
+                    return (
+                        <div className={`w-full ${minHeight} text-[17px] text-green-900 journal-lines whitespace-pre-wrap break-words px-2`}>
+                            {answers[part]}
+                        </div>
+                    );
+                }
+                return (
+                    <textarea 
+                        value={answers[part]}
+                        onChange={(e) => handleAnswerChange(part, e.target.value)}
+                        placeholder={placeholder}
+                        className={`w-full ${minHeight} bg-transparent resize-none border-none focus:outline-none text-[17px] text-green-900 journal-lines placeholder:text-green-300 px-2`}
+                    />
+                );
+            };
+
+            return (
+                <div className="w-full flex flex-col items-center gap-6">
+                    
+                    {/* 상단 액션바 (초록색 테마) */}
+                    <div className="w-full max-w-[210mm] flex justify-between items-center bg-white p-4 rounded-3xl shadow-md border-4 border-green-500">
+                        <div className="flex items-center gap-3">
+                            <span className="text-4xl">🌿</span>
+                            <h1 className="text-2xl text-green-700 pt-1">Explore AFRICA: 초록 초원 메시지 카드</h1>
+                        </div>
+                        <button 
+                            onClick={downloadPDF}
+                            disabled={isPrinting}
+                            className={`flex items-center gap-2 text-white px-6 py-3 rounded-2xl text-lg transition-all shadow-md border-2 border-green-800
+                                ${isPrinting ? 'bg-gray-400 border-gray-500 cursor-not-allowed' : 'bg-green-600 hover:bg-green-500 active:scale-95'}`}
+                        >
+                            🖨️ {isPrinting ? '카드 저장 중...' : '메시지 카드 저장하기'}
+                        </button>
+                    </div>
+
+                    {/* PDF 출력 영역 */}
+                    <div ref={reportRef} id="report-container" className={`p-[12mm] border-8 rounded-3xl flex flex-col relative overflow-hidden ${isPrinting ? 'border-none shadow-none' : 'border-green-600 shadow-2xl'}`}>
+                        
+                        {/* 초원 느낌의 데코레이션 */}
+                        <div className="absolute top-4 left-4 text-6xl opacity-30 transform -rotate-12 z-0">🌳</div>
+                        <div className="absolute bottom-12 right-12 text-7xl opacity-30 transform rotate-12 z-0">🦒</div>
+                        <div className="absolute bottom-16 left-20 text-5xl opacity-20 z-0">🌸</div>
+                        <div className="grass-bottom"></div>
+
+                        {/* 헤더 및 정보 입력란 */}
+                        <div className="flex justify-between items-end border-b-4 border-green-500 pb-4 mb-4 relative z-10">
+                            <div>
+                                <h2 className="text-[32px] text-green-700 tracking-wide flex items-center gap-2 whitespace-nowrap">
+                                    📩 미래의 발명가에게 보내는 메시지
+                                </h2>
+                                <p className="text-xl text-green-800 mt-2 ml-2 pb-1">기후 위기를 해결할 우리의 싱그러운 아이디어!</p>
+                            </div>
+                            
+                            <div className="flex items-center gap-3 bg-green-50 p-2 px-4 rounded-2xl border-2 border-green-200 shadow-sm shrink-0 mb-1 ml-4">
+                                <div className="flex flex-col items-start">
+                                    <label className="text-sm font-bold text-green-800 mb-1">모둠</label>
+                                    <input 
+                                        type="text" placeholder="A" 
+                                        value={studentInfo.groupNum} onChange={(e) => handleInfoChange('groupNum', e.target.value)}
+                                        className={`bg-transparent w-8 text-center text-xl text-green-900 font-bold focus:outline-none placeholder:font-normal placeholder:text-green-300 ${isPrinting ? 'border-none' : 'border-b-2 border-green-400'}`}
+                                    />
+                                </div>
+                                <div className="w-px h-10 bg-green-200 mx-1"></div>
+                                <div className="flex flex-col items-start">
+                                    <label className="text-sm font-bold text-green-800 mb-1">모둠명</label>
+                                    <input 
+                                        type="text" placeholder="우리 모둠" 
+                                        value={studentInfo.teamName} onChange={(e) => handleInfoChange('teamName', e.target.value)}
+                                        className={`bg-transparent w-32 text-xl text-green-900 font-bold focus:outline-none placeholder:font-normal placeholder:text-green-300 ${isPrinting ? 'border-none' : 'border-b-2 border-green-400'}`}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 활동 가이드 박스 */}
+                        <div className="bg-green-100/80 border-2 border-green-300 rounded-2xl p-4 mb-4 relative z-10 shadow-sm flex items-start gap-3">
+                            <span className="text-3xl mt-1">👩‍🏫</span>
+                            <div>
+                                <p className="text-green-900 font-bold text-lg mb-1">활동 가이드</p>
+                                <p className="text-green-800 text-[16px] leading-snug break-keep">
+                                    아프리카의 기후 위기 영상을 보고 느낀 점을 바탕으로, <strong>기후 문제를 해결할 수 있는 창의적인 기술</strong>을 상상해 봅시다. 세상에 없던 여러분만의 독특한 발명 아이디어를 구체적으로 적고, 그 발명품이 우리 지구와 케냐 친구들에게 어떤 도움을 줄 수 있을지 설명해 주세요.
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* 메시지 카드 본문 */}
+                        <div className="flex-1 flex flex-col gap-5 relative z-10">
+                            
+                            <div className="bg-white/80 border-2 border-green-400 rounded-3xl p-5 shadow-sm">
+                                <h3 className="text-xl text-green-700 mb-2 flex items-center gap-2">
+                                    🎥 1. 기후 위기로 발생된 가장 큰 어려움을 하나만 적어보세요.
+                                </h3>
+                                {renderTextArea('q1', '영상 속 케냐 친구들의 상황으로 부터 생각해 보세요.')}
+                            </div>
+
+                            <div className="bg-white/80 border-2 border-green-400 rounded-3xl p-5 shadow-sm">
+                                <h3 className="text-xl text-green-700 mb-2 flex items-center gap-2">
+                                    🛠️ 2. 이 문제를 해결할 발명 기술 아이디어를 제안해 보세요.
+                                </h3>
+                                {renderTextArea('q2', '누구도 생각하지 못한 창의적이고 독특한 기술 아이디어를 제안해 보세요!', 'min-h-[130px]')}
+                            </div>
+
+                            <div className="bg-white/80 border-2 border-green-400 rounded-3xl p-5 shadow-sm">
+                                <h3 className="text-xl text-green-700 mb-2 flex items-center gap-2">
+                                    🌱 3. 이 발명품이 어떻게 지구를 지킬 수 있을까요?
+                                </h3>
+                                {renderTextArea('q3', '발명품이 실제로 만들어졌을 때 케냐 친구들과 자연에 어떤 도움을 줄지 상상해 보세요.', 'min-h-[130px]')}
+                            </div>
+
+                        </div>
+
+                        {/* 꼬리말 */}
+                        <div className="text-right mt-6 pr-6 mb-4 relative z-10">
+                            <p className="text-green-800 text-lg mb-1">기후정의를 실현할 발명가,</p>
+                            <span className="text-xl text-green-800 font-bold">
+                                 <span className="text-green-700 border-b-2 border-green-500 inline-block min-w-[120px] text-center px-2">{studentInfo.teamName || '탐험가'}</span> (으)로부터 ✍️
+                            </span>
+                        </div>
+
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

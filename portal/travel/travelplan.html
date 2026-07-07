@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1, viewport-fit=cover">
+<title>Travel Plan</title>
+<link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<style>
+    :root {
+        --primary: #00bfa5; 
+        --primary-light: #e0f2f1;
+        --bg: #f5f7f9;
+        --card-bg: #ffffff;
+        --text-main: #212529;
+        --text-sub: #868e96;
+        --border: #f1f3f5;
+        --input-bg: #f8f9fa;
+        --danger: #ff6b6b;
+        --shadow: 0 8px 20px rgba(0,0,0,0.04);
+        --sat: env(safe-area-inset-top);
+        --sab: env(safe-area-inset-bottom);
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; font-family: "Pretendard", sans-serif; }
+    
+    body { 
+        margin: 0; background: var(--bg); color: var(--text-main); 
+        height: 100vh; height: 100dvh; 
+        display: flex; flex-direction: column; overflow: hidden; 
+    }
+
+    /* Header */
+    header { 
+        background: var(--card-bg); 
+        padding: var(--sat) 16px 0 16px; 
+        height: calc(60px + var(--sat)); 
+        display: flex; justify-content: space-between; align-items: center; 
+        border-bottom: 1px solid var(--border); flex-shrink: 0; z-index: 50; 
+    }
+    .logo { font-weight: 800; font-size: 1.2rem; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
+    .logo i { color: var(--primary); }
+    
+    .header-btn { 
+        width: 36px; height: 36px; border-radius: 8px;
+        background: white; border: 1px solid var(--border);
+        color: var(--text-main); font-size: 1.1rem; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+    .header-btn:active { background: #f1f3f5; transform: scale(0.95); }
+
+    .pc-btn-group { display: flex; gap: 8px; }
+    
+    .pc-label-btn {
+        font-size: 0.8rem; font-weight: 600; padding: 0 12px; height: 36px; border-radius: 8px;
+        background: var(--primary-light); color: var(--primary); border: none; cursor: pointer;
+        display: flex; align-items: center; gap: 6px; transition: 0.2s;
+    }
+    .pc-label-btn:hover { filter: brightness(0.95); }
+    .pc-label-btn i { font-size: 0.9rem; }
+
+    /* Mobile handling for PC buttons */
+    @media (max-width: 768px) { 
+        .pc-only-text { display: none; } /* Hide text on mobile */
+        .pc-label-btn { padding: 0; width: 36px; justify-content: center; background: white; border: 1px solid var(--border); color: var(--text-main); }
+        
+        /* [수정] 모바일에서 이 클래스가 붙은 요소는 아예 숨김 처리 */
+        .desktop-only { display: none !important; }
+    }
+
+    /* Day Slider */
+    .day-nav {
+        background: var(--card-bg); padding: 12px 0 12px 16px; 
+        border-bottom: 1px solid var(--border); flex-shrink: 0;
+        display: flex; gap: 10px; overflow-x: auto; scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+    }
+    .day-nav::-webkit-scrollbar { display: none; }
+    
+    .day-pill {
+        padding: 8px 18px; border-radius: 24px; font-size: 0.9rem; font-weight: 600;
+        background: #f1f3f5; color: #adb5bd; border: none; cursor: pointer;
+        white-space: nowrap; transition: 0.2s; flex-shrink: 0;
+    }
+    .day-pill.active {
+        background: var(--text-main); color: white; box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    }
+    .day-add {
+        width: 36px; height: 36px; border-radius: 50%; background: #f8f9fa; border: 1px dashed #ced4da;
+        display: flex; align-items: center; justify-content: center; color: #adb5bd; cursor: pointer; flex-shrink: 0; margin-right: 16px;
+    }
+
+    /* Summary Bar */
+    .summary-bar {
+        background: var(--primary-light); padding: 12px 20px; font-size: 0.9rem; 
+        color: var(--primary); font-weight: 700; display: flex; justify-content: space-between; align-items: center;
+        flex-shrink: 0;
+    }
+    .summary-total-group { text-align: right; display: flex; flex-direction: column; align-items: flex-end; line-height: 1.2; }
+    .summary-sub { font-size: 0.75rem; color: #009688; font-weight: 500; }
+
+    /* Content Area */
+    main { 
+        flex: 1; overflow-y: auto; padding: 20px; 
+        padding-bottom: calc(90px + var(--sab)); 
+        display: flex; flex-direction: column; gap: 16px;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Card Design */
+    .card {
+        background: var(--card-bg); border-radius: 20px; padding: 20px;
+        box-shadow: var(--shadow); position: relative; border: 1px solid white;
+        transition: transform 0.1s;
+    }
+    .card:active { transform: scale(0.98); }
+    
+    .card-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+    .card-time { font-weight: 800; font-size: 1rem; color: var(--text-main); }
+    .card-cat { 
+        font-size: 0.75rem; font-weight: 700; padding: 4px 8px; border-radius: 6px;
+        background: #f8f9fa; color: #868e96; 
+    }
+    
+    .card-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 12px; line-height: 1.4; }
+    
+    .place-chip {
+        display: inline-flex; align-items: center; gap: 4px; padding: 6px 12px;
+        background: #f8f9fa; border-radius: 12px; font-size: 0.85rem; color: #495057;
+        margin-right: 6px; margin-bottom: 6px; text-decoration: none; border: 1px solid #e9ecef;
+    }
+    .place-chip i { color: var(--primary); }
+
+    .card-memo {
+        background: #f8f9fa; padding: 12px; border-radius: 12px; color: #495057; 
+        font-size: 0.9rem; line-height: 1.5; margin-top: 8px;
+    }
+    .card-img { width: 100%; height: 140px; object-fit: cover; border-radius: 12px; margin-top: 10px; }
+    
+    /* Cost Display */
+    .card-cost-wrapper { margin-top: 12px; text-align: right; }
+    .card-cost { font-weight: 800; color: #ff922b; font-size: 1rem; }
+    .card-cost-sub { display: block; font-size: 0.8rem; color: #adb5bd; font-weight: 500; margin-top: 2px; }
+
+    /* FAB */
+    .fab {
+        position: fixed; 
+        bottom: calc(24px + var(--sab)); 
+        right: 24px; 
+        width: 60px; height: 60px;
+        background: var(--text-main); color: white; border-radius: 50%; border: none;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.3); font-size: 24px; cursor: pointer;
+        display: flex; align-items: center; justify-content: center; z-index: 100;
+    }
+    .fab:active { transform: scale(0.95); }
+
+    /* Modal */
+    .modal-overlay {
+        display: none; position: fixed; inset: 0;
+        background: rgba(0,0,0,0.5); z-index: 200; backdrop-filter: blur(4px);
+        align-items: flex-end; 
+    }
+    .modal-content {
+        background: white; width: 100%; max-width: 600px; margin: 0 auto;
+        border-radius: 28px 28px 0 0; 
+        padding: 24px 24px calc(24px + var(--sab)); 
+        max-height: 90vh; overflow-y: auto;
+        animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        display: flex; flex-direction: column; gap: 20px;
+    }
+    @media (min-width: 769px) {
+        .modal-overlay { align-items: center; }
+        .modal-content { border-radius: 28px; max-height: 80vh; width: 500px; padding-bottom: 24px; }
+    }
+    @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+    .modal-header { text-align: center; position: relative; margin-bottom: 10px; }
+    .modal-handle { width: 40px; height: 5px; background: #e9ecef; border-radius: 10px; display: inline-block; margin-bottom: 16px; }
+    .modal-title { font-size: 1.2rem; font-weight: 800; color: var(--text-main); margin: 0; text-align: left; }
+
+    /* Form Styles */
+    .label { font-size: 0.85rem; font-weight: 700; color: var(--primary); margin-bottom: 8px; display: block; }
+    
+    .input-box {
+        width: 100%; padding: 16px; background: var(--input-bg); border: 1px solid transparent;
+        border-radius: 16px; font-size: 1rem; color: var(--text-main); outline: none; transition: 0.2s;
+    }
+    .input-box:focus { background: white; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
+
+    /* Category Chips */
+    .category-grid { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+    .cat-chip {
+        padding: 10px 16px; border-radius: 20px; background: white; border: 1px solid #e9ecef;
+        color: #495057; font-weight: 600; font-size: 0.9rem; cursor: pointer; white-space: nowrap; flex-shrink: 0;
+    }
+    .cat-chip.selected {
+        background: var(--primary); color: white; border-color: var(--primary);
+    }
+    .cat-chip i { margin-right: 4px; }
+
+    .modal-btns { display: flex; gap: 12px; margin-top: 10px; }
+    .btn-lg { flex: 1; padding: 18px; border-radius: 16px; font-weight: 700; font-size: 1rem; border: none; cursor: pointer; }
+    .btn-save { background: var(--text-main); color: white; }
+    .btn-del { background: #ffe3e3; color: #fa5252; }
+    
+    /* Empty State */
+    .empty-state { text-align: center; padding: 60px 20px; color: #adb5bd; }
+    .empty-state i { font-size: 3rem; margin-bottom: 16px; color: #e9ecef; }
+
+    /* Settings Modal Specific */
+    .currency-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+    .currency-btn {
+        padding: 14px; border: 1px solid #e9ecef; border-radius: 12px; background: white; 
+        font-weight: 600; cursor: pointer; text-align: center;
+    }
+    .currency-btn.selected { background: var(--primary); color: white; border-color: var(--primary); }
+
+</style>
+</head>
+<body>
+
+<header>
+    <div class="logo"><i class="fas fa-paper-plane"></i> Travel Plan</div>
+    <div class="pc-btn-group">
+        <button class="pc-label-btn" onclick="openSettings()">
+            <i class="fas fa-cog"></i> <span class="pc-only-text">설정</span>
+        </button>
+
+        <button class="pc-label-btn desktop-only" onclick="document.getElementById('excel-input').click()">
+            <i class="fas fa-file-excel"></i> <span class="pc-only-text">엑셀 입력</span>
+        </button>
+        
+        <button class="header-btn" onclick="document.getElementById('json-input').click()"><i class="fas fa-folder-open"></i></button>
+        <button class="header-btn" onclick="exportJSON()"><i class="fas fa-share-nodes"></i></button>
+        <button class="header-btn" onclick="resetAll()"><i class="fas fa-trash-alt" style="color:var(--danger)"></i></button>
+    </div>
+    <input type="file" id="json-input" accept=".json" hidden onchange="importJSON(this)">
+    <input type="file" id="excel-input" accept=".xlsx,.xls,.csv" hidden onchange="handleExcel(this)">
+</header>
+
+<div class="day-nav" id="day-nav"></div>
+
+<div class="summary-bar">
+    <span id="summary-day">Day 1</span>
+    <div class="summary-total-group">
+        <span id="summary-total">0</span>
+        <span id="summary-sub" class="summary-sub"></span>
+    </div>
+</div>
+
+<main id="schedule-container"></main>
+
+<button class="fab" onclick="openModal('new')"><i class="fas fa-plus"></i></button>
+
+<div class="modal-overlay" id="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <div class="modal-handle"></div>
+            <h2 class="modal-title" id="modal-title">새 일정</h2>
+        </div>
+        
+        <input type="hidden" id="edit-id">
+
+        <div>
+            <span class="label">카테고리</span>
+            <div class="category-grid" id="category-chips">
+                <button class="cat-chip selected" onclick="selectCat(this)" data-val="관광"><i class="fas fa-camera"></i> 관광</button>
+                <button class="cat-chip" onclick="selectCat(this)" data-val="숙소"><i class="fas fa-bed"></i> 숙소</button>
+                <button class="cat-chip" onclick="selectCat(this)" data-val="교통"><i class="fas fa-bus"></i> 교통</button>
+                <button class="cat-chip" onclick="selectCat(this)" data-val="맛집"><i class="fas fa-utensils"></i> 맛집</button>
+                <button class="cat-chip" onclick="selectCat(this)" data-val="카페"><i class="fas fa-coffee"></i> 카페</button>
+                <button class="cat-chip" onclick="selectCat(this)" data-val="쇼핑"><i class="fas fa-shopping-bag"></i> 쇼핑</button>
+            </div>
+        </div>
+
+        <div>
+            <span class="label">일정명</span>
+            <input type="text" id="input-title" class="input-box" placeholder="예: 오사카 성 구경">
+        </div>
+
+        <div style="display:flex; gap:12px;">
+            <div style="flex:1;">
+                <span class="label">Day</span>
+                <select id="input-day" class="input-box" style="background:white;"></select>
+            </div>
+            <div style="flex:1;">
+                <span class="label">시간</span>
+                <input type="time" id="input-time" class="input-box" style="background:white;">
+            </div>
+        </div>
+
+        <div>
+            <span class="label">장소 (메인 | 대안)</span>
+            <div style="display:flex; gap:8px; margin-bottom:8px;">
+                <input type="text" id="input-place-temp" class="input-box" placeholder="장소 입력 후 추가" onkeypress="if(event.key==='Enter') addPlace()">
+                <button onclick="addPlace()" style="background:var(--text-main); color:white; border:none; border-radius:12px; width:50px; cursor:pointer;"><i class="fas fa-plus"></i></button>
+            </div>
+            <div id="place-list-ui" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
+        </div>
+
+        <div>
+            <span class="label">메모 / 이미지 URL</span>
+            <textarea id="input-memo" class="input-box" rows="4" placeholder="메모를 입력하세요. 이미지 주소를 넣으면 미리보기가 됩니다."></textarea>
+        </div>
+
+        <div>
+            <span class="label" id="cost-label">비용</span>
+            <input type="number" id="input-cost" class="input-box" placeholder="0">
+            <p id="cost-help-text" style="font-size:0.8rem; color:#868e96; margin-top:6px;"></p>
+        </div>
+
+        <div class="modal-btns">
+            <button class="btn-lg btn-del" id="btn-delete" style="display:none;" onclick="deleteRecord()">삭제</button>
+            <button class="btn-lg btn-save" onclick="saveRecord()">저장하기</button>
+        </div>
+        <div style="text-align:center; margin-top:10px; font-size:0.9rem; color:#868e96; cursor:pointer;" onclick="closeModal('modal')">닫기</div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="settings-modal">
+    <div class="modal-content" style="max-height: auto;">
+        <div class="modal-header">
+            <div class="modal-handle"></div>
+            <h2 class="modal-title">여행 설정</h2>
+        </div>
+
+        <div>
+            <span class="label">화폐 단위</span>
+            <div class="currency-grid">
+                <div class="currency-btn" onclick="setCurrency('KRW', '원')" data-code="KRW">🇰🇷 원 (KRW)</div>
+                <div class="currency-btn" onclick="setCurrency('JPY', '¥')" data-code="JPY">🇯🇵 엔 (JPY)</div>
+                <div class="currency-btn" onclick="setCurrency('USD', '$')" data-code="USD">🇺🇸 달러 (USD)</div>
+                <div class="currency-btn" onclick="setCurrency('EUR', '€')" data-code="EUR">🇪🇺 유로 (EUR)</div>
+            </div>
+            <div style="margin-top:8px; display:flex; gap:8px; align-items:center;">
+                <span style="font-size:0.9rem;">기타:</span>
+                <input type="text" id="custom-currency-symbol" class="input-box" style="padding:10px;" placeholder="기호 (예: £)">
+                <input type="text" id="custom-currency-code" class="input-box" style="padding:10px;" placeholder="코드 (예: GBP)">
+            </div>
+        </div>
+
+        <div id="exchange-rate-group" style="display:none;">
+            <span class="label">환율 설정 (1 단위 = ? 원)</span>
+            <input type="number" id="setting-rate" class="input-box" placeholder="예: 100엔=900원이면, 9 입력">
+            <p style="font-size:0.8rem; color:#868e96; margin-top:8px;">
+                * 팁: 엔화(JPY)는 보통 100엔 단위로 계산하지만, 계산 편의를 위해 <b>1엔당 원화 가격</b>(예: 9.1)을 입력해주세요.
+                <br>* 달러(USD)는 1달러당 가격(예: 1350)을 입력해주세요.
+            </p>
+        </div>
+
+        <div class="modal-btns">
+            <button class="btn-lg btn-save" onclick="saveSettings()">설정 저장</button>
+        </div>
+        <div style="text-align:center; margin-top:10px; font-size:0.9rem; color:#868e96; cursor:pointer;" onclick="closeModal('settings-modal')">닫기</div>
+    </div>
+</div>
+
+<script>
+    let travelData = [];
+    let currentDay = "Day 1";
+    let tempPlaces = [];
+    
+    // Settings State
+    let appSettings = {
+        code: 'KRW',   // KRW, USD, JPY ...
+        symbol: '원',   // 원, $, ¥ ...
+        rate: 1        // Exchange rate to KRW
+    };
+
+    const DB_NAME = "TripProDB";
+    const DB_VERSION = 1;
+    let db;
+
+    document.addEventListener('DOMContentLoaded', () => {
+        loadSettings();
+        loadData();
+    });
+
+    // --- Settings Functions ---
+    function loadSettings() {
+        const saved = localStorage.getItem('trip_settings');
+        if(saved) {
+            appSettings = JSON.parse(saved);
+        }
+        updateSettingsUI();
+    }
+
+    function openSettings() {
+        document.getElementById('settings-modal').style.display = 'flex';
+        updateSettingsUI();
+    }
+
+    function updateSettingsUI() {
+        // Highlight Currency Buttons
+        document.querySelectorAll('.currency-btn').forEach(btn => {
+            btn.classList.toggle('selected', btn.dataset.code === appSettings.code);
+        });
+
+        // Toggle Rate Input
+        const rateGroup = document.getElementById('exchange-rate-group');
+        if (appSettings.code === 'KRW') {
+            rateGroup.style.display = 'none';
+        } else {
+            rateGroup.style.display = 'block';
+            document.getElementById('setting-rate').value = appSettings.rate;
+        }
+
+        // Custom Inputs
+        if (!['KRW','JPY','USD','EUR'].includes(appSettings.code)) {
+            document.getElementById('custom-currency-symbol').value = appSettings.symbol;
+            document.getElementById('custom-currency-code').value = appSettings.code;
+        }
+    }
+
+    function setCurrency(code, symbol) {
+        appSettings.code = code;
+        appSettings.symbol = symbol;
+        
+        // Reset custom fields if standard selected
+        document.getElementById('custom-currency-symbol').value = '';
+        document.getElementById('custom-currency-code').value = '';
+        
+        updateSettingsUI();
+    }
+
+    function saveSettings() {
+        // Check Custom
+        const customSym = document.getElementById('custom-currency-symbol').value.trim();
+        const customCode = document.getElementById('custom-currency-code').value.trim();
+        if(customSym && customCode) {
+            appSettings.symbol = customSym;
+            appSettings.code = customCode;
+        }
+
+        // Get Rate
+        if(appSettings.code !== 'KRW') {
+            const r = parseFloat(document.getElementById('setting-rate').value);
+            if(!r || r <= 0) return alert('유효한 환율을 입력해주세요.');
+            appSettings.rate = r;
+        } else {
+            appSettings.rate = 1;
+        }
+
+        localStorage.setItem('trip_settings', JSON.stringify(appSettings));
+        closeModal('settings-modal');
+        refreshUI();
+    }
+
+
+    // --- Database & Data ---
+    function initDB() {
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(DB_NAME, DB_VERSION);
+            req.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains("schedules")) db.createObjectStore("schedules", { keyPath: "id" });
+            };
+            req.onsuccess = (e) => { db = e.target.result; resolve(db); };
+            req.onerror = reject;
+        });
+    }
+
+    async function loadData() {
+        if (!db) await initDB();
+        const tx = db.transaction("schedules", "readonly");
+        tx.objectStore("schedules").getAll().onsuccess = (e) => {
+            travelData = e.target.result || [];
+            refreshUI();
+        };
+    }
+
+    async function saveData() {
+        const tx = db.transaction("schedules", "readwrite");
+        const store = tx.objectStore("schedules");
+        store.clear().onsuccess = () => {
+            travelData.forEach(item => store.put(item));
+        };
+        return new Promise(resolve => tx.oncomplete = resolve);
+    }
+
+    // --- Format Helper ---
+    function formatMoney(amount) {
+        if (!amount && amount !== 0) return '';
+        const num = Number(amount);
+        
+        // Main Display (Selected Currency)
+        let mainText = '';
+        if (appSettings.code === 'KRW') mainText = `${num.toLocaleString()}원`;
+        else if (appSettings.code === 'USD') mainText = `$${num.toLocaleString()}`;
+        else if (appSettings.code === 'JPY') mainText = `¥${num.toLocaleString()}`;
+        else if (appSettings.code === 'EUR') mainText = `€${num.toLocaleString()}`;
+        else mainText = `${num.toLocaleString()}${appSettings.symbol}`;
+
+        // Sub Display (KRW conversion)
+        let subText = '';
+        if (appSettings.code !== 'KRW') {
+            const krw = Math.round(num * appSettings.rate);
+            subText = `(약 ${krw.toLocaleString()}원)`;
+        }
+
+        return { main: mainText, sub: subText };
+    }
+
+    // --- UI Rendering ---
+    function refreshUI() {
+        const days = [...new Set(travelData.map(d => d.day))].sort((a,b) => {
+            const na = parseInt(a.replace(/\D/g,''))||0, nb = parseInt(b.replace(/\D/g,''))||0;
+            return na - nb || a.localeCompare(b);
+        });
+
+        if (days.length === 0) days.push("Day 1");
+        if (!days.includes(currentDay)) currentDay = days[0];
+
+        // 1. Day Navigation
+        const nav = document.getElementById('day-nav');
+        nav.innerHTML = '';
+        days.forEach(d => {
+            const btn = document.createElement('button');
+            btn.className = `day-pill ${d === currentDay ? 'active' : ''}`;
+            btn.textContent = d;
+            btn.onclick = () => { currentDay = d; refreshUI(); };
+            nav.appendChild(btn);
+        });
+        const addBtn = document.createElement('div');
+        addBtn.className = 'day-add';
+        addBtn.innerHTML = '<i class="fas fa-plus"></i>';
+        addBtn.onclick = addNewDay;
+        nav.appendChild(addBtn);
+
+        // 2. Select Options in Modal
+        const sel = document.getElementById('input-day');
+        sel.innerHTML = '';
+        days.forEach(d => {
+            const op = document.createElement('option');
+            op.value = d; op.textContent = d;
+            sel.appendChild(op);
+        });
+
+        renderList();
+    }
+
+    function renderList() {
+        const container = document.getElementById('schedule-container');
+        container.innerHTML = '';
+        
+        const items = travelData.filter(d => d.day === currentDay).sort((a,b) => a.time.localeCompare(b.time));
+        
+        // Calculate Total
+        const total = items.reduce((acc, cur) => acc + (cur.cost || 0), 0);
+        const fmtTotal = formatMoney(total);
+        
+        document.getElementById('summary-day').textContent = currentDay;
+        document.getElementById('summary-total').textContent = `합계: ${fmtTotal.main}`;
+        document.getElementById('summary-sub').textContent = fmtTotal.sub;
+
+        if (items.length === 0) {
+            container.innerHTML = `<div class="empty-state"><i class="fas fa-map-marked-alt"></i><p>일정이 비어있습니다.<br>새로운 추억을 기록해보세요!</p></div>`;
+            return;
+        }
+
+        items.forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.onclick = () => openModal('edit', item.id);
+
+            // Places Chips
+            let placeHtml = '';
+            if (item.places && item.places.length > 0) {
+                placeHtml = `<div style="margin-top:8px;">` + 
+                    item.places.map(p => 
+                        `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p)}" target="_blank" class="place-chip" onclick="event.stopPropagation()"><i class="fas fa-map-marker-alt"></i> ${p}</a>`
+                    ).join('') + 
+                `</div>`;
+            }
+
+            // Memo & Image
+            let memoHtml = '';
+            let imgHtml = '';
+            if(item.memo) {
+                if(item.memo.match(/\.(jpeg|jpg|gif|png|webp)$/i)) {
+                    imgHtml = `<img src="${item.memo}" class="card-img">`;
+                } else {
+                    memoHtml = `<div class="card-memo">${item.memo}</div>`;
+                }
+            }
+
+            // Cost Display
+            let costHtml = '';
+            if (item.cost !== undefined && item.cost !== null && item.cost !== '') {
+                const fmt = formatMoney(item.cost);
+                costHtml = `
+                    <div class="card-cost-wrapper">
+                        <div class="card-cost">${fmt.main}</div>
+                        ${fmt.sub ? `<span class="card-cost-sub">${fmt.sub}</span>` : ''}
+                    </div>
+                `;
+            }
+
+            card.innerHTML = `
+                <div class="card-row">
+                    <div class="card-time">${item.time}</div>
+                    <span class="card-cat">${item.category}</span>
+                </div>
+                <div class="card-title">${item.title}</div>
+                ${placeHtml}
+                ${memoHtml}
+                ${imgHtml}
+                ${costHtml}
+            `;
+            container.appendChild(card);
+        });
+    }
+
+    // --- Modal Functions ---
+    function openModal(mode, id) {
+        document.getElementById('modal').style.display = 'flex';
+        document.getElementById('edit-id').value = '';
+        
+        // Label Update based on Currency
+        document.getElementById('cost-label').textContent = `비용 (${appSettings.code})`;
+        document.getElementById('cost-help-text').textContent = appSettings.code === 'KRW' 
+            ? '원화 금액을 입력하세요.' 
+            : `${appSettings.symbol} 단위로 금액을 입력하세요. (자동으로 원화 환산됨)`;
+
+        // Reset Category Chips
+        document.querySelectorAll('.cat-chip').forEach(c => c.classList.remove('selected'));
+        
+        if (mode === 'edit' && id) {
+            document.getElementById('modal-title').textContent = "일정 수정";
+            const item = travelData.find(x => x.id === id);
+            document.getElementById('edit-id').value = item.id;
+            document.getElementById('input-title').value = item.title;
+            document.getElementById('input-day').value = item.day;
+            document.getElementById('input-time').value = item.time;
+            document.getElementById('input-memo').value = item.memo;
+            document.getElementById('input-cost').value = item.cost;
+            
+            // Set Category
+            const catBtn = [...document.querySelectorAll('.cat-chip')].find(b => b.dataset.val === item.category);
+            if(catBtn) catBtn.classList.add('selected');
+
+            tempPlaces = item.places ? [...item.places] : [];
+            document.getElementById('btn-delete').style.display = 'block';
+        } else {
+            document.getElementById('modal-title').textContent = "새 일정";
+            document.getElementById('input-title').value = '';
+            document.getElementById('input-day').value = currentDay;
+            document.getElementById('input-time').value = "10:00";
+            document.getElementById('input-memo').value = '';
+            document.getElementById('input-cost').value = '';
+            
+            document.querySelector('.cat-chip[data-val="관광"]').classList.add('selected');
+            tempPlaces = [];
+            document.getElementById('btn-delete').style.display = 'none';
+        }
+        renderPlaces();
+    }
+    
+    function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+    
+    // Close on overlay click
+    document.querySelectorAll('.modal-overlay').forEach(overlay => {
+        overlay.addEventListener('click', (e) => {
+            if(e.target === overlay) overlay.style.display = 'none';
+        });
+    });
+
+    function selectCat(btn) {
+        document.querySelectorAll('.cat-chip').forEach(c => c.classList.remove('selected'));
+        btn.classList.add('selected');
+    }
+
+    function addPlace() {
+        const val = document.getElementById('input-place-temp').value.trim();
+        if(val) { tempPlaces.push(val); document.getElementById('input-place-temp').value=''; renderPlaces(); }
+    }
+    function removePlace(idx) { tempPlaces.splice(idx, 1); renderPlaces(); }
+    function renderPlaces() {
+        document.getElementById('place-list-ui').innerHTML = tempPlaces.map((p, i) => 
+            `<span class="place-chip" style="background:#e0f2f1; color:var(--primary); border:none;">${p} <i class="fas fa-times" onclick="removePlace(${i})" style="margin-left:4px; opacity:0.5; cursor:pointer;"></i></span>`
+        ).join('');
+    }
+
+    async function saveRecord() {
+        const id = document.getElementById('edit-id').value;
+        const title = document.getElementById('input-title').value;
+        if (!title) return alert('일정명을 입력해주세요.');
+
+        const activeCat = document.querySelector('.cat-chip.selected');
+        const category = activeCat ? activeCat.dataset.val : '기타';
+
+        const record = {
+            id: id ? Number(id) : Date.now(),
+            day: document.getElementById('input-day').value,
+            time: document.getElementById('input-time').value,
+            category: category,
+            title: title,
+            places: tempPlaces,
+            memo: document.getElementById('input-memo').value,
+            cost: Number(document.getElementById('input-cost').value)
+        };
+
+        if (id) {
+            const idx = travelData.findIndex(x => x.id == id);
+            if(idx > -1) travelData[idx] = record;
+        } else {
+            travelData.push(record);
+        }
+
+        currentDay = record.day;
+        await saveData(); refreshUI(); closeModal('modal');
+    }
+
+    async function deleteRecord() {
+        if(confirm('삭제하시겠습니까?')) {
+            travelData = travelData.filter(x => x.id != document.getElementById('edit-id').value);
+            await saveData(); refreshUI(); closeModal('modal');
+        }
+    }
+
+    function addNewDay() {
+        const days = [...new Set(travelData.map(d=>d.day))];
+        const last = days.length > 0 ? parseInt(days[days.length-1].replace(/\D/g,'')) || 0 : 0;
+        currentDay = `Day ${last+1}`;
+        openModal('new');
+    }
+
+    async function resetAll() {
+        if(confirm('모든 데이터를 삭제하고 초기화하시겠습니까?')) {
+            travelData = [];
+            await saveData(); refreshUI();
+        }
+    }
+
+    // --- JSON & Excel ---
+    function exportJSON() {
+        if (travelData.length === 0) return alert('공유할 데이터가 없습니다.');
+        const blob = new Blob([JSON.stringify(travelData, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `travel_plan_${new Date().toISOString().slice(0,10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    function importJSON(input) {
+        const file = input.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const json = JSON.parse(e.target.result);
+                if (Array.isArray(json)) {
+                    if (confirm(`JSON 파일에서 ${json.length}건의 일정을 불러오시겠습니까?`)) {
+                        travelData = json;
+                        await saveData(); refreshUI();
+                    }
+                } else alert('형식이 올바르지 않습니다.');
+            } catch (err) { alert('파일 오류'); }
+            input.value = '';
+        };
+        reader.readAsText(file);
+    }
+
+    function handleExcel(input) {
+        const file = input.files[0];
+        if(!file) return;
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            const data = new Uint8Array(e.target.result);
+            const wb = XLSX.read(data, {type:'array'});
+            const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1});
+            if(rows.length <= 1) return alert("데이터 없음");
+            if(confirm(`엑셀에서 ${rows.length-1}건 불러오기 (기존 삭제)`)) {
+                travelData = rows.slice(1).map((r,i) => ({
+                    id: Date.now()+i,
+                    day: r[0]||'Day 1', time: r[1]||'10:00', category: r[2]||'기타',
+                    title: r[3]||'일정', places: r[4]?r[4].toString().split('|').map(s=>s.trim()):[],
+                    memo: r[5]||'', cost: r[6]||0
+                })).filter(d=>d.title);
+                await saveData(); refreshUI();
+            }
+            input.value = '';
+        };
+        reader.readAsArrayBuffer(file);
+    }
+</script>
+</body>
+</html>

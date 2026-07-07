@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>역할별 활동 기록</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        :root {
+            /* 주황색 테마 유지 */
+            --main-color: #ff4500;
+            --light-color: #fff0eb;
+            --border-color: #ffbba6;
+            --header-bg: #ffd1c2;
+        }
+
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Pretendard', 'Malgun Gothic', sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            background-color: #ffffff;
+            width: 100%;
+            max-width: 800px;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+            position: relative;
+        }
+
+        /* 조 정보 입력 영역 */
+        .group-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 30px;
+            background-color: var(--light-color);
+            padding: 15px;
+            border-radius: 8px;
+            border: 2px solid var(--border-color);
+        }
+
+        .info-label {
+            font-size: 1.15rem;
+            color: var(--main-color);
+            font-weight: bold;
+            white-space: nowrap; 
+            flex-shrink: 0; 
+        }
+
+        .info-select, .info-input {
+            flex: 1;
+            min-width: 0; 
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 1.05rem;
+            outline: none;
+            color: #333;
+            background-color: #fff;
+            font-family: inherit;
+            text-align: center;
+        }
+
+        .info-select { cursor: pointer; }
+
+        .info-select:focus, .info-input:focus {
+            border-color: var(--main-color);
+            box-shadow: 0 0 5px rgba(255, 69, 0, 0.3);
+        }
+
+        /* 수행과제 타이틀 영역 */
+        .task-header {
+            display: flex;
+            border-top: 2px solid var(--main-color);
+            border-bottom: 2px solid var(--main-color);
+            margin-bottom: 30px;
+        }
+
+        .task-tag {
+            background-color: var(--header-bg);
+            padding: 10px 20px;
+            font-weight: bold;
+            font-size: 1.1rem;
+            border-right: 1px solid var(--main-color);
+            white-space: nowrap;
+        }
+
+        .task-title {
+            padding: 10px 20px;
+            font-weight: bold;
+            font-size: 1.1rem;
+            flex: 1;
+        }
+
+        /* 공통 블록 속성 (PDF 잘림 방지용) */
+        .section-block {
+            margin-bottom: 30px;
+            overflow: hidden; 
+            padding: 20px;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            background-color: #fdfdfd;
+        }
+        
+        /* 역할 헤더 (학번, 이름, 타이틀) */
+        .role-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px dashed var(--border-color);
+        }
+
+        .role-assignee {
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .assignee-input {
+            width: 70px;
+            padding: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 0.95rem;
+            text-align: center;
+            outline: none;
+            background-color: #fff;
+        }
+
+        .assignee-input.name-input {
+            width: 90px;
+        }
+
+        .assignee-input:focus {
+            border-color: var(--main-color);
+            box-shadow: 0 0 5px rgba(255, 69, 0, 0.3);
+        }
+
+        .role-title {
+            font-size: 1.15rem;
+            font-weight: bold;
+            color: var(--main-color);
+            flex: 1;
+            line-height: 1.4;
+            word-break: keep-all; /* 두 줄바꿈 시 단어 단위 유지 */
+        }
+
+        /* 입력 그룹 영역 */
+        .input-group {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 12px;
+            gap: 15px;
+        }
+
+        .input-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .input-label {
+            font-size: 1.05rem;
+            font-weight: bold;
+            color: #222;
+            width: 220px; /* 라벨 너비 고정으로 깔끔한 정렬 */
+            flex-shrink: 0;
+            margin-top: 8px;
+        }
+
+        .answer-area {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 1rem;
+            font-family: inherit;
+            resize: none; 
+            outline: none;
+            line-height: 1.5;
+            overflow-y: hidden;
+            background-color: #fff;
+        }
+
+        .answer-area:focus {
+            border-color: var(--main-color);
+            box-shadow: 0 0 5px rgba(255, 69, 0, 0.3);
+        }
+
+        /* PDF 다운로드 버튼 CSS */
+        .download-btn {
+            width: 100%;
+            padding: 15px;
+            background-color: #333;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            margin-top: 20px;
+        }
+
+        .download-btn:hover {
+            background-color: #555;
+        }
+
+        /* PDF 캡처용 특수 스타일 */
+        .pdf-mode { box-shadow: none !important; }
+        
+        .pdf-text-replacement {
+            display: inline-block;
+            width: 100%;
+            padding: 8px 0;
+            font-family: inherit;
+            box-sizing: border-box;
+        }
+
+        .pdf-textarea-replacement {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            font-family: inherit;
+            box-sizing: border-box;
+            white-space: pre-wrap;
+            word-break: break-all;
+            border: 1px solid transparent; 
+            min-height: 38px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container" id="captureArea">
+    
+    <div class="group-info">
+        <span class="info-label">나의 조는?</span>
+        <select class="info-select" id="groupSelect">
+            <option value="" disabled selected>조 선택(A~F)</option>
+            <option value="A조">A조</option>
+            <option value="B조">B조</option>
+            <option value="C조">C조</option>
+            <option value="D조">D조</option>
+            <option value="E조">E조</option>
+            <option value="F조">F조</option>
+        </select>
+        <input type="text" class="info-input" id="groupName" placeholder="조 이름 입력">
+    </div>
+
+    <div class="task-header">
+        <div class="task-tag">수행과제4-3</div>
+        <div class="task-title">역할별 활동 기록</div>
+    </div>
+
+    <div class="section-block">
+        <div class="role-header">
+            <div class="role-assignee">
+                <input type="text" class="assignee-input" placeholder="학번">
+                <input type="text" class="assignee-input name-input" placeholder="이름">
+            </div>
+            <div class="role-title">1. 팀장 모둠 활동 조율 내용</div>
+        </div>
+        <div class="input-group">
+            <label class="input-label">역할 분담:</label>
+            <textarea class="answer-area" rows="1"></textarea>
+        </div>
+        <div class="input-group">
+            <label class="input-label">시간 관리 방법:</label>
+            <textarea class="answer-area" rows="1"></textarea>
+        </div>
+        <div class="input-group">
+            <label class="input-label">발표 준비 과정:</label>
+            <textarea class="answer-area" rows="1"></textarea>
+        </div>
+        <div class="input-group">
+            <label class="input-label">최종 발표 핵심 내용:</label>
+            <textarea class="answer-area" rows="1"></textarea>
+        </div>
+    </div>
+
+    <div class="section-block">
+        <div class="role-header">
+            <div class="role-assignee">
+                <input type="text" class="assignee-input" placeholder="학번">
+                <input type="text" class="assignee-input name-input" placeholder="이름">
+            </div>
+            <div class="role-title">2. 공간·지도 디자이너 지도 및 공간 디자인 내용</div>
+        </div>
+        <div class="input-group">
+            <label class="input-label">지도에 표현한 시설:</label>
+            <textarea class="answer-area" rows="1"></textarea>
+        </div>
+        <div class="input-group">
+            <label class="input-label">사용한 기호와 색상:</label>
+            <textarea class="answer-area" rows="1"></textarea>
+        </div>
+        <div class="input-group">
+            <label class="input-label">마을 공간 구성의 특징:</label>
+            <textarea class="answer-area" rows="1"></textarea>
+        </div>
+        <div class="input-group">
+            <label class="input-label">디자인하며 중요하게 생각한 점:</label>
+            <textarea class="answer-area" rows="1"></textarea>
+        </div>
+    </div>
+
+    <div class="section-block">
+        <div class="role-header">
+            <div class="role-assignee">
+                <input type="text" class="assignee-input" placeholder="학번">
+                <input type="text" class="assignee-input name-input" placeholder="이름">
+            </div>
+            <div class="role-title">3. 환경·입지 설계자 환경 및 입지 분석 내용</div>
+        </div>
+        <div class="input-group">
+            <label class="input-label">조사한 환경 특징:</label>
+            <textarea class="answer-area" rows="1"></textarea>
+        </div>
+        <div class="input-group">
+            <label class="input-label">적합하다고 생각한 에너지:</label>
+            <textarea class="answer-area" rows="1"></textarea>
+        </div>
+        <div class="input-group">
+            <label class="input-label">발전소 설치 위치와 이유:</label>
+            <textarea class="answer-area" rows="1"></textarea>
+        </div>
+        <div class="input-group">
+            <label class="input-label">마을 위치 선정 이유:</label>
+            <textarea class="answer-area" rows="1"></textarea>
+        </div>
+    </div>
+
+    <div class="section-block">
+        <div class="role-header">
+            <div class="role-assignee">
+                <input type="text" class="assignee-input" placeholder="학번">
+                <input type="text" class="assignee-input name-input" placeholder="이름">
+            </div>
+            <div class="role-title">4. 에너지·산업 기획자 에너지 및 산업 계획 내용</div>
+        </div>
+        <div class="input-group">
+            <label class="input-label">선택한 신재생에너지 종류:</label>
+            <textarea class="answer-area" rows="1"></textarea>
+        </div>
+        <div class="input-group">
+            <label class="input-label">예상 에너지 활용 방법:</label>
+            <textarea class="answer-area" rows="1"></textarea>
+        </div>
+        <div class="input-group">
+            <label class="input-label">계획한 마을 산업:</label>
+            <textarea class="answer-area" rows="1"></textarea>
+        </div>
+        <div class="input-group">
+            <label class="input-label">생산성과 지속가능성을 고려한 점:</label>
+            <textarea class="answer-area" rows="1"></textarea>
+        </div>
+    </div>
+
+    <div class="section-block">
+        <div class="role-header">
+            <div class="role-assignee">
+                <input type="text" class="assignee-input" placeholder="학번">
+                <input type="text" class="assignee-input name-input" placeholder="이름">
+            </div>
+            <div class="role-title">5. 홍보 콘텐츠 제작자 (5인 모둠인 경우만) 홍보 자료 제작 내용</div>
+        </div>
+        <div class="input-group">
+            <label class="input-label">제작한 홍보물 종류:</label>
+            <textarea class="answer-area" rows="1"></textarea>
+        </div>
+        <div class="input-group">
+            <label class="input-label">사용한 슬로건:</label>
+            <textarea class="answer-area" rows="1"></textarea>
+        </div>
+        <div class="input-group">
+            <label class="input-label">강조하고 싶은 마을의 장점:</label>
+            <textarea class="answer-area" rows="1"></textarea>
+        </div>
+        <div class="input-group">
+            <label class="input-label">홍보 디자인의 특징:</label>
+            <textarea class="answer-area" rows="1"></textarea>
+        </div>
+    </div>
+    
+    <button type="button" id="downloadBtn" class="download-btn">PDF로 다운로드</button>
+</div>
+
+<script>
+    // 텍스트 영역(Textarea) 자동 높이 조절
+    document.querySelectorAll('textarea').forEach(textarea => {
+        textarea.addEventListener('input', function() {
+            this.style.height = 'auto'; 
+            this.style.height = this.scrollHeight + 'px'; 
+        });
+    });
+
+    // 스마트 줄바꿈 적용 및 PDF 다운로드 기능
+    document.getElementById('downloadBtn').addEventListener('click', async function(e) {
+        e.preventDefault(); 
+        const currentScrollY = window.scrollY; 
+        const captureArea = document.getElementById('captureArea');
+        const downloadBtn = this;
+
+        // PDF 생성 시 버튼 숨김
+        downloadBtn.style.visibility = 'hidden';
+        captureArea.classList.add('pdf-mode');
+
+        // 텍스트 변환
+        const formElements = captureArea.querySelectorAll('input, select, textarea');
+        const replacements = [];
+        const originalMargins = []; 
+
+        // 1. 폼 요소를 텍스트/기호로 변환
+        formElements.forEach(el => {
+            let replacementElement;
+            const tagName = el.tagName.toLowerCase();
+
+            if (tagName === 'textarea') {
+                replacementElement = document.createElement('div');
+                replacementElement.className = 'pdf-textarea-replacement';
+                replacementElement.textContent = el.value;
+                if(el.value === "") replacementElement.innerHTML = "&nbsp;"; 
+            } else {
+                replacementElement = document.createElement('span');
+                replacementElement.className = 'pdf-text-replacement';
+                
+                if (tagName === 'select') {
+                    replacementElement.innerText = el.value === "" ? "" : el.options[el.selectedIndex].text;
+                } else {
+                    replacementElement.innerText = el.value;
+                }
+            }
+
+            const computedStyle = window.getComputedStyle(el);
+            replacementElement.style.fontSize = computedStyle.fontSize;
+            replacementElement.style.color = computedStyle.color;
+            
+            // 상단 조 정보 CSS
+            if(el.classList.contains('info-input') || el.classList.contains('info-select')) {
+                replacementElement.style.textAlign = 'center';
+                replacementElement.style.padding = '0 10px';
+                replacementElement.style.width = 'auto';
+                replacementElement.style.flex = '1';
+                
+                if(tagName === 'select' && el.value === "") {
+                    replacementElement.innerText = "조 선택(A~F)";
+                    replacementElement.style.color = '#aaa';
+                }
+            } 
+            // 학번/이름 역할 배정 인풋 CSS
+            else if (el.classList.contains('assignee-input')) {
+                replacementElement.style.textAlign = 'center';
+                replacementElement.style.display = 'inline-block';
+                replacementElement.style.width = window.getComputedStyle(el).width;
+                replacementElement.style.padding = '8px 0';
+                
+                if(el.value === "") {
+                    replacementElement.innerHTML = "&nbsp;";
+                }
+                replacementElement.style.borderBottom = '1px solid #999'; // PDF에서 작성란임을 명확히 보여주기 위해 밑줄 추가
+            }
+
+            el.parentNode.insertBefore(replacementElement, el);
+            const originalDisplay = el.style.display;
+            el.style.display = 'none';
+
+            replacements.push({ element: el, replacement: replacementElement, originalDisplay: originalDisplay });
+        });
+
+        // 렌더링 대기
+        await new Promise(r => setTimeout(r, 100)); 
+
+        // 2. 스마트 잘림 방지 로직
+        const PAGE_HEIGHT_PX = captureArea.offsetWidth * (277 / 190); 
+        const blocks = captureArea.querySelectorAll('.section-block');
+        
+        blocks.forEach(block => {
+            const rect = block.getBoundingClientRect();
+            const captureRect = captureArea.getBoundingClientRect();
+            
+            const top = rect.top - captureRect.top;
+            const bottom = top + block.offsetHeight;
+
+            const safeTop = top + 20; 
+            const safeBottom = bottom + 20;
+
+            const pageNumTop = Math.floor(safeTop / PAGE_HEIGHT_PX);
+            const pageNumBottom = Math.floor(safeBottom / PAGE_HEIGHT_PX);
+
+            if (pageNumTop !== pageNumBottom) {
+                const targetTop = pageNumBottom * PAGE_HEIGHT_PX + 20; 
+                const shift = targetTop - top;
+                
+                const currentMargin = parseFloat(window.getComputedStyle(block).marginTop) || 0;
+                originalMargins.push({ element: block, margin: block.style.marginTop }); 
+                
+                block.style.marginTop = (currentMargin + shift) + 'px';
+            }
+        });
+
+        await new Promise(r => setTimeout(r, 100));
+
+        // 3. 캡처 및 PDF 생성
+        html2canvas(captureArea, {
+            scale: 2, 
+            useCORS: true,
+            backgroundColor: '#ffffff'
+        }).then(canvas => {
+            const imgData = canvas.toDataURL('image/png');
+            const { jsPDF } = window.jspdf;
+            
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = pdf.internal.pageSize.getHeight();
+            
+            const margin = 10; 
+            const finalWidth = pdfWidth - (margin * 2);
+            const finalHeight = (canvas.height * finalWidth) / canvas.width;
+
+            let position = margin;
+            let heightLeft = finalHeight;
+            const printedAmount = pdfHeight - (margin * 2);
+
+            pdf.addImage(imgData, 'PNG', margin, position, finalWidth, finalHeight);
+            
+            pdf.setFillColor(255, 255, 255);
+            pdf.rect(0, 0, pdfWidth, margin, 'F'); 
+            pdf.rect(0, pdfHeight - margin, pdfWidth, margin, 'F'); 
+
+            heightLeft -= printedAmount;
+
+            while (heightLeft > 5) { 
+                position -= printedAmount; 
+                
+                pdf.addPage();
+                pdf.addImage(imgData, 'PNG', margin, position, finalWidth, finalHeight);
+                
+                pdf.setFillColor(255, 255, 255);
+                pdf.rect(0, 0, pdfWidth, margin, 'F'); 
+                pdf.rect(0, pdfHeight - margin, pdfWidth, margin, 'F'); 
+                
+                heightLeft -= printedAmount;
+            }
+            
+            // 파일명 설정
+            const groupSelectValue = replacements.find(r => r.element.id === 'groupSelect')?.element.value !== "" 
+                ? replacements.find(r => r.element.id === 'groupSelect')?.element.options[replacements.find(r => r.element.id === 'groupSelect').element.selectedIndex].text : '';
+            const groupNameInput = replacements.find(r => r.element.id === 'groupName')?.replacement.innerText.trim() || '';
+            
+            const nameParts = [];
+            if (groupSelectValue) nameParts.push(groupSelectValue);
+            if (groupNameInput) nameParts.push(groupNameInput);
+            
+            const safeName = nameParts.length > 0 ? nameParts.join('_') : '이름없음';
+            const finalFileName = `수행과제4-3_${safeName}.pdf`;
+            
+            pdf.save(finalFileName);
+            
+        }).finally(() => {
+            // UI 복구
+            replacements.forEach(rep => {
+                rep.replacement.parentNode.removeChild(rep.replacement);
+                rep.element.style.display = rep.originalDisplay;
+            });
+
+            originalMargins.forEach(item => {
+                item.element.style.marginTop = item.margin;
+            });
+
+            captureArea.classList.remove('pdf-mode');
+            downloadBtn.style.visibility = 'visible';
+            window.scrollTo(0, currentScrollY);
+        });
+    });
+</script>
+
+</body>
+</html>

@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>✏️ 나의 암기 짝꿍</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+<style>
+    /* --- 디자인 테마 (중학생 맞춤: 밝고 귀여운 파스텔톤) --- */
+    :root {
+        --bg: #f0f7f4; --card: #ffffff; --text: #495057; --border: #dbe4e0;
+        --primary: #20c997; --primary-dark: #12b886; --accent: #ffd43b;
+        --danger: #ff8787; --success: #69db7c;
+        --header-height: 70px;
+        --font-title: 'Jua', sans-serif; --font-body: 'Noto Sans KR', sans-serif;
+    }
+    
+    * { box-sizing: border-box; }
+    
+    body { margin: 0; font-family: var(--font-body); background: var(--bg); color: var(--text); font-size: 14px; height: 100vh; overflow: hidden; }
+
+    /* 레이아웃 구조 */
+    .app { display: flex; flex-direction: column; height: 100%; width: 100%; overflow: hidden; }
+    
+    header { 
+        background: var(--card); border-bottom: 3px solid var(--primary); 
+        padding: 0 30px; height: var(--header-height); 
+        display: flex; justify-content: space-between; align-items: center; 
+        flex-shrink: 0; z-index: 100; box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+    h1 { font-family: var(--font-title); font-size: 26px; margin: 0; color: var(--primary-dark); display: flex; align-items: center; gap: 10px; }
+    
+    main { flex: 1; display: flex; overflow: hidden; height: calc(100vh - var(--header-height)); }
+    
+    aside { width: 260px; background: #fff; border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 25px; gap: 20px; flex-shrink: 0; overflow-y: auto; }
+    
+    .panel { background: #f8f9fa; border: 2px solid #e9ecef; border-radius: 15px; padding: 15px; }
+    .panel-title { font-family: var(--font-title); font-size: 16px; color: var(--primary); margin-bottom: 12px; }
+    
+    .nav-menu { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+    .nav-item { padding: 12px 15px; border-radius: 12px; cursor: pointer; font-weight: 600; color: #555; transition: 0.2s; display: flex; align-items: center; gap: 10px; }
+    .nav-item:hover { background: #e6fcf5; color: var(--primary-dark); transform: translateX(5px); }
+    .nav-item.active { background: var(--primary); color: #fff; box-shadow: 0 4px 6px rgba(32, 201, 151, 0.3); }
+    
+    .content { flex: 1; display: flex; flex-direction: column; padding: 25px; overflow: hidden; height: 100%; }
+    .view-section { display: none; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
+    .view-section.active { display: flex; }
+    
+    /* 툴바 & 테이블 */
+    .table-wrapper { flex: 1; background: var(--card); border: 2px solid var(--primary); border-radius: 15px; overflow: auto; min-height: 0; box-shadow: 0 5px 15px rgba(0,0,0,0.05); }
+    .toolbar { display: flex; gap: 10px; margin-bottom: 15px; align-items: center; background: var(--card); padding: 15px; border-radius: 15px; border: 1px solid var(--border); flex-shrink: 0; box-shadow: 0 2px 5px rgba(0,0,0,0.03); }
+    .toolbar-title { font-family: var(--font-title); font-size: 20px; color: var(--text); margin-right: 10px; }
+    .count-badge { background: var(--accent); color: #fff; padding: 4px 10px; border-radius: 20px; font-size: 13px; font-weight: bold; }
+
+    .search-select, .search-input { padding: 8px 12px; border: 2px solid #e9ecef; border-radius: 10px; outline: none; }
+    .search-input:focus { border-color: var(--primary); }
+    
+    .btn { padding: 0 16px; height: 38px; border-radius: 10px; border: none; font-family: var(--font-title); font-size: 15px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: 0.2s; }
+    .btn:active { transform: scale(0.96); }
+    .btn-default { background: #f1f3f5; color: #495057; }
+    .btn-default:hover { background: #e9ecef; }
+    .btn-primary { background: var(--primary); color: #fff; box-shadow: 0 3px 0 #1aa179; }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn-success { background: var(--success); color: #fff; box-shadow: 0 3px 0 #51cf66; }
+    .btn-danger { background: var(--danger); color: #fff; box-shadow: 0 3px 0 #ff6b6b; }
+    
+    table { width: 100%; border-collapse: separate; border-spacing: 0; }
+    th { background: #e6fcf5; color: #20c997; font-family: var(--font-title); font-size: 16px; padding: 12px; position: sticky; top: 0; z-index: 10; border-bottom: 2px solid var(--primary); }
+    td { padding: 10px; border-bottom: 1px solid #f1f3f5; text-align: center; white-space: nowrap; height: 45px; }
+    .star-select { border: 1px solid #ced4da; border-radius: 6px; padding: 4px; width: 100%; text-align: center; color: #fab005; font-weight: bold; }
+
+    /* --- [New] 플래시카드 스타일 (가로형으로 수정됨) --- */
+    .flash-container { 
+        flex: 1; 
+        display: flex; 
+        flex-direction: column; 
+        align-items: center; 
+        justify-content: flex-start; /* 상단부터 정렬 */
+        overflow-y: auto;           /* 세로 스크롤 허용 */
+        position: relative; 
+        padding: 40px 20px;
+    }
+    .flash-container::-webkit-scrollbar { width: 8px; }
+    .flash-container::-webkit-scrollbar-thumb { background: #ced4da; border-radius: 4px; }
+
+    .flash-scene { 
+        width: 100%; 
+        max-width: 500px; 
+        /* 비율 변경: 3/4(세로형) -> 2/1(가로형/낮은 높이) */
+        aspect-ratio: 2 / 1; 
+        perspective: 1000px; 
+        cursor: pointer; 
+        position: relative; 
+        margin: 0 auto 30px auto;
+        flex-shrink: 0;
+    }
+    
+    .flash-card { width: 100%; height: 100%; position: relative; transition: transform 0.6s; transform-style: preserve-3d; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+    .flash-scene.flipped .flash-card { transform: rotateY(180deg); }
+    
+    /* 패딩을 줄여서 공간 확보 (40px -> 25px) */
+    .flash-face { position: absolute; width: 100%; height: 100%; backface-visibility: hidden; border-radius: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 25px; background: #fff; border: 4px solid var(--primary); }
+    .flash-back { transform: rotateY(180deg); background: #fff; border-color: var(--accent); }
+    
+    .f-domain { background: var(--primary); color: #fff; padding: 4px 12px; border-radius: 20px; font-family: var(--font-title); margin-bottom: 10px; font-size: 14px; }
+    /* 폰트 크기 조정 (32px -> 26px) */
+    .f-topic { font-size: 26px; font-family: var(--font-title); text-align: center; color: #333; margin-bottom: 10px; line-height: 1.3; }
+    .f-star { font-size: 20px; color: var(--accent); }
+    
+    /* 폰트 크기 조정 (28px -> 24px) */
+    .f-key { font-size: 24px; font-family: var(--font-title); color: var(--primary-dark); margin-bottom: 15px; text-align: center; border-bottom: 2px dashed #ddd; padding-bottom: 10px; width: 100%; }
+    .f-memo { font-size: 16px; color: #555; text-align: left; line-height: 1.5; white-space: pre-wrap; width: 100%; flex: 1; overflow-y: auto; }
+    
+    .f-hint { position: absolute; bottom: 15px; color: #adb5bd; font-size: 12px; }
+
+    .flash-controls { 
+        display: flex; 
+        gap: 20px; 
+        align-items: center; 
+        margin-top: 0; 
+        margin-bottom: 40px;
+        flex-shrink: 0;
+    }
+    .btn-circle { width: 50px; height: 50px; border-radius: 50%; border: none; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: 0.2s; background: #fff; color: #555; }
+    .btn-circle:active { transform: scale(0.95); }
+    .btn-check { background: var(--success); color: white; width: 60px; height: 60px; font-size: 24px; }
+    .flash-progress { font-family: var(--font-title); font-size: 18px; color: var(--primary); }
+
+    /* 인쇄 미리보기 레이아웃 */
+    .print-layout-container { display: flex; flex: 1; gap: 20px; overflow: hidden; min-height: 0; align-items: stretch; }
+    .sticker-input-panel { width: 320px; background: #fff; border: 1px solid var(--border); border-radius: 15px; padding: 25px; display: flex; flex-direction: column; overflow-y: auto; flex-shrink: 0; }
+    
+    /* 날짜 선택 그룹 */
+    .date-select-group { 
+        background: #f8f9fa; border: 2px dashed #dbe4e0; border-radius: 10px; 
+        padding: 15px; margin-bottom: 15px; display: flex; flex-direction: column; gap: 8px; 
+    }
+    .filter-status { font-size: 12px; color: var(--primary); text-align: center; font-weight: bold; margin-top: 5px; display: none; }
+    
+    .sticker-input-group { display: flex; gap: 10px; margin-bottom: 12px; align-items: center; }
+    .sticker-input-group label { width: 24px; height: 24px; border-radius: 50%; background: var(--primary); color: white; font-weight: bold; font-size: 12px; display: flex; justify-content: center; align-items: center; }
+    .sticker-input-group input { flex: 1; padding: 10px; border: 2px solid #eee; border-radius: 8px; font-size: 14px; outline:none; }
+    
+    .preview-scroll-area { flex: 1; background: #868e96; padding: 40px; overflow: auto; border-radius: 15px; }
+    
+    /* [화면용] 카드 스타일 (미리보기) */
+    .sticker-page { 
+        width: 210mm; height: 297mm; background: white; 
+        box-shadow: 0 10px 25px rgba(0,0,0,0.2); padding: 10mm; 
+        display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(4, 1fr); gap: 5mm; 
+        margin: 0 auto 50px auto; flex-shrink: 0;
+    }
+    .sticker-card { 
+        border: 1px dashed #ced4da; border-radius: 10px; background: #fff;
+        display: flex; align-items: center; justify-content: center; overflow: hidden; 
+    }
+    .card-box { 
+        width: 100%; height: 100%; border: 3px solid #495057; border-radius: 12px;
+        display: flex; flex-direction: column; background: #fff;
+    }
+    /* 카드 헤더/바디 등은 내용이 있을 때만 보임 */
+    .card-header { background: var(--primary); color: #fff; border-bottom: 2px solid #333; padding: 0 12px; display: flex; justify-content: space-between; align-items: center; height: 15%; }
+    .card-domain { font-family: var(--font-title); font-size: 16px; }
+    .card-star { font-size: 16px; color: #ffd43b; text-shadow: 1px 1px 0 #ce8500; }
+    .card-topic { background: #fff; border-bottom: 2px dashed #eee; padding: 5px; text-align: center; font-size: 13px; color: #868e96; font-weight: 700; height: 12%; display:flex; align-items:center; justify-content:center; }
+    .card-body { flex: 1; display: flex; align-items: center; justify-content: center; font-family: var(--font-title); font-size: 32px; color: #333; text-align: center; word-break: keep-all; padding: 10px; }
+    .card-footer { background: #fff9db; border-top: 2px solid #333; padding: 10px; font-size: 12px; color: #555; height: 20%; overflow: hidden; text-overflow: ellipsis; white-space: pre-wrap; font-family: 'GangwonEdu_OTFBoldA', sans-serif; }
+
+    /* [화면용] 수첩 스타일 */
+    .booklet-page { width: 297mm; height: 210mm; background: white; box-shadow: 0 10px 25px rgba(0,0,0,0.2); display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(2, 1fr); margin: 0 auto 50px auto; flex-shrink: 0; }
+    .zine-cell { border: 1px dashed #e9ecef; display: flex; flex-direction: column; padding: 8px; overflow: hidden; position: relative; }
+    .zine-cell.inverted { transform: rotate(180deg); border-bottom: 2px solid #333; }
+    .zine-cell.normal { border-top: 2px solid #333; }
+    .z-content { height: 100%; display: flex; flex-direction: column; border: 2px solid #333; border-radius: 8px; background: #fff; overflow: hidden; }
+    .z-header { background: #e6fcf5; font-size: 11px; padding: 4px 8px; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #333; font-weight: bold; color: #20c997; }
+    .z-topic { text-align: center; font-size: 11px; color: #aaa; font-weight: 700; padding: 5px 0; border-bottom: 1px dotted #eee; }
+    .z-body { flex: 1; display: flex; align-items: center; justify-content: center; font-family: var(--font-title); font-size: 24px; text-align: center; padding: 5px; word-break: keep-all; color: #333; }
+    .z-footer { font-size: 10px; padding: 5px; border-top: 2px solid #333; background: #fff9db; color: #495057; height: 35px; overflow: hidden; }
+    .z-num { position: absolute; bottom: 5px; right: 5px; font-size: 10px; font-weight: bold; color: #fff; background: #333; border-radius: 50%; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; z-index: 10; }
+    .inverted .z-num { bottom: auto; top: 5px; right: auto; left: 5px; transform: rotate(180deg); }
+
+    /* [인쇄 설정] */
+    @media print {
+        @page { size: A4 portrait; margin: 0mm; } 
+        body * { visibility: hidden; }
+        html, body { width: 210mm !important; height: 297mm !important; margin: 0 !important; padding: 0 !important; overflow: hidden !important; }
+
+        body.print-mode-card #sticker-grid-target {
+            visibility: visible !important; display: grid !important;
+            position: fixed; top: 0; left: 0; width: 210mm !important; height: 297mm !important;
+            grid-template-columns: 50% 50% !important; grid-template-rows: 25% 25% 25% 25% !important;
+            padding: 5mm 5mm 7mm 5mm !important; 
+            gap: 2mm !important; background: transparent !important; box-shadow: none !important; margin: 0 !important;
+        }
+        body.print-mode-card #sticker-grid-target * { visibility: visible !important; }
+        body.print-mode-card .sticker-card { width: 100% !important; height: 100% !important; border: none !important; padding: 0 !important; display: flex !important; border-radius: 0 !important; }
+        body.print-mode-card .card-box { width: 100% !important; height: 100% !important; border: 2px solid #000 !important; border-radius: 8px !important; flex: 1 !important; }
+
+        body.print-mode-booklet #booklet-target {
+            visibility: visible !important; display: grid !important;
+            margin: 0 !important; box-shadow: none !important;
+            position: fixed; left: 50%; top: 50%; width: 297mm !important; height: 210mm !important;
+            transform: translate(-50%, -50%) rotate(90deg) scale(1);
+        }
+        body.print-mode-booklet #booklet-target * { visibility: visible !important; }
+    }
+</style>
+</head>
+<body>
+
+<div class="app">
+    <header>
+        <h1>✏️ 나의 암기 짝꿍</h1>
+        <button class="btn btn-danger" onclick="resetAllData()">🗑️ 초기화</button>
+    </header>
+
+    <main>
+        <aside>
+            <div class="panel">
+                <div class="panel-title">MENU</div>
+                <ul class="nav-menu">
+                    <li class="nav-item active" onclick="switchTab('tab-data', this)">📝 데이터 입력</li>
+                    <li class="nav-item" onclick="switchTab('tab-flash', this)">⚡ 플래시카드</li>
+                    <li class="nav-item" onclick="switchTab('tab-print-card', this)">📇 카드 만들기</li>
+                    <li class="nav-item" onclick="switchTab('tab-print-booklet', this)">📖 미니 수첩</li>
+                </ul>
+            </div>
+            
+            <div class="panel" style="margin-top:auto">
+                <div class="panel-title">💡 사용 방법</div>
+                <div style="font-size:12px; color:#666; line-height:1.5;">
+                    1. <b>데이터 입력</b>에서 내용을 적으세요.<br>
+                    2. <b>플래시카드</b> 탭에서 암기하세요.<br>
+                    3. <b>인쇄 탭</b>에서 나만의 굿즈를 만드세요!<br>
+                    <br>
+                    <b>⌨️ 단축키 (PC)</b><br>
+                    Space: 뒤집기 / Enter: 완료<br>
+                    ← / → : 이동 / R: 섞기
+                </div>
+            </div>
+        </aside>
+
+        <div class="content">
+            <div id="tab-data" class="view-section active">
+                <div class="toolbar">
+                    <span class="toolbar-title">공부할 내용 <span id="cnt-data" class="count-badge">0개</span></span>
+                    <select id="search-col" class="search-select"></select>
+                    <input type="text" id="search-val" class="search-input" placeholder="검색하기..." onkeyup="gridSearch()">
+                    <span style="flex:1"></span>
+                    <button class="btn btn-default" onclick="gridAddRow()">➕ 추가</button>
+                    <button class="btn btn-success" onclick="importFromExcel()">📂 엑셀 불러오기</button>
+                    <button class="btn btn-primary" onclick="exportToExcel()">💾 엑셀 저장</button>
+                </div>
+                <div class="table-wrapper">
+                    <table id="grid-data"><thead></thead><tbody></tbody></table>
+                </div>
+            </div>
+
+            <div id="tab-flash" class="view-section">
+                <div class="toolbar">
+                    <span class="toolbar-title">⚡ 플래시카드 학습</span>
+                    <span style="flex:1"></span>
+                    <button class="btn btn-default" onclick="resetFlashProgress()">🔄 학습 초기화</button>
+                </div>
+                
+                <div class="flash-container">
+                    <div class="flash-scene" onclick="toggleFlashFlip()">
+                        <div class="flash-card" id="flash-card-el">
+                            <div class="flash-face flash-front">
+                                <div class="f-domain" id="f-domain">과목</div>
+                                <div class="f-topic" id="f-topic">단원명</div>
+                                <div class="f-star" id="f-star">★★★★★</div>
+                                <div class="f-hint">👆 카드를 눌러 정답 확인 (Space)</div>
+                            </div>
+                            <div class="flash-face flash-back">
+                                <div class="f-key" id="f-key">핵심내용</div>
+                                <div class="f-memo" id="f-memo">메모 내용이 여기에 나옵니다.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flash-controls">
+                        <button class="btn-circle" onclick="prevFlash()" title="이전 (←)"><i class="fas fa-chevron-left"></i></button>
+                        <div style="text-align:center">
+                            <div class="flash-progress" id="f-progress">1 / 10</div>
+                            <div style="display:flex; gap:10px; margin-top:10px;">
+                                <button class="btn-circle" style="width:40px; height:40px; font-size:14px;" onclick="shuffleFlash()" title="섞기 (R)"><i class="fas fa-random"></i></button>
+                                <button class="btn-circle btn-check" onclick="toggleFlashComplete()" title="암기완료 (Enter)"><i class="fas fa-check"></i></button>
+                            </div>
+                        </div>
+                        <button class="btn-circle" onclick="nextFlash()" title="다음 (→)"><i class="fas fa-chevron-right"></i></button>
+                    </div>
+
+                    <div id="flash-empty" style="display:none; text-align:center; padding:40px; color:#adb5bd;">
+                        <i class="fas fa-crown" style="font-size:50px; margin-bottom:20px; color:#ffd43b;"></i>
+                        <div style="font-size:20px; font-weight:bold; color:#333;">모두 암기했어요! 대단해요! 🎉</div>
+                        <button class="btn btn-primary" style="margin-top:20px;" onclick="resetFlashProgress()">다시 공부하기</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tab-print-card" class="view-section">
+                <div class="toolbar">
+                    <span class="toolbar-title">📇 암기 카드 인쇄</span>
+                    <span style="font-size:12px; color:#888; margin-left:10px;">📌 A4 꽉 찬 인쇄 (여백 '없음' 추천)</span>
+                    <span style="flex:1"></span>
+                    <button class="btn btn-default" onclick="renderCards()">🔄 새로고침</button>
+                    <button class="btn btn-primary" onclick="printMode('card')">🖨️ 인쇄하기</button>
+                </div>
+                
+                <div class="print-layout-container">
+                    <div class="sticker-input-panel">
+                        <div class="panel-title">날짜별 불러오기</div>
+                        <div class="date-select-group">
+                            <input type="date" id="date-pick-card" class="search-input" style="width:100%; background:#fff;">
+                            <button class="btn btn-primary" style="width:100%; justify-content:center;" onclick="fetchDataByDate('card')">📅 데이터 가져오기</button>
+                            <div id="status-card" class="filter-status"></div>
+                        </div>
+
+                        <div class="panel-title" style="margin-bottom:15px; border-top:1px dashed #ddd; padding-top:15px;">단원 선택</div>
+                        <div id="card-inputs-container"></div>
+                        <button class="btn btn-default" onclick="clearInputs('card')" style="margin-top:10px; width:100%;">모두 비우기</button>
+                        <button class="btn btn-success" onclick="fillRandom('card')" style="margin-top:5px; width:100%;">🎲 랜덤 채우기</button>
+                    </div>
+                    <div class="preview-scroll-area">
+                        <div class="sticker-page" id="sticker-grid-target"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tab-print-booklet" class="view-section">
+                <div class="toolbar">
+                    <span class="toolbar-title">📖 미니 수첩 인쇄</span>
+                    <span style="font-size:12px; color:#888; margin-left:10px;">📌 8칸 접기용 수첩 (A4 세로 인쇄)</span>
+                    <span style="flex:1"></span>
+                    <button class="btn btn-default" onclick="renderBooklet()">🔄 새로고침</button>
+                    <button class="btn btn-success" onclick="printMode('booklet')">📖 수첩 인쇄</button>
+                </div>
+                
+                <div class="print-layout-container">
+                    <div class="sticker-input-panel">
+                        <div class="panel-title">날짜별 불러오기</div>
+                        <div class="date-select-group">
+                            <input type="date" id="date-pick-book" class="search-input" style="width:100%; background:#fff;">
+                            <button class="btn btn-primary" style="width:100%; justify-content:center;" onclick="fetchDataByDate('book')">📅 데이터 가져오기</button>
+                            <div id="status-book" class="filter-status"></div>
+                        </div>
+
+                        <div class="panel-title" style="margin-bottom:15px; border-top:1px dashed #ddd; padding-top:15px;">단원 선택</div>
+                        <div id="book-inputs-container"></div>
+                        <button class="btn btn-default" onclick="clearInputs('book')" style="margin-top:10px; width:100%;">모두 비우기</button>
+                        <button class="btn btn-success" onclick="fillRandom('book')" style="margin-top:5px; width:100%;">🎲 랜덤 채우기</button>
+                    </div>
+                    
+                    <div class="preview-scroll-area">
+                        <div class="booklet-page" id="booklet-target"></div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+</div>
+
+<template id="sticker-template">
+    <div class="sticker-card">
+        <div class="card-box">
+            <div class="card-header">
+                <span class="card-domain">과목</span>
+                <span class="card-star">★★★</span>
+            </div>
+            <div class="card-topic">단원명</div>
+            <div class="card-body">핵심 내용</div>
+            <div class="card-footer">메모/팁</div>
+        </div>
+    </div>
+</template>
+
+<script>
+/* ==========================================================================
+   1. 데이터 및 DB 로직
+   ========================================================================== */
+const COLUMNS = ["입력일", "과목", "단원명", "핵심내용", "중요해요", "메모/팁"];
+const todayStr = new Date().toISOString().split('T')[0];
+
+const INITIAL_DATA = [
+    { 입력일: "2025-12-25", 과목: "역사", 단원명: "고려의 건국", 핵심내용: "팔만대장경", 중요해요: 5, "메모/팁": "몽골 침입 격퇴 염원", completed: false }
+];
+
+let DB_DATA = []; 
+let filteredData = { card: [], book: [] };
+
+let sortState = { col: null, dir: 'asc' };
+const DB_NAME = "MY_STUDY_DB";
+const STORE_NAME = "study_notes";
+const DB_VERSION = 1;
+let dbInstance = null;
+
+// 플래시카드 상태
+let flashList = [];
+let flashIndex = 0;
+let currentTab = 'tab-data';
+
+function initDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        request.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME, { keyPath: "id", autoIncrement: true });
+        };
+        request.onsuccess = (e) => { dbInstance = e.target.result; resolve(dbInstance); };
+        request.onerror = (e) => reject(e);
+    });
+}
+async function loadData() {
+    if(!dbInstance) await initDB();
+    return new Promise((resolve) => {
+        const tx = dbInstance.transaction(STORE_NAME, "readonly");
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.getAll();
+        req.onsuccess = () => {
+            DB_DATA = req.result || [];
+            if(DB_DATA.length === 0) { 
+                DB_DATA = JSON.parse(JSON.stringify(INITIAL_DATA)); 
+                saveAllData(true); 
+            }
+            // 완료 상태 없으면 초기화
+            DB_DATA.forEach(d => { if(d.completed === undefined) d.completed = false; });
+            
+            filteredData.card = [...DB_DATA];
+            filteredData.book = [...DB_DATA];
+            resolve();
+        };
+    });
+}
+async function saveAllData(renderMode = true) {
+    if(!dbInstance) return;
+    const tx = dbInstance.transaction(STORE_NAME, "readwrite");
+    const store = tx.objectStore(STORE_NAME);
+    await new Promise((resolve) => { store.clear().onsuccess = resolve; });
+    DB_DATA.forEach(item => { const { id, ...cleanItem } = item; store.put(cleanItem); });
+    filteredData.card = [...DB_DATA];
+    filteredData.book = [...DB_DATA];
+    if(renderMode) { await loadData(); renderGrid(); }
+}
+async function resetAllData() {
+    if(confirm("정말 모든 공부 내용을 지울까요? 🗑️")) {
+        const tx = dbInstance.transaction(STORE_NAME, "readwrite");
+        tx.objectStore(STORE_NAME).clear();
+        tx.oncomplete = () => location.reload();
+    }
+}
+function getStarString(count) { return "★".repeat(Math.min(parseInt(count)||0, 5)); }
+
+/* ==========================================================================
+   2. UI 로직
+   ========================================================================== */
+
+window.onload = async function() {
+    await initDB();
+    await loadData();
+    initSearchSelect();
+    initInputFields('card');
+    initInputFields('book');
+    document.getElementById('date-pick-card').value = todayStr;
+    document.getElementById('date-pick-book').value = todayStr;
+    renderGrid();
+    renderCards();
+    renderBooklet();
+    
+    // 키보드 단축키
+    document.addEventListener('keydown', (e) => {
+        if(currentTab !== 'tab-flash') return;
+        if(e.key === ' ' || e.key === 'Spacebar') { e.preventDefault(); toggleFlashFlip(); }
+        else if(e.key === 'ArrowRight') nextFlash();
+        else if(e.key === 'ArrowLeft') prevFlash();
+        else if(e.key === 'Enter') toggleFlashComplete();
+        else if(e.key.toLowerCase() === 'r') shuffleFlash();
+    });
+};
+
+function switchTab(tabId, el) {
+    currentTab = tabId;
+    document.querySelectorAll('.view-section').forEach(d => d.classList.remove('active'));
+    document.getElementById(tabId).classList.add('active');
+    document.querySelectorAll('.nav-item').forEach(li => li.classList.remove('active'));
+    el.classList.add('active');
+    
+    if(tabId === 'tab-flash') initFlashcards();
+}
+
+/* --- 플래시카드 로직 --- */
+function initFlashcards() {
+    // 완료되지 않은 항목만
+    flashList = DB_DATA.filter(d => !d.completed && d["단원명"]).reverse();
+    flashIndex = 0;
+    renderFlashcard();
+}
+
+function renderFlashcard() {
+    const cardEl = document.getElementById('flash-card-el');
+    const container = document.querySelector('.flash-container');
+    const controls = document.querySelector('.flash-controls');
+    const emptyMsg = document.getElementById('flash-empty');
+    const scene = document.querySelector('.flash-scene');
+
+    if(flashList.length === 0) {
+        scene.style.display = 'none';
+        controls.style.display = 'none';
+        emptyMsg.style.display = 'block';
+        return;
+    }
+    
+    scene.style.display = 'block';
+    controls.style.display = 'flex';
+    emptyMsg.style.display = 'none';
+    cardEl.parentElement.classList.remove('flipped'); // Reset flip
+
+    const item = flashList[flashIndex];
+    document.getElementById('f-domain').innerText = item["과목"] || "과목 없음";
+    document.getElementById('f-topic').innerText = item["단원명"] || "";
+    document.getElementById('f-star').innerText = getStarString(item["중요해요"]);
+    
+    document.getElementById('f-key').innerText = item["핵심내용"] || "";
+    document.getElementById('f-memo').innerText = item["메모/팁"] || "";
+    
+    document.getElementById('f-progress').innerText = `${flashIndex + 1} / ${flashList.length}`;
+}
+
+function toggleFlashFlip() {
+    const scene = document.querySelector('.flash-scene');
+    scene.classList.toggle('flipped');
+}
+
+function nextFlash() {
+    if(flashList.length === 0) return;
+    flashIndex = (flashIndex + 1) % flashList.length;
+    renderFlashcard();
+}
+
+function prevFlash() {
+    if(flashList.length === 0) return;
+    flashIndex = (flashIndex - 1 + flashList.length) % flashList.length;
+    renderFlashcard();
+}
+
+function shuffleFlash() {
+    flashList.sort(() => Math.random() - 0.5);
+    flashIndex = 0;
+    renderFlashcard();
+    alert("🔀 카드를 섞었습니다!");
+}
+
+function toggleFlashComplete() {
+    if(flashList.length === 0) return;
+    const item = flashList[flashIndex];
+    
+    // DB 업데이트
+    const dbItem = DB_DATA.find(d => d["단원명"] === item["단원명"] && d["핵심내용"] === item["핵심내용"]);
+    if(dbItem) {
+        dbItem.completed = true;
+        saveAllData(false); // 저장
+    }
+    
+    flashList.splice(flashIndex, 1);
+    if(flashIndex >= flashList.length) flashIndex = 0;
+    renderFlashcard();
+}
+
+function resetFlashProgress() {
+    if(!confirm("모든 카드를 다시 공부할까요?")) return;
+    DB_DATA.forEach(d => d.completed = false);
+    saveAllData(false);
+    initFlashcards();
+    alert("초기화 완료! 화이팅! 🔥");
+}
+
+/* --- 그리드 --- */
+function renderGrid() {
+    const table = document.getElementById('grid-data');
+    const tbody = table.querySelector('tbody');
+    const thead = table.querySelector('thead');
+    document.getElementById('cnt-data').innerText = `${DB_DATA.length}개`;
+
+    thead.innerHTML = "";
+    const trH = document.createElement('tr');
+    trH.innerHTML = `<th style="width:50px;">삭제</th>`;
+    COLUMNS.forEach(col => {
+        const th = document.createElement('th');
+        th.innerText = col;
+        if(col === "중요해요") th.style.width = "120px";
+        if(col === "입력일") th.style.width = "120px";
+        th.style.cursor = "pointer";
+        th.onclick = () => sortGrid(col);
+        trH.appendChild(th);
+    });
+    thead.appendChild(trH);
+    
+    tbody.innerHTML = "";
+    DB_DATA.forEach((row, idx) => {
+        const tr = document.createElement('tr');
+        // 완료된 항목 표시
+        if(row.completed) tr.style.opacity = "0.5";
+
+        const tdDel = document.createElement('td');
+        const btnDel = document.createElement('button');
+        btnDel.className = "btn btn-danger"; btnDel.style.padding="2px 8px"; btnDel.style.height="26px";
+        btnDel.innerText = "✖"; btnDel.onclick = () => deleteRow(idx);
+        tdDel.appendChild(btnDel); tr.appendChild(tdDel);
+
+        COLUMNS.forEach(col => {
+            const td = document.createElement('td');
+            if(col === "중요해요") {
+                const select = document.createElement('select'); select.className = "star-select";
+                for(let i=1; i<=5; i++) {
+                    const opt = document.createElement('option'); opt.value = i; opt.text = "★".repeat(i);
+                    if(parseInt(row[col]) === i) opt.selected = true;
+                    select.appendChild(opt);
+                }
+                select.onchange = function() { DB_DATA[idx][col] = parseInt(this.value); saveAllData(false); };
+                td.appendChild(select);
+            } else {
+                td.innerText = row[col] || ""; td.contentEditable = true; td.spellcheck = false;
+                td.onblur = function() { const v = this.innerText.trim(); if(DB_DATA[idx][col]!==v) { DB_DATA[idx][col]=v; saveAllData(false); } };
+            }
+            tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+    });
+}
+function gridAddRow() { 
+    const newRow = {}; 
+    const today = new Date().toISOString().split('T')[0];
+    COLUMNS.forEach(c => {
+        if(c === "중요해요") newRow[c] = 1;
+        else if(c === "입력일") newRow[c] = today;
+        else newRow[c] = "";
+    }); 
+    newRow.completed = false;
+    DB_DATA.unshift(newRow); 
+    saveAllData(true); 
+}
+function deleteRow(idx) { if(confirm("이 내용을 삭제할까요?")) { DB_DATA.splice(idx, 1); saveAllData(true); } }
+function sortGrid(col) {
+    sortState.dir = (sortState.col === col && sortState.dir === 'asc') ? 'desc' : 'asc';
+    sortState.col = col;
+    DB_DATA.sort((a, b) => {
+        if(col === "중요해요") { return sortState.dir === 'asc' ? (a[col]||0)-(b[col]||0) : (b[col]||0)-(a[col]||0); }
+        return sortState.dir === 'asc' ? (a[col]||"").localeCompare(b[col]||"") : (b[col]||"").localeCompare(a[col]||"");
+    });
+    renderGrid();
+}
+function initSearchSelect() {
+    const sel = document.getElementById('search-col'); if(!sel) return;
+    sel.innerHTML = '<option value="all">전체</option>';
+    COLUMNS.forEach((c,i) => { const opt = document.createElement('option'); opt.value = i+1; opt.text = c; sel.appendChild(opt); });
+}
+function gridSearch() {
+    const sCol = document.getElementById('search-col').value;
+    const sVal = document.getElementById('search-val').value.toLowerCase();
+    const rows = document.querySelectorAll('#grid-data tbody tr');
+    let cnt = 0;
+    rows.forEach(tr => {
+        let txt = "";
+        if(sCol === "all") txt = tr.innerText;
+        else {
+            const td = tr.children[parseInt(sCol)];
+            const sel = td.querySelector('select');
+            txt = sel ? sel.options[sel.selectedIndex].text : td.innerText;
+        }
+        if(txt.toLowerCase().includes(sVal)) { tr.style.display=''; cnt++; } else tr.style.display='none';
+    });
+    document.getElementById('cnt-data').innerText = `${cnt}/${rows.length}개`;
+}
+
+function importFromExcel() {
+    const input = document.createElement('input'); input.type = 'file'; input.accept = '.xlsx';
+    input.onchange = (e) => {
+        const f = e.target.files[0]; if(!f) return;
+        const r = new FileReader();
+        r.onload = (evt) => {
+            const wb = XLSX.read(evt.target.result, {type:'binary'});
+            const ws = wb.Sheets[wb.SheetNames[0]];
+            const json = XLSX.utils.sheet_to_json(ws);
+            const today = new Date().toISOString().split('T')[0];
+            
+            json.forEach(row => {
+                const nr = {};
+                COLUMNS.forEach(col => {
+                    let v = row[col] || "";
+                    if(col === "중요해요") {
+                        if(typeof v === 'number') v = Math.min(Math.max(v,1),5);
+                        else if(typeof v === 'string' && v.includes('★')) v = Math.min(v.length,5);
+                        else v = 1;
+                    }
+                    if(col === "입력일" && !v) v = today;
+                    nr[col] = v;
+                });
+                nr.completed = false;
+                DB_DATA.push(nr);
+            });
+            saveAllData(true);
+            alert(`${json.length}개 내용을 불러왔어요!`);
+        };
+        r.readAsBinaryString(f);
+    };
+    input.click();
+}
+function exportToExcel() {
+    if(DB_DATA.length===0) return alert("저장할 내용이 없어요.");
+    const ws = XLSX.utils.json_to_sheet(DB_DATA.map(({id,...r})=>r));
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "공부내용");
+    XLSX.writeFile(wb, "나의공부노트.xlsx");
+}
+
+/* --- [수정] Print & Inputs Logic --- */
+function initInputFields(type) {
+    const container = document.getElementById(`${type}-inputs-container`);
+    container.innerHTML = "";
+    
+    const dataListId = `${type}-topic-options`;
+    
+    for(let i=0; i<8; i++) {
+        const div = document.createElement('div');
+        div.className = "sticker-input-group";
+        div.innerHTML = `<label>${i+1}</label><input type="text" id="${type}-in-${i}" placeholder="단원명 선택" list="${dataListId}" onkeydown="if(event.key==='Enter') ${type==='card'?'renderCards()':'renderBooklet()'}">`;
+        container.appendChild(div);
+    }
+    
+    if(!document.getElementById(dataListId)) {
+        const dl = document.createElement('datalist'); 
+        dl.id = dataListId; 
+        document.body.appendChild(dl);
+    }
+    
+    updateTopicDatalist(type);
+}
+
+function updateTopicDatalist(type) {
+    const dl = document.getElementById(`${type}-topic-options`); if(!dl) return;
+    dl.innerHTML = "";
+    const source = filteredData[type] && filteredData[type].length > 0 ? filteredData[type] : DB_DATA;
+    [...new Set(source.map(d=>d["단원명"]))].forEach(t => { 
+        if(t) { const op = document.createElement('option'); op.value = t; dl.appendChild(op); } 
+    });
+}
+
+function clearInputs(type) {
+    for(let i=0; i<8; i++) document.getElementById(`${type}-in-${i}`).value = "";
+    type === 'card' ? renderCards() : renderBooklet();
+}
+
+function fillRandom(type) {
+    const source = filteredData[type].length > 0 ? filteredData[type] : DB_DATA;
+    if(source.length === 0) return alert("데이터가 없어요!");
+
+    const valid = source.filter(d=>d["단원명"] && d["단원명"].trim()!=="");
+    if(valid.length === 0) return alert("선택된 날짜에 유효한 데이터가 없어요.");
+
+    const shuffled = [...valid].sort(()=>0.5-Math.random());
+    for(let i=0; i<8; i++) {
+        document.getElementById(`${type}-in-${i}`).value = (i<shuffled.length) ? shuffled[i]["단원명"] : "";
+    }
+    type === 'card' ? renderCards() : renderBooklet();
+}
+
+function fetchDataByDate(type) {
+    const pickerId = type === 'card' ? 'date-pick-card' : 'date-pick-book';
+    const statusId = type === 'card' ? 'status-card' : 'status-book';
+    const dateVal = document.getElementById(pickerId).value;
+    
+    if(!dateVal) {
+        filteredData[type] = [...DB_DATA];
+        updateTopicDatalist(type);
+        document.getElementById(statusId).style.display = 'none';
+        alert("전체 데이터 모드로 변경되었습니다. 🌍");
+        return;
+    }
+    
+    const targetData = DB_DATA.filter(d => d["입력일"] === dateVal && d["단원명"] && d["단원명"].trim()!=="");
+    if(targetData.length === 0) {
+        alert(`${dateVal}에 입력된 데이터가 없습니다. 😅`);
+        return;
+    }
+    
+    filteredData[type] = targetData;
+    updateTopicDatalist(type);
+    
+    const statusDiv = document.getElementById(statusId);
+    statusDiv.innerHTML = `✅ ${dateVal} 데이터 ${targetData.length}개를 가져왔어요.<br>아래에서 선택하거나 랜덤 버튼을 눌러보세요!`;
+    statusDiv.style.display = 'block';
+    
+    clearInputs(type);
+}
+
+function renderCards() {
+    const target = document.getElementById('sticker-grid-target');
+    const tmpl = document.getElementById('sticker-template');
+    target.innerHTML = "";
+    
+    for(let i=0; i<8; i++) {
+        const val = document.getElementById(`card-in-${i}`).value.trim();
+        const clone = tmpl.content.cloneNode(true);
+        const card = clone.querySelector('.sticker-card');
+        const item = DB_DATA.find(d => d["단원명"] === val);
+        
+        if(!val) {
+            card.classList.add('empty');
+            clone.querySelector('.card-domain').innerText = "";
+            clone.querySelector('.card-topic').innerText = "";
+            clone.querySelector('.card-body').innerText = "";
+            clone.querySelector('.card-footer').innerText = "";
+            clone.querySelector('.card-star').innerText = "";
+        }
+        else if(item) {
+            clone.querySelector('.card-domain').innerText = item["과목"]||"-";
+            clone.querySelector('.card-topic').innerText = item["단원명"]||"-";
+            clone.querySelector('.card-body').innerText = item["핵심내용"];
+            clone.querySelector('.card-footer').innerText = item["메모/팁"]||"";
+            clone.querySelector('.card-star').innerText = getStarString(item["중요해요"]);
+        } else {
+            clone.querySelector('.card-topic').innerText = val;
+            clone.querySelector('.card-body').innerText = "❓";
+            clone.querySelector('.card-footer').innerText = "(내용 없음)";
+        }
+        target.appendChild(clone);
+    }
+}
+
+function renderBooklet() {
+    const target = document.getElementById('booklet-target');
+    target.innerHTML = "";
+    
+    const inputs = [];
+    for(let i=0; i<8; i++) {
+        const val = document.getElementById(`book-in-${i}`).value.trim();
+        const item = DB_DATA.find(d => d["단원명"] === val);
+        if (!val) {
+            inputs.push({ "단원명": "", "핵심내용": "", "메모/팁": "", "중요해요": 0, "과목": "" });
+        } else {
+            inputs.push(item ? item : { "단원명": val, "핵심내용": val||"", "메모/팁": "", "중요해요": 0, "과목": "" });
+        }
+    }
+    
+    const layout = [4, 3, 2, 1, 5, 6, 7, 0];
+    
+    for(let i=0; i<8; i++) {
+        const inputIdx = layout[i];
+        const data = inputs[inputIdx];
+        const pageNum = inputIdx + 1;
+        
+        const cell = document.createElement('div');
+        cell.className = (i < 4) ? "zine-cell inverted" : "zine-cell normal";
+        
+        const isDataEmpty = !data["단원명"] && !data["핵심내용"];
+        
+        let html = `
+            <div class="z-content">
+                <div class="z-header">
+                    <span>${isDataEmpty ? "" : (data["과목"]||"MEMO")}</span>
+                    <span style="color:#ffd43b; text-shadow:1px 1px 0 #999;">${isDataEmpty ? "" : getStarString(data["중요해요"])}</span>
+                </div>
+                <div class="z-topic">${data["단원명"]||""}</div>
+                <div class="z-body">${data["핵심내용"]||""}</div>
+                <div class="z-footer">${data["메모/팁"]||""}</div>
+            </div>
+            <div class="z-num">${pageNum}</div>
+        `;
+        
+        cell.innerHTML = html;
+        target.appendChild(cell);
+    }
+}
+
+function printMode(mode) {
+    document.body.classList.remove('print-mode-card', 'print-mode-booklet');
+    if(mode === 'card') {
+        document.body.classList.add('print-mode-card');
+    } else {
+        document.body.classList.add('print-mode-booklet');
+    }
+    setTimeout(() => window.print(), 300);
+}
+</script>
+</body>
+</html>

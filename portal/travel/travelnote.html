@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1, viewport-fit=cover">
+<title>Travel Note</title>
+<link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+<style>
+    :root {
+        --primary: #009688; /* Teal Color */
+        --primary-bg: #e0f2f1;
+        --bg: #f3f4f6;
+        --card-bg: #ffffff;
+        --text-main: #1f2937;
+        --text-sub: #6b7280;
+        --border: #e5e7eb;
+        --danger: #ef4444;
+        /* iOS Safe Area */
+        --sat: env(safe-area-inset-top);
+        --sab: env(safe-area-inset-bottom);
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; font-family: "Pretendard", sans-serif; }
+    
+    /* [iOS Fix] 100dvh for address bar handling */
+    body { 
+        margin: 0; background: var(--bg); color: var(--text-main); 
+        height: 100vh; height: 100dvh; 
+        display: flex; flex-direction: column; overflow: hidden; 
+    }
+
+    /* Header */
+    header { 
+        background: var(--card-bg); 
+        padding: var(--sat) 16px 0 16px; /* Top Safe Area */
+        height: calc(60px + var(--sat)); 
+        display: flex; justify-content: space-between; align-items: center; 
+        border-bottom: 1px solid var(--border); flex-shrink: 0; z-index: 50; 
+    }
+    .logo { font-weight: 800; font-size: 1.1rem; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
+    .logo i { color: var(--primary); font-size: 1.2rem; }
+    
+    .header-actions { display: flex; gap: 8px; }
+    
+    /* Unified Button Style */
+    .icon-btn { 
+        width: 36px; height: 36px; border-radius: 8px; 
+        background: white; border: 1px solid var(--border);
+        color: var(--text-main); font-size: 1rem; cursor: pointer; 
+        display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05); transition: 0.2s;
+    }
+    .icon-btn:active { background: #f3f4f6; transform: scale(0.95); }
+    
+    /* Nav */
+    .nav-container { background: var(--card-bg); padding: 12px 0 12px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .nav-scroll { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-right: 16px; -webkit-overflow-scrolling: touch; }
+    .nav-scroll::-webkit-scrollbar { display: none; }
+    
+    .nav-chip {
+        padding: 8px 16px; border-radius: 20px; font-size: 0.9rem; font-weight: 600;
+        background: #f3f4f6; color: #9ca3af; border: 1px solid transparent; 
+        cursor: pointer; white-space: nowrap; transition: 0.2s; flex-shrink: 0;
+    }
+    .nav-chip.active { background: var(--primary); color: white; box-shadow: 0 2px 4px rgba(0, 150, 136, 0.3); }
+
+    .summary-bar {
+        background: var(--primary-bg); padding: 8px 16px; font-size: 0.85rem; 
+        color: var(--primary); font-weight: 700; display: flex; justify-content: space-between;
+        border-bottom: 1px solid #b2dfdb; flex-shrink: 0;
+    }
+
+    /* Main Content */
+    main { 
+        flex: 1; overflow-y: auto; padding: 16px; 
+        padding-bottom: calc(90px + var(--sab)); /* Bottom Safe Area + FAB */
+        -webkit-overflow-scrolling: touch;
+    }
+    .grid-container { 
+        display: grid; 
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); 
+        gap: 16px; 
+    }
+
+    /* Card */
+    .card {
+        background: var(--card-bg); border-radius: 12px; overflow: hidden;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid var(--border);
+        display: flex; flex-direction: column; cursor: pointer; transition: transform 0.1s;
+    }
+    .card:active { transform: scale(0.98); }
+
+    .card-img-area {
+        width: 100%; height: 130px; background: #f9fafb; position: relative;
+        display: flex; align-items: center; justify-content: center; overflow: hidden;
+        border-bottom: 1px solid #f3f4f6;
+    }
+    .card-img { width: 100%; height: 100%; object-fit: cover; }
+    .no-img-icon { font-size: 2rem; color: #e5e7eb; }
+    
+    .card-badge {
+        position: absolute; top: 8px; left: 8px;
+        background: rgba(0,0,0,0.6); color: white; padding: 3px 8px; 
+        border-radius: 6px; font-size: 0.7rem; font-weight: 700; backdrop-filter: blur(2px);
+    }
+
+    .card-body { padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+    .card-title { font-size: 1rem; font-weight: 700; color: var(--text-main); line-height: 1.3; margin: 0; }
+    .card-preview { 
+        font-size: 0.8rem; color: var(--text-sub); line-height: 1.5; 
+        display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+        background: #f9fafb; padding: 8px; border-radius: 6px; margin-top: 4px;
+    }
+
+    /* FAB */
+    .fab {
+        position: fixed; bottom: calc(24px + var(--sab)); right: 24px; width: 56px; height: 56px;
+        background: var(--primary); color: white; border-radius: 50%; border: none;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.3); font-size: 24px; cursor: pointer;
+        display: flex; align-items: center; justify-content: center; z-index: 100;
+    }
+    .fab:active { transform: scale(0.95); }
+
+    /* Modal */
+    .modal-overlay { 
+        display: none; position: fixed; inset: 0; 
+        background: rgba(0,0,0,0.6); z-index: 200; 
+        backdrop-filter: blur(2px); align-items: flex-end; 
+    }
+    .modal-content {
+        background: white; width: 100%; max-width: 600px; margin: 0 auto;
+        border-radius: 20px 20px 0 0; 
+        padding: 24px 24px calc(24px + var(--sab)) 24px; /* Bottom Safe Area */
+        max-height: 90vh; overflow-y: auto;
+        animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        display: flex; flex-direction: column; gap: 16px;
+    }
+    @media (min-width: 769px) { 
+        .modal-overlay { align-items: center; } 
+        .modal-content { border-radius: 20px; max-height: 85vh; width: 500px; padding-bottom: 24px; } 
+    }
+    @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+    .modal-handle { width: 40px; height: 4px; background: #e5e7eb; border-radius: 10px; align-self: center; margin-bottom: 4px; }
+    .label { font-size: 0.75rem; font-weight: 700; color: var(--primary); margin-bottom: 4px; display: block; text-transform: uppercase; }
+    
+    .input-box { width: 100%; padding: 12px; background: #f8f9fa; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 1rem; color: var(--text-main); outline: none; font-family: inherit; }
+    .input-box:focus { background: white; border-color: var(--primary); }
+    textarea.input-box { min-height: 120px; line-height: 1.6; resize: none; }
+
+    .cat-scroll { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+    .cat-chip { padding: 8px 14px; border-radius: 16px; background: white; border: 1px solid #e5e7eb; color: #6b7280; font-weight: 600; font-size: 0.85rem; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
+    .cat-chip.selected { background: var(--primary); color: white; border-color: var(--primary); }
+
+    .upload-box {
+        border: 2px dashed #d1d5db; border-radius: 12px; height: 160px; background: #f9fafb;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        cursor: pointer; position: relative; overflow: hidden;
+    }
+    .upload-box img { position: absolute; width: 100%; height: 100%; object-fit: contain; background: #000; }
+    .btn-remove-img { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.6); color: white; border: none; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; display: none; align-items: center; justify-content: center; }
+
+    .modal-btns { display: flex; gap: 8px; margin-top: 10px; }
+    .btn { flex: 1; padding: 14px; border-radius: 10px; font-weight: 700; font-size: 1rem; border: none; cursor: pointer; }
+    .btn-save { background: var(--text-main); color: white; }
+    .btn-del { background: #fee2e2; color: #ef4444; }
+    
+    .img-modal { display: none; position: fixed; inset: 0; background: black; z-index: 300; align-items: center; justify-content: center; }
+    .img-full { max-width: 100%; max-height: 100%; object-fit: contain; }
+    .img-close { position: absolute; top: max(20px, var(--sat)); right: 20px; color: white; font-size: 2rem; cursor: pointer; z-index: 301; padding: 10px; }
+
+</style>
+</head>
+<body>
+
+<header>
+    <div class="logo"><i class="fas fa-passport"></i> Travel Note</div>
+    <div class="header-actions">
+        <button class="icon-btn" onclick="document.getElementById('json-input').click()">
+            <i class="fas fa-folder-open"></i>
+        </button>
+        <button class="icon-btn" onclick="exportJSON()">
+            <i class="fas fa-share-nodes"></i>
+        </button>
+        <button class="icon-btn" onclick="resetAll()">
+            <i class="fas fa-trash-alt" style="color:var(--danger)"></i>
+        </button>
+    </div>
+    <input type="file" id="json-input" accept=".json" hidden onchange="importJSON(this)">
+</header>
+
+<div class="nav-container">
+    <div class="nav-scroll" id="nav-list">
+        <button class="nav-chip active" onclick="filterBy('ALL')">전체</button>
+        <button class="nav-chip" onclick="filterBy('교통')"><i class="fas fa-bus"></i> 교통/티켓</button>
+        <button class="nav-chip" onclick="filterBy('숙소')"><i class="fas fa-bed"></i> 숙소</button>
+        <button class="nav-chip" onclick="filterBy('체크')"><i class="fas fa-check-square"></i> 체크리스트</button>
+        <button class="nav-chip" onclick="filterBy('장소')"><i class="fas fa-map-marker-alt"></i> 관광/맛집</button>
+        <button class="nav-chip" onclick="filterBy('기타')"><i class="fas fa-sticky-note"></i> 기타</button>
+    </div>
+</div>
+
+<div class="summary-bar">
+    <span id="filter-title">전체 보기</span>
+    <span id="count-text">0개의 기록</span>
+</div>
+
+<main>
+    <div class="grid-container" id="card-list"></div>
+</main>
+
+<button class="fab" onclick="openModal('new')"><i class="fas fa-pen"></i></button>
+
+<div class="modal-overlay" id="modal">
+    <div class="modal-content">
+        <div class="modal-handle"></div>
+        <h3 style="margin:0;">메모 작성</h3>
+        <input type="hidden" id="edit-id">
+
+        <div>
+            <span class="label">카테고리</span>
+            <div class="cat-scroll" id="cat-chips">
+                <button class="cat-chip selected" onclick="selectCat(this)" data-val="교통">교통/티켓</button>
+                <button class="cat-chip" onclick="selectCat(this)" data-val="숙소">숙소</button>
+                <button class="cat-chip" onclick="selectCat(this)" data-val="체크">체크리스트</button>
+                <button class="cat-chip" onclick="selectCat(this)" data-val="장소">관광/맛집</button>
+                <button class="cat-chip" onclick="selectCat(this)" data-val="기타">기타</button>
+            </div>
+        </div>
+
+        <div>
+            <span class="label">제목</span>
+            <input type="text" id="input-title" class="input-box" placeholder="예: 라피트 예약 내역">
+        </div>
+
+        <div>
+            <span class="label">내용</span>
+            <textarea id="input-content" class="input-box" placeholder="예약번호, 길찾기 정보 등..."></textarea>
+        </div>
+
+        <div>
+            <span class="label">사진 (E-티켓/지도)</span>
+            <div class="upload-box" onclick="document.getElementById('file-input').click()">
+                <img id="preview-img" style="display:none;">
+                <button class="btn-remove-img" id="btn-remove-img" onclick="removeImage(event)"><i class="fas fa-times"></i></button>
+                <i class="fas fa-camera"></i>
+                <span style="font-size:0.8rem; color:#9ca3af;">터치하여 사진 추가</span>
+            </div>
+            <input type="file" id="file-input" hidden accept="image/*" onchange="handleImage(this)">
+        </div>
+
+        <div class="modal-btns">
+            <button class="btn btn-del" id="btn-delete" style="display:none;" onclick="deleteRecord()">삭제</button>
+            <button class="btn" style="background:#f3f4f6; color:#6b7280; border:1px solid #e5e7eb;" onclick="closeModal()">취소</button>
+            <button class="btn btn-save" onclick="saveRecord()">저장</button>
+        </div>
+    </div>
+</div>
+
+<div class="img-modal" id="img-modal" onclick="this.style.display='none'">
+    <span class="img-close">&times;</span>
+    <img class="img-full" id="img-full">
+</div>
+
+<script>
+    let db;
+    let notes = [];
+    let currentFilter = 'ALL';
+    let tempImage = "";
+
+    const DB_NAME = "TravelNoteDB";
+    const STORE_NAME = "notes";
+
+    document.addEventListener('DOMContentLoaded', initDB);
+
+    function initDB() {
+        const req = indexedDB.open(DB_NAME, 1);
+        req.onupgradeneeded = (e) => e.target.result.createObjectStore(STORE_NAME, { keyPath: "id" });
+        req.onsuccess = (e) => { db = e.target.result; loadNotes(); };
+    }
+
+    function loadNotes() {
+        const tx = db.transaction(STORE_NAME, "readonly");
+        tx.objectStore(STORE_NAME).getAll().onsuccess = (e) => {
+            notes = e.target.result || [];
+            renderGrid();
+        };
+    }
+
+    function saveNote(note) {
+        const tx = db.transaction(STORE_NAME, "readwrite");
+        tx.objectStore(STORE_NAME).put(note);
+        tx.oncomplete = () => { loadNotes(); closeModal(); };
+    }
+
+    function deleteNoteData(id) {
+        const tx = db.transaction(STORE_NAME, "readwrite");
+        tx.objectStore(STORE_NAME).delete(id);
+        tx.oncomplete = () => { loadNotes(); closeModal(); };
+    }
+
+    // UI Logic
+    function filterBy(cat) {
+        currentFilter = cat;
+        document.querySelectorAll('.nav-chip').forEach(el => {
+            const txt = el.innerText;
+            if(cat === 'ALL' && txt === '전체') el.classList.add('active');
+            else if(cat !== 'ALL' && (txt.includes(cat) || (cat==='장소' && txt.includes('관광')))) el.classList.add('active');
+            else el.classList.remove('active');
+        });
+        renderGrid();
+    }
+
+    function renderGrid() {
+        const container = document.getElementById('card-list');
+        container.innerHTML = '';
+        
+        let filtered = notes.slice().reverse();
+        if (currentFilter !== 'ALL') {
+            filtered = filtered.filter(n => n.category === currentFilter);
+        }
+
+        let titleMap = {'ALL':'전체', '교통':'교통/티켓', '숙소':'숙소', '체크':'체크리스트', '장소':'관광/맛집', '기타':'기타'};
+        document.getElementById('filter-title').innerText = titleMap[currentFilter] || currentFilter;
+        document.getElementById('count-text').innerText = `${filtered.length}개의 기록`;
+
+        if (filtered.length === 0) {
+            container.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:60px 0; color:#cbd5e1;">
+                <i class="fas fa-pen-nib" style="font-size:3rem; margin-bottom:10px;"></i><br>기록이 없습니다.
+            </div>`;
+            return;
+        }
+
+        filtered.forEach(note => {
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.onclick = () => openModal('edit', note.id);
+
+            const imgSection = note.image 
+                ? `<img src="${note.image}" class="card-img" onclick="viewImage('${note.image}', event)">`
+                : `<i class="fas fa-image no-img-icon"></i>`;
+
+            let badgeName = titleMap[note.category] || note.category;
+
+            card.innerHTML = `
+                <div class="card-img-area">
+                    ${imgSection}
+                    <div class="card-badge">${badgeName}</div>
+                </div>
+                <div class="card-body">
+                    <div class="card-title">${note.title}</div>
+                    <div class="card-preview">${note.content || '내용 없음'}</div>
+                </div>
+            `;
+            container.appendChild(card);
+        });
+    }
+
+    // Modal
+    function openModal(mode, id) {
+        document.getElementById('modal').style.display = 'flex';
+        tempImage = "";
+        document.getElementById('preview-img').style.display = 'none';
+        document.getElementById('btn-remove-img').style.display = 'none';
+        
+        document.querySelectorAll('.cat-chip').forEach(c => c.classList.remove('selected'));
+
+        if (mode === 'edit') {
+            const note = notes.find(n => n.id === id);
+            document.getElementById('edit-id').value = note.id;
+            document.getElementById('input-title').value = note.title;
+            document.getElementById('input-content').value = note.content;
+            tempImage = note.image || "";
+            
+            const chip = [...document.querySelectorAll('.cat-chip')].find(c => c.dataset.val === note.category);
+            if(chip) chip.classList.add('selected');
+            else document.querySelector('.cat-chip').classList.add('selected');
+
+            document.getElementById('btn-delete').style.display = 'block';
+        } else {
+            document.getElementById('edit-id').value = '';
+            document.getElementById('input-title').value = '';
+            document.getElementById('input-content').value = '';
+            document.querySelector('.cat-chip[data-val="교통"]').classList.add('selected');
+            document.getElementById('btn-delete').style.display = 'none';
+        }
+
+        if (tempImage) {
+            const img = document.getElementById('preview-img');
+            img.src = tempImage; img.style.display = 'block';
+            document.getElementById('btn-remove-img').style.display = 'flex';
+        }
+    }
+
+    function closeModal() { document.getElementById('modal').style.display = 'none'; }
+    document.getElementById('modal').addEventListener('click', e => { if(e.target.id === 'modal') closeModal(); });
+
+    function selectCat(el) {
+        document.querySelectorAll('.cat-chip').forEach(c => c.classList.remove('selected'));
+        el.classList.add('selected');
+    }
+
+    // Image
+    function handleImage(input) {
+        const file = input.files[0];
+        if(!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            tempImage = e.target.result;
+            const img = document.getElementById('preview-img');
+            img.src = tempImage; img.style.display = 'block';
+            document.getElementById('btn-remove-img').style.display = 'flex';
+        };
+        reader.readAsDataURL(file);
+    }
+    function removeImage(e) {
+        e.stopPropagation();
+        tempImage = "";
+        document.getElementById('preview-img').style.display = 'none';
+        document.getElementById('btn-remove-img').style.display = 'none';
+        document.getElementById('file-input').value = "";
+    }
+    function viewImage(src, e) {
+        e.stopPropagation();
+        document.getElementById('img-full').src = src;
+        document.getElementById('img-modal').style.display = 'flex';
+    }
+
+    // CRUD
+    function saveRecord() {
+        const id = document.getElementById('edit-id').value;
+        const title = document.getElementById('input-title').value;
+        if(!title) return alert('제목을 입력하세요');
+
+        const cat = document.querySelector('.cat-chip.selected').dataset.val;
+        const content = document.getElementById('input-content').value;
+
+        const note = {
+            id: id ? Number(id) : Date.now(),
+            category: cat,
+            title: title,
+            content: content,
+            image: tempImage,
+            date: new Date().toISOString()
+        };
+        saveNote(note);
+    }
+
+    function deleteRecord() {
+        if(confirm('삭제하시겠습니까?')) {
+            deleteNoteData(Number(document.getElementById('edit-id').value));
+        }
+    }
+
+    function resetAll() {
+        if(confirm('모든 기록을 삭제하시겠습니까?')) {
+            const tx = db.transaction(STORE_NAME, "readwrite");
+            tx.objectStore(STORE_NAME).clear();
+            tx.oncomplete = () => loadNotes();
+        }
+    }
+
+    // Import/Export (Button Order: Import -> Export -> Reset)
+    function exportJSON() {
+        if(notes.length === 0) return alert('데이터 없음');
+        const blob = new Blob([JSON.stringify(notes, null, 2)], {type:'application/json'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `travel_note_${new Date().toISOString().slice(0,10)}.json`;
+        a.click();
+    }
+    function importJSON(input) {
+        const file = input.files[0];
+        if(!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const json = JSON.parse(e.target.result);
+                if(Array.isArray(json)) {
+                    if(confirm(`${json.length}건 복원하시겠습니까?`)) {
+                        const tx = db.transaction(STORE_NAME, "readwrite");
+                        const store = tx.objectStore(STORE_NAME);
+                        json.forEach(n => store.put(n));
+                        tx.oncomplete = () => { loadNotes(); alert('완료'); };
+                    }
+                } else alert('형식 오류');
+            } catch(e) { alert('파일 오류'); }
+            input.value = '';
+        };
+        reader.readAsText(file);
+    }
+</script>
+</body>
+</html>

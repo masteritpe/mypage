@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>탄소요금계산서</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        :root {
+            --main-orange: #ff4500;
+            --light-orange: #fff0eb;
+            --border-color: #ffbba6;
+        }
+
+        /* 모든 요소에 box-sizing 적용하여 삐져나감 방지 */
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Pretendard', 'Malgun Gothic', sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .calculator-container {
+            background-color: #ffffff;
+            background-image: url('data:image/svg+xml,%3Csvg width="100%25" height="100%25" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="noise"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.01" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23noise)" opacity="0.05"/%3E%3C/svg%3E');
+            width: 100%;
+            max-width: 600px;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+            position: relative;
+        }
+
+        h1 {
+            text-align: center;
+            color: var(--main-orange);
+            font-size: 3rem;
+            font-weight: 900;
+            margin-top: 0;
+            margin-bottom: 20px;
+            letter-spacing: -2px;
+        }
+
+        /* 인적사항 입력란 CSS */
+        .student-info {
+            display: flex;
+            width: 100%;
+            gap: 10px;
+            margin-bottom: 25px;
+        }
+
+        .info-group {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            gap: 5px;
+        }
+
+        .info-label {
+            font-size: 0.85rem;
+            color: #555;
+            font-weight: bold;
+            padding-left: 2px;
+        }
+
+        .info-input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 1.1rem;
+            text-align: center;
+            outline: none;
+            color: #333;
+        }
+
+        .info-input:focus {
+            border-color: var(--main-orange);
+            box-shadow: 0 0 5px rgba(255, 69, 0, 0.3);
+        }
+
+        .section-title {
+            color: var(--main-orange);
+            border: 2px solid var(--main-orange);
+            background-color: var(--light-orange);
+            text-align: center;
+            padding: 10px;
+            font-size: 1.2rem;
+            margin-top: 25px;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+
+        .item-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .item-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 5px;
+            border-bottom: 1px dashed var(--border-color);
+        }
+
+        .item-name {
+            flex: 1;
+            font-weight: bold;
+            color: var(--main-orange);
+            font-size: 1.1rem;
+        }
+
+        .item-controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .price-badge {
+            color: var(--main-orange);
+            font-weight: bold;
+            font-size: 1.2rem;
+            min-width: 45px;
+            text-align: right;
+        }
+
+        input[type="number"] {
+            width: 60px;
+            padding: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            text-align: center;
+            font-size: 1rem;
+            color: #333;
+            outline: none;
+        }
+
+        input[type="number"]:focus {
+            border-color: var(--main-orange);
+            box-shadow: 0 0 5px rgba(255, 69, 0, 0.3);
+        }
+
+        .direct-amount-input {
+            width: 80px !important;
+        }
+
+        .line-total {
+            min-width: 45px;
+            text-align: right;
+            color: var(--main-orange);
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+
+        .total-section {
+            margin-top: 40px;
+            padding: 20px;
+            background-color: var(--main-orange);
+            color: white;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        .total-label {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .total-subtext {
+            font-size: 1rem;
+            font-weight: normal;
+            opacity: 0.9;
+            margin-top: 5px;
+        }
+
+        .total-amount {
+            font-size: 2.5rem;
+        }
+
+        /* PDF 다운로드 버튼 CSS */
+        .download-btn {
+            width: 100%;
+            padding: 15px;
+            margin-top: 20px;
+            background-color: #333;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .download-btn:hover {
+            background-color: #555;
+        }
+    </style>
+</head>
+<body>
+
+<div class="calculator-container" id="captureArea">
+    <h1>탄소요금계산서</h1>
+
+    <div class="student-info">
+        <div class="info-group">
+            <span class="info-label">반</span>
+            <input type="text" class="info-input" placeholder="반">
+        </div>
+        <div class="info-group">
+            <span class="info-label">번호</span>
+            <input type="text" class="info-input" placeholder="번호">
+        </div>
+        <div class="info-group">
+            <span class="info-label">이름</span>
+            <input type="text" class="info-input" placeholder="이름">
+        </div>
+    </div>
+
+    <div class="section-title">기본 제공 재료(분실시)</div>
+    <div class="item-list">
+        <div class="item-row">
+            <span class="item-name">바퀴 1개 또는 바퀴 축</span>
+            <div class="item-controls">
+                <span class="price-badge fixed-price" data-price="5">C5</span>
+                <input type="number" class="qty-input" min="0" placeholder="수량" value="0">
+                <span class="line-total">0 C</span>
+            </div>
+        </div>
+        <div class="item-row">
+            <span class="item-name">모터</span>
+            <div class="item-controls">
+                <span class="price-badge fixed-price" data-price="10">C10</span>
+                <input type="number" class="qty-input" min="0" placeholder="수량" value="0">
+                <span class="line-total">0 C</span>
+            </div>
+        </div>
+        <div class="item-row">
+            <span class="item-name">태양광셀</span>
+            <div class="item-controls">
+                <span class="price-badge fixed-price" data-price="10">C10</span>
+                <input type="number" class="qty-input" min="0" placeholder="수량" value="0">
+                <span class="line-total">0 C</span>
+            </div>
+        </div>
+        <div class="item-row">
+            <span class="item-name">큰 기어</span>
+            <div class="item-controls">
+                <span class="price-badge fixed-price" data-price="3">C3</span>
+                <input type="number" class="qty-input" min="0" placeholder="수량" value="0">
+                <span class="line-total">0 C</span>
+            </div>
+        </div>
+        <div class="item-row">
+            <span class="item-name">작은기어</span>
+            <div class="item-controls">
+                <span class="price-badge fixed-price" data-price="3">C3</span>
+                <input type="number" class="qty-input" min="0" placeholder="수량" value="0">
+                <span class="line-total">0 C</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="section-title">꾸밈용 재료</div>
+    <div class="item-list">
+        <div class="item-row">
+            <span class="item-name">우드락 1장</span>
+            <div class="item-controls">
+                <span class="price-badge fixed-price" data-price="5">C5</span>
+                <input type="number" class="qty-input" min="0" placeholder="수량" value="0">
+                <span class="line-total">0 C</span>
+            </div>
+        </div>
+        <div class="item-row">
+            <span class="item-name">클레이 작은 종이컵 반컵 분량</span>
+            <div class="item-controls">
+                <span class="price-badge fixed-price" data-price="3">C3</span>
+                <input type="number" class="qty-input" min="0" placeholder="수량" value="0">
+                <span class="line-total">0 C</span>
+            </div>
+        </div>
+        <div class="item-row">
+            <span class="item-name">빨대</span>
+            <div class="item-controls">
+                <span class="price-badge fixed-price" data-price="1">C1</span>
+                <input type="number" class="qty-input" min="0" placeholder="수량" value="0">
+                <span class="line-total">0 C</span>
+            </div>
+        </div>
+        <div class="item-row">
+            <span class="item-name">색종이</span>
+            <div class="item-controls">
+                <span class="price-badge fixed-price" data-price="3">C3</span>
+                <input type="number" class="qty-input" min="0" placeholder="수량" value="0">
+                <span class="line-total">0 C</span>
+            </div>
+        </div>
+        <div class="item-row">
+            <span class="item-name">색철사 10센티 당</span>
+            <div class="item-controls">
+                <span class="price-badge fixed-price" data-price="3">C3</span>
+                <input type="number" class="qty-input" min="0" placeholder="수량" value="0">
+                <span class="line-total">0 C</span>
+            </div>
+        </div>
+        <div class="item-row">
+            <span class="item-name">눈알스티커 2개</span>
+            <div class="item-controls">
+                <span class="price-badge fixed-price" data-price="1">C1</span>
+                <input type="number" class="qty-input" min="0" placeholder="수량" value="0">
+                <span class="line-total">0 C</span>
+            </div>
+        </div>
+        <div class="item-row">
+            <span class="item-name">골판지</span>
+            <div class="item-controls">
+                <span class="price-badge fixed-price" data-price="2">C2</span>
+                <input type="number" class="qty-input" min="0" placeholder="수량" value="0">
+                <span class="line-total">0 C</span>
+            </div>
+        </div>
+        <div class="item-row">
+            <span class="item-name">도화지</span>
+            <div class="item-controls">
+                <span class="price-badge fixed-price" data-price="2">C2</span>
+                <input type="number" class="qty-input" min="0" placeholder="수량" value="0">
+                <span class="line-total">0 C</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="section-title">페널티 및 기타</div>
+    <div class="item-list">
+        <div class="item-row">
+            <span class="item-name">재료 낭비</span>
+            <div class="item-controls">
+                <span class="price-badge fixed-price" data-price="10">C10</span>
+                <input type="number" class="qty-input" min="0" placeholder="횟수" value="0">
+                <span class="line-total">0 C</span>
+            </div>
+        </div>
+        <div class="item-row">
+            <span class="item-name">쓸만한 재료 투기</span>
+            <div class="item-controls">
+                <span class="price-badge fixed-price" data-price="10">C10</span>
+                <input type="number" class="qty-input" min="0" placeholder="횟수" value="0">
+                <span class="line-total">0 C</span>
+            </div>
+        </div>
+        <div class="item-row">
+            <span class="item-name">타인재료 사용</span>
+            <div class="item-controls">
+                <span class="price-badge fixed-price" data-price="20">C20</span>
+                <input type="number" class="qty-input" min="0" placeholder="횟수" value="0">
+                <span class="line-total">0 C</span>
+            </div>
+        </div>
+        <div class="item-row">
+            <span class="item-name">기타 비양심</span>
+            <div class="item-controls">
+                <span style="color: var(--main-orange); font-weight: bold;">C</span>
+                <input type="number" class="direct-amount-input" placeholder="금액" value="0" min="0">
+                <span class="line-total">0 C</span>
+            </div>
+        </div>
+        <div class="item-row">
+            <span class="item-name">이외 재료는 협상</span>
+            <div class="item-controls">
+                <span style="color: var(--main-orange); font-weight: bold;">C</span>
+                <input type="number" class="direct-amount-input" placeholder="금액" value="0" min="0">
+                <span class="line-total">0 C</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="total-section">
+        <div class="total-label">
+            <span>총 요금 합계</span>
+            <span class="total-subtext">(기본소득 -10 적용)</span>
+        </div>
+        <div><span class="total-amount" id="totalAmount">0</span> C</div>
+    </div>
+    
+    <button type="button" id="downloadBtn" class="download-btn">PDF로 다운로드</button>
+</div>
+
+<script>
+    // 총 금액 계산 로직
+    function calculateTotal() {
+        let grandTotal = 0;
+        const rows = document.querySelectorAll('.item-row');
+        
+        rows.forEach(row => {
+            let lineTotal = 0;
+            
+            const qtyInput = row.querySelector('.qty-input');
+            const fixedPriceEl = row.querySelector('.fixed-price');
+            const directAmountInput = row.querySelector('.direct-amount-input');
+            
+            // 1. 단가 * 수량 항목 계산
+            if (qtyInput && fixedPriceEl) {
+                const qty = parseInt(qtyInput.value) || 0;
+                const price = parseInt(fixedPriceEl.dataset.price) || 0;
+                lineTotal = price * qty;
+            } 
+            // 2. 직접 적용 금액 항목 계산 (기타 비양심, 이외 재료는 협상)
+            else if (directAmountInput) {
+                lineTotal = parseInt(directAmountInput.value) || 0;
+            }
+            
+            // 우측에 항목별 합계 금액 표시 업데이트 (C 추가)
+            const lineTotalDisplay = row.querySelector('.line-total');
+            if (lineTotalDisplay) {
+                lineTotalDisplay.innerText = lineTotal + ' C';
+            }
+            
+            grandTotal += lineTotal;
+        });
+        
+        // 기본소득 10 차감 적용, 단 0 미만은 0으로 표시 (마이너스 방지)
+        const finalAmount = Math.max(0, grandTotal - 10);
+        document.getElementById('totalAmount').innerText = finalAmount;
+    }
+
+    // 모든 입력 필드에 이벤트 리스너 추가
+    const allInputs = document.querySelectorAll('input[type="number"]');
+    allInputs.forEach(input => {
+        input.addEventListener('input', calculateTotal);
+        // 빈칸일 때 포커스 아웃시 0으로 자동 변경
+        input.addEventListener('blur', function() {
+            if(this.value === '') this.value = 0;
+            calculateTotal();
+        });
+        // 포커스 시 0이 들어있으면 쉽게 입력할 수 있게 지워줌
+        input.addEventListener('focus', function() {
+            if(this.value === '0') this.value = '';
+        });
+    });
+
+    // 페이지 로드시 초기 계산 실행
+    calculateTotal();
+
+    // PDF 다운로드 기능
+    document.getElementById('downloadBtn').addEventListener('click', function(e) {
+        e.preventDefault(); // 기본 이벤트 방지
+        const currentScrollY = window.scrollY; // 현재 스크롤 위치 저장
+
+        const captureArea = document.getElementById('captureArea');
+        const downloadBtn = this;
+
+        // display:none 대신 visibility:hidden을 사용해 높이 유지 (스크롤 튐 방지)
+        downloadBtn.style.visibility = 'hidden';
+
+        html2canvas(captureArea, {
+            scale: 2, // 고화질 캡처
+            useCORS: true,
+            backgroundColor: '#ffffff'
+        }).then(canvas => {
+            const imgData = canvas.toDataURL('image/png');
+            
+            // jsPDF 초기화 (A4 사이즈, 세로)
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = pdf.internal.pageSize.getHeight();
+            
+            const imgWidth = canvas.width;
+            const imgHeight = canvas.height;
+            
+            // A4 1장에 안전하게 맞추기 위한 여백 계산
+            const margin = 10; // 상하좌우 최소 10mm 여백
+            const availableWidth = pdfWidth - (margin * 2);
+            const availableHeight = pdfHeight - (margin * 2);
+            
+            // 가로 세로 중 덜 남는 쪽 비율을 선택해 1장 안에 반드시 들어가게 조정
+            const ratio = Math.min(availableWidth / imgWidth, availableHeight / imgHeight);
+            
+            const finalWidth = imgWidth * ratio;
+            const finalHeight = imgHeight * ratio;
+            
+            // 페이지 가로/세로 중앙 정렬
+            const marginX = (pdfWidth - finalWidth) / 2;
+            const marginY = margin;
+            
+            pdf.addImage(imgData, 'PNG', marginX, marginY, finalWidth, finalHeight);
+            
+            // 이름, 반, 번호 입력값 가져오기
+            const classInput = document.querySelectorAll('.info-input')[0].value.trim();
+            const numInput = document.querySelectorAll('.info-input')[1].value.trim();
+            const nameInput = document.querySelectorAll('.info-input')[2].value.trim();
+            
+            // 파일명 조합 (예: 탄소요금계산서_1반_2번_홍길동.pdf)
+            let fileNameParts = ['탄소요금계산서'];
+            if (classInput) fileNameParts.push(`${classInput}반`);
+            if (numInput) fileNameParts.push(`${numInput}번`);
+            fileNameParts.push(nameInput ? nameInput : '이름없음');
+            
+            const finalFileName = fileNameParts.join('_') + '.pdf';
+            pdf.save(finalFileName);
+            
+        }).finally(() => {
+            // 완료 후 버튼 원상복구 및 스크롤 위치 고정
+            downloadBtn.style.visibility = 'visible';
+            window.scrollTo(0, currentScrollY);
+        });
+    });
+</script>
+
+</body>
+</html>
