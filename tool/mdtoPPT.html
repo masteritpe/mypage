@@ -8,6 +8,7 @@
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <script src="https://unpkg.com/@phosphor-icons/web"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   
   <style>
     :root {
@@ -142,7 +143,6 @@
     .doc-item:hover { background: var(--bg-body); }
     .doc-item.active { background: #E5E7EB; font-weight: 600; }
     
-    /* 드래그 앤 드랍 스타일 */
     .doc-item.dragging {
       opacity: 0.5;
       background: #F3F4F6;
@@ -311,6 +311,17 @@
       transform: translateX(-50%) translateY(0);
       opacity: 1;
     }
+
+    /* PDF 출력 시 슬라이드 툴바 제외 및 슬라이드 연속 출력 설정 (페이지 분할 제거) */
+    .exporting-pdf .slide-toolbar { display: none !important; }
+    .exporting-pdf .slide-wrapper { 
+      border: none !important; 
+      box-shadow: none !important; 
+      margin-bottom: 2em !important; /* 슬라이드 사이에 빈 줄 간격 추가 */
+      padding-bottom: 2em !important; 
+      page-break-inside: avoid !important; /* 내용이 중간에 잘리는 것을 방지 */
+    }
+    .exporting-pdf #slides-container { gap: 0 !important; }
   </style>
 </head>
 <body>
@@ -323,10 +334,10 @@
           <h2>MD to PPT</h2>
         </div>
         <div class="sidebar-title-actions">
-          <button class="btn-export" onclick="importFromJSON()" title="JSON 문서 복원">
+          <button class="btn-export" onclick="importFromMD()" title="MD 문서 복원">
             <i class="ph ph-upload-simple"></i>
           </button>
-          <button class="btn-export" onclick="exportAllToJSON()" title="모든 문서 JSON 내보내기">
+          <button class="btn-export" onclick="exportAllToMD()" title="모든 문서 MD 백업">
             <i class="ph ph-download-simple"></i>
           </button>
         </div>
@@ -361,6 +372,9 @@
           <button class="btn btn-outline" onclick="addEmptySlide()">
             <i class="ph ph-plus"></i> 낱장 추가
           </button>
+          <button class="btn btn-outline" onclick="exportToPDF()">
+            <i class="ph ph-file-pdf"></i> PDF로 내보내기
+          </button>
         </div>
       </div>
       <div class="instructions">
@@ -383,7 +397,7 @@
 
   <div id="toast" class="toast"></div>
 
-  <input type="file" id="json-upload" accept=".json" style="display: none;" onchange="handleJSONUpload(event)">
+  <input type="file" id="md-upload" accept=".md" style="display: none;" onchange="handleMDUpload(event)">
 
   <script>
     const container = document.getElementById('slides-container');
@@ -429,7 +443,6 @@
           const docs = e.target.result;
           docListContainer.innerHTML = '';
           
-          // sortOrder가 있으면 sortOrder로, 없으면 updatedAt 역순으로 정렬
           docs.sort((a, b) => {
             if (a.sortOrder !== undefined && b.sortOrder !== undefined) {
               return a.sortOrder - b.sortOrder;
@@ -442,7 +455,7 @@
             const item = document.createElement('div');
             item.className = `doc-item ${currentDocId === doc.id ? 'active' : ''}`;
             item.dataset.id = doc.id;
-            item.draggable = true; // 드래그 가능하게 설정
+            item.draggable = true;
             item.onclick = () => loadDocument(doc.id);
             item.innerHTML = `
               <div class="doc-item-title">${escapeHtml(doc.title)}</div>
@@ -451,7 +464,6 @@
               </button>
             `;
             
-            // 드래그 이벤트 연결
             bindDragEvents(item);
             docListContainer.appendChild(item);
           });
@@ -460,7 +472,6 @@
       });
     }
 
-    // --- 드래그 앤 드롭 로직 시작 ---
     let draggedItem = null;
 
     function bindDragEvents(item) {
@@ -472,11 +483,8 @@
 
       item.addEventListener('dragend', () => {
         draggedItem.classList.remove('dragging');
-        // 모든 아이템에서 drag-over 클래스 제거
         document.querySelectorAll('.doc-item').forEach(i => i.classList.remove('drag-over'));
         draggedItem = null;
-        
-        // 순서 변경 후 IndexedDB에 반영
         saveNewOrder();
       });
 
@@ -494,7 +502,6 @@
         e.preventDefault();
         if (item === draggedItem) return;
         
-        // 드롭된 위치에 따라 요소를 재배치
         const allItems = [...docListContainer.querySelectorAll('.doc-item')];
         const draggedIndex = allItems.indexOf(draggedItem);
         const targetIndex = allItems.indexOf(item);
@@ -507,7 +514,6 @@
       });
     }
 
-    // 순서 변경 사항을 IndexedDB에 저장
     function saveNewOrder() {
       if (!db) return;
       const transaction = db.transaction(["documents"], "readwrite");
@@ -520,17 +526,12 @@
         request.onsuccess = (e) => {
           const doc = e.target.result;
           if (doc) {
-            doc.sortOrder = index; // 새로운 순서 인덱스 부여
+            doc.sortOrder = index;
             store.put(doc);
           }
         };
       });
-      
-      transaction.oncomplete = () => {
-        console.log("순서 저장 완료");
-      };
     }
-    // --- 드래그 앤 드롭 로직 끝 ---
 
     function createNewDocument() {
       currentDocId = 'temp_' + Date.now();
@@ -576,7 +577,6 @@
       }
       titleInput.classList.remove('error');
       
-      // 기존 순서값 유지를 위해 현재 문서 데이터를 먼저 가져옴
       const transaction = db.transaction(["documents"], "readwrite");
       const store = transaction.objectStore("documents");
       
@@ -595,7 +595,7 @@
           title: title, 
           slides: slides, 
           updatedAt: Date.now(),
-          sortOrder: existingDoc ? existingDoc.sortOrder : 9999 // 새 문서면 맨 뒤로
+          sortOrder: existingDoc ? existingDoc.sortOrder : 9999
         };
         
         const putRequest = store.put(docData);
@@ -618,7 +618,7 @@
       };
     }
     
-    function exportAllToJSON() {
+    function exportAllToMD() {
       if (!db) return;
       const transaction = db.transaction(["documents"], "readonly");
       const store = transaction.objectStore("documents");
@@ -630,43 +630,118 @@
           showToast("내보낼 문서가 없습니다.");
           return;
         }
-        const jsonString = JSON.stringify(docs, null, 2);
-        const blob = new Blob([jsonString], { type: "application/json" });
+
+        let mdContent = "";
+        docs.forEach(doc => {
+          mdContent += `# DOCUMENT: ${doc.title}\n\n`;
+          doc.slides.forEach((slideHtml, index) => {
+            mdContent += slideHtml.trim() + "\n";
+            if (index < doc.slides.length - 1) {
+              mdContent += "\n---\n\n";
+            }
+          });
+          mdContent += "\n\n";
+        });
+
+        const blob = new Blob([mdContent], { type: "text/markdown" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
         const dateStr = new Date().toISOString().slice(0, 10);
-        a.download = `MDtoPPT_Export_${dateStr}.json`;
+        a.download = `MDtoPPT_Backup_${dateStr}.md`;
         document.body.appendChild(a);
         a.click();
         setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
-        showToast("JSON 다운로드가 시작되었습니다.");
+        showToast("MD 백업 파일 다운로드가 시작되었습니다.");
       };
     }
 
-    function importFromJSON() { document.getElementById('json-upload').click(); }
+    function importFromMD() { document.getElementById('md-upload').click(); }
 
-    function handleJSONUpload(event) {
+    function handleMDUpload(event) {
       const file = event.target.files[0];
       if (!file) return;
       const reader = new FileReader();
       reader.onload = function(e) {
         try {
-          const importedData = JSON.parse(e.target.result);
-          if (!Array.isArray(importedData)) { showToast("잘못된 형식의 파일입니다."); return; }
+          const content = e.target.result;
+          const docChunks = content.split(/# DOCUMENT:\s*/).filter(c => c.trim().length > 0);
+          
+          if (docChunks.length === 0) { showToast("잘못된 형식의 MD 파일입니다."); return; }
+          
           if (!db) return;
           const transaction = db.transaction(["documents"], "readwrite");
           const store = transaction.objectStore("documents");
-          importedData.forEach(doc => { if (doc.id && doc.title) store.put(doc); });
+          
+          docChunks.forEach((chunk, idx) => {
+            const lines = chunk.split('\n');
+            const title = lines[0].trim();
+            const body = lines.slice(1).join('\n').trim();
+            
+            const slides = body.split(/\n---\n/).map(s => {
+              return marked.parse(s.trim());
+            });
+
+            const docId = 'doc_' + Date.now() + '_' + idx;
+            const docData = {
+              id: docId,
+              title: title,
+              slides: slides,
+              updatedAt: Date.now(),
+              sortOrder: idx
+            };
+            store.put(docData);
+          });
+
           transaction.oncomplete = () => {
-            showToast(`✅ 문서가 복원되었습니다.`);
+            showToast(`✅ ${docChunks.length}개의 문서가 복원되었습니다.`);
             loadDocumentList(document.getElementById('search-input').value);
-            if (currentDocId) loadDocument(currentDocId);
             event.target.value = '';
           };
-        } catch (error) { showToast("파일 읽기 오류"); }
+        } catch (error) { 
+          console.error(error);
+          showToast("파일 읽기 오류"); 
+        }
       };
       reader.readAsText(file);
+    }
+
+    /**
+     * 현재 슬라이드 목록을 PDF로 내보내기 (연속 출력 모드)
+     */
+    function exportToPDF() {
+      const element = document.getElementById('slides-container');
+      const isEmpty = document.getElementById('empty-state');
+      
+      if (isEmpty || container.children.length === 0) {
+        showToast("⚠️ 내보낼 슬라이드가 없습니다.");
+        return;
+      }
+
+      const title = titleInput.value.trim() || "presentation";
+      
+      // PDF 생성을 위해 UI 요소 숨기기 위한 클래스 추가
+      element.classList.add('exporting-pdf');
+
+      const opt = {
+        margin: 10,
+        filename: `${title}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
+      };
+
+      showToast("📄 PDF를 생성 중입니다...");
+
+      html2pdf().set(opt).from(element).save().then(() => {
+        // 완료 후 클래스 제거하여 UI 복원
+        element.classList.remove('exporting-pdf');
+        showToast("✅ PDF 다운로드가 완료되었습니다.");
+      }).catch(err => {
+        console.error(err);
+        element.classList.remove('exporting-pdf');
+        showToast("❌ PDF 생성 중 오류가 발생했습니다.");
+      });
     }
 
     function showToast(message) {
