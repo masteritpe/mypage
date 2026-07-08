@@ -60,11 +60,36 @@
     .sidebar-title {
       display: flex;
       align-items: center;
+      justify-content: space-between;
+    }
+    .sidebar-title-left {
+      display: flex;
+      align-items: center;
       gap: 10px;
     }
-    .sidebar-title i { font-size: 24px; color: var(--primary); }
-    .sidebar-title h2 { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
+    .sidebar-title-left i { font-size: 24px; color: var(--primary); }
+    .sidebar-title-left h2 { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
     
+    .sidebar-title-actions {
+      display: flex;
+      gap: 4px;
+    }
+
+    .btn-export {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 6px;
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+    .btn-export:hover { background: #E5E7EB; color: var(--primary); }
+    .btn-export i { font-size: 20px; }
+
     /* 검색창 영역 */
     .search-wrapper {
       padding: 0 20px 12px 20px;
@@ -107,12 +132,26 @@
       padding: 10px 12px;
       border-radius: var(--radius-md);
       cursor: pointer;
-      transition: all 0.2s;
+      transition: background 0.2s, transform 0.1s;
       font-size: 14px;
       color: var(--text-main);
+      user-select: none;
+      background: var(--bg-surface);
+      border: 1px solid transparent;
     }
     .doc-item:hover { background: var(--bg-body); }
     .doc-item.active { background: #E5E7EB; font-weight: 600; }
+    
+    /* 드래그 앤 드랍 스타일 */
+    .doc-item.dragging {
+      opacity: 0.5;
+      background: #F3F4F6;
+      border: 1px dashed var(--text-muted);
+    }
+    .doc-item.drag-over {
+      border-top: 2px solid var(--primary);
+    }
+
     .doc-item-title {
       flex: 1;
       white-space: nowrap;
@@ -279,8 +318,18 @@
   <div class="sidebar">
     <div class="sidebar-header">
       <div class="sidebar-title">
-        <i class="ph ph-presentation-chart"></i>
-        <h2>MD to PPT</h2>
+        <div class="sidebar-title-left">
+          <i class="ph ph-presentation-chart"></i>
+          <h2>MD to PPT</h2>
+        </div>
+        <div class="sidebar-title-actions">
+          <button class="btn-export" onclick="importFromJSON()" title="JSON 문서 복원">
+            <i class="ph ph-upload-simple"></i>
+          </button>
+          <button class="btn-export" onclick="exportAllToJSON()" title="모든 문서 JSON 내보내기">
+            <i class="ph ph-download-simple"></i>
+          </button>
+        </div>
       </div>
       <button class="btn btn-primary" onclick="createNewDocument()" style="width:100%; justify-content:center;">
         <i class="ph ph-plus"></i> 새 문서 시작 (Ctrl+Alt+N)
@@ -289,7 +338,6 @@
     <div class="search-wrapper">
       <div class="search-box">
         <i class="ph ph-magnifying-glass"></i>
-        <!-- 검색창 맞춤법 검사 제거 (spellcheck="false") -->
         <input type="text" id="search-input" class="search-input" placeholder="문서 제목 검색..." spellcheck="false">
       </div>
     </div>
@@ -301,7 +349,6 @@
     <div class="dashboard-header">
       <div class="header-top">
         <div class="title-area">
-          <!-- 타이틀 입력창: value 제거, placeholder로 문구 표시, 맞춤법 검사 제거 (spellcheck="false") -->
           <input type="text" id="document-title" class="title-input" placeholder="제목 없는 슬라이드" spellcheck="false">
         </div>
         <div class="actions">
@@ -336,8 +383,11 @@
 
   <div id="toast" class="toast"></div>
 
+  <input type="file" id="json-upload" accept=".json" style="display: none;" onchange="handleJSONUpload(event)">
+
   <script>
     const container = document.getElementById('slides-container');
+    const docListContainer = document.getElementById('doc-list');
     const titleInput = document.getElementById('document-title');
     let slideCount = 0;
     let currentDocId = null;
@@ -377,15 +427,22 @@
 
         request.onsuccess = (e) => {
           const docs = e.target.result;
-          const listContainer = document.getElementById('doc-list');
-          listContainer.innerHTML = '';
-          docs.sort((a, b) => b.updatedAt - a.updatedAt);
+          docListContainer.innerHTML = '';
+          
+          // sortOrder가 있으면 sortOrder로, 없으면 updatedAt 역순으로 정렬
+          docs.sort((a, b) => {
+            if (a.sortOrder !== undefined && b.sortOrder !== undefined) {
+              return a.sortOrder - b.sortOrder;
+            }
+            return b.updatedAt - a.updatedAt;
+          });
 
           docs.forEach(doc => {
             if (searchQuery && !doc.title.toLowerCase().includes(searchQuery.toLowerCase())) return;
             const item = document.createElement('div');
             item.className = `doc-item ${currentDocId === doc.id ? 'active' : ''}`;
             item.dataset.id = doc.id;
+            item.draggable = true; // 드래그 가능하게 설정
             item.onclick = () => loadDocument(doc.id);
             item.innerHTML = `
               <div class="doc-item-title">${escapeHtml(doc.title)}</div>
@@ -393,17 +450,91 @@
                 <i class="ph ph-trash"></i>
               </button>
             `;
-            listContainer.appendChild(item);
+            
+            // 드래그 이벤트 연결
+            bindDragEvents(item);
+            docListContainer.appendChild(item);
           });
           resolve(docs.length > 0);
         };
       });
     }
 
+    // --- 드래그 앤 드롭 로직 시작 ---
+    let draggedItem = null;
+
+    function bindDragEvents(item) {
+      item.addEventListener('dragstart', (e) => {
+        draggedItem = item;
+        item.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+      });
+
+      item.addEventListener('dragend', () => {
+        draggedItem.classList.remove('dragging');
+        // 모든 아이템에서 drag-over 클래스 제거
+        document.querySelectorAll('.doc-item').forEach(i => i.classList.remove('drag-over'));
+        draggedItem = null;
+        
+        // 순서 변경 후 IndexedDB에 반영
+        saveNewOrder();
+      });
+
+      item.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        if (item === draggedItem) return;
+        item.classList.add('drag-over');
+      });
+
+      item.addEventListener('dragleave', () => {
+        item.classList.remove('drag-over');
+      });
+
+      item.addEventListener('drop', (e) => {
+        e.preventDefault();
+        if (item === draggedItem) return;
+        
+        // 드롭된 위치에 따라 요소를 재배치
+        const allItems = [...docListContainer.querySelectorAll('.doc-item')];
+        const draggedIndex = allItems.indexOf(draggedItem);
+        const targetIndex = allItems.indexOf(item);
+        
+        if (draggedIndex < targetIndex) {
+          item.after(draggedItem);
+        } else {
+          item.before(draggedItem);
+        }
+      });
+    }
+
+    // 순서 변경 사항을 IndexedDB에 저장
+    function saveNewOrder() {
+      if (!db) return;
+      const transaction = db.transaction(["documents"], "readwrite");
+      const store = transaction.objectStore("documents");
+      const allItems = [...docListContainer.querySelectorAll('.doc-item')];
+      
+      allItems.forEach((item, index) => {
+        const id = item.dataset.id;
+        const request = store.get(id);
+        request.onsuccess = (e) => {
+          const doc = e.target.result;
+          if (doc) {
+            doc.sortOrder = index; // 새로운 순서 인덱스 부여
+            store.put(doc);
+          }
+        };
+      });
+      
+      transaction.oncomplete = () => {
+        console.log("순서 저장 완료");
+      };
+    }
+    // --- 드래그 앤 드롭 로직 끝 ---
+
     function createNewDocument() {
       currentDocId = 'temp_' + Date.now();
       document.querySelectorAll('.doc-item').forEach(i => i.classList.remove('active'));
-      // 초기값을 텍스트로 채우지 않고 비워둠으로써 placeholder가 보이도록 수정
       titleInput.value = '';
       titleInput.classList.remove('error');
       clearAll();
@@ -437,7 +568,6 @@
     function saveCurrentDocument() {
       if (!db) return;
       const title = titleInput.value.trim();
-      // placeholder로 대체되었으므로, 실제 텍스트가 입력되었는지 확인하는 로직으로 변경
       if (!title) {
         titleInput.classList.add('error');
         titleInput.focus();
@@ -445,18 +575,34 @@
         return;
       }
       titleInput.classList.remove('error');
-      if (currentDocId && currentDocId.startsWith('temp_')) currentDocId = 'doc_' + Date.now();
-      const slides = [];
-      document.querySelectorAll('.slide-wrapper').forEach(wrapper => {
-        slides.push(wrapper.querySelector('.slide-content').innerHTML);
-      });
-      const docData = { id: currentDocId, title: title, slides: slides, updatedAt: Date.now() };
+      
+      // 기존 순서값 유지를 위해 현재 문서 데이터를 먼저 가져옴
       const transaction = db.transaction(["documents"], "readwrite");
       const store = transaction.objectStore("documents");
-      const request = store.put(docData);
-      request.onsuccess = () => {
-        showToast("✅ 저장되었습니다.");
-        loadDocumentList(document.getElementById('search-input').value);
+      
+      const getRequest = store.get(currentDocId);
+      getRequest.onsuccess = () => {
+        const existingDoc = getRequest.result;
+        if (currentDocId && currentDocId.startsWith('temp_')) currentDocId = 'doc_' + Date.now();
+        
+        const slides = [];
+        document.querySelectorAll('.slide-wrapper').forEach(wrapper => {
+          slides.push(wrapper.querySelector('.slide-content').innerHTML);
+        });
+
+        const docData = { 
+          id: currentDocId, 
+          title: title, 
+          slides: slides, 
+          updatedAt: Date.now(),
+          sortOrder: existingDoc ? existingDoc.sortOrder : 9999 // 새 문서면 맨 뒤로
+        };
+        
+        const putRequest = store.put(docData);
+        putRequest.onsuccess = () => {
+          showToast("✅ 저장되었습니다.");
+          loadDocumentList(document.getElementById('search-input').value);
+        };
       };
     }
 
@@ -471,13 +617,64 @@
         loadDocumentList(document.getElementById('search-input').value);
       };
     }
+    
+    function exportAllToJSON() {
+      if (!db) return;
+      const transaction = db.transaction(["documents"], "readonly");
+      const store = transaction.objectStore("documents");
+      const request = store.getAll();
+
+      request.onsuccess = (e) => {
+        const docs = e.target.result;
+        if (!docs || docs.length === 0) {
+          showToast("내보낼 문서가 없습니다.");
+          return;
+        }
+        const jsonString = JSON.stringify(docs, null, 2);
+        const blob = new Blob([jsonString], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        const dateStr = new Date().toISOString().slice(0, 10);
+        a.download = `MDtoPPT_Export_${dateStr}.json`;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+        showToast("JSON 다운로드가 시작되었습니다.");
+      };
+    }
+
+    function importFromJSON() { document.getElementById('json-upload').click(); }
+
+    function handleJSONUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const importedData = JSON.parse(e.target.result);
+          if (!Array.isArray(importedData)) { showToast("잘못된 형식의 파일입니다."); return; }
+          if (!db) return;
+          const transaction = db.transaction(["documents"], "readwrite");
+          const store = transaction.objectStore("documents");
+          importedData.forEach(doc => { if (doc.id && doc.title) store.put(doc); });
+          transaction.oncomplete = () => {
+            showToast(`✅ 문서가 복원되었습니다.`);
+            loadDocumentList(document.getElementById('search-input').value);
+            if (currentDocId) loadDocument(currentDocId);
+            event.target.value = '';
+          };
+        } catch (error) { showToast("파일 읽기 오류"); }
+      };
+      reader.readAsText(file);
+    }
 
     function showToast(message) {
       const toast = document.getElementById('toast');
       toast.textContent = message;
       toast.classList.add('show');
       if (toastTimeout) clearTimeout(toastTimeout);
-      toastTimeout = setTimeout(() => toast.classList.remove('show'), 1000);
+      toastTimeout = setTimeout(() => toast.classList.remove('show'), 2000);
     }
 
     window.addEventListener('keydown', (e) => {
@@ -498,9 +695,7 @@
       chunks.forEach(chunk => createSlide(chunk));
     });
 
-    function createSlide(markdownText = '') {
-      appendSlideStructure(markdownText ? marked.parse(markdownText) : '');
-    }
+    function createSlide(markdownText = '') { appendSlideStructure(markdownText ? marked.parse(markdownText) : ''); }
 
     function appendSlideStructure(htmlContent = '') {
       slideCount++;
@@ -534,11 +729,7 @@
       if (container.children.length === 0) clearAll();
     }
 
-    function clearAll() {
-      slideCount = 0;
-      container.innerHTML = '';
-      showEmptyStatePlaceHolder();
-    }
+    function clearAll() { slideCount = 0; container.innerHTML = ''; showEmptyStatePlaceHolder(); }
 
     function showEmptyStatePlaceHolder() {
       container.innerHTML = `
