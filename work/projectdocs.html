@@ -444,7 +444,7 @@ let currentLinks = [];
 let quillDesc, quillNote;
 
 const $ = s => document.querySelector(s);
-function toast(m) { const t = $('#toast'); t.textContent = m; t.style.opacity = '1'; setTimeout(() => t.style.opacity = '0', 1500); }
+function toast(m) { const t = $('#toast'); t.textContent = m; t.style.opacity = '1'; setTimeout(() => t.style.opacity = '0', 1000); }
 function openShortcutModal() { $('#shortcut-modal').style.display = 'flex'; }
 function closeShortcutModal() { $('#shortcut-modal').style.display = 'none'; }
 
@@ -475,7 +475,14 @@ function initEditors() {
     const quillOptions = {
         theme: 'snow',
         scrollingContainer: '.editor-scroll', // 스크롤 튐 현상 해결의 핵심
-        modules: { toolbar: false, imageResize: { displaySize: true } }
+        modules: { 
+            toolbar: false, 
+            imageResize: { displaySize: true },
+            // ✅ 핵심 버그 수정: Quill이 블록(목록, 단락 등) 사이를 계산해서 임의로 빈 줄을 생성하는 기능 완전 차단
+            clipboard: {
+                matchVisual: false
+            }
+        }
     };
     
     quillDesc = new Quill('#inp-desc', quillOptions);
@@ -488,6 +495,17 @@ function initEditors() {
     };
     quillDesc.clipboard.addMatcher('TABLE', tableMatcher);
     quillNote.clipboard.addMatcher('TABLE', tableMatcher);
+
+    // ✅ 에디터(설명/메모) 내부의 텍스트 링크 클릭 시 무조건 새창(_blank)으로 열기
+    const handleLinkClick = (e) => {
+        const targetLink = e.target.closest('a');
+        if (targetLink && targetLink.href) {
+            e.preventDefault(); // 기본 커서 이동 동작을 막고
+            window.open(targetLink.href, '_blank'); // 새 탭 호출
+        }
+    };
+    quillDesc.root.addEventListener('click', handleLinkClick);
+    quillNote.root.addEventListener('click', handleLinkClick);
 }
 
 // --- Core DB Logic ---
@@ -507,11 +525,10 @@ const DOC_CORE = {
             const tx = this.db.transaction(this.STORE_NAME, 'readonly');
             tx.objectStore(this.STORE_NAME).getAll().onsuccess = (e) => {
                 this.state.items = e.target.result || [];
-                // ✅ 정렬 로직 수정 적용 (1. 카테고리 내림차순, 2. 문서 ID 내림차순)
+                // ✅ 정렬 로직 (1. 카테고리 내림차순, 2. 문서 ID 내림차순)
                 this.state.items.sort((a, b) => {
                     const catDiff = (b.category || '').localeCompare(a.category || '');
                     if (catDiff !== 0) return catDiff;
-                    // 문서 ID도 내림차순(b -> a 비교)
                     return (b.doc_id || '').localeCompare(a.doc_id || '');
                 });
                 resolve(this.state.items);
@@ -907,6 +924,13 @@ function loadItem(i) {
     quillDesc.clipboard.dangerouslyPasteHTML(i.description || '');
     quillNote.clipboard.dangerouslyPasteHTML(i.note || '');
     
+    // ✅ 불러오기 시 포커스 블러 처리 (자동 스크롤 이동 방지)
+    quillDesc.blur();
+    quillNote.blur();
+    
+    // ✅ 데이터 바인딩 직후 스크롤 맨 위로 고정
+    setTimeout(() => { document.querySelector('.editor-scroll').scrollTop = 0; }, 0);
+    
     $('#inp-check').checked = !!i.checked;
     currentFiles = i.attachments || []; renderAttachGrid();
     
@@ -923,13 +947,19 @@ async function saveCurrent() {
     
     const cleanLinks = currentLinks.filter(l => l.url && l.url.trim() !== '');
 
+    let finalDescHtml = quillDesc.root.innerHTML;
+    if (finalDescHtml === '<p><br></p>') finalDescHtml = '';
+    
+    let finalNoteHtml = quillNote.root.innerHTML;
+    if (finalNoteHtml === '<p><br></p>') finalNoteHtml = '';
+
     const item = {
         uid: DOC_CORE.state.selectedId || Date.now().toString(36),
         project_name: $('#inp-project').value, category: $('#inp-cat').value,
         doc_id: $('#inp-id').value, author: $('#inp-author').value, version: $('#inp-version').value,
         summary: $('#inp-summary').value, 
-        description: quillDesc.root.innerHTML,
-        note: quillNote.root.innerHTML, 
+        description: finalDescHtml,
+        note: finalNoteHtml, 
         checked: $('#inp-check').checked,
         attachments: currentFiles,
         graphLinks: cleanLinks
