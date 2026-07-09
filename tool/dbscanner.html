@@ -1,473 +1,403 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>IndexedDB Scanner</title>
-  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
-  <style>
-    :root {
-      /* Color Palette: Modern Slate & Soft Indigo */
-      --bg-color: #F8FAFC;
-      --card-bg: #FFFFFF;
-      --primary: #6366F1;
-      --primary-hover: #4F46E5;
-      --primary-light: #EEF2FF;
-      --text-title: #0F172A;
-      --text-main: #334155;
-      --text-muted: #64748B;
-      --border: #E2E8F0;
-      --border-hover: #CBD5E1;
-      --success-bg: #F0FDF4;
-      --success-text: #166534;
-      
-      --radius-sm: 8px;
-      --radius-md: 16px;
-      --radius-lg: 24px;
-    }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>로컬 DB & 파일 스캐너</title>
+    <style>
+        /* 기존 Excel Viewer의 Modern Light Theme Variables 유지 */
+        :root {
+            --bg-color: #f8fafc;
+            --surface-color: #ffffff;
+            --text-primary: #0f172a;
+            --text-secondary: #64748b;
+            --border-color: #e2e8f0;
+            --primary-color: #3b82f6;
+            --primary-hover: #2563eb;
+            --danger-color: #ef4444;
+            --danger-hover: #dc2626;
+            --table-header-bg: #f1f5f9;
+            --table-hover-bg: #f8fafc;
+            --edit-bg: #eff6ff;
+            --success-bg: #dcfce7;
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --radius-md: 8px;
+            --radius-lg: 12px;
+            --transition-fast: 0.15s ease-in-out;
+            --table-font-size: 13px; 
+        }
 
-    * { box-sizing: border-box; }
+        * { box-sizing: border-box; }
 
-    body {
-      font-family: 'Pretendard', system-ui, -apple-system, sans-serif;
-      background-color: var(--bg-color);
-      color: var(--text-main);
-      margin: 0;
-      padding: 40px 20px;
-      display: flex;
-      justify-content: center;
-      min-height: 100vh;
-      -webkit-font-smoothing: antialiased;
-    }
+        body {
+            margin: 0; background-color: var(--bg-color); color: var(--text-primary);
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            -webkit-font-smoothing: antialiased; display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+        }
 
-    .container {
-      background: var(--card-bg);
-      width: 100%;
-      max-width: 760px;
-      padding: 40px;
-      border-radius: var(--radius-lg);
-      box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.05), 0 8px 10px -6px rgba(15, 23, 42, 0.01);
-      height: fit-content;
-    }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
-    .header-group {
-      text-align: center;
-      margin-bottom: 32px;
-    }
+        /* --- Header --- */
+        header {
+            background-color: var(--surface-color); border-bottom: 1px solid var(--border-color);
+            padding: 16px 24px; display: flex; justify-content: space-between; align-items: center;
+            box-shadow: var(--shadow-sm); z-index: 10;
+        }
+        .header-left { display: flex; align-items: center; gap: 20px; }
+        header h1 { font-size: 20px; font-weight: 700; margin: 0; letter-spacing: -0.5px; display: flex; align-items: center; gap: 8px; }
 
-    h1 {
-      font-size: 26px;
-      font-weight: 700;
-      color: var(--text-title);
-      margin: 0 0 12px 0;
-      letter-spacing: -0.02em;
-    }
+        /* --- Buttons --- */
+        .btn {
+            appearance: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+            border: 1px solid var(--border-color); background-color: var(--surface-color); color: var(--text-primary);
+            padding: 8px 16px; border-radius: var(--radius-md); cursor: pointer; font-weight: 500; font-size: 14px;
+            transition: all var(--transition-fast); box-shadow: var(--shadow-sm); white-space: nowrap;
+        }
+        .btn:hover { border-color: #cbd5e1; background-color: #f8fafc; }
+        .btn.primary { background-color: var(--primary-color); color: white; border-color: var(--primary-color); }
+        .btn.primary:hover { background-color: var(--primary-hover); border-color: var(--primary-hover); }
 
-    p.desc {
-      color: var(--text-muted);
-      margin: 0;
-      font-size: 15px;
-      line-height: 1.6;
-      word-break: keep-all;
-    }
+        .btns-right { display: flex; gap: 12px; align-items: center; }
 
-    code {
-      font-family: 'JetBrains Mono', 'Fira Code', monospace;
-      background-color: #F1F5F9;
-      color: #DB2777;
-      padding: 2px 6px;
-      border-radius: 6px;
-      font-size: 0.9em;
-    }
+        /* --- Main Layout --- */
+        main { padding: 24px; flex: 1; display: flex; flex-direction: column; gap: 16px; overflow: hidden; }
 
-    /* Upload Box */
-    .upload-box {
-      position: relative;
-      border: 2px dashed var(--border);
-      border-radius: var(--radius-md);
-      padding: 50px 20px;
-      text-align: center;
-      background-color: var(--card-bg);
-      cursor: pointer;
-      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-      margin-bottom: 32px;
-    }
+        /* --- Panels --- */
+        .panel {
+            background-color: var(--surface-color); border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg); padding: 16px 20px; box-shadow: var(--shadow-sm); flex-shrink: 0;
+            display: flex; gap: 24px; align-items: center; flex-wrap: wrap;
+        }
 
-    .upload-box:hover, .upload-box.drag-active {
-      border-color: var(--primary);
-      background-color: var(--primary-light);
-    }
+        .control-group { display: flex; gap: 12px; align-items: center; flex: 1; min-width: 300px; }
+        .control-label { font-size: 14px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
+        
+        .input-text {
+            flex: 1; padding: 10px 14px; border: 1px solid var(--border-color); border-radius: var(--radius-md);
+            font-size: 14px; transition: border-color var(--transition-fast);
+        }
+        .input-text:focus { outline: none; border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+        
+        .divider { width: 1px; height: 32px; background-color: var(--border-color); }
 
-    .upload-icon {
-      color: var(--primary);
-      margin-bottom: 16px;
-      transition: transform 0.2s;
-    }
+        /* --- Split View for Results --- */
+        .results-wrapper {
+            display: flex; gap: 16px; flex: 1; overflow: hidden;
+        }
 
-    .upload-box:hover .upload-icon {
-      transform: translateY(-4px);
-    }
+        .table-container {
+            flex: 1; border: 1px solid var(--border-color); border-radius: var(--radius-lg);
+            background-color: var(--surface-color); box-shadow: var(--shadow-sm); overflow: auto;
+            display: flex; flex-direction: column;
+        }
 
-    .upload-box label {
-      cursor: pointer;
-      font-size: 17px;
-      font-weight: 600;
-      color: var(--primary);
-      display: block;
-      margin-bottom: 8px;
-    }
+        .table-header-title {
+            padding: 12px 16px; background-color: var(--table-header-bg); border-bottom: 1px solid var(--border-color);
+            font-weight: 600; font-size: 14px; position: sticky; top: 0; z-index: 5;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .badge { background-color: #e0f2fe; color: #0369a1; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
 
-    .upload-box .hint {
-      color: var(--text-muted);
-      font-size: 14px;
-      margin: 0;
-    }
+        table { border-collapse: collapse; width: 100%; text-align: left; }
+        th { background-color: var(--table-header-bg); border-bottom: 1px solid var(--border-color); padding: 10px 16px; font-size: 13px; font-weight: 600; color: var(--text-secondary); position: sticky; top: 45px; z-index: 2; }
+        td { border-bottom: 1px solid var(--border-color); padding: 12px 16px; font-size: var(--table-font-size); color: var(--text-primary); word-break: break-all; }
+        tr:hover td { background-color: var(--table-hover-bg); }
 
-    input[type="file"] {
-      display: none;
-    }
+        .empty-state { padding: 60px 20px; text-align: center; color: var(--text-secondary); display: flex; flex-direction: column; align-items: center; gap: 12px; line-height: 1.6; }
+        .empty-state svg { width: 48px; height: 48px; color: #cbd5e1; }
 
-    /* Results */
-    .result-section {
-      border-top: 1px solid var(--border);
-      padding-top: 28px;
-    }
-
-    .stats {
-      display: flex;
-      align-items: center;
-      font-size: 14.5px;
-      color: var(--text-muted);
-      margin-bottom: 20px;
-      font-weight: 500;
-    }
-
-    .stats .highlight {
-      color: var(--primary);
-      font-weight: 600;
-      margin: 0 4px;
-    }
-
-    .result-list {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .result-item {
-      background: var(--card-bg);
-      border: 1px solid var(--border);
-      padding: 18px 20px;
-      border-radius: var(--radius-sm);
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      transition: box-shadow 0.2s, border-color 0.2s;
-      animation: fadeIn 0.4s ease-out forwards;
-    }
-
-    .result-item:hover {
-      border-color: var(--border-hover);
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-    }
-
-    .file-header {
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
-    }
-
-    .file-icon {
-      color: #94A3B8;
-      flex-shrink: 0;
-      margin-top: 2px;
-    }
-
-    .file-name {
-      font-weight: 600;
-      font-size: 15px;
-      color: var(--text-title);
-      word-break: break-all;
-      line-height: 1.4;
-    }
-
-    .badges-container {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      padding-left: 30px;
-    }
-
-    /* Badge & Copy Action */
-    .db-badge {
-      display: inline-flex;
-      align-items: center;
-      background: var(--primary-light);
-      color: var(--primary-hover);
-      padding: 6px 12px;
-      border-radius: 9999px;
-      font-weight: 600;
-      font-size: 13px;
-      letter-spacing: 0.01em;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      user-select: none;
-    }
-
-    .db-badge:hover {
-      background: #E0E7FF;
-      transform: translateY(-1px);
-      box-shadow: 0 2px 4px rgba(99, 102, 241, 0.1);
-    }
-
-    .db-badge:active {
-      transform: translateY(0) scale(0.96);
-    }
-
-    .db-badge.copied {
-      background: var(--success-bg);
-      color: var(--success-text);
-      pointer-events: none;
-    }
-
-    .empty-result {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      color: var(--text-muted);
-      padding: 40px 20px;
-      background: var(--bg-color);
-      border-radius: var(--radius-md);
-      font-size: 15px;
-      gap: 12px;
-    }
-
-    /* Animations */
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    /* Spinner */
-    .loader {
-      display: none;
-      width: 24px;
-      height: 24px;
-      border: 3px solid #E2E8F0;
-      border-bottom-color: var(--primary);
-      border-radius: 50%;
-      animation: rotation 1s linear infinite;
-      margin: 0 auto 16px auto;
-    }
-
-    @keyframes rotation {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-  </style>
+        /* --- Toast --- */
+        #toast-area { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 9999; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+        .toast { background-color: var(--surface-color); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 12px 24px; box-shadow: var(--shadow-md); display: flex; align-items: center; gap: 12px; animation: slideUp 0.3s forwards; font-size: 14px; font-weight: 500; }
+        .toast.ok { border-bottom: 4px solid #10b981; } .toast.info { border-bottom: 4px solid #3b82f6; } .toast.bad { border-bottom: 4px solid #ef4444; }
+        @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    </style>
 </head>
 <body>
+    <header>
+        <div class="header-left">
+            <h1>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--primary-color)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                    <path d="M3 5V19C3 20.6569 7.02944 22 12 22C16.9706 22 21 20.6569 21 19V5"></path>
+                    <path d="M3 12C3 13.6569 7.02944 15 12 15C16.9706 15 21 13.6569 21 12"></path>
+                </svg>
+                DB 스캐너 & 파일 링크 분석
+            </h1>
+        </div>
+    </header>
 
-  <div class="container">
-    <div class="header-group">
-      <h1>IndexedDB 스캐너</h1>
-      <p class="desc">
-        폴더를 선택하거나 드래그하여 HTML, JS, TS 파일을 분석하세요.<br>
-        <code>indexedDB.open()</code> 함수로 생성된 데이터베이스 이름을 추출합니다.
-      </p>
-    </div>
+    <main>
+        <div class="panel">
+            <div class="control-group">
+                <span class="control-label">1. IndexedDB 검색</span>
+                <input type="text" id="db-search-input" class="input-text" placeholder="저장된 데이터 검색어 입력..." />
+                <button class="btn primary" id="btn-search-db">검색</button>
+            </div>
+            
+            <div class="divider"></div>
 
-    <div class="upload-box" id="dropZone">
-      <svg class="upload-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-        <polyline points="17 8 12 3 7 8"></polyline>
-        <line x1="12" y1="3" x2="12" y2="15"></line>
-      </svg>
-      <label for="folderInput">폴더를 선택하거나 여기로 드래그하세요</label>
-      <p class="hint">하위 폴더의 파일까지 모두 스캔합니다.</p>
-      <input type="file" id="folderInput" webkitdirectory directory multiple>
-    </div>
+            <div class="control-group">
+                <span class="control-label">2. HTML 파일 분석</span>
+                <label class="btn primary" style="cursor: pointer;">
+                    폴더 지정
+                    <input type="file" id="folder-input" webkitdirectory directory multiple style="display:none" />
+                </label>
+                <span id="folder-status" style="font-size: 13px; color: var(--text-secondary);">폴더를 선택해주세요.</span>
+            </div>
+        </div>
 
-    <div class="result-section" id="resultSection" style="display: none;">
-      <div id="stats" class="stats"></div>
-      <div id="resultContainer" class="result-list"></div>
-    </div>
-  </div>
+        <div class="results-wrapper">
+            <div class="table-container">
+                <div class="table-header-title">
+                    <span>IndexedDB 검색 결과</span>
+                    <span id="db-count" class="badge">0건</span>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 25%;">데이터베이스명</th>
+                            <th style="width: 25%;">오브젝트 스토어</th>
+                            <th style="width: 50%;">일치하는 데이터 (Snippet)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="db-results-body">
+                        <tr><td colspan="3"><div class="empty-state">검색어를 입력하고 검색을 진행해주세요.</div></td></tr>
+                    </tbody>
+                </table>
+            </div>
 
-  <script>
-    const dropZone = document.getElementById('dropZone');
-    const folderInput = document.getElementById('folderInput');
-    const resultSection = document.getElementById('resultSection');
-    const resultContainer = document.getElementById('resultContainer');
-    const stats = document.getElementById('stats');
+            <div class="table-container">
+                <div class="table-header-title">
+                    <span>DB와 연결된 HTML 파일 목록</span>
+                    <span id="html-count" class="badge">0건</span>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 40%;">파일명</th>
+                            <th style="width: 60%;">연결된(포함된) DB명</th>
+                        </tr>
+                    </thead>
+                    <tbody id="html-results-body">
+                        <tr><td colspan="2"><div class="empty-state">우측 상단 '폴더 지정'을 통해 로컬 폴더를 불러오세요.</div></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
 
-    dropZone.addEventListener('click', () => folderInput.click());
+    <div id="toast-area"></div>
 
-    folderInput.addEventListener('change', (event) => {
-      handleFiles(event.target.files);
-    });
-
-    dropZone.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      dropZone.classList.add('drag-active');
-    });
-
-    dropZone.addEventListener('dragleave', (e) => {
-      e.preventDefault();
-      dropZone.classList.remove('drag-active');
-    });
-
-    dropZone.addEventListener('drop', (e) => {
-      e.preventDefault();
-      dropZone.classList.remove('drag-active');
-      
-      const files = e.dataTransfer.files;
-      if (files && files.length > 0) {
-        handleFiles(files);
-      }
-    });
-
-    async function handleFiles(files) {
-      if (!files || files.length === 0) return;
-
-      resultSection.style.display = 'block';
-      resultContainer.innerHTML = '';
-      stats.innerHTML = `<div class="loader" style="display:block;"></div>스캔 중입니다...`;
-
-      let scannedCount = 0;
-      let foundCount = 0;
-
-      setTimeout(async () => {
-        for (const file of files) {
-          if (file.name.match(/\.(html|js|ts)$/i)) {
-            scannedCount++;
-            try {
-              const text = await file.text();
-              const dbNames = extractDBNames(text);
-              
-              if (dbNames.length > 0) {
-                foundCount++;
-                appendResultItem(file, dbNames);
-              }
-            } catch (e) {
-              console.error(`파일을 읽는 중 오류 발생: ${file.name}`, e);
-            }
-          }
+    <script>
+        // --- 공통 UI 헬퍼 ---
+        function toast(msg, type = "info") {
+            const area = document.getElementById("toast-area");
+            const el = document.createElement("div"); el.className = "toast " + type;
+            const icon = type === "ok" ? "✔️" : type === "bad" ? "❌" : "ℹ️";
+            el.innerHTML = `<span>${icon}</span> <div>${msg}</div>`;
+            area.appendChild(el);
+            setTimeout(() => { 
+                el.style.opacity = '0'; el.style.transform = 'translateY(10px)'; 
+                setTimeout(() => el.remove(), 300); 
+            }, 2500);
         }
 
-        renderStats(scannedCount, foundCount);
-      }, 100);
-    }
+        // 보안상 HTML 태그 텍스트화
+        const escapeHtml = (unsafe) => (unsafe || "").toString()
+            .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 
-    function appendResultItem(file, dbNames) {
-      const resultItem = document.createElement('div');
-      resultItem.className = 'result-item';
-      
-      const filePath = file.webkitRelativePath || file.name;
-      
-      const fileHeader = document.createElement('div');
-      fileHeader.className = 'file-header';
-      fileHeader.innerHTML = `
-        <svg class="file-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
-          <polyline points="13 2 13 9 20 9"></polyline>
-        </svg>
-        <div class="file-name">${filePath}</div>
-      `;
-      resultItem.appendChild(fileHeader);
-      
-      const badgesContainer = document.createElement('div');
-      badgesContainer.className = 'badges-container';
-      
-      dbNames.forEach(dbName => {
-        const badge = document.createElement('span');
-        badge.className = 'db-badge';
-        badge.innerText = dbName;
-        badge.title = "클릭하여 복사"; // 툴팁 힌트 추가
-        
-        // 클릭 시 복사 이벤트 추가
-        badge.addEventListener('click', async () => {
-          try {
-            await navigator.clipboard.writeText(dbName);
-            
-            // 시각적 피드백 (복사됨 텍스트 및 스타일 변경)
-            const originalText = badge.innerText;
-            badge.innerText = '복사 완료!';
-            badge.classList.add('copied');
-            
-            // 1.5초 후 원래 상태로 복구
-            setTimeout(() => {
-              badge.innerText = originalText;
-              badge.classList.remove('copied');
-            }, 1500);
-          } catch (err) {
-            console.error('복사 실패:', err);
-            alert('클립보드 복사에 실패했습니다.');
-          }
+        // 브라우저 내의 모든 DB 목록 가져오기 (최신 브라우저 지원)
+        async function getAllDatabases() {
+            if (!indexedDB.databases) {
+                toast("현재 브라우저는 전체 DB 스캔 API(indexedDB.databases)를 지원하지 않습니다.", "bad");
+                return [];
+            }
+            return await indexedDB.databases();
+        }
+
+        // 특정 DB에서 검색어 찾기
+        function searchInDatabase(dbInfo, keyword) {
+            return new Promise((resolve) => {
+                const request = indexedDB.open(dbInfo.name, dbInfo.version);
+                const results = [];
+
+                request.onsuccess = (e) => {
+                    const db = e.target.result;
+                    const storeNames = Array.from(db.objectStoreNames);
+                    let storesProcessed = 0;
+
+                    if (storeNames.length === 0) {
+                        db.close();
+                        return resolve(results);
+                    }
+
+                    storeNames.forEach(storeName => {
+                        let tx;
+                        try { tx = db.transaction(storeName, 'readonly'); } 
+                        catch (err) { storesProcessed++; checkDone(); return; }
+
+                        const store = tx.objectStore(storeName);
+                        const cursorReq = store.openCursor();
+
+                        cursorReq.onsuccess = (event) => {
+                            const cursor = event.target.result;
+                            if (cursor) {
+                                const dataStr = JSON.stringify(cursor.value);
+                                if (dataStr.toLowerCase().includes(keyword.toLowerCase())) {
+                                    // 매칭된 부분의 일부만 잘라서 보여주기
+                                    const matchIndex = dataStr.toLowerCase().indexOf(keyword.toLowerCase());
+                                    const start = Math.max(0, matchIndex - 30);
+                                    const end = Math.min(dataStr.length, matchIndex + keyword.length + 30);
+                                    let snippet = dataStr.substring(start, end);
+                                    if (start > 0) snippet = "..." + snippet;
+                                    if (end < dataStr.length) snippet = snippet + "...";
+
+                                    results.push({
+                                        dbName: dbInfo.name,
+                                        storeName: storeName,
+                                        snippet: snippet
+                                    });
+                                }
+                                cursor.continue();
+                            } else {
+                                storesProcessed++;
+                                checkDone();
+                            }
+                        };
+                        cursorReq.onerror = () => { storesProcessed++; checkDone(); };
+                    });
+
+                    function checkDone() {
+                        if (storesProcessed === storeNames.length) {
+                            db.close();
+                            resolve(results);
+                        }
+                    }
+                };
+
+                request.onerror = () => resolve(results); // 오류 발생시 스킵
+            });
+        }
+
+        // --- 1. DB 검색 이벤트 ---
+        let foundDBNames = new Set(); // HTML 파일 스캔에 활용할 전체 발견 DB 리스트
+
+        document.getElementById('btn-search-db').addEventListener('click', async () => {
+            const keyword = document.getElementById('db-search-input').value.trim();
+            if (!keyword) return toast("검색어를 입력해주세요.", "bad");
+
+            const tbody = document.getElementById('db-results-body');
+            tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;">스캔 중...</td></tr>`;
+
+            try {
+                const databases = await getAllDatabases();
+                let allResults = [];
+                foundDBNames.clear();
+
+                for (const dbInfo of databases) {
+                    foundDBNames.add(dbInfo.name); // 존재하는 DB 이름 전부 기억
+                    const dbResults = await searchInDatabase(dbInfo, keyword);
+                    allResults = allResults.concat(dbResults);
+                }
+
+                document.getElementById('db-count').textContent = `${allResults.length}건`;
+
+                if (allResults.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="3"><div class="empty-state">검색어와 일치하는 DB 내용이 없습니다.</div></td></tr>`;
+                    return;
+                }
+
+                tbody.innerHTML = allResults.map(item => `
+                    <tr>
+                        <td style="font-weight: 600; color: var(--primary-color);">${escapeHtml(item.dbName)}</td>
+                        <td>${escapeHtml(item.storeName)}</td>
+                        <td style="color: var(--text-secondary);">${escapeHtml(item.snippet).replace(new RegExp(keyword, 'gi'), match => `<b style="color:var(--text-primary); background:#fef08a;">${match}</b>`)}</td>
+                    </tr>
+                `).join('');
+                
+                toast("DB 스캔을 완료했습니다.", "ok");
+            } catch (err) {
+                console.error(err);
+                toast("DB 스캔 중 오류가 발생했습니다.", "bad");
+            }
         });
 
-        badgesContainer.appendChild(badge);
-      });
-      
-      resultItem.appendChild(badgesContainer);
-      resultContainer.appendChild(resultItem);
-    }
+        // 엔터키 검색
+        document.getElementById('db-search-input').addEventListener('keydown', (e) => {
+            if(e.key === 'Enter') document.getElementById('btn-search-db').click();
+        });
 
-    function renderStats(scannedCount, foundCount) {
-      if (scannedCount === 0) {
-        stats.innerHTML = `스캔 가능한 웹 파일(HTML, JS, TS)을 찾지 못했습니다.`;
-        resultContainer.innerHTML = `
-          <div class="empty-result">
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="10"></circle>
-              <line x1="12" y1="8" x2="12" y2="12"></line>
-              <line x1="12" y1="16" x2="12.01" y2="16"></line>
-            </svg>
-            스캔된 파일이 없습니다.
-          </div>`;
-        return;
-      }
 
-      stats.innerHTML = `총 <span class="highlight">${scannedCount}개</span>의 파일을 스캔하여 <span class="highlight">${foundCount}개</span>의 파일에서 DB를 발견했습니다.`;
+        // --- 2. HTML 파일 분석 이벤트 ---
+        document.getElementById('folder-input').addEventListener('change', async (e) => {
+            const files = Array.from(e.target.files).filter(f => f.name.endsWith('.html'));
+            document.getElementById('folder-status').textContent = `선택된 폴더 내 HTML 파일: ${files.length}개`;
 
-      if (foundCount === 0) {
-        resultContainer.innerHTML = `
-          <div class="empty-result">
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-              <polyline points="17 8 12 3 7 8"></polyline>
-              <line x1="12" y1="3" x2="12" y2="15"></line>
-            </svg>
-            IndexedDB 이름이 발견되지 않았습니다.
-          </div>`;
-      }
-    }
+            const tbody = document.getElementById('html-results-body');
+            
+            if (files.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="2"><div class="empty-state">해당 폴더에 HTML 파일이 없습니다.</div></td></tr>`;
+                document.getElementById('html-count').textContent = `0건`;
+                return;
+            }
 
-    function extractDBNames(text) {
-      const names = new Set();
-      
-      const directPattern = /indexedDB\.open\(\s*['"`]([^'"`]+)['"`]/g;
-      let match;
-      while ((match = directPattern.exec(text)) !== null) {
-        names.add(match[1]);
-      }
+            // DB 목록이 로드되지 않았다면 강제로 한번 로드
+            if (foundDBNames.size === 0) {
+                const databases = await getAllDatabases();
+                databases.forEach(db => foundDBNames.add(db.name));
+            }
 
-      const varPattern = /indexedDB\.open\(\s*([a-zA-Z0-9_]+)/g;
-      while ((match = varPattern.exec(text)) !== null) {
-        const varName = match[1];
-        
-        if (varName && !varName.match(/['"`]/)) {
-          const assignPattern = new RegExp(`(?:const|let|var)\\s+${varName}\\s*=\\s*['"\`]([^'"\`]+)['"\`]`, 'g');
-          let assignMatch;
-          while ((assignMatch = assignPattern.exec(text)) !== null) {
-            names.add(assignMatch[1]);
-          }
-        }
-      }
-      
-      return Array.from(names);
-    }
-  </script>
+            const dbNamesArray = Array.from(foundDBNames);
+            if(dbNamesArray.length === 0) {
+                toast("브라우저 내에 생성된 IndexedDB가 없어 분석할 대상이 없습니다.", "info");
+            }
+
+            tbody.innerHTML = `<tr><td colspan="2" style="text-align:center;">HTML 파일 스캔 중...</td></tr>`;
+            let resultHtmlList = [];
+
+            // 파일 텍스트 내용을 읽어서 매칭 검사
+            const readFile = (file) => new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.onerror = () => resolve("");
+                reader.readAsText(file);
+            });
+
+            for (const file of files) {
+                const content = await readFile(file);
+                const matchedDBs = dbNamesArray.filter(dbName => content.includes(dbName));
+                
+                if (matchedDBs.length > 0) {
+                    resultHtmlList.push({
+                        fileName: file.webkitRelativePath || file.name,
+                        linkedDBs: matchedDBs
+                    });
+                }
+            }
+
+            document.getElementById('html-count').textContent = `${resultHtmlList.length}건`;
+
+            if (resultHtmlList.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="2"><div class="empty-state">기존 DB와 연결된(이름이 포함된) HTML 파일이 없습니다.</div></td></tr>`;
+                toast("연결된 파일이 없습니다.", "info");
+                return;
+            }
+
+            tbody.innerHTML = resultHtmlList.map(item => `
+                <tr>
+                    <td style="font-weight: 500;">${escapeHtml(item.fileName)}</td>
+                    <td>${item.linkedDBs.map(db => `<span class="badge" style="background:#eff6ff; border: 1px solid var(--border-color);">${escapeHtml(db)}</span>`).join(' ')}</td>
+                </tr>
+            `).join('');
+
+            toast("HTML 파일 분석을 완료했습니다.", "ok");
+        });
+    </script>
 </body>
 </html>
