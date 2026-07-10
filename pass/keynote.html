@@ -1717,9 +1717,34 @@
       });
     };
 
+    // [수정사항] 페이지 진입 시 URL 파라미터(?uid=...) 감지 및 딥링크 로드 처리
     window.onload = async () => { 
       await initDB(); 
-      showInitModal();
+      
+      const urlParams = new URLSearchParams(window.location.search);
+      const uid = urlParams.get('uid');
+
+      if (uid) {
+        document.getElementById('initLoadModal').style.display = 'none';
+        currentSeasonFilter = 'all'; // 딥링크로 직접 접속 시 모든 데이터 조회
+        document.getElementById('seasonBadge').textContent = '전체';
+        isFirstLoad = false;
+        
+        await renderNoteList();
+        
+        const tx = db.transaction(['notes'], 'readonly');
+        const req = tx.objectStore('notes').get(uid);
+        req.onsuccess = () => {
+            if(req.result) {
+                loadNote(req.result);
+            } else {
+                alert('요청하신 딥링크(uid)에 해당하는 키노트가 없습니다.');
+                createNewNote();
+            }
+        };
+      } else {
+        showInitModal();
+      }
     };
 
     const generateId = () => '_' + Math.random().toString(36).substr(2, 9);
@@ -1836,6 +1861,10 @@
       transaction.oncomplete = () => {
         currentNoteId = note.id; 
         
+        // [수정사항] 저장 완료 시 URL 파라미터를 현재 아이디로 업데이트 (새로고침 없이 딥링크 복사 가능)
+        const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?uid=' + currentNoteId;
+        window.history.replaceState({path: newUrl}, '', newUrl);
+
         // [수정사항] 새 노트이거나 완료 상태 변경 시에만 전체를 다시 그리고 그 외에는 해당 항목만 업데이트 처리
         if (isNewNote || titleChangedComState) {
           renderNoteList(); 
@@ -1988,6 +2017,13 @@
       deactivateCurrentEditor();
 
       currentNoteId = note.id; 
+      
+      // [수정사항] 노트 불러올 때 URL 파라미터를 현재 아이디로 업데이트
+      if (currentNoteId) {
+        const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?uid=' + currentNoteId;
+        window.history.replaceState({path: newUrl}, '', newUrl);
+      }
+
       document.getElementById('docTitle').value = note.title;
       currentNoteData = note;
       if (!currentNoteData.items) currentNoteData.items = [];
@@ -2003,6 +2039,11 @@
       if (isCardMode) { toggleCardMode(); } 
       deactivateCurrentEditor();
       currentNoteId = null; 
+
+      // [수정사항] 새 문서 작성 시 URL 파라미터 초기화
+      const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+      window.history.replaceState({path: newUrl}, '', newUrl);
+
       document.getElementById('docTitle').value = ''; 
       currentNoteData = { id: null, title: '', items: [] };
       document.getElementById('itemCount').value = 19; 

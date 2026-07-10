@@ -1,6 +1,6 @@
 /* ===========================================================================
  * 3. 5R_ui.js : UI, Events, Init
- * (Update: 폰트 확대/축소를 전체에서 "선택한 텍스트만" 가능하도록 변경)
+ * (Update: 폰트 확대/축소를 전체에서 "선택한 텍스트만" 가능하도록 변경 / 딥링크 기능 추가)
  * =========================================================================== */
 {
   const S = window.SELTE;
@@ -938,7 +938,26 @@
         
         document.addEventListener('paste', handleGlobalPaste);
 
-        await refreshAll(); clearInputs();
+        await refreshAll(); 
+
+        // ✨ URL 파라미터(?uid=...) 감지 및 자동 로드 기능
+        const urlParams = new URLSearchParams(window.location.search);
+        const deepLinkUid = urlParams.get('uid');
+        let isLoadedViaDeepLink = false;
+
+        if (deepLinkUid) {
+            const targetItem = S.state.items.find(x => x.id === deepLinkUid);
+            if (targetItem) {
+                await loadItem(targetItem);
+                isLoadedViaDeepLink = true;
+            } else {
+                S.toast('링크된 항목을 찾을 수 없습니다.', 'warn');
+            }
+        }
+
+        if (!isLoadedViaDeepLink) {
+            clearInputs();
+        }
     } catch(e) { console.error(e); alert('Init Error: '+e.message); }
   })();
 }

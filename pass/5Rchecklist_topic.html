@@ -164,6 +164,14 @@
     #imageZoomModal img { max-width: 90%; max-height: 90%; border-radius: 8px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); }
     .toast { position: fixed; bottom: 30px; left: 50%; transform: translate(-50%, 20px); background: #1e293b; color: #fff; padding: 14px 28px; border-radius: 30px; opacity: 0; transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1); pointer-events: none; z-index: 11000; font-size: 15px; font-weight: 500; box-shadow: var(--shadow-md); }
     .toast.show { opacity: 1; transform: translate(-50%, 0); }
+    
+    /* Highlight loaded item */
+    @keyframes pulse-row { 
+        0% { background-color: #ecfdf5; } 
+        50% { background-color: #a7f3d0; } 
+        100% { background-color: #ecfdf5; } 
+    }
+    .loaded-row td { animation: pulse-row 2s ease; border-left: 4px solid var(--brand) !important; }
   </style>
 </head>
 <body>
@@ -410,7 +418,26 @@
       const diff = getSheetIdx(a) - getSheetIdx(b); return diff !== 0 ? diff : naturalSort(a, b);
     });
     
-    let checked = isInitialLoad ? new Set(['기출']) : new Set(Array.from($('sheetFilter').querySelectorAll('input:checked')).map(i=>i.value));
+    // URL에 uid가 있을 경우 해당 아이템의 sheet를 포함하도록 초기화 로직 수정
+    const urlParams = new URLSearchParams(window.location.search);
+    const uid = urlParams.get('uid');
+    
+    let checked;
+    if (isInitialLoad) {
+      if (uid) {
+         const targetItem = state.items.find(x => x.id === uid);
+         if (targetItem && targetItem.sheet) {
+             checked = new Set([targetItem.sheet]);
+         } else {
+             checked = new Set(['기출']);
+         }
+      } else {
+         checked = new Set(['기출']);
+      }
+    } else {
+      checked = new Set(Array.from($('sheetFilter').querySelectorAll('input:checked')).map(i=>i.value));
+    }
+    
     isInitialLoad = false;
     
     $('sheetFilter').innerHTML = sheets.map(s=>`<label class="chip-label"><input type="checkbox" value="${s}" ${checked.has(s)?'checked':''} style="display:none"><span>#${s}</span></label>`).join('');
@@ -489,7 +516,7 @@
     updateSelectedCount();
   };
 
-  function renderTable(){
+  function renderTable(highlightId = null){
     const maxPage = Math.ceil(state.filtered.length/state.pageSize) || 1;
     state.page = Math.min(state.page, maxPage);
     const list = state.filtered.slice((state.page-1)*state.pageSize, state.page*state.pageSize);
@@ -506,8 +533,9 @@
 
     $('dataBody').innerHTML = list.length ? list.map(item => {
       const isSelected = state.selectedIds.has(item.id);
+      const isHighlighted = item.id === highlightId;
       return `
-      <tr data-id="${item.id}" onclick="loadItem('${item.id}')" class="${isSelected ? 'selected-row' : ''}">
+      <tr data-id="${item.id}" onclick="loadItem('${item.id}')" class="${isSelected ? 'selected-row' : ''} ${isHighlighted ? 'loaded-row' : ''}">
         <td onclick="event.stopPropagation();" style="text-align:center;">
           <input type="checkbox" style="width:16px; height:16px; cursor:pointer;" onchange="toggleSelect('${item.id}', this.checked)" ${isSelected ? 'checked' : ''}>
         </td>
@@ -917,7 +945,45 @@
     t.classList.add('active'); $(t.dataset.target).classList.add('active');
   });
 
-  (async ()=>{ await openBankDB(); await refreshData(); await openSearchDB(); })();
+  // 딥링크 파라미터 감지 및 로드 추가
+  (async ()=>{ 
+    await openBankDB(); 
+    await refreshData(); 
+    await openSearchDB(); 
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    const uid = urlParams.get('uid');
+    
+    if (uid) {
+      const targetItem = state.items.find(x => x.id === uid);
+      if (targetItem) {
+        
+        // 검색 필터 강제 설정
+        $('filterRound').value = targetItem.round || '';
+        $('filterCategory').value = targetItem.category || '';
+        $('filterType').value = targetItem.type || '';
+        
+        // 필터 적용 후 테이블 렌더링 시 하이라이트 효과를 위한 id 전달
+        applyFilter(); 
+        renderTable(uid);
+        
+        // 에디터 패널에 해당 데이터 띄우기
+        await window.loadItem(uid);
+        
+        // 스크롤 이동
+        setTimeout(() => {
+          const row = document.querySelector(`tr[data-id="${uid}"]`);
+          if(row) {
+              row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 300);
+        
+        toast('🔗 링크를 통해 문항을 찾아 표시했습니다.');
+      } else {
+        toast('⚠️ 링크에 해당하는 문항을 찾을 수 없습니다.');
+      }
+    }
+  })();
 })();
 </script>
 </body>
