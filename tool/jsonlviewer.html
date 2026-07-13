@@ -69,6 +69,21 @@
   header h1 { font-size: 17px; font-weight: 700; color: var(--text); letter-spacing: -0.01em; }
   .file-info { font-size: 13px; color: var(--overlay); margin-left: auto; font-weight: 500; }
 
+  /* 갱신 버튼 스타일 추가 */
+  .btn-refresh {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--primary-text);
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .btn-refresh:hover { background: var(--primary-dim); border-color: var(--primary); }
+  .btn-refresh:disabled { opacity: 0.6; cursor: not-allowed; }
+
   .btn-reset {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -472,6 +487,7 @@
 <header>
   <h1>Claude JSONL Viewer</h1>
   <span class="file-info" id="fileInfo">파일을 불러오세요</span>
+  <button class="btn-refresh" id="btnRefresh" onclick="refreshFiles()" style="display:none">새로고침</button>
   <button class="btn-reset" id="btnReset" onclick="resetViewer()" style="display:none">초기화</button>
 </header>
 
@@ -510,17 +526,69 @@ let currentSession = null;
 let showRaw = false;
 let searchQuery = '';
 
+// 파일 갱신을 위한 저장소
+const fileHandlesMap = new Map(); // 최신 브라우저용 (수정된 파일 실시간 갱신 지원)
+const loadedFilesMap = new Map(); // 구형 브라우저 및 폴백용
+
 const dropZone = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
 
-dropZone.addEventListener('click', () => fileInput.click());
+// 1. 클릭하여 파일 열기 (File System API 지원 시 핸들 획득)
+dropZone.addEventListener('click', async () => {
+  if (window.showOpenFilePicker) {
+    try {
+      const handles = await window.showOpenFilePicker({
+        multiple: true,
+        types: [{ description: 'JSONL Files', accept: { 'application/jsonl': ['.jsonl'], 'text/plain': ['.jsonl'] } }]
+      });
+      for (const handle of handles) {
+        fileHandlesMap.set(handle.name, handle);
+        const file = await handle.getFile();
+        readFileData(file);
+      }
+      document.getElementById('btnRefresh').style.display = 'inline-block';
+    } catch (e) {
+      // 사용자가 파일 선택 창을 취소한 경우 무시
+    }
+  } else {
+    fileInput.click();
+  }
+});
+
 dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
 dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
-dropZone.addEventListener('drop', e => {
+
+// 2. 드래그 앤 드롭 (File System API 지원 시 핸들 획득 시도)
+dropZone.addEventListener('drop', async e => {
   e.preventDefault();
   dropZone.classList.remove('dragover');
+  
+  let usedHandles = false;
+  if (e.dataTransfer.items && window.FileSystemFileHandle) {
+    for (const item of e.dataTransfer.items) {
+      if (item.kind === 'file' && item.getAsFileSystemHandle) {
+        try {
+          const handle = await item.getAsFileSystemHandle();
+          if (handle && handle.kind === 'file') {
+            fileHandlesMap.set(handle.name, handle);
+            const file = await handle.getFile();
+            readFileData(file);
+            usedHandles = true;
+          }
+        } catch(err) { console.error("핸들 획득 실패:", err); }
+      }
+    }
+  }
+  
+  if (usedHandles) {
+    document.getElementById('btnRefresh').style.display = 'inline-block';
+    return;
+  }
+
+  // 핸들 획득 실패 또는 미지원 브라우저일 경우 기존 방식(폴백) 적용
   loadFiles(e.dataTransfer.files);
 });
+
 fileInput.addEventListener('change', e => loadFiles(e.target.files));
 document.getElementById('searchBox').addEventListener('input', e => {
   searchQuery = e.target.value.toLowerCase();
@@ -529,10 +597,66 @@ document.getElementById('searchBox').addEventListener('input', e => {
 
 function loadFiles(files) {
   Array.from(files).forEach(file => {
-    const reader = new FileReader();
-    reader.onload = e => parseJsonl(e.target.result, file.name);
-    reader.readAsText(file, 'utf-8');
+    loadedFilesMap.set(file.name, file); 
+    readFileData(file);
   });
+  document.getElementById('btnRefresh').style.display = 'inline-block';
+}
+
+function readFileData(file) {
+  const reader = new FileReader();
+  reader.onload = e => parseJsonl(e.target.result, file.name);
+  reader.readAsText(file, 'utf-8');
+}
+
+// 파일 새로고침 및 에러 방어 로직
+async function refreshFiles() {
+  if (fileHandlesMap.size === 0 && loadedFilesMap.size === 0) return;
+  
+  const btn = document.getElementById('btnRefresh');
+  const originalText = btn.textContent;
+  btn.textContent = '갱신 중...';
+  btn.disabled = true;
+
+  const errorFiles = [];
+
+  // A. FileSystem Handle이 있는 파일 갱신 (수정된 파일 읽기 성공 보장)
+  for (const [filename, handle] of fileHandlesMap.entries()) {
+    try {
+      const file = await handle.getFile();
+      await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => { parseJsonl(e.target.result, filename); resolve(); };
+        reader.onerror = () => reject(new Error('Read Error'));
+        reader.readAsText(file, 'utf-8');
+      });
+    } catch (e) {
+      errorFiles.push(filename);
+    }
+  }
+
+  // B. 일반 File 객체만 있는 경우 (수정되었을 시 에러 방어)
+  for (const [filename, file] of loadedFilesMap.entries()) {
+    if (fileHandlesMap.has(filename)) continue; 
+    try {
+      await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => { parseJsonl(e.target.result, filename); resolve(); };
+        reader.onerror = () => reject(new Error('NotReadableError'));
+        reader.readAsText(file, 'utf-8');
+      });
+    } catch (e) {
+      errorFiles.push(filename); // 에러 발생 시 무한 로딩 대신 기록
+    }
+  }
+
+  btn.textContent = originalText;
+  btn.disabled = false;
+
+  // 브라우저 권한 문제로 읽지 못한 파일이 있다면 안내
+  if (errorFiles.length > 0) {
+    alert(`다음 파일은 외부에서 수정되어 브라우저 보안 정책상 자동 갱신이 차단되었습니다.\n파일을 다시 화면에 드롭해주세요.\n\n${errorFiles.join('\n')}`);
+  }
 }
 
 function parseJsonl(text, filename) {
@@ -553,14 +677,23 @@ function parseJsonl(text, filename) {
   const timestamps = messages.map(m => m.timestamp).filter(Boolean).sort();
   const startTime = timestamps[0] ? new Date(timestamps[0]) : null;
   const session = { filename, sessionId, cwd, messages, firstText, startTime, raw: text };
+  
   const idx = sessions.findIndex(s => s.sessionId === sessionId);
   if (idx >= 0) sessions[idx] = session;
   else sessions.push(session);
+  
   sessions.sort((a, b) => (b.startTime || 0) - (a.startTime || 0));
   renderSidebar();
   document.getElementById('fileInfo').textContent = `${sessions.length}개 세션 로드됨`;
   document.getElementById('btnReset').style.display = 'inline-block';
-  if (sessions.length === 1 || currentSession?.sessionId === sessionId) selectSession(session);
+  
+  // 갱신 시 기존 탭(RAW/MD) 상태를 잃지 않고 화면만 다시 그리기 위함
+  if (currentSession?.sessionId === sessionId) {
+    currentSession = session;
+    renderSession(session);
+  } else if (sessions.length === 1) {
+    selectSession(session);
+  }
 }
 
 function getTextPreview(msg) {
@@ -736,6 +869,8 @@ function renderMarkdown(text) {
 
 function resetViewer() {
   if (!confirm('모든 세션을 초기화하시겠습니까?')) return;
+  fileHandlesMap.clear();
+  loadedFilesMap.clear();
   sessions.length = 0;
   currentSession = null;
   showRaw = false;
@@ -746,6 +881,7 @@ function resetViewer() {
   document.getElementById('sessionList').innerHTML = '';
   document.getElementById('sessionCount').textContent = '0개';
   document.getElementById('fileInfo').textContent = '파일을 불러오세요';
+  document.getElementById('btnRefresh').style.display = 'none';
   document.getElementById('btnReset').style.display = 'none';
   document.getElementById('fileInput').value = '';
   document.getElementById('messages').innerHTML = `
