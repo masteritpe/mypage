@@ -405,7 +405,6 @@ window.MathJax = {
 
     function stripHtmlTags(str) {
         if(!str) return '';
-        // 테이블 관련 태그 및 mark 태그 추가
         let temp = str.replace(/<([가-힣a-zA-Z0-9_\s]+)>/g, function(match, p1) {
             const knownTags = ['p', 'b', 'strong', 'i', 'em', 'ul', 'ol', 'li', 'br', 'img', 'div', 'span', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'code', 'pre', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'tfoot', 'mark'];
             if (knownTags.includes(p1.toLowerCase())) return match;
@@ -426,17 +425,14 @@ window.MathJax = {
         md = md.replace(/<img[^>]+src=["']([^"']+)["'][^>]*>/gi, '![image]($1)');
         md = md.replace(/<h[1-6][^>]*>([\s\S]*?)<\/h[1-6]>/gi, '\n**$1**\n\n');
 
-        // code 및 pre 태그 변환
         md = md.replace(/<pre[^>]*><code[^>]*>([\s\S]*?)<\/code><\/pre>/gi, '\n```\n$1\n```\n');
         md = md.replace(/<code[^>]*>([\s\S]*?)<\/code>/gi, '`$1`');
 
-        // 테이블(Table) 태그를 읽기 쉬운 파이프(|) 텍스트/리스트 형태로 변환
         md = md.replace(/<tr[^>]*>/gi, '\n');
         md = md.replace(/<td[^>]*>|<th[^>]*>/gi, ' | ');
         md = md.replace(/<\/td>|<\/th>|<\/tr>/gi, '');
         md = md.replace(/<\/?(table|thead|tbody|tfoot)[^>]*>/gi, '\n');
 
-        // 블록 레벨 태그들이 텍스트 병합을 유발하지 않도록 줄바꿈으로 변환 (수정된 핵심 로직)
         md = md.replace(/<p[^>]*>/gi, '\n');
         md = md.replace(/<\/p>/gi, '\n\n');
         md = md.replace(/<div[^>]*>/gi, '\n');
@@ -462,8 +458,6 @@ window.MathJax = {
         md = md.replace(/<li[^>]*>/gi, '- '); md = md.replace(/<\/li>/gi, '\n');
         
         md = stripHtmlTags(md);
-        
-        // 연속된 공백 및 줄바꿈 정리
         md = md.replace(/\n\s*\n/g, '\n\n');
         
         let lines = md.split('\n');
@@ -616,7 +610,6 @@ window.MathJax = {
                 setCategoryAndTag('Link', 'Link');
                 document.getElementById('articlesContainer').innerHTML = ''; articleCount = 0;
 
-                // ★ 수정: 정렬된 exportedNodes가 존재하면 우선 적용, 없으면 트리 구조의 노드들을 평탄화
                 let nodes = [];
                 if (json.data && json.data.exportedNodes) {
                     nodes = json.data.exportedNodes;
@@ -869,7 +862,6 @@ window.MathJax = {
                 const jsonArr = JSON.parse(e.target.result);
                 if (!Array.isArray(jsonArr)) throw new Error("배열 형태의 데이터가 아닙니다.");
 
-                // 데이터 연번 순으로 정렬 (domainSeq 최우선, 없을시 기존 키 사용)
                 jsonArr.sort((a, b) => {
                     const numA = Number(a.domainSeq || a.no || a.id || a.seq || 0);
                     const numB = Number(b.domainSeq || b.no || b.id || b.seq || 0);
@@ -885,14 +877,12 @@ window.MathJax = {
                 if (jsonArr.length > 0) {
                     for (let index = 0; index < jsonArr.length; index++) {
                         const item = jsonArr[index];
-                        // 제목에 연번(domainSeq) 명시 추가, 도메인/분야(파일명) 제거
                         const seqNum = item.domainSeq || item.no || item.seq || (index + 1);
                         const title = item.topic ? `[${seqNum}] ${item.topic}` : `[${seqNum}] 제목없음`;
                         let content = '';
                         
                         let rawDef = await processEmbeddedImages(item.definition || '', `5R_${index+1}_Def`);
                         let rawMne = await processEmbeddedImages(item.mnemonic || '', `5R_${index+1}_Mne`);
-                        // 새롭게 추가된 참조 내용(notes) 처리
                         let rawNote = await processEmbeddedImages(item.note || item.notes || item.reference || item.desc || item.description || '', `5R_${index+1}_Note`);
                         
                         let def = convertHtmlToMd(rawDef).trim();
@@ -903,29 +893,22 @@ window.MathJax = {
                         if (mne) content += `**[두음/키워드]**\n\n${mne}\n\n`;
                         if (note) content += `**[참조/Notes]**\n\n${note}\n\n`;
                         
-                        // --- 5R 다중 이미지 추출 로직 시작 ---
                         let imgList = [];
-                        
-                        // 배열 형태 검사
                         if (Array.isArray(item.images)) imgList.push(...item.images);
                         if (Array.isArray(item.imageUrls)) imgList.push(...item.imageUrls);
                         
-                        // 키값 패턴 검사 (예: _img1Data, image1, img1 등 최대 10개)
                         for (let k = 1; k <= 10; k++) {
                             if (item[`_img${k}Data`]) imgList.push(item[`_img${k}Data`]);
                             if (item[`image${k}`]) imgList.push(item[`image${k}`]);
                             if (item[`img${k}`]) imgList.push(item[`img${k}`]);
                         }
                         
-                        // 단일 키값 검사
                         ['image', 'imgData', 'img', 'imageUrl'].forEach(key => {
                             if (item[key] && typeof item[key] === 'string') imgList.push(item[key]);
                         });
 
-                        // 중복 제거
                         imgList = [...new Set(imgList)];
 
-                        // 본문에 삽입
                         imgList.forEach((imgData, imgIdx) => {
                             if (imgData) {
                                 if (imgData.startsWith('data:image')) {
@@ -935,7 +918,6 @@ window.MathJax = {
                                 }
                             }
                         });
-                        // --- 5R 다중 이미지 추출 로직 끝 ---
 
                         addArticle({ title: title, content: content.trim(), visualType: 'none' });
                     }
@@ -1209,19 +1191,14 @@ window.MathJax = {
         const protectMath = (str) => {
             if (!str) return '';
             let formatted = convertArrows(str);
+            // 수식 내 특수문자 HTML 엔티티 변환 제거 (수식 렌더링 시 Misplaced &, # 에러 방지)
             return formatted.replace(/\$\$(.*?)\$\$/gs, (match) => 
                         match.replace(/</g, "&lt;")
                              .replace(/>/g, "&gt;")
-                             .replace(/\|/g, "&#124;")
-                             .replace(/_/g, "&#95;")
-                             .replace(/\*/g, "&#42;")
                     )
                     .replace(/\$(.*?)\$/g, (match) => 
                         match.replace(/</g, "&lt;")
                              .replace(/>/g, "&gt;")
-                             .replace(/\|/g, "&#124;")
-                             .replace(/_/g, "&#95;")
-                             .replace(/\*/g, "&#42;")
                     );
         };
 
@@ -1255,6 +1232,46 @@ window.MathJax = {
                     let formattedKw = kwContent.trim().replace(/\n/g, '<br>').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
                     return `**[두음/키워드]**\n<div class="dueum-box"><p>${formattedKw}</p></div>`;
                 });
+
+                // --- 마크다운 표(Table) 깨짐 현상 방지 스마트 파싱 로직 추가 ---
+                let rawLines = processedContent.split('\n');
+                let newLines = [];
+                let currentRow = "";
+
+                for (let i = 0; i < rawLines.length; i++) {
+                    let line = rawLines[i].trimEnd();
+                    let isTableStart = line.trimStart().startsWith('|');
+
+                    if (currentRow !== "") {
+                        if (isTableStart) {
+                            newLines.push(currentRow);
+                            currentRow = line;
+                        } else {
+                            if (line !== "") {
+                                let addStr = line.trimStart();
+                                if (currentRow.endsWith('<br>') && addStr.startsWith('<br>')) {
+                                    addStr = addStr.substring(4); // 중복 <br> 방지
+                                }
+                                currentRow += (currentRow.endsWith(' ') ? "" : " ") + addStr;
+                            }
+                        }
+                    } else {
+                        if (isTableStart) {
+                            currentRow = line;
+                        } else {
+                            newLines.push(line);
+                        }
+                    }
+
+                    // | 로 끝나는 행이 발견되면 표의 하나의 Row로 닫기
+                    if (currentRow !== "" && currentRow.endsWith('|')) {
+                        newLines.push(currentRow);
+                        currentRow = "";
+                    }
+                }
+                if (currentRow !== "") newLines.push(currentRow);
+                processedContent = newLines.join('\n');
+                // --- 마크다운 표 깨짐 방지 파싱 끝 ---
 
                 // 일반 마크다운 뷰어에서도 줄바꿈이 올바르게 보이도록(스페이스바 2개 추가 적용) 처리
                 let lines = processedContent.split('\n');
