@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>체크리스트</title>
+  
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <style>
+    :root {
+      --bg-body: #F9FAFB;
+      --bg-surface: #FFFFFF;
+      --border-light: #F3F4F6;
+      --border-base: #E5E7EB;
+      --border-dark: #D1D5DB;
+      --text-main: #111827;
+      --text-muted: #6B7280;
+      --primary: #111827;
+      --primary-hover: #374151;
+      --secondary: #FFFFFF;
+      --secondary-hover: #F9FAFB;
+      --danger: #EF4444;
+      --active-bg: #EFF6FF;
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05);
+      --radius-md: 8px;
+      --radius-lg: 12px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Pretendard', -apple-system, sans-serif;
+      background: var(--bg-body); color: var(--text-main); margin: 0; padding: 0;
+      -webkit-font-smoothing: antialiased; display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+    }
+
+    /* 탑바 */
+    .top-bar { 
+      background: var(--bg-surface); height: 64px; min-height: 64px; padding: 0 20px; 
+      border-bottom: 1px solid var(--border-base); display: flex; justify-content: space-between; align-items: center; z-index: 10; 
+    }
+    .app-title { font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 8px; color: var(--primary); }
+    .actions { display: flex; gap: 8px; align-items: center; }
+    .divider { width: 1px; height: 20px; background: var(--border-dark); margin: 0 4px; }
+
+    /* 버튼 공통 */
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 14px; border-radius: var(--radius-md); font-size: 14px; font-weight: 600; cursor: pointer; transition: 0.2s; border: 1px solid transparent; outline: none; }
+    .btn-primary { background: var(--primary); color: white; box-shadow: var(--shadow-sm); }
+    .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
+    .btn-outline { background: var(--secondary); color: var(--text-main); border-color: var(--border-base); }
+    .btn-outline:hover { background: var(--secondary-hover); border-color: #D1D5DB; }
+    .btn-danger { color: var(--danger); background: transparent; border: 1px solid var(--danger); padding: 4px 8px; font-size: 12px; }
+    .btn-danger:hover { background: #FEF2F2; }
+
+    /* 레이아웃 */
+    .app-layout { display: flex; flex: 1; overflow: hidden; }
+
+    /* 사이드바 (좌측 이력 관리) */
+    .sidebar { width: 300px; background: var(--bg-surface); border-right: 1px solid var(--border-base); display: flex; flex-direction: column; }
+    .sidebar-header { padding: 16px; border-bottom: 1px solid var(--border-base); }
+    .search-input { width: 100%; padding: 10px 14px; border: 1px solid var(--border-base); border-radius: var(--radius-md); font-size: 14px; outline: none; transition: 0.2s; }
+    .search-input:focus { border-color: var(--primary); }
+    
+    .history-list { flex: 1; overflow-y: auto; list-style: none; padding: 0; margin: 0; }
+    .history-item { padding: 16px; border-bottom: 1px solid var(--border-light); cursor: pointer; transition: 0.2s; }
+    .history-item:hover { background: var(--secondary-hover); }
+    .history-item.active { background: var(--active-bg); border-left: 4px solid var(--primary); padding-left: 12px; }
+    .history-date { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; display: flex; justify-content: space-between;}
+    .history-title { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    /* 메인 콘텐츠 */
+    .main-area { flex: 1; overflow-y: auto; padding: 30px; display: flex; flex-direction: column; align-items: center; }
+    .document-wrapper { width: 100%; max-width: 800px; display: flex; flex-direction: column; gap: 24px; }
+    .doc-header { background: var(--bg-surface); padding: 24px; border-radius: var(--radius-lg); border: 1px solid var(--border-base); box-shadow: var(--shadow-sm); display: flex; gap: 16px; align-items: flex-end; }
+    
+    .input-field { display: flex; flex-direction: column; gap: 8px; flex: 1; }
+    .input-field label { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+    .input-field input { padding: 12px; border: 1px solid var(--border-base); border-radius: var(--radius-md); font-size: 15px; outline: none; font-family: inherit; }
+    .input-field input:focus { border-color: var(--primary); }
+
+    .checklist-card { background: var(--bg-surface); padding: 24px; border-radius: var(--radius-lg); border: 1px solid var(--border-base); box-shadow: var(--shadow-sm); }
+    .input-group { display: flex; gap: 10px; margin-bottom: 24px; }
+    .task-input { flex: 1; padding: 12px 16px; border: 1px solid var(--border-base); border-radius: var(--radius-md); font-size: 15px; outline: none; }
+    .task-input:focus { border-color: var(--primary); }
+
+    /* 태스크 리스트 (드래그 앤 드랍 적용) */
+    .task-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+    .task-item { display: flex; align-items: center; justify-content: space-between; padding: 16px; border: 1px solid var(--border-light); border-radius: var(--radius-md); background: #FAFAFA; transition: border 0.2s, background 0.2s; }
+    .task-item:hover { border-color: var(--border-base); background: var(--secondary); }
+    .task-item.completed { opacity: 0.6; }
+    .task-item.completed .task-text { text-decoration: line-through; color: var(--text-muted); }
+    
+    /* 드래그 상태 스타일 */
+    .task-item.dragging { opacity: 0.5; border: 1px dashed var(--primary); background: var(--border-light); }
+    .task-item.drag-over { border-top: 2px solid var(--primary); transform: translateY(2px); }
+    
+    .drag-handle { cursor: grab; font-size: 20px; color: var(--border-dark); margin-right: 4px; }
+    .drag-handle:active { cursor: grabbing; }
+
+    .task-content { display: flex; align-items: center; gap: 12px; flex: 1; cursor: pointer; user-select: none; }
+    .task-checkbox { width: 20px; height: 20px; accent-color: var(--primary); cursor: pointer; }
+    .task-text { font-size: 15px; font-weight: 500; }
+    .empty-state { text-align: center; color: var(--text-muted); padding: 40px 0; font-size: 15px; }
+
+    /* 토스트 알림 (하단 정중앙) */
+    .toast {
+      visibility: hidden; background-color: #111827; color: #fff; text-align: center;
+      border-radius: var(--radius-md); padding: 12px 24px; position: fixed; z-index: 1000;
+      left: 50%; bottom: 20px; transform: translateX(-50%); font-size: 14px;
+      opacity: 0; transition: opacity 0.3s, bottom 0.3s; display: flex; align-items: center; gap: 8px;
+      box-shadow: var(--shadow-md);
+    }
+    .toast.show { visibility: visible; opacity: 1; bottom: 40px; }
+  </style>
+</head>
+<body>
+
+  <!-- 탑바 -->
+  <div class="top-bar">
+    <div class="app-title"><i class="ph-fill ph-check-square-offset"></i> Checklist</div>
+    <div class="actions">
+      <input type="file" id="excelInput" accept=".xlsx, .xls" style="display: none;" onchange="handleFileUpload(event)">
+      <button class="btn btn-outline" onclick="downloadTemplate()" title="엑셀 업로드 양식 다운로드"><i class="ph ph-file-xls"></i> 양식 다운로드</button>
+      <button class="btn btn-outline" onclick="document.getElementById('excelInput').click()" title="현재 문서에 엑셀 데이터 추가"><i class="ph ph-upload-simple"></i> 엑셀 업로드</button>
+      <button class="btn btn-outline" onclick="exportToExcel()" title="현재 문서를 엑셀로 백업"><i class="ph ph-download-simple"></i> 엑셀 다운로드</button>
+      <div class="divider"></div>
+      <button class="btn btn-outline" onclick="createNewDoc()" title="단축키: Ctrl + Alt + N"><i class="ph ph-file-plus"></i> 신규</button>
+      <button class="btn btn-primary" onclick="saveDocument()" title="단축키: Ctrl + S"><i class="ph ph-floppy-disk"></i> 저장</button>
+    </div>
+  </div>
+
+  <div class="app-layout">
+    <!-- 좌측 사이드바 -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <input type="text" id="searchInput" class="search-input" placeholder="작업명 또는 일자로 검색..." spellcheck="false" oninput="loadSidebar()">
+      </div>
+      <ul id="historyList" class="history-list">
+        <!-- JS 렌더링 -->
+      </ul>
+    </aside>
+
+    <!-- 메인 콘텐츠 -->
+    <main class="main-area">
+      <div class="document-wrapper">
+        
+        <!-- 작업 메타데이터 -->
+        <div class="doc-header">
+          <div class="input-field" style="max-width: 200px;">
+            <label for="docDate">작업일자</label>
+            <input type="date" id="docDate" spellcheck="false">
+          </div>
+          <div class="input-field">
+            <label for="docTitle">작업명</label>
+            <input type="text" id="docTitle" placeholder="예: [프로젝트] 1차 기획안 작성" spellcheck="false">
+          </div>
+          <button class="btn btn-danger" id="btnDeleteDoc" onclick="deleteDocument()" style="height: 42px; padding: 0 16px; border-radius: var(--radius-md);"><i class="ph ph-trash"></i> 문서 삭제</button>
+        </div>
+
+        <!-- 체크리스트 -->
+        <div class="checklist-card">
+          <div class="input-group">
+            <input type="text" id="taskInput" class="task-input" placeholder="새로운 체크리스트 항목 입력..." spellcheck="false" onkeypress="handleKeyPress(event)">
+            <button class="btn btn-primary" onclick="addTask()"><i class="ph ph-plus"></i> 추가</button>
+          </div>
+          <ul id="taskList" class="task-list">
+             <!-- JS 렌더링 -->
+          </ul>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <div id="toastMsg" class="toast"><i class="ph-bold ph-check"></i> 처리되었습니다</div>
+
+  <script>
+    // === IndexedDB 초기화 ===
+    let db;
+    let currentDocId = null;
+    let currentTasks = [];
+    let dragStartIndex = null; // 드래그 시작 인덱스 기록
+
+    const request = indexedDB.open("ChecklistDB", 1);
+
+    request.onupgradeneeded = function(e) {
+      db = e.target.result;
+      if (!db.objectStoreNames.contains("documents")) {
+        const store = db.createObjectStore("documents", { keyPath: "id", autoIncrement: true });
+        store.createIndex("date", "date", { unique: false });
+        store.createIndex("title", "title", { unique: false });
+      }
+    };
+
+    request.onsuccess = function(e) {
+      db = e.target.result;
+      createNewDoc(); 
+      loadSidebar();
+    };
+
+    request.onerror = function(e) {
+      console.error("IndexedDB 에러:", e.target.error);
+    };
+
+    // === 단축키 설정 ===
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        saveDocument();
+      }
+      if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'n') {
+        e.preventDefault();
+        createNewDoc();
+      }
+    });
+
+    // === UI 공통 함수 ===
+    function showToast(msg, icon = 'ph-check') {
+      const toast = document.getElementById('toastMsg');
+      toast.innerHTML = `<i class="ph-bold ${icon}"></i> ${msg}`;
+      toast.classList.add('show');
+      setTimeout(() => { toast.classList.remove('show'); }, 1000);
+    }
+
+    function getToday() {
+      const offset = new Date().getTimezoneOffset() * 60000;
+      const dateOffset = new Date(Date.now() - offset);
+      return dateOffset.toISOString().split("T")[0];
+    }
+
+    // === 사이드바 이력 관리 ===
+    function loadSidebar() {
+      const searchKeyword = document.getElementById("searchInput").value.trim().toLowerCase();
+      const transaction = db.transaction(["documents"], "readonly");
+      const store = transaction.objectStore("documents");
+      const req = store.getAll();
+
+      req.onsuccess = function() {
+        let docs = req.result;
+        docs.sort((a, b) => new Date(b.date) - new Date(a.date));
+        if (searchKeyword) {
+          docs = docs.filter(d => d.title.toLowerCase().includes(searchKeyword) || d.date.includes(searchKeyword));
+        }
+        renderSidebar(docs);
+      };
+    }
+
+    function renderSidebar(docs) {
+      const list = document.getElementById("historyList");
+      list.innerHTML = "";
+
+      if (docs.length === 0) {
+        list.innerHTML = `<li class="empty-state" style="padding:20px 0;">이력이 없습니다.</li>`;
+        return;
+      }
+
+      docs.forEach(doc => {
+        const li = document.createElement("li");
+        li.className = `history-item ${doc.id === currentDocId ? 'active' : ''}`;
+        li.onclick = () => selectDocument(doc.id);
+        
+        const total = doc.tasks.length;
+        const completed = doc.tasks.filter(t => t.completed).length;
+        const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+        li.innerHTML = `
+          <div class="history-date">
+            <span><i class="ph ph-calendar-blank"></i> ${doc.date}</span>
+            <span>진행률: ${percent}%</span>
+          </div>
+          <div class="history-title">${doc.title || "제목 없음"}</div>
+        `;
+        list.appendChild(li);
+      });
+    }
+
+    // === 문서 관리 (CRUD) ===
+    function createNewDoc() {
+      currentDocId = null;
+      currentTasks = [];
+      document.getElementById("docDate").value = getToday();
+      document.getElementById("docTitle").value = "";
+      document.getElementById("taskInput").value = "";
+      document.getElementById("btnDeleteDoc").style.display = "none";
+      renderTasks();
+      loadSidebar();
+      document.getElementById("docTitle").focus();
+    }
+
+    function selectDocument(id) {
+      const transaction = db.transaction(["documents"], "readonly");
+      const store = transaction.objectStore("documents");
+      const req = store.get(id);
+
+      req.onsuccess = function() {
+        if (req.result) {
+          currentDocId = req.result.id;
+          currentTasks = req.result.tasks || [];
+          document.getElementById("docDate").value = req.result.date;
+          document.getElementById("docTitle").value = req.result.title;
+          document.getElementById("btnDeleteDoc").style.display = "inline-flex";
+          renderTasks();
+          loadSidebar(); 
+        }
+      };
+    }
+
+    function saveDocument() {
+      const date = document.getElementById("docDate").value;
+      const title = document.getElementById("docTitle").value.trim();
+
+      if (!date || !title) {
+        alert("작업일자와 작업명은 필수 입력 항목입니다.");
+        return;
+      }
+
+      const docData = {
+        date: date,
+        title: title,
+        tasks: currentTasks,
+        updatedAt: new Date().toISOString()
+      };
+
+      const transaction = db.transaction(["documents"], "readwrite");
+      const store = transaction.objectStore("documents");
+
+      let req;
+      if (currentDocId) {
+        docData.id = currentDocId; 
+        req = store.put(docData);
+      } else {
+        req = store.add(docData);
+      }
+
+      req.onsuccess = function(e) {
+        if (!currentDocId) currentDocId = e.target.result; 
+        document.getElementById("btnDeleteDoc").style.display = "inline-flex";
+        loadSidebar();
+        showToast("문서가 저장되었습니다.", "ph-floppy-disk");
+      };
+    }
+
+    function deleteDocument() {
+      if (!currentDocId) return;
+      if (!confirm("현재 작업 문서를 삭제하시겠습니까?")) return;
+
+      const transaction = db.transaction(["documents"], "readwrite");
+      const store = transaction.objectStore("documents");
+      const req = store.delete(currentDocId);
+
+      req.onsuccess = function() {
+        showToast("삭제되었습니다.", "ph-trash");
+        createNewDoc();
+      };
+    }
+
+    // === 체크리스트 관리 ===
+    function addTask() {
+      const input = document.getElementById("taskInput");
+      const text = input.value.trim();
+      if (!text) return;
+
+      currentTasks.push({ id: Date.now(), text: text, completed: false });
+      input.value = "";
+      renderTasks();
+    }
+
+    function toggleTask(taskId) {
+      const task = currentTasks.find(t => t.id === taskId);
+      if (task) {
+        task.completed = !task.completed;
+        renderTasks();
+      }
+    }
+
+    function deleteTask(taskId) {
+      currentTasks = currentTasks.filter(t => t.id !== taskId);
+      renderTasks();
+    }
+
+    function handleKeyPress(e) {
+      if (e.key === 'Enter') addTask();
+    }
+
+    // 드래그 앤 드랍 이벤트 핸들러
+    function handleDragStart(e) {
+      dragStartIndex = +this.dataset.index;
+      this.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    }
+
+    function handleDragOver(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      return false;
+    }
+
+    function handleDragEnter(e) {
+      e.preventDefault();
+      this.classList.add('drag-over');
+    }
+
+    function handleDragLeave(e) {
+      this.classList.remove('drag-over');
+    }
+
+    function handleDrop(e) {
+      e.stopPropagation();
+      this.classList.remove('drag-over');
+      
+      const dragEndIndex = +this.dataset.index;
+      if (dragStartIndex !== null && dragStartIndex !== dragEndIndex) {
+        // 배열 아이템 위치 교환 (splice 사용)
+        const draggedItem = currentTasks.splice(dragStartIndex, 1)[0];
+        currentTasks.splice(dragEndIndex, 0, draggedItem);
+        renderTasks();
+      }
+      return false;
+    }
+
+    function handleDragEnd(e) {
+      this.classList.remove('dragging');
+      document.querySelectorAll('.task-item').forEach(item => item.classList.remove('drag-over'));
+      dragStartIndex = null;
+    }
+
+    function renderTasks() {
+      const list = document.getElementById("taskList");
+      list.innerHTML = "";
+
+      if (currentTasks.length === 0) {
+        list.innerHTML = `
+          <div class="empty-state">
+            <i class="ph ph-list-checks" style="font-size: 48px; color: var(--border-dark); margin-bottom: 16px;"></i><br>
+            등록된 항목이 없습니다. 하단에서 추가하거나 엑셀을 업로드하세요.
+          </div>`;
+        return;
+      }
+
+      currentTasks.forEach((task, index) => {
+        const li = document.createElement("li");
+        li.className = `task-item ${task.completed ? 'completed' : ''}`;
+        li.draggable = true; // 드래그 활성화
+        li.dataset.index = index; // 인덱스 저장
+
+        li.innerHTML = `
+          <div style="display:flex; align-items:center; flex:1;">
+            <i class="ph ph-dots-six-vertical drag-handle"></i>
+            <label class="task-content">
+              <input type="checkbox" class="task-checkbox" ${task.completed ? 'checked' : ''} onchange="toggleTask(${task.id})">
+              <span class="task-text">${task.text}</span>
+            </label>
+          </div>
+          <button class="btn btn-danger" onclick="deleteTask(${task.id})"><i class="ph ph-trash"></i> 삭제</button>
+        `;
+
+        // 드래그 이벤트 바인딩
+        li.addEventListener('dragstart', handleDragStart);
+        li.addEventListener('dragover', handleDragOver);
+        li.addEventListener('dragenter', handleDragEnter);
+        li.addEventListener('dragleave', handleDragLeave);
+        li.addEventListener('drop', handleDrop);
+        li.addEventListener('dragend', handleDragEnd);
+
+        list.appendChild(li);
+      });
+    }
+
+    // === 엑셀 연동 기능 (SheetJS) ===
+    function downloadTemplate() {
+      const ws_data = [
+        ["작업항목", "완료여부(O/X)"],
+        ["[예시] 기획안 초안 작성", "O"],
+        ["[예시] 팀 내부 리뷰 진행", "X"],
+        ["[예시] 피드백 반영 및 수정", "X"]
+      ];
+      const ws = XLSX.utils.aoa_to_sheet(ws_data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "작업목록_양식");
+      XLSX.writeFile(wb, "작업목록_업로드_양식.xlsx");
+      showToast("양식이 다운로드 되었습니다.", "ph-download");
+    }
+
+    function handleFileUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, {type: 'array'});
+          const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+          
+          if(json.length === 0) throw new Error("데이터가 없습니다.");
+          
+          json.forEach((row, idx) => {
+            const textKey = Object.keys(row).find(k => k.includes('작업') || k.includes('항목') || k.includes('내용'));
+            const statusKey = Object.keys(row).find(k => k.includes('상태') || k.includes('완료여부') || k.includes('완료'));
+            
+            if (textKey && row[textKey]) {
+              currentTasks.push({
+                id: Date.now() + idx,
+                text: row[textKey].toString().trim(),
+                completed: statusKey ? (row[statusKey].toString().toUpperCase() === 'O') : false
+              });
+            }
+          });
+          
+          renderTasks();
+          showToast("엑셀 항목이 리스트에 추가되었습니다.");
+        } catch (err) {
+          alert("오류: 양식(작업항목, 완료여부)을 확인해주세요.\n" + err.message);
+        }
+        event.target.value = '';
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function exportToExcel() {
+      if (currentTasks.length === 0) {
+        alert("다운로드할 작업 항목이 없습니다.");
+        return;
+      }
+
+      const ws_data = [["작업항목", "완료여부(O/X)"]];
+      currentTasks.forEach(t => {
+        ws_data.push([t.text, t.completed ? "O" : "X"]);
+      });
+
+      const ws = XLSX.utils.aoa_to_sheet(ws_data);
+      const wb = XLSX.utils.book_new();
+      
+      const docTitle = document.getElementById("docTitle").value.trim() || "미제정_문서";
+      
+      XLSX.utils.book_append_sheet(wb, ws, "작업목록");
+      XLSX.writeFile(wb, `${docTitle}_${getToday()}.xlsx`);
+      showToast("현재 작업목록이 다운로드 되었습니다.", "ph-download");
+    }
+  </script>
+</body>
+</html>
