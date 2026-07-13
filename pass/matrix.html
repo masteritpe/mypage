@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Topic Matrix</title>
+  <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- 이미지 저장을 위한 html2canvas 라이브러리 추가 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <!-- 엑셀 다운/업로드를 위한 SheetJS 라이브러리 추가 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <style>
+    :root {
+      --bg-app: #f4fbf6;        
+      --bg-card: #ffffff;       
+      --text-main: #1f2937;     
+      --text-muted: #6b7280;    
+      --border-light: #e5e7eb;
+      --brand: #10b981;         
+      --brand-hover: #059669;   
+      --delete-bg: #6b7280;     /* 차분한 회색으로 변경 */
+      --delete-hover: #4b5563;  /* 마우스 오버 시 조금 더 진한 회색 */
+      --radius-lg: 12px;
+      --radius-md: 8px;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.05);
+    }
+    * { box-sizing: border-box; font-family: 'Pretendard', sans-serif; }
+    body { margin: 0; padding: 20px; background: var(--bg-app); color: var(--text-main); display: flex; flex-direction: column; gap: 20px; height: 100vh; overflow: hidden; }
+    .header { display: flex; justify-content: space-between; align-items: center; background: var(--bg-card); padding: 16px 24px; border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
+    .header h1 { margin: 0; font-size: 20px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+    .btn { background: var(--brand); color: #fff; border: none; padding: 8px 16px; border-radius: var(--radius-md); font-size: 14px; font-weight: 600; cursor: pointer; transition: 0.2s; }
+    .btn:hover { background: var(--brand-hover); }
+    .btn.outline { background: #fff; color: var(--text-main); border: 1px solid var(--border-light); }
+    .btn.outline:hover { background: #f9fafb; }
+    
+    /* 삭제 버튼 스타일 */
+    .btn.delete { background: var(--delete-bg); color: #fff; }
+    .btn.delete:hover { background: var(--delete-hover); }
+    
+    .container { display: flex; gap: 20px; flex: 1; overflow: hidden; }
+    
+    .matrix-section { flex: 2; background: var(--bg-card); border-radius: var(--radius-lg); padding: 20px; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; overflow: hidden; }
+    .matrix-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .matrix-header h2 { margin: 0; font-size: 16px; }
+    .table-wrapper { flex: 1; overflow: auto; border: 1px solid var(--border-light); border-radius: var(--radius-md); }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; text-align: center; }
+    thead th { position: sticky; top: 0; background: #f8fafc; padding: 12px; border-bottom: 1px solid var(--border-light); font-weight: 600; color: var(--text-muted); }
+    tbody td { padding: 12px; border-bottom: 1px solid #f1f5f9; color: var(--text-main); }
+    tbody tr:hover { background: #f0fdf4; }
+    .dot { width: 12px; height: 12px; background-color: var(--text-main); border-radius: 50%; display: inline-block; cursor: pointer; transition: transform 0.2s; }
+    .dot:hover { transform: scale(1.5); background-color: var(--brand); }
+
+    .viewer-section { flex: 1; background: var(--bg-card); border-radius: var(--radius-lg); padding: 20px; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; overflow: hidden; }
+    .viewer-header { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid var(--brand); padding-bottom: 12px; margin-bottom: 16px; }
+    .viewer-header h2 { margin: 0; font-size: 16px; }
+    
+    .chip-label { font-size: 12px; font-weight: 600; background: #fff; border: 1px solid var(--border-light); border-radius: 20px; padding: 4px 12px; cursor: pointer; user-select: none; transition: 0.2s; color: var(--text-muted); display: inline-flex; align-items: center; justify-content: center; }
+    .chip-label input:checked + span { color: var(--brand); }
+    .chip-label:has(input:checked) { border-color: var(--brand); background: #f0fdf4; }
+    .chip-label:hover { border-color: #cbd5e1; }
+
+    .question-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding-right: 8px; }
+    .question-card { border: 1px solid var(--border-light); padding: 16px; border-radius: var(--radius-md); background: #fafafa; }
+    .question-meta { font-size: 13px; color: var(--brand); font-weight: 700; margin-bottom: 8px; display: flex; gap: 6px; }
+    .question-text { font-size: 14px; line-height: 1.6; word-break: keep-all; }
+
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 100; }
+    .modal-content { background: #fff; width: 400px; padding: 24px; border-radius: var(--radius-lg); }
+    .modal-content h3 { margin-top: 0; margin-bottom: 16px; }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+    .form-group input { width: 100%; padding: 10px; border: 1px solid var(--border-light); border-radius: var(--radius-md); font-size: 14px; }
+    
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+
+    .topic-name { cursor: pointer; transition: color 0.2s; display: inline-block; padding: 4px 0; }
+    .topic-name:hover { color: var(--brand); text-decoration: underline; }
+
+    #toast {
+      visibility: hidden;
+      min-width: 250px;
+      background-color: rgba(31, 41, 55, 0.9);
+      color: #fff;
+      text-align: center;
+      border-radius: 30px;
+      padding: 12px 24px;
+      position: fixed;
+      z-index: 1000;
+      left: 50%;
+      bottom: 30px;
+      transform: translateX(-50%);
+      font-size: 14px;
+      font-weight: 600;
+      box-shadow: var(--shadow-md);
+      opacity: 0;
+      transition: opacity 0.3s, visibility 0.3s, transform 0.3s;
+    }
+    #toast.show {
+      visibility: visible;
+      opacity: 1;
+      transform: translate(-50%, -10px);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 토스트 알림 컨테이너 -->
+  <div id="toast">알림 메시지</div>
+
+  <div class="header">
+    <h1>📊 Topic Matrix</h1>
+    <div style="display: flex; gap: 8px;">
+      <!-- 숨겨진 파일 인풋 -->
+      <input type="file" id="excelInput" accept=".xlsx, .xls" style="display: none;" onchange="handleExcelUpload(event)">
+      
+      <!-- 엑셀 연동 버튼들 추가 -->
+      <button class="btn outline" onclick="downloadExcelTemplate()">📄 양식 다운</button>
+      <button class="btn outline" onclick="document.getElementById('excelInput').click()">📤 엑셀 업로드</button>
+      <button class="btn outline" onclick="exportTopicsToExcel()">📥 엑셀 다운</button>
+      
+      <div style="width: 1px; background: var(--border-light); margin: 0 4px;"></div>
+      
+      <button class="btn outline" onclick="openSettingsModal()">⚙️ 환경설정</button>
+      <button class="btn" onclick="openTopicModal()" title="단축키: Alt+L">+ 새 토픽 추가</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- 토픽 매트릭스 -->
+    <div class="matrix-section" id="matrixSection">
+      <div class="matrix-header">
+        <h2>회차별 출제 매트릭스</h2>
+        <button class="btn outline" style="padding: 6px 12px; font-size: 12px;" onclick="saveMatrixAsImage()" data-html2canvas-ignore="true">💾 이미지 저장</button>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr id="matrixHeader">
+              <!-- 동적 렌더링 영역 -->
+            </tr>
+          </thead>
+          <tbody id="matrixBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 기출문제 뷰어 -->
+    <div class="viewer-section">
+      <div class="viewer-header">
+        <h2>문제 확인 보드</h2>
+        <div id="categoryFilter" style="display: flex; gap: 6px; flex-wrap: wrap;">
+          <label class="chip-label">
+            <input type="checkbox" value="관리" onchange="renderFilteredQuestions()" style="display:none">
+            <span>관리</span>
+          </label>
+          <label class="chip-label">
+            <input type="checkbox" value="응용" onchange="renderFilteredQuestions()" style="display:none">
+            <span>응용</span>
+          </label>
+          <label class="chip-label">
+            <input type="checkbox" value="정보통신" onchange="renderFilteredQuestions()" style="display:none">
+            <span>정보통신</span>
+          </label>
+        </div>
+      </div>
+      
+      <div id="viewerGuide" style="color: var(--text-muted); font-size: 14px; text-align: center; margin-top: 40px;">
+        매트릭스의 <span class="dot" style="display:inline-block; width:10px; height:10px;"></span> 점을 클릭하면<br>해당 회차의 토픽 기출문제가 조회됩니다.
+      </div>
+      <div class="question-list" id="questionList" style="display: none;"></div>
+    </div>
+  </div>
+
+  <!-- 환경설정 모달 -->
+  <div class="modal-overlay" id="settingsModal">
+    <div class="modal-content">
+      <h3>매트릭스 환경설정</h3>
+      <div class="form-group">
+        <label>시작 회차</label>
+        <input type="number" id="settingStartRound" placeholder="예: 129">
+      </div>
+      <div class="form-group">
+        <label>종료 회차</label>
+        <input type="number" id="settingEndRound" placeholder="예: 139">
+      </div>
+      <div style="display: flex; gap: 10px; margin-top: 24px;">
+        <button class="btn outline" style="flex: 1;" onclick="closeSettingsModal()">취소</button>
+        <button class="btn" style="flex: 1;" onclick="saveSettings()" title="단축키: Ctrl+S">저장</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 토픽 입력/수정 모달 -->
+  <div class="modal-overlay" id="topicModal">
+    <div class="modal-content">
+      <h3 id="topicModalTitle">새 토픽 등록</h3>
+      <div class="form-group">
+        <label>토픽명 (예: ISP/ISMP)</label>
+        <input type="text" id="topicName" placeholder="토픽명 입력">
+      </div>
+      <div class="form-group">
+        <label>출제 회차 (콤마로 구분, 예: 129, 131, 138, 139)</label>
+        <input type="text" id="topicRounds" placeholder="예: 129, 131, 138">
+      </div>
+      <div class="form-group">
+        <label>검색 키워드 (토픽뱅크 매칭용)</label>
+        <input type="text" id="topicKeywords" placeholder="예: ISP, ISMP">
+      </div>
+      <div style="display: flex; gap: 10px; margin-top: 24px;">
+        <button class="btn outline" style="flex: 1;" onclick="closeTopicModal()">취소</button>
+        <!-- 삭제 버튼 (초기엔 숨김, class="btn delete" 사용) -->
+        <button class="btn delete" id="btnDeleteTopic" style="flex: 1; display: none;" onclick="deleteTopic()">삭제</button>
+        <button class="btn" style="flex: 1;" onclick="saveTopic()" title="단축키: Ctrl+S">저장</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const DB_BANK_NAME = 'TopicBankDB'; 
+    const DB_MATRIX_NAME = 'TopicMatrixDB';
+    let dbBank = null;
+    let dbMatrix = null;
+    
+    // 회차 설정 관련 전역 변수
+    let startRound = 129;
+    let endRound = 139;
+    let baseRounds = [];
+    
+    let currentFetchedQuestions = [];
+    let editingTopicId = null;
+
+    function showToast(message) {
+      const toast = document.getElementById("toast");
+      toast.innerText = message;
+      toast.className = "show";
+      setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 1000); 
+    }
+
+    document.addEventListener('keydown', function(e) {
+      if (e.altKey && e.key.toLowerCase() === 'l') {
+        e.preventDefault();
+        openTopicModal();
+      }
+      if (e.ctrlKey && e.key.toLowerCase() === 's') {
+        e.preventDefault(); 
+        const topicModal = document.getElementById('topicModal');
+        const settingsModal = document.getElementById('settingsModal');
+
+        if (topicModal.style.display === 'flex') saveTopic();
+        else if (settingsModal.style.display === 'flex') saveSettings();
+        else showToast('모든 변경사항이 안전하게 자동 보관 중입니다.');
+      }
+    });
+
+    async function initApp() {
+      initSettings();
+      await openBankDB();
+      await openMatrixDB();
+      renderMatrixHeader();
+      loadMatrixData();
+    }
+
+    function initSettings() {
+      const savedStart = localStorage.getItem('matrixStartRound');
+      const savedEnd = localStorage.getItem('matrixEndRound');
+      if (savedStart) startRound = parseInt(savedStart, 10);
+      if (savedEnd) endRound = parseInt(savedEnd, 10);
+      updateBaseRounds();
+    }
+
+    function updateBaseRounds() {
+      baseRounds = [];
+      for (let i = startRound; i <= endRound; i++) {
+        baseRounds.push(i);
+      }
+    }
+
+    function openSettingsModal() {
+      document.getElementById('settingStartRound').value = startRound;
+      document.getElementById('settingEndRound').value = endRound;
+      document.getElementById('settingsModal').style.display = 'flex';
+      document.getElementById('settingStartRound').focus();
+    }
+
+    function closeSettingsModal() {
+      document.getElementById('settingsModal').style.display = 'none';
+    }
+
+    function saveSettings() {
+      const newStart = parseInt(document.getElementById('settingStartRound').value, 10);
+      const newEnd = parseInt(document.getElementById('settingEndRound').value, 10);
+      
+      if (isNaN(newStart) || isNaN(newEnd) || newStart > newEnd) {
+        alert('올바른 회차 범위를 입력해주세요.');
+        return;
+      }
+      startRound = newStart;
+      endRound = newEnd;
+      
+      localStorage.setItem('matrixStartRound', startRound);
+      localStorage.setItem('matrixEndRound', endRound);
+      
+      updateBaseRounds();
+      closeSettingsModal();
+      renderMatrixHeader();
+      loadMatrixData();
+      showToast('환경설정이 저장되었습니다.');
+    }
+
+    function openBankDB() {
+      return new Promise((resolve) => {
+        const req = indexedDB.open(DB_BANK_NAME, 1);
+        req.onsuccess = (e) => { dbBank = e.target.result; resolve(); };
+        req.onerror = () => { console.warn('TopicBankDB 연결 실패'); resolve(); };
+      });
+    }
+
+    function openMatrixDB() {
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_MATRIX_NAME, 1);
+        req.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains('topics')) db.createObjectStore('topics', { keyPath: 'id' });
+        };
+        req.onsuccess = (e) => { dbMatrix = e.target.result; resolve(); };
+      });
+    }
+
+    function renderMatrixHeader() {
+      const headerRow = document.getElementById('matrixHeader');
+      const thList = baseRounds.map(r => `<th>${r}</th>`).join('');
+      headerRow.innerHTML = `<th style="text-align: left; width: 220px;">토픽</th>${thList}<th>계</th>`;
+    }
+
+    function loadMatrixData() {
+      const tx = dbMatrix.transaction('topics', 'readonly');
+      const store = tx.objectStore('topics');
+      const req = store.getAll();
+
+      req.onsuccess = (e) => {
+        let topics = e.target.result || [];
+        const tbody = document.getElementById('matrixBody');
+        tbody.innerHTML = '';
+
+        // 최초 1회만 샘플 데이터 등록 
+        if (topics.length === 0 && !localStorage.getItem('matrixInitDone')) {
+          localStorage.setItem('matrixInitDone', 'true');
+          const dummy1 = { id: '1', name: 'ISP/ISMP', rounds: ['129', '131', '138', '139'], keywords: 'ISP, ISMP' };
+          const dummy2 = { id: '2', name: 'IT감리/PMO', rounds: ['129', '130', '131', '134', '136', '137'], keywords: '감리, PMO' };
+          
+          topics = [dummy1, dummy2];
+          const initTx = dbMatrix.transaction('topics', 'readwrite');
+          initTx.objectStore('topics').put(dummy1);
+          initTx.objectStore('topics').put(dummy2);
+        }
+
+        topics.forEach(topic => {
+          const tr = document.createElement('tr');
+          let rowHtml = `<td style="text-align: left; font-weight: 600;">
+            <span class="topic-name" onclick="editTopic('${topic.id}')" title="클릭하여 수정" data-html2canvas-ignore="true">${topic.name}</span>
+          </td>`;
+          let totalCount = 0;
+
+          baseRounds.forEach(round => {
+            const strRound = String(round);
+            const hasAppeared = topic.rounds.includes(strRound);
+            if (hasAppeared) totalCount++;
+            const cellContent = hasAppeared 
+              ? `<div class="dot" title="${round}회 기출문제 조회" onclick="fetchQuestions('${topic.keywords}', '${strRound}')"></div>` 
+              : ``;
+            rowHtml += `<td>${cellContent}</td>`;
+          });
+          rowHtml += `<td style="font-weight: 700;">${totalCount}</td>`;
+          tr.innerHTML = rowHtml;
+          tbody.appendChild(tr);
+        });
+      };
+    }
+
+    function fetchQuestions(keywords, round) {
+      const guide = document.getElementById('viewerGuide');
+      const list = document.getElementById('questionList');
+      
+      guide.style.display = 'none';
+      list.style.display = 'flex';
+      list.innerHTML = '<div style="text-align:center; padding: 20px; color:#6b7280;">문제를 불러오는 중...</div>';
+
+      if (!dbBank) return list.innerHTML = `<div style="text-align:center; padding: 20px; color:red;">TopicBankDB 미연결</div>`;
+
+      const tx = dbBank.transaction('items', 'readonly');
+      const store = tx.objectStore('items');
+      const req = store.getAll();
+
+      req.onsuccess = (e) => {
+        const allItems = e.target.result || [];
+        const keywordArr = keywords.split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
+        currentFetchedQuestions = allItems.filter(item => {
+          if (String(item.round) !== round) return false;
+          const probText = String(item.problem || '').toLowerCase();
+          return keywordArr.some(kw => probText.includes(kw));
+        });
+        renderFilteredQuestions();
+      };
+    }
+
+    function renderFilteredQuestions() {
+      const list = document.getElementById('questionList');
+      if (currentFetchedQuestions.length === 0) {
+        list.innerHTML = `<div style="text-align:center; padding: 40px; color:var(--text-muted);">해당 회차에 매칭되는 DB 문제가 없습니다.</div>`;
+        return;
+      }
+      const checkedInputs = Array.from(document.querySelectorAll('#categoryFilter input:checked'));
+      const selectedCats = checkedInputs.map(input => input.value);
+
+      const matched = currentFetchedQuestions.filter(item => {
+        if (selectedCats.length === 0) return true;
+        const cat = item.category?.trim() || '';
+        return selectedCats.some(selected => cat.includes(selected));
+      });
+
+      if (matched.length === 0) {
+        list.innerHTML = `<div style="text-align:center; padding: 40px; color:var(--text-muted);">선택한 종목에 해당하는 문제가 없습니다.</div>`;
+        return;
+      }
+
+      list.innerHTML = matched.map(item => `
+        <div class="question-card">
+          <div class="question-meta">
+            <span>제${item.round}회</span> | 
+            <span>${item.category || '종목미상'}</span> | 
+            <span>${item.type || '교시미상'}</span>
+          </div>
+          <div class="question-text">${(item.problem || '').replace(/\n/g, '<br>')}</div>
+        </div>
+      `).join('');
+    }
+
+    function openTopicModal() {
+      editingTopicId = null;
+      document.getElementById('topicModalTitle').innerText = '새 토픽 등록';
+      document.getElementById('topicName').value = '';
+      document.getElementById('topicRounds').value = '';
+      document.getElementById('topicKeywords').value = '';
+      
+      // 새 토픽 등록 시 삭제 버튼 숨김
+      document.getElementById('btnDeleteTopic').style.display = 'none';
+
+      document.getElementById('topicModal').style.display = 'flex'; 
+      document.getElementById('topicName').focus(); 
+    }
+
+    function editTopic(id) {
+      const tx = dbMatrix.transaction('topics', 'readonly');
+      const store = tx.objectStore('topics');
+      const req = store.get(id);
+
+      req.onsuccess = (e) => {
+        const topic = e.target.result;
+        if (topic) {
+          editingTopicId = topic.id;
+          document.getElementById('topicModalTitle').innerText = '토픽 수정';
+          document.getElementById('topicName').value = topic.name;
+          document.getElementById('topicRounds').value = topic.rounds.join(', ');
+          document.getElementById('topicKeywords').value = topic.keywords;
+          
+          // 기존 토픽 수정 시 삭제 버튼 표시
+          document.getElementById('btnDeleteTopic').style.display = 'block';
+
+          document.getElementById('topicModal').style.display = 'flex';
+          document.getElementById('topicName').focus(); 
+        } else {
+          alert("저장된 토픽 데이터를 찾을 수 없습니다.");
+        }
+      };
+    }
+
+    function closeTopicModal() {
+      document.getElementById('topicModal').style.display = 'none';
+      document.getElementById('topicName').value = '';
+      document.getElementById('topicRounds').value = '';
+      document.getElementById('topicKeywords').value = '';
+      editingTopicId = null;
+    }
+
+    function saveTopic() {
+      const name = document.getElementById('topicName').value.trim();
+      const roundsRaw = document.getElementById('topicRounds').value.trim();
+      const keywords = document.getElementById('topicKeywords').value.trim();
+
+      if (!name || !roundsRaw) return alert('토픽명과 출제 회차는 필수 입력입니다.');
+
+      const rounds = roundsRaw.split(',').map(r => r.trim()).filter(Boolean);
+      const id = editingTopicId ? editingTopicId : 'TPC_' + Date.now();
+      const targetTopic = { id, name, rounds, keywords: keywords || name };
+
+      const tx = dbMatrix.transaction('topics', 'readwrite');
+      tx.objectStore('topics').put(targetTopic);
+      tx.oncomplete = () => { 
+        closeTopicModal(); 
+        loadMatrixData(); 
+        showToast('토픽이 성공적으로 저장되었습니다.');
+      };
+    }
+
+    // 항목 삭제 기능
+    function deleteTopic() {
+      if (!editingTopicId) return;
+      
+      if (confirm('해당 토픽을 완전히 삭제하시겠습니까?')) {
+        const tx = dbMatrix.transaction('topics', 'readwrite');
+        const store = tx.objectStore('topics');
+        const req = store.delete(editingTopicId);
+
+        req.onsuccess = () => {
+          closeTopicModal();
+          loadMatrixData();
+          showToast('토픽이 삭제되었습니다.');
+        };
+      }
+    }
+
+    function saveMatrixAsImage() {
+      const targetElement = document.getElementById('matrixSection');
+      html2canvas(targetElement, { scale: 2, backgroundColor: '#ffffff' }).then(canvas => {
+        const link = document.createElement('a');
+        link.download = `Topic_Matrix_${new Date().getTime()}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        showToast('이미지가 다운로드 되었습니다.');
+      }).catch(err => {
+        console.error('이미지 저장 오류:', err);
+        alert('매트릭스를 이미지로 저장하는데 실패했습니다.');
+      });
+    }
+
+    // === 엑셀 연동 기능 ===
+
+    function downloadExcelTemplate() {
+      const ws_data = [
+        ["토픽명", "출제회차(콤마구분)", "검색키워드(콤마구분)"],
+        ["ISP/ISMP", "129, 131, 138, 139", "ISP, ISMP"],
+        ["IT감리/PMO", "129, 130", "감리, PMO"]
+      ];
+      const ws = XLSX.utils.aoa_to_sheet(ws_data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "토픽양식");
+      XLSX.writeFile(wb, "토픽_업로드_양식.xlsx");
+      showToast("엑셀 양식이 다운로드 되었습니다.");
+    }
+
+    function handleExcelUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, {type: 'array'});
+          const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+          
+          if(json.length === 0) throw new Error("데이터가 없습니다.");
+          
+          const tx = dbMatrix.transaction('topics', 'readwrite');
+          const store = tx.objectStore('topics');
+          let addedCount = 0;
+
+          json.forEach((row, idx) => {
+            const nameKey = Object.keys(row).find(k => k.includes('토픽'));
+            const roundsKey = Object.keys(row).find(k => k.includes('회차'));
+            const keywordsKey = Object.keys(row).find(k => k.includes('키워드'));
+            
+            if (nameKey && row[nameKey]) {
+              const name = row[nameKey].toString().trim();
+              if(name.startsWith("[예시]")) return; 
+
+              const roundsRaw = roundsKey && row[roundsKey] ? row[roundsKey].toString() : "";
+              const rounds = roundsRaw.split(',').map(r => r.trim()).filter(Boolean);
+              
+              const keywords = keywordsKey && row[keywordsKey] ? row[keywordsKey].toString().trim() : name;
+              
+              const id = 'TPC_' + Date.now() + '_' + idx;
+              store.put({ id, name, rounds, keywords });
+              addedCount++;
+            }
+          });
+          
+          tx.oncomplete = () => {
+            loadMatrixData();
+            showToast(`${addedCount}개의 토픽이 업로드 되었습니다.`);
+          };
+        } catch (err) {
+          alert("오류: 양식을 확인해주세요.\n" + err.message);
+        }
+        event.target.value = ''; 
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function exportTopicsToExcel() {
+      const tx = dbMatrix.transaction('topics', 'readonly');
+      const store = tx.objectStore('topics');
+      const req = store.getAll();
+
+      req.onsuccess = (e) => {
+        const topics = e.target.result || [];
+        if (topics.length === 0) {
+          alert("다운로드할 토픽 데이터가 없습니다.");
+          return;
+        }
+
+        const ws_data = [["토픽명", "출제회차(콤마구분)", "검색키워드(콤마구분)"]];
+        topics.forEach(t => {
+          ws_data.push([t.name, t.rounds.join(', '), t.keywords]);
+        });
+
+        const ws = XLSX.utils.aoa_to_sheet(ws_data);
+        const wb = XLSX.utils.book_new();
+        
+        XLSX.utils.book_append_sheet(wb, ws, "TopicMatrix");
+        XLSX.writeFile(wb, `Topic_Matrix_Backup_${new Date().getTime()}.xlsx`);
+        showToast("토픽 매트릭스가 엑셀로 저장되었습니다.");
+      };
+    }
+
+    window.onload = initApp;
+  </script>
+</body>
+</html>
