@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>웹에서 이미지 추출 (WEB to Image)</title>
+  
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+  <style>
+    :root {
+      --bg-body: #F9FAFB;
+      --bg-surface: #FFFFFF;
+      --border-light: #F3F4F6;
+      --border-base: #E5E7EB;
+      --border-dark: #D1D5DB;
+      --text-main: #111827;
+      --text-muted: #6B7280;
+      --primary: #111827;
+      --primary-hover: #374151;
+      --secondary: #FFFFFF;
+      --secondary-hover: #F9FAFB;
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+      --radius-md: 8px;
+      --radius-lg: 12px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background: var(--bg-body); color: var(--text-main);
+      -webkit-font-smoothing: antialiased; 
+      min-height: 100vh; display: flex; flex-direction: column;
+    }
+
+    .top-bar { 
+      position: sticky; top: 0; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(8px); 
+      height: 64px; min-height: 64px; padding: 0 32px; border-bottom: 1px solid var(--border-base); 
+      display: flex; justify-content: space-between; align-items: center; z-index: 100; 
+    }
+    .app-title { font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 10px; color: var(--primary); }
+    
+    .actions { display: flex; gap: 10px; align-items: center; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 14px; border-radius: var(--radius-md); font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; border: 1px solid transparent; outline: none; }
+    .btn-primary { background: var(--primary); color: white; box-shadow: var(--shadow-sm); }
+    .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
+    .btn-outline { background: var(--secondary); color: var(--text-main); border-color: var(--border-base); }
+    .btn-outline:hover { background: var(--secondary-hover); border-color: var(--border-dark); }
+    
+    .hidden { display: none !important; }
+
+    .container { padding: 40px 32px; max-width: 1400px; margin: 0 auto; width: 100%; flex: 1; }
+    .keynote-card { background: var(--bg-surface); border: 1px solid var(--border-base); border-radius: var(--radius-lg); padding: 32px; margin-bottom: 28px; box-shadow: var(--shadow-md); position: relative; }
+    
+    .html-textarea { width: 100%; height: 360px; padding: 20px; border: 2px dashed var(--border-dark); border-radius: var(--radius-md); font-family: monospace; font-size: 14px; line-height: 1.6; resize: vertical; outline: none; transition: 0.2s; margin-top:16px; background-color: var(--bg-body); }
+    .html-textarea:focus { border-color: var(--primary); background-color: var(--bg-surface); }
+
+    .instructions {
+      display: flex; gap: 20px; align-items: center; font-size: 13px; color: var(--text-muted);
+      background: var(--bg-surface); padding: 12px 20px; border-radius: var(--radius-md); border: 1px solid var(--border-base);
+      margin-bottom: 24px;
+    }
+    .instructions span { display: inline-flex; align-items: center; gap: 6px; }
+
+    .image-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; }
+    .image-card { background: var(--bg-surface); border: 1px solid var(--border-base); border-radius: var(--radius-md); overflow: hidden; position: relative; transition: transform 0.2s, box-shadow 0.2s; }
+    .image-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-md); }
+    
+    .image-preview { width: 100%; height: 180px; object-fit: contain; background-color: #f3f4f6; border-bottom: 1px solid var(--border-light); cursor: zoom-in; }
+    
+    .image-info { padding: 12px; display: flex; justify-content: space-between; align-items: center; }
+    .image-name { font-size: 13px; font-weight: 500; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
+    .image-actions { display: flex; gap: 6px; }
+    
+    .icon-btn { background: transparent; border: none; color: var(--text-muted); cursor: pointer; padding: 6px; border-radius: 4px; transition: all 0.2s; display: flex; align-items: center; justify-content: center; }
+    .icon-btn:hover { background: var(--border-base); color: var(--primary); }
+
+    .copied-card { background-color: #D1FAE5 !important; border-color: #6EE7B7 !important; }
+    .copied-card .image-preview { background-color: rgba(209, 250, 229, 0.6) !important; }
+
+    .toast { visibility: hidden; min-width: 250px; background-color: #333; color: #fff; text-align: center; border-radius: var(--radius-md); padding: 12px 16px; position: fixed; z-index: 3000; left: 50%; bottom: 30px; transform: translateX(-50%); display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; opacity: 0; transition: opacity 0.3s, bottom 0.3s; }
+    .toast.show { visibility: visible; opacity: 1; bottom: 50px; }
+
+    .modal-overlay { display: none; position: fixed; z-index: 2000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.85); backdrop-filter: blur(5px); justify-content: center; align-items: center; flex-direction: column; }
+    .modal-content { max-width: 90%; max-height: 80vh; object-fit: contain; background-color: #FFFFFF; border-radius: var(--radius-md); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); animation: zoomIn 0.2s ease-out; }
+    .modal-controls { margin-top: 24px; display: flex; gap: 12px; animation: zoomIn 0.2s ease-out; }
+    .modal-controls .btn-outline { background: rgba(255, 255, 255, 0.1); color: white; border-color: rgba(255, 255, 255, 0.2); }
+    .modal-controls .btn-outline:hover { background: rgba(255, 255, 255, 0.2); }
+    .modal-close { position: absolute; top: 20px; right: 30px; color: white; font-size: 40px; font-weight: 300; cursor: pointer; transition: color 0.2s; line-height: 1; }
+    .modal-close:hover { color: #9CA3AF; }
+    
+    @keyframes zoomIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  </style>
+</head>
+<body>
+
+  <header class="top-bar">
+    <div class="app-title"><i class="ph ph-images-square"></i> WEB to Image 추출기</div>
+    <div class="actions">
+      <button class="btn btn-outline hidden" id="btnBack" onclick="switchToInput()"><i class="ph ph-arrow-left"></i> 데이터 다시 입력</button>
+      <button class="btn btn-primary" id="btnSubmit" onclick="analyzeAndExtract()"><i class="ph ph-magic-wand"></i> 이미지 추출하기</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <div id="panelInput" class="keynote-card">
+      <div style="margin-bottom: 8px;">
+        <h3 style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;"><i class="ph-fill ph-textbox"></i> 원본 웹 페이지 복사/붙여넣기</h3>
+        <p style="color: var(--text-muted); font-size: 14px;">웹 브라우저에서 복사한 영역(텍스트, 표, 그림 포함)을 아래 공간에 클릭 후 붙여넣기(Ctrl+V) 하세요.</p>
+      </div>
+      <textarea id="txtSource" class="html-textarea" spellcheck="false" placeholder="클릭 후 Ctrl+V (또는 Cmd+V)를 눌러 복사한 HTML 내용을 붙여넣으세요..."></textarea>
+    </div>
+
+    <div id="panelOutput" class="keynote-card hidden" style="padding: 24px; min-height: 400px;">
+      <div class="instructions">
+        <span><i class="ph ph-arrows-out"></i> 이미지 클릭: 크게 보기</span>
+        <span style="color: #D1D5DB;">|</span>
+        <span><i class="ph ph-copy"></i> 아이콘 클릭: 클립보드 복사 (내부 가상 주소 또는 에디터 우회)</span>
+        <span style="color: #D1D5DB;">|</span>
+        <span><i class="ph ph-download-simple"></i> 아이콘 클릭: 직접 다운로드</span>
+      </div>
+
+      <div id="emptyState" style="text-align:center; padding: 60px 20px; color: var(--text-muted); display: none;">
+        <i class="ph ph-image-broken" style="font-size: 48px; margin-bottom: 12px;"></i>
+        <p>복사된 영역에서 유효한 이미지를 찾지 못했습니다.</p>
+      </div>
+
+      <div class="image-grid" id="imageGrid"></div>
+    </div>
+  </main>
+
+  <div id="toastCopied" class="toast"><i class="ph-bold ph-check-circle"></i> <span>알림 메시지</span></div>
+
+  <div id="image-modal" class="modal-overlay" onclick="closeModal()">
+    <span class="modal-close" onclick="closeModal()">&times;</span>
+    <img id="modal-img" class="modal-content" src="" onclick="event.stopPropagation();">
+    <div class="modal-controls" onclick="event.stopPropagation();">
+      <button class="btn btn-primary" onclick="copyModalImage()">
+        <i class="ph ph-copy"></i> 복사
+      </button>
+      <button class="btn btn-outline" onclick="downloadModalImage()">
+        <i class="ph ph-download-simple"></i> 다운로드
+      </button>
+    </div>
+  </div>
+
+  <script>
+    let clipboardHtmlData = null;
+    let directImageBlobs = [];
+    let extractedImages = [];
+    let currentModalIndex = -1;
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const txtSource = document.getElementById('txtSource');
+      
+      txtSource.addEventListener('paste', (e) => {
+        clipboardHtmlData = e.clipboardData.getData('text/html');
+        directImageBlobs = [];
+        
+        if (e.clipboardData.items) {
+          for (let item of e.clipboardData.items) {
+            if (item.type.startsWith('image/')) {
+              directImageBlobs.push({ file: item.getAsFile(), type: item.type });
+            }
+          }
+        }
+      });
+
+      txtSource.addEventListener('input', (e) => {
+        if (e.inputType && !e.inputType.includes('Paste')) clipboardHtmlData = null;
+      });
+    });
+
+    function switchToInput() {
+      document.getElementById('panelInput').classList.remove('hidden');
+      document.getElementById('panelOutput').classList.add('hidden');
+      document.getElementById('btnBack').classList.add('hidden');
+      document.getElementById('btnSubmit').classList.remove('hidden');
+    }
+
+    function switchToOutput() {
+      document.getElementById('panelInput').classList.add('hidden');
+      document.getElementById('panelOutput').classList.remove('hidden');
+      document.getElementById('btnBack').classList.remove('hidden');
+      document.getElementById('btnSubmit').classList.add('hidden');
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toastCopied');
+      toast.querySelector('span').innerText = msg;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 2000);
+    }
+
+    function analyzeAndExtract() {
+      extractedImages = [];
+
+      if (directImageBlobs.length > 0) {
+        directImageBlobs.forEach((blobData, index) => {
+          extractedImages.push({
+            url: URL.createObjectURL(blobData.file),
+            name: `pasted_image_${Date.now()}_${index}.png`
+          });
+        });
+      }
+
+      if (clipboardHtmlData) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(clipboardHtmlData, 'text/html');
+        const images = doc.querySelectorAll('img');
+        
+        images.forEach((img, index) => {
+          const src = img.src || img.getAttribute('data-src');
+          if (!src) return;
+
+          let fileName = img.alt || `web_image_${index}`;
+          if(fileName.length > 30) fileName = fileName.substring(0, 30) + '...';
+
+          if (!extractedImages.some(imgObj => imgObj.url === src)) {
+            extractedImages.push({ url: src, name: fileName });
+          }
+        });
+      }
+
+      renderImageGrid();
+      switchToOutput();
+    }
+
+    function renderImageGrid() {
+      const imageGrid = document.getElementById('imageGrid');
+      const emptyState = document.getElementById('emptyState');
+      imageGrid.innerHTML = '';
+
+      if (extractedImages.length === 0) {
+        emptyState.style.display = 'block';
+        imageGrid.style.display = 'none';
+        return;
+      }
+
+      emptyState.style.display = 'none';
+      imageGrid.style.display = 'grid';
+
+      extractedImages.forEach((img, index) => {
+        const card = document.createElement('div');
+        card.className = 'image-card';
+        card.id = `img-card-${index}`;
+        
+        card.innerHTML = `
+          <img src="${img.url}" class="image-preview" title="클릭하여 크게 보기" onclick="viewImageFullScreen(${index})">
+          <div class="image-info">
+            <span class="image-name" title="${img.name}">${img.name}</span>
+            <div class="image-actions">
+              <button class="icon-btn" onclick="copyImage(${index})" title="이미지 복사">
+                <i class="ph ph-copy"></i>
+              </button>
+              <button class="icon-btn" onclick="downloadImage(${index})" title="이미지 다운로드">
+                <i class="ph ph-download-simple"></i>
+              </button>
+            </div>
+          </div>
+        `;
+        imageGrid.appendChild(card);
+      });
+      
+      showToast(`${extractedImages.length}개의 이미지가 추출되었습니다.`);
+    }
+
+    function viewImageFullScreen(index) {
+      currentModalIndex = index;
+      document.getElementById('modal-img').src = extractedImages[index].url;
+      document.getElementById('image-modal').style.display = 'flex';
+    }
+
+    function closeModal() {
+      document.getElementById('image-modal').style.display = 'none';
+      currentModalIndex = -1;
+    }
+
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+    /* =========================================================================
+       🔥 오직 브라우저 내부 기능만 사용하는 무알림(Silent) 우회 복사/다운로드 엔진
+       ========================================================================= */
+
+    // 이미지 원본 URL을 받아 브라우저 내부 메모리(Blob) 주소로 변환 시도
+    async function convertToLocalBlobUrl(url) {
+      if (url.startsWith('blob:') || url.startsWith('data:')) return url;
+
+      try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Network fetch failed');
+        const blob = await response.blob();
+        return URL.createObjectURL(blob);
+      } catch (error) {
+        // Fetch 실패 시 캔버스를 이용한 시도
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.crossOrigin = "anonymous";
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width; canvas.height = img.height;
+            canvas.getContext('2d').drawImage(img, 0, 0);
+            canvas.toBlob((blob) => {
+              if (blob) resolve(URL.createObjectURL(blob));
+              else reject(new Error("Canvas blob extraction failed"));
+            }, "image/png");
+          };
+          img.onerror = () => reject(new Error("CORS blocked"));
+          img.src = url;
+        });
+      }
+    }
+
+    // [복사 기능] 알림창 없이 에디터 우회 복사로 직행
+    async function copyImage(index) {
+      const imgData = extractedImages[index];
+      
+      try {
+        // 1. 보안이 허용되는 경우 (가상 주소 즉시 생성 가능)
+        const localBlobUrl = await convertToLocalBlobUrl(imgData.url);
+        const response = await fetch(localBlobUrl);
+        const blob = await response.blob();
+        
+        await navigator.clipboard.write([
+          new ClipboardItem({ [blob.type || 'image/png']: blob })
+        ]);
+        visualFeedbackSuccess(index, '이미지가 복사되었습니다!');
+
+      } catch (err) {
+        // 2. 보안(CORS)으로 막힌 경우 -> HTML 복사로 조용히 우회
+        // 에러 알림창을 띄우지 않고, 엑셀/워드/노션 등이 대신 해석할 수 있도록 HTML로 넘깁니다.
+        try {
+          const tempDiv = document.createElement('div');
+          tempDiv.contentEditable = true;
+          tempDiv.innerHTML = `<img src="${imgData.url}">`;
+          tempDiv.style.position = 'absolute'; tempDiv.style.left = '-9999px';
+          document.body.appendChild(tempDiv);
+          
+          const range = document.createRange();
+          range.selectNode(tempDiv.querySelector('img'));
+          const selection = window.getSelection();
+          selection.removeAllRanges(); selection.addRange(range);
+          
+          document.execCommand('copy');
+          document.body.removeChild(tempDiv);
+          
+          visualFeedbackSuccess(index, '에디터용(워드/엑셀 등)으로 우회 복사되었습니다!');
+        } catch (fallbackErr) {
+          // 이마저도 실패하면 조용히 새 창 띄우기
+          window.open(imgData.url, '_blank');
+        }
+      }
+    }
+
+    // [다운로드 기능] 알림창 없이 새 탭 띄우기
+    async function downloadImage(index) {
+      const imgData = extractedImages[index];
+      const filename = imgData.name.endsWith('.png') ? imgData.name : imgData.name + '.png';
+      
+      try {
+        // 보안이 허용되는 경우 즉시 다운로드
+        const localBlobUrl = await convertToLocalBlobUrl(imgData.url);
+        const a = document.createElement('a');
+        a.href = localBlobUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      } catch (err) {
+        // 보안(CORS)으로 막힌 경우 경고창 없이 새 창으로만 띄워 우클릭 저장 유도
+        window.open(imgData.url, '_blank');
+      }
+    }
+
+    // 피드백 UI 업데이트
+    function visualFeedbackSuccess(index, msg) {
+      showToast(msg);
+      const card = document.getElementById(`img-card-${index}`);
+      if (card) {
+        card.classList.add('copied-card');
+        setTimeout(() => card.classList.remove('copied-card'), 2000);
+      }
+    }
+
+    function copyModalImage() { if (currentModalIndex > -1) copyImage(currentModalIndex); }
+    function downloadModalImage() { if (currentModalIndex > -1) downloadImage(currentModalIndex); }
+  </script>
+</body>
+</html>
