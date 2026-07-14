@@ -126,6 +126,7 @@
 
       <button class="btn btn-outline hidden" id="btnBack" onclick="switchToInput()"><i class="ph ph-arrow-left"></i> 텍스트 다시 입력</button>
       <button class="btn btn-danger hidden" id="btnCrop" onclick="applySelectionToPreview()"><i class="ph ph-scissors"></i> 영역 자르기</button>
+      <button class="btn btn-outline hidden" id="btnExportJson" onclick="exportToJSON()"><i class="ph ph-download-simple"></i> JSON 저장</button>
       <button class="btn btn-primary" id="btnSubmit" onclick="analyzeAndRender()"><i class="ph ph-magic-wand"></i> 데이터 추출 및 표 생성</button>
     </div>
   </header>
@@ -137,7 +138,7 @@
         <h3 style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;"><i class="ph-fill ph-textbox"></i> 원본 텍스트 입력</h3>
         <p class="text-muted" style="font-size: 14px; color: var(--text-muted); line-height: 1.6;">
           복사한 데이터를 붙여넣으세요. 무의미한 열/행 제어 문자와 <b>[대표]</b> 키워드는 자동 삭제됩니다.<br>
-          변환 후에는 <b>① 더블클릭 수정 ② 마우스 드래그 영역복사 ③ 셀 클릭 자동복사 ④ 열/행 숨기기</b>를 지원합니다.
+          변환 후에는 <b>① 더블클릭 수정 ② 마우스 드래그 영역복사 ③ 셀 클릭 자동복사 ④ 열/행 숨기기 ⑤ JSON 저장</b>을 지원합니다.
         </p>
       </div>
       <textarea id="txtSource" class="html-textarea" spellcheck="false" placeholder="이곳에 원본 데이터를 붙여넣으세요..."></textarea>
@@ -163,7 +164,7 @@
     </div>
   </main>
 
-  <div id="toastCopied" class="toast"><i class="ph-bold ph-check-circle"></i> <span>복사되었습니다</span></div>
+  <div id="toastCopied" class="toast"><i class="ph-bold ph-check-circle"></i> <span>알림 메시지</span></div>
 
   <script>
     // --- 표시 컬럼 (드롭다운) 제어 ---
@@ -216,6 +217,7 @@
       document.getElementById('panelOutput').classList.add('hidden');
       document.getElementById('btnBack').classList.add('hidden');
       document.getElementById('btnCrop').classList.add('hidden');
+      document.getElementById('btnExportJson').classList.add('hidden');
       document.getElementById('colMenuWrapper').classList.add('hidden');
       document.getElementById('btnSubmit').classList.remove('hidden');
     }
@@ -225,6 +227,7 @@
       document.getElementById('panelOutput').classList.remove('hidden');
       document.getElementById('btnBack').classList.remove('hidden');
       document.getElementById('btnCrop').classList.remove('hidden');
+      document.getElementById('btnExportJson').classList.remove('hidden');
       document.getElementById('colMenuWrapper').classList.remove('hidden');
       document.getElementById('btnSubmit').classList.add('hidden');
       initResizers();
@@ -307,6 +310,61 @@
 
       clearSelection();
       switchToOutput();
+    }
+
+    // --- JSON 저장 기능 (파일명 날짜/시간 추가) ---
+    function exportToJSON() {
+      const tbody = document.getElementById('tableBody');
+      const rows = tbody.querySelectorAll('tr');
+      const data = [];
+
+      rows.forEach(row => {
+        // 숨겨진 행 제외
+        if (row.classList.contains('hidden-row')) return;
+        
+        // 셀 내용이 비어있는 빈 데이터 행 방지
+        if (row.cells.length < 6) return;
+
+        // 올바른 매핑 구조 (왼쪽부터 차례대로 1:1 매핑)
+        const item = {
+          "번호": row.cells[1].innerText.trim(),
+          "문제": row.cells[2].innerText.trim(),     // 토픽
+          "리드문": row.cells[3].innerText.trim(),   // 키워드
+          "개념": row.cells[4].innerText.trim(),     // 비고
+          "풀이": row.cells[5].innerText.trim()      // 상세 내용
+        };
+        
+        data.push(item);
+      });
+
+      if (data.length === 0) {
+        return alert("저장할 데이터가 없습니다.");
+      }
+
+      const jsonString = JSON.stringify(data, null, 2);
+      const blob = new Blob([jsonString], { type: "application/json;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      
+      // 현재 날짜와 시간 가져오기 (YYYYMMDD_HHMMSS 형식)
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const seconds = String(now.getSeconds()).padStart(2, '0');
+      const timestamp = `${year}${month}${day}_${hours}${minutes}${seconds}`;
+      
+      const a = document.createElement('a');
+      a.href = url;
+      // 파일명에 타임스탬프 적용
+      a.download = `extracted_data_${timestamp}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      showToast('JSON 파일이 저장되었습니다');
     }
 
     // --- 행 숨김 해제 기능 ---

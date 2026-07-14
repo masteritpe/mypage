@@ -453,6 +453,8 @@
         <button class="btn btn-outline" onclick="exportJSON()"><i class="ph ph-download-simple"></i> 백업</button>
         <div class="divider"></div>
         <button class="btn btn-primary" onclick="saveCurrentNote()"><i class="ph ph-floppy-disk"></i> 저장</button>
+        <input type="file" id="bulkInput" accept=".json" style="display: none;" onchange="importBulkJSON(event)">
+        <button class="btn btn-outline" onclick="document.getElementById('bulkInput').click()"><i class="ph ph-files"></i> Bulk</button>
         <button class="btn btn-outline" onclick="prepareAndPrint()"><i class="ph ph-printer"></i> PDF</button>
         
         <button class="btn btn-outline" onclick="executeExport('anki')" title="Anki txt 추출 (시즌 기준)"><i class="ph ph-cards"></i> Anki</button>
@@ -1933,6 +1935,42 @@
             renderNoteList().then(() => { loadNote(importedNote); }); 
           };
         } catch (err) { alert("파일을 읽는 중 오류가 발생했습니다: " + err.message); } 
+        event.target.value = ''; 
+      }; 
+      reader.readAsText(file);
+    }
+
+    function importBulkJSON(event) {
+      const file = event.target.files[0]; 
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const bulkData = JSON.parse(e.target.result);
+          if (!Array.isArray(bulkData)) return alert("유효한 Bulk JSON 파일이 아닙니다. (배열 형태의 JSON이어야 합니다.)"); 
+          
+          deactivateCurrentEditor(); 
+
+          const newItems = bulkData.map(item => {
+            const formatText = (text) => text ? '<p>' + String(text).replace(/\n/g, '<br>') + '</p>' : '';
+            return {
+              problem: formatText(item['문제']),
+              lead: formatText(item['리드문']),
+              concept: formatText(item['개념']),
+              solution: formatText(item['풀이']),
+              type5r: []
+            };
+          });
+
+          currentNoteData.items = newItems;
+          const newCount = newItems.length || 1;
+          document.getElementById('itemCount').value = newCount;
+          generateForms(newCount);
+          
+          alert(`총 ${newItems.length}개의 문항이 성공적으로 일괄 입력되었습니다.\n(우측 상단의 [저장] 버튼을 눌러야 최종 반영됩니다)`); 
+        } catch (err) { 
+          alert("파일을 읽는 중 오류가 발생했습니다: " + err.message); 
+        } 
         event.target.value = ''; 
       }; 
       reader.readAsText(file);
