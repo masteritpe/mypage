@@ -137,8 +137,8 @@
     }
     .list-item:hover { background: var(--accent-hover); }
     .list-item.active { background: var(--bg-body); }
-    .list-item input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; accent-color: var(--accent-primary); flex-shrink: 0; }
-    .list-item-title { flex: 1; font-size: 14.5px; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+    .list-item input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; accent-color: var(--accent-primary); flex-shrink: 0; pointer-events: auto; }
+    .list-item-title { flex: 1; font-size: 14.5px; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; pointer-events: auto; }
     .list-item.active .list-item-title { font-weight: 700; color: var(--accent-primary); }
     .completed-text { color: var(--text-tertiary) !important; text-decoration: line-through; }
 
@@ -215,7 +215,7 @@
     }
     
     .progress-bar { height: 3px; background: transparent; width: 100%; position: absolute; top: 0; left: 0; z-index: 5; }
-    .progress-fill { height: 100%; background: var(--accent-primary); width: 0%; transition: width 0.1s linear; }
+    .progress-fill { height: 100%; background: var(--accent-primary); width: 0%; /* Transition은 JS에서 제어 */ }
     
     .screen-content { 
         flex: 1; padding: 30px 40px; 
@@ -465,10 +465,8 @@
     let currentPlayIndex = -1;
 
     let playInterval = null;
-    let progressInterval = null;
     let isPlaying = false;
     let slideDuration = 10000;
-    let startTime = 0;
     
     let isTtsEnabled = false;
     
@@ -503,6 +501,42 @@
         $playerAreaDOM.classList.remove('show-controls');
     });
 
+    // 🚀 [최적화 2] 사이드바 리스트 이벤트 위임 (Event Delegation) 적용
+    $list.addEventListener('click', (e) => {
+        const listItem = e.target.closest('.list-item');
+        if (!listItem) return;
+        
+        const checkbox = listItem.querySelector('.item-checkbox');
+        if (!checkbox) return;
+        
+        const realIndex = parseInt(checkbox.dataset.idx);
+
+        // 체크박스 자체 클릭 시
+        if (e.target.type === 'checkbox') {
+            updateSelection();
+            return;
+        }
+
+        // 타이틀(텍스트 영역) 클릭 시
+        if (e.target.closest('.list-item-title')) {
+            if(isPlaying) stopPlay();
+            if(!checkbox.checked) { 
+                checkbox.checked = true; 
+                updateSelection(); 
+            }
+            const newPlayIndex = selectedIndices.indexOf(realIndex);
+            if(newPlayIndex !== -1) showSlide(newPlayIndex);
+        }
+    });
+
+    // 🚀 [최적화 3] 이미지 확대 모달 이벤트 위임 적용
+    $screenContent.addEventListener('click', (e) => {
+        if (e.target.tagName.toLowerCase() === 'img' && e.target.closest('.ql-editor')) {
+            document.getElementById('modal-image').src = e.target.src;
+            document.getElementById('image-modal').classList.add('show');
+        }
+    });
+
     const stripHTML = (html) => {
         if (!html) return '';
         return html.replace(/<[^>]*>?/gm, '').replace(/&nbsp;/g, ' ').trim();
@@ -527,13 +561,11 @@
         });
     };
 
-    // 🚀 사용 가능한 한국어 시스템 음성 로딩 & 메모리 보존을 위한 리스트 바인딩
     function loadVoices() {
         if (typeof speechSynthesis === 'undefined') return;
         systemVoices = speechSynthesis.getVoices();
         
         $voiceSelect.innerHTML = '';
-        // 한국어 지원 보이스 또는 기본 보이스만 필터링
         const koVoices = systemVoices.filter(v => v.lang.includes('ko') || v.lang.includes('KO'));
         
         if (koVoices.length === 0) {
@@ -622,7 +654,6 @@
         if(currentNote) $noteSelect.value = currentNote.id;
     }
 
-    // 🚀 환경설정 모달 열기/닫기
     function openSettingsModal() {
         loadVoices();
         $settingsModal.style.display = 'flex';
@@ -631,7 +662,6 @@
     function closeSettingsModal() {
         selectedVoiceName = $voiceSelect.value;
         $settingsModal.style.display = 'none';
-        // 음성이 바뀌었으면 현재 진행중인 슬라이드 TTS 다시 리프레시 실행
         if (isTtsEnabled && selectedIndices.length > 0 && currentPlayIndex !== -1) {
             const realIndex = selectedIndices[currentPlayIndex];
             speakCurrentSlide(currentNote.items[realIndex], realIndex);
@@ -739,15 +769,7 @@
                 <div class="list-item-title ${completedClass}" title="${fullTitle.replace(/"/g, '&quot;')}">${realIndex + 1}. ${plainTitle}</div>
             `;
             
-            div.querySelector('.list-item-title').onclick = () => {
-                if(isPlaying) stopPlay();
-                const checkbox = div.querySelector('input');
-                if(!checkbox.checked) { checkbox.checked = true; updateSelection(); }
-                const newPlayIndex = selectedIndices.indexOf(realIndex);
-                if(newPlayIndex !== -1) showSlide(newPlayIndex);
-            };
-            
-            div.querySelector('input').onchange = () => updateSelection();
+            // 🚀 최적화 2: 개별 리스너 할당 코드 삭제됨 (Event Delegation 사용)
             fragment.appendChild(div);
         });
         $list.appendChild(fragment); 
@@ -841,10 +863,9 @@
         }
     }
 
-    // 🚀 메모리 최적화 완료된 TTS 연동 핸들러 (인스턴스 단일 재사용 및 가비지 최소화)
     function speakCurrentSlide(item, realIndex) {
         if (typeof speechSynthesis === 'undefined') return;
-        speechSynthesis.cancel(); // 큐 비우기 및 즉각 중단
+        speechSynthesis.cancel(); 
         
         if(!isTtsEnabled) return;
 
@@ -856,16 +877,23 @@
 
         if(speechText.trim() === "") return;
 
-        // 매번 객체를 new 하지 않고 globalUtterance 하나를 재활용하여 메모리 300MB 점유 및 가비지 컬렉터 부하 완전 해소
         if (!globalUtterance) {
             globalUtterance = new SpeechSynthesisUtterance();
         }
+
+        // 🚀 [최적화 4] TTS 이벤트 리스너 명시적 해제 (크롬 메모리 누수 방어)
+        globalUtterance.onstart = null;
+        globalUtterance.onend = null;
+        globalUtterance.onerror = null;
+        
+        globalUtterance.onend = () => {
+            // 재생 종료 후 참조 해제를 유도
+        };
         
         globalUtterance.text = speechText;
         globalUtterance.lang = 'ko-KR';
         globalUtterance.rate = 1.0;
 
-        // 선택된 특수 보이스 매핑
         if (selectedVoiceName) {
             const foundVoice = systemVoices.find(v => v.name === selectedVoiceName);
             if (foundVoice) globalUtterance.voice = foundVoice;
@@ -901,20 +929,16 @@
         const hasSol = setContentOrHide('play-sol', item.solution);
         document.getElementById('sol-divider').style.display = hasSol ? 'block' : 'none';
 
-        document.querySelectorAll('.ql-editor img').forEach(img => {
-            img.onclick = (e) => {
-                document.getElementById('modal-image').src = e.target.src;
-                document.getElementById('image-modal').classList.add('show');
-            };
-        });
+        // 🚀 최적화 3: 이미지 클릭 리스너 순회 할당 코드 삭제됨 (Event Delegation 사용)
 
         document.querySelectorAll('.list-item').forEach(el => el.classList.remove('active'));
         const activeEl = document.getElementById(`list-item-${realIndex}`);
         if(activeEl) { activeEl.classList.add('active'); activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
         
         updateCounter();
-        document.getElementById('progress-fill').style.width = '0%';
-        document.getElementById('progress-fill').style.transition = 'none';
+        const progressFill = document.getElementById('progress-fill');
+        progressFill.style.transition = 'none';
+        progressFill.style.width = '0%';
 
         speakCurrentSlide(item, realIndex);
     }
@@ -924,7 +948,11 @@
         $screenContent.style.display = 'none';
         $playerControls.style.display = 'none'; 
         document.getElementById('status-counter').textContent = '0 / 0';
-        document.getElementById('progress-fill').style.width = '0%';
+        
+        const progressFill = document.getElementById('progress-fill');
+        progressFill.style.transition = 'none';
+        progressFill.style.width = '0%';
+        
         if (typeof speechSynthesis !== 'undefined') speechSynthesis.cancel();
     }
 
@@ -964,26 +992,34 @@
     function stopPlay() {
         isPlaying = false;
         clearInterval(playInterval);
-        clearInterval(progressInterval);
+        
         document.getElementById('btn-play').style.display = 'flex';
         document.getElementById('btn-stop').style.display = 'none';
-        document.getElementById('progress-fill').style.width = '0%';
-        document.getElementById('progress-fill').style.transition = 'none';
+        
+        // 🚀 [최적화 1] CSS Transition 초기화
+        const progressFill = document.getElementById('progress-fill');
+        progressFill.style.transition = 'none';
+        progressFill.style.width = '0%';
+        
         if (typeof speechSynthesis !== 'undefined') speechSynthesis.cancel();
     }
 
+    // 🚀 [최적화 1] setInterval 대신 CSS Transition으로 대체하여 리페인트 비용 최소화
     function resetProgressTimer() {
-        clearInterval(playInterval); clearInterval(progressInterval);
+        clearInterval(playInterval);
+        
+        const progressFill = document.getElementById('progress-fill');
+        progressFill.style.transition = 'none';
+        progressFill.style.width = '0%';
+
         if (isTtsEnabled) return;
 
-        startTime = Date.now();
-        document.getElementById('progress-fill').style.transition = 'width 0.1s linear';
-        
-        progressInterval = setInterval(() => {
-            let percent = ((Date.now() - startTime) / slideDuration) * 100;
-            if(percent > 100) percent = 100;
-            document.getElementById('progress-fill').style.width = `${percent}%`;
-        }, 100);
+        // 브라우저 Reflow를 강제로 발생시켜 초기화 상태(0%)를 먼저 인식시킴
+        void progressFill.offsetWidth; 
+
+        // CSS Transition으로 width 애니메이션 하드웨어 가속 처리
+        progressFill.style.transition = `width ${slideDuration}ms linear`;
+        progressFill.style.width = '100%';
 
         playInterval = setInterval(() => { playNext(); }, slideDuration);
     }
@@ -1006,8 +1042,9 @@
             
             if(isPlaying) {
                 clearInterval(playInterval);
-                clearInterval(progressInterval);
-                document.getElementById('progress-fill').style.width = '0%';
+                const progressFill = document.getElementById('progress-fill');
+                progressFill.style.transition = 'none';
+                progressFill.style.width = '0%';
             }
 
             if(selectedIndices.length > 0 && currentPlayIndex !== -1) {
