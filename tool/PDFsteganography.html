@@ -175,7 +175,7 @@
     <div class="instructions">
       <span><i class="ph ph-eye-slash"></i> <b>메타데이터 스텔스:</b> 시각적 변화 없이 파일 속성에만 문구를 숨깁니다.</span>
       <span style="color: #D1D5DB;">|</span>
-      <span><i class="ph ph-eye"></i> <b>서브리미널 워터마크:</b> 눈에 띌 듯 말 듯 아주 희미한 투명도로 배경에 확언을 도배합니다.</span>
+      <span><i class="ph ph-eye"></i> <b>서브리미널 워터마크:</b> 눈에 띌 듯 말 듯 아주 희미한 투명도로 배경에 확언을 삽입합니다.</span>
     </div>
   </div>
 
@@ -202,6 +202,16 @@
         <select id="stealth-mode" onchange="toggleControls()">
           <option value="meta">1. 메타데이터 스텔스</option>
           <option value="watermark">2. 서브리미널 워터마크</option>
+        </select>
+      </div>
+
+      <div class="form-group" id="position-control" style="display: none;">
+        <label><i class="ph ph-crosshair"></i> 워터마크 위치</label>
+        <select id="watermark-position" onchange="resetToEncodeState()">
+          <option value="diagonal" selected>대각선</option>
+          <option value="top-left">왼쪽 상단</option>
+          <option value="center">가운데</option>
+          <option value="bottom-right">오른쪽 하단</option>
         </select>
       </div>
 
@@ -295,6 +305,7 @@
     function toggleControls() {
       const mode = document.getElementById('stealth-mode').value;
       const displayStyle = (mode === 'watermark') ? 'flex' : 'none';
+      document.getElementById('position-control').style.display = displayStyle;
       document.getElementById('opacity-control').style.display = displayStyle;
       document.getElementById('fontsize-control').style.display = displayStyle;
     }
@@ -356,33 +367,40 @@
       }
     });
 
-    // --- 워터마크 이미지 생성기 (캔버스 활용) ---
-    async function createWatermarkImage(text, fontSize) {
+    // --- 페이지 크기 및 위치에 맞춘 워터마크 이미지 생성기 ---
+    async function createPageSpecificWatermark(text, fontSize, position, width, height) {
       const wCanvas = document.createElement('canvas');
+      const scale = 2; // 고해상도 처리를 위한 스케일업
+      wCanvas.width = width * scale;
+      wCanvas.height = height * scale;
       const wCtx = wCanvas.getContext('2d');
       
-      const CANVAS_SIZE = 3000;
-      wCanvas.width = CANVAS_SIZE;
-      wCanvas.height = CANVAS_SIZE;
-
+      wCtx.scale(scale, scale);
       wCtx.fillStyle = "#000000"; 
       wCtx.font = `bold ${fontSize}px 'Pretendard', 'Malgun Gothic', sans-serif`;
-      wCtx.textAlign = "center";
-      wCtx.textBaseline = "middle";
-
-      wCtx.translate(CANVAS_SIZE / 2, CANVAS_SIZE / 2);
-      wCtx.rotate(-45 * Math.PI / 180);
-
-      const stepX = wCtx.measureText(text).width + (fontSize * 2);
-      const stepY = fontSize * 2.5;
-
-      const LIMIT = CANVAS_SIZE;
-      for (let x = -LIMIT; x <= LIMIT; x += stepX) {
-        for (let y = -LIMIT; y <= LIMIT; y += stepY) {
-          wCtx.fillText(text, x, y);
-        }
+      
+      const padding = 40; // 화면 가장자리 여백
+      
+      if (position === 'top-left') {
+        wCtx.textAlign = "left";
+        wCtx.textBaseline = "top";
+        wCtx.fillText(text, padding, padding);
+      } else if (position === 'bottom-right') {
+        wCtx.textAlign = "right";
+        wCtx.textBaseline = "bottom";
+        wCtx.fillText(text, width - padding, height - padding);
+      } else if (position === 'center') {
+        wCtx.textAlign = "center";
+        wCtx.textBaseline = "middle";
+        wCtx.fillText(text, width / 2, height / 2);
+      } else if (position === 'diagonal') {
+        wCtx.textAlign = "center";
+        wCtx.textBaseline = "middle";
+        wCtx.translate(width / 2, height / 2);
+        wCtx.rotate(-45 * Math.PI / 180);
+        wCtx.fillText(text, 0, 0);
       }
-
+      
       return wCanvas.toDataURL('image/png');
     }
 
@@ -394,6 +412,7 @@
       const mode = document.getElementById('stealth-mode').value;
       const opacityVal = parseFloat(document.getElementById('opacity-slider').value) / 100;
       const fontSizeVal = parseInt(document.getElementById('fontsize-slider').value, 10);
+      const position = document.getElementById('watermark-position').value;
 
       if (!text) return showToast('자기확언 문구를 입력해주세요.'); 
 
@@ -410,17 +429,23 @@
 
         // 워터마크 렌더링
         if (mode === 'watermark') {
-          const pngDataUrl = await createWatermarkImage(text, fontSizeVal);
-          const embeddedPng = await pdfDoc.embedPng(pngDataUrl);
           const pages = pdfDoc.getPages();
+          const watermarkCache = {}; // 동일한 페이지 크기 재사용을 위한 캐시
           
           for (const page of pages) {
             const { width, height } = page.getSize();
-            page.drawImage(embeddedPng, {
-              x: width / 2 - 1500,
-              y: height / 2 - 1500,
-              width: 3000,
-              height: 3000,
+            const cacheKey = `${width}x${height}_${position}_${fontSizeVal}`;
+            
+            if (!watermarkCache[cacheKey]) {
+              const pngDataUrl = await createPageSpecificWatermark(text, fontSizeVal, position, width, height);
+              watermarkCache[cacheKey] = await pdfDoc.embedPng(pngDataUrl);
+            }
+            
+            page.drawImage(watermarkCache[cacheKey], {
+              x: 0,
+              y: 0,
+              width: width,
+              height: height,
               opacity: opacityVal 
             });
           }
@@ -428,7 +453,7 @@
 
         processedFileBytes = await pdfDoc.save();
         
-        // 핵심!! 작업이 완료되면 '적용하기'를 완벽히 숨기고 '저장' 버튼만 띄움
+        // 작업이 완료되면 '적용하기'를 숨기고 '저장' 버튼만 띄움
         btnEncode.style.display = 'none';
         btnDownload.style.display = 'inline-flex';
         btnEncode.disabled = false;

@@ -166,7 +166,7 @@
     <div class="instructions">
       <span><i class="ph ph-eye-slash"></i> <b>픽셀 스텔스:</b> 이미지의 픽셀값(LSB)을 조작하여 완벽하게 은닉합니다.</span>
       <span style="color: #D1D5DB;">|</span>
-      <span><i class="ph ph-eye"></i> <b>서브리미널 워터마크:</b> 눈에 띌 듯 말 듯 희미한 패턴으로 무의식을 자극합니다.</span>
+      <span><i class="ph ph-eye"></i> <b>서브리미널 워터마크:</b> 눈에 띌 듯 말 듯 희미하게 이미지에 확언을 삽입합니다.</span>
     </div>
   </div>
 
@@ -187,6 +187,16 @@
         <select id="stealth-mode" onchange="toggleControls()">
           <option value="lsb">1. 픽셀 스텔스</option>
           <option value="watermark">2. 서브리미널 워터마크</option>
+        </select>
+      </div>
+
+      <div class="form-group" id="position-control" style="display: none;">
+        <label><i class="ph ph-crosshair"></i> 워터마크 위치</label>
+        <select id="watermark-position" onchange="resetToEncodeState()">
+          <option value="diagonal" selected>대각선</option>
+          <option value="top-left">왼쪽 상단</option>
+          <option value="center">가운데</option>
+          <option value="bottom-right">오른쪽 하단</option>
         </select>
       </div>
 
@@ -256,6 +266,7 @@
     function toggleControls() {
       const mode = document.getElementById('stealth-mode').value;
       const displayStyle = (mode === 'watermark') ? 'flex' : 'none';
+      document.getElementById('position-control').style.display = displayStyle;
       document.getElementById('opacity-control').style.display = displayStyle;
       document.getElementById('fontsize-control').style.display = displayStyle;
       resetToEncodeState(); // 모드 변경 시 적용버튼 복구
@@ -315,29 +326,36 @@
     });
 
     // --- 워터마크 그리기 함수 ---
-    function applyWatermarkToCanvas(text, opacity, fontSize) {
+    function applyWatermarkToCanvas(text, opacity, fontSize, position) {
       ctx.save();
       ctx.globalAlpha = opacity;
       ctx.fillStyle = "#ffffff"; 
       ctx.globalCompositeOperation = "difference"; 
       
       ctx.font = `bold ${fontSize}px 'Pretendard', sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
+      
+      const padding = 40;
 
-      const stepX = ctx.measureText(text).width + (fontSize * 2);
-      const stepY = fontSize * 3;
-
-      ctx.translate(canvas.width / 2, canvas.height / 2);
-      ctx.rotate(-30 * Math.PI / 180);
-
-      const maxDim = Math.max(canvas.width, canvas.height) * 3;
-
-      for (let x = -maxDim; x <= maxDim; x += stepX) {
-        for (let y = -maxDim; y <= maxDim; y += stepY) {
-          ctx.fillText(text, x, y);
-        }
+      if (position === 'top-left') {
+        ctx.textAlign = "left";
+        ctx.textBaseline = "top";
+        ctx.fillText(text, padding, padding);
+      } else if (position === 'bottom-right') {
+        ctx.textAlign = "right";
+        ctx.textBaseline = "bottom";
+        ctx.fillText(text, canvas.width - padding, canvas.height - padding);
+      } else if (position === 'center') {
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+      } else if (position === 'diagonal') {
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.rotate(-45 * Math.PI / 180);
+        ctx.fillText(text, 0, 0);
       }
+
       ctx.restore();
     }
 
@@ -347,6 +365,7 @@
       const mode = document.getElementById('stealth-mode').value;
       const opacity = parseInt(document.getElementById('opacity-slider').value) / 100;
       const fontSize = parseInt(document.getElementById('fontsize-slider').value, 10);
+      const position = document.getElementById('watermark-position').value;
 
       if (!text) { 
         showToast('숨길 자기확언 문구를 입력해주세요.'); 
@@ -356,7 +375,7 @@
       ctx.drawImage(originalImage, 0, 0, canvas.width, canvas.height);
 
       if (mode === 'watermark') {
-        applyWatermarkToCanvas(text, opacity, fontSize);
+        applyWatermarkToCanvas(text, opacity, fontSize, position);
       }
 
       const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
