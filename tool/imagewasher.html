@@ -31,9 +31,15 @@
         .instructions { display: flex; gap: 16px; align-items: center; justify-content: center; font-size: 14px; color: var(--text-muted); background: var(--bg-surface); padding: 12px 20px; border-radius: var(--radius-md); border: 1px solid var(--border-base); }
         #workspace { width: 100%; max-width: 600px; margin: 0 auto; }
         .panel { background: var(--bg-surface); border: 1px solid var(--border-base); border-radius: var(--radius-lg); padding: 30px; box-shadow: var(--shadow-md); text-align: center; transition: all 0.3s ease; }
-        .panel-header { display: flex; justify-content: center; align-items: center; margin-bottom: 20px; }
+        
+        /* 헤더 위치 조정을 위해 relative 추가 */
+        .panel-header { display: flex; justify-content: center; align-items: center; margin-bottom: 20px; position: relative; }
         .panel-title { font-weight: 700; font-size: 16px; display: flex; align-items: center; gap: 8px; color: var(--text-main); }
         
+        /* 초기화 버튼 스타일 */
+        .reset-btn { position: absolute; right: 0; background: var(--bg-surface); border: 1px solid var(--border-base); color: var(--text-muted); padding: 6px 12px; border-radius: var(--radius-md); font-size: 13px; font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 6px; font-family: inherit; transition: all 0.2s ease; }
+        .reset-btn:hover { background: var(--bg-body); color: var(--text-main); border-color: var(--text-muted); }
+
         .empty-msg { padding: 40px 20px; color: var(--text-muted); display: flex; flex-direction: column; align-items: center; gap: 12px; background: var(--bg-body); border-radius: var(--radius-md); border: 2px dashed var(--border-base); }
         .empty-msg i { font-size: 48px; color: var(--primary); opacity: 0.8; }
         kbd { background-color: var(--border-light); border: 1px solid var(--border-base); border-radius: 4px; padding: 2px 6px; font-family: inherit; font-weight: bold; color: var(--text-main); }
@@ -68,6 +74,10 @@
         <div class="panel" id="main-panel">
             <div class="panel-header">
                 <div class="panel-title" id="status-title"><i class="ph ph-clock"></i> 대기 중</div>
+                <!-- 초기화 버튼 추가 -->
+                <button id="reset-btn" class="reset-btn" style="display: none;">
+                    <i class="ph ph-arrow-counter-clockwise"></i> 초기화
+                </button>
             </div>
             
             <div class="empty-msg" id="instruction-box">
@@ -108,8 +118,35 @@
 
             toast.classList.add('show');
             clearTimeout(toastTimeout);
-            toastTimeout = setTimeout(() => { toast.classList.remove('show'); }, 3000);
+            toastTimeout = setTimeout(() => { toast.classList.remove('show'); }, 1000);
         }
+
+        // 초기화 버튼 이벤트 리스너 추가
+        document.getElementById('reset-btn').addEventListener('click', () => {
+            const statusTitle = document.getElementById('status-title');
+            const instructionBox = document.getElementById('instruction-box');
+            const previewContainer = document.getElementById('preview-container');
+            const mainPanel = document.getElementById('main-panel');
+            const resetBtn = document.getElementById('reset-btn');
+
+            statusTitle.innerHTML = `<i class="ph ph-clock"></i> 대기 중`;
+            mainPanel.style.borderColor = "var(--border-base)";
+            
+            instructionBox.style.display = "flex";
+            instructionBox.innerHTML = `
+                <i class="ph ph-sparkle"></i>
+                <div>화면을 클릭한 후 <kbd>Ctrl</kbd> + <kbd>V</kbd>를 눌러주세요.</div>
+                <div style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
+                    PPT의 복잡한 찌꺼기 데이터가 순수 PNG로 세탁됩니다.
+                </div>
+            `;
+            
+            previewContainer.style.display = "none";
+            document.getElementById('preview').src = "";
+            resetBtn.style.display = "none";
+            
+            showToast("초기화되었습니다.");
+        });
 
         document.addEventListener('paste', async (e) => {
             const clipboardData = e.clipboardData || window.clipboardData;
@@ -120,6 +157,7 @@
             const statusTitle = document.getElementById('status-title');
             const instructionBox = document.getElementById('instruction-box');
             const previewContainer = document.getElementById('preview-container');
+            const resetBtn = document.getElementById('reset-btn');
 
             // 1단계: 클립보드에 들어온 데이터 타입 모두 수집 및 이미지 검색
             for (let item of items) {
@@ -157,6 +195,7 @@
                         2. PPT에서 우클릭 후 <b>'그림으로 저장'</b> 하기
                     </div>
                 `;
+                resetBtn.style.display = "flex"; // 오류 시에도 초기화 가능하도록 표시
                 showToast("이미지를 찾을 수 없습니다.", true);
                 return;
             }
@@ -181,6 +220,7 @@
                         
                         statusTitle.innerHTML = `<i class="ph ph-check-circle" style="color: var(--primary);"></i> 세탁 완료!`;
                         document.getElementById('main-panel').style.borderColor = "var(--primary)"; 
+                        resetBtn.style.display = "flex"; // 세탁 완료 시 초기화 버튼 표시
                         
                         showToast("세탁 성공! 이미지를 우클릭하여 복사하세요.");
                     }, 'image/png');
@@ -190,6 +230,7 @@
             } catch (error) {
                 console.error(error);
                 statusTitle.innerHTML = `<i class="ph ph-warning-circle" style="color: #EF4444;"></i> 처리 오류`;
+                resetBtn.style.display = "flex";
                 showToast("이미지 처리 중 오류가 발생했습니다.", true);
             }
         });
