@@ -99,8 +99,16 @@
     .chip-label:hover { border-color: #cbd5e1; }
 
     .question-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding-right: 8px; }
-    .question-card { border: 1px solid var(--border-light); padding: 16px; border-radius: var(--radius-md); background: #fafafa; }
-    .question-meta { font-size: 13px; color: var(--brand); font-weight: 700; margin-bottom: 8px; display: flex; gap: 6px; }
+    
+    /* === 개별 문제 고정 UI 스타일 === */
+    .question-card { position: relative; border: 1px solid var(--border-light); padding: 16px; border-radius: var(--radius-md); background: #fafafa; transition: border-color 0.2s, box-shadow 0.2s; }
+    .question-card.pinned { border-color: var(--brand); box-shadow: 0 0 0 1px var(--brand); background: #ffffff; }
+    .pin-btn { position: absolute; top: 14px; right: 14px; background: none; border: none; font-size: 16px; cursor: pointer; opacity: 0.3; transition: 0.2s; padding: 4px; line-height: 1; border-radius: 4px; }
+    .pin-btn:hover { opacity: 1; background: #e5e7eb; transform: scale(1.1); }
+    .question-card.pinned .pin-btn { opacity: 1; }
+    .question-card.pinned .pin-btn:hover { background: #d1fae5; }
+    
+    .question-meta { font-size: 13px; color: var(--brand); font-weight: 700; margin-bottom: 8px; display: flex; gap: 6px; padding-right: 24px; }
     .question-text { font-size: 14px; line-height: 1.6; word-break: keep-all; }
 
     .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 100; }
@@ -303,6 +311,11 @@
     let editingTopicId = null;
     let dragSrcEl = null;
 
+    // === 토픽+회차별 개별 문제 고정 데이터 관리 ===
+    let currentTopicId = null;
+    let currentRound = null;
+    let pinnedQuestionsList = []; // IndexedDB에서 로드하여 현재 활성화된 고정 데이터 보관
+
     function showToast(message) {
       const toast = document.getElementById("toast");
       toast.innerText = message;
@@ -328,6 +341,15 @@
       await openMatrixDB();
       renderMatrixHeader();
       loadMatrixData();
+      
+      // 개별 문제 핀 버튼 클릭 이벤트 위임
+      document.getElementById('questionList').addEventListener('click', function(e) {
+        const btn = e.target.closest('.pin-btn');
+        if (btn) {
+          const item = JSON.parse(decodeURIComponent(btn.dataset.item));
+          toggleQuestionPin(item);
+        }
+      });
     }
 
     function initSettings() {
@@ -394,10 +416,17 @@
 
     function openMatrixDB() {
       return new Promise((resolve) => {
-        const req = indexedDB.open(DB_MATRIX_NAME, 1);
+        // DB 스키마 구조 변경(pinned_questions object store 추가)을 위해 버전을 2로 상향
+        const req = indexedDB.open(DB_MATRIX_NAME, 2);
         req.onupgradeneeded = (e) => {
           const db = e.target.result;
-          if (!db.objectStoreNames.contains('topics')) db.createObjectStore('topics', { keyPath: 'id' });
+          if (!db.objectStoreNames.contains('topics')) {
+            db.createObjectStore('topics', { keyPath: 'id' });
+          }
+          // 개별 문제 고정을 관리하는 테이블 생성 (키: `${topicId}_${round}`)
+          if (!db.objectStoreNames.contains('pinned_questions')) {
+            db.createObjectStore('pinned_questions', { keyPath: 'targetKey' });
+          }
         };
         req.onsuccess = (e) => { dbMatrix = e.target.result; resolve(); };
       });
@@ -447,7 +476,6 @@
           tr.addEventListener('drop', handleDrop);
           tr.addEventListener('dragend', handleDragEnd);
 
-          // 드래그 핸들에 data-html2canvas-ignore 추가, 토픽명에서 제거
           let rowHtml = `<td style="text-align: left;">
             <span class="drag-handle" title="드래그하여 순서 변경" data-html2canvas-ignore="true">≡</span>
             <span class="topic-name" onclick="editTopic('${topic.id}')" title="클릭하여 수정">${topic.name}</span>
@@ -458,7 +486,7 @@
             const strRound = String(round);
             const hasAppeared = topic.rounds.includes(strRound);
             if (hasAppeared) totalCount++;
-            const cellContent = hasAppeared ? `<div class="dot" title="${round}회 기출문제 조회" onclick="fetchQuestions('${topic.keywords}', '${strRound}')"></div>` : ``;
+            const cellContent = hasAppeared ? `<div class="dot" title="${round}회 기출문제 조회" onclick="fetchQuestions('${topic.id}', '${strRound}')"></div>` : ``;
             rowHtml += `<td>${cellContent}</td>`;
           });
           rowHtml += `<td style="font-weight: 700;">${totalCount}</td>`;
@@ -493,50 +521,127 @@
       return false;
     }
 
-    function fetchQuestions(keywords, round) {
+    // === IndexedDB에 개별 문제 고정 토글 처리 ===
+    function toggleQuestionPin(targetItem) {
+      if (!currentTopicId || !currentRound) return;
+      const mapKey = `${currentTopicId}_${currentRound}`;
+      
+      const existsIndex = pinnedQuestionsList.findIndex(p => p.problem === targetItem.problem && p.round === targetItem.round);
+      if (existsIndex > -1) {
+        pinnedQuestionsList.splice(existsIndex, 1);
+        showToast('문제 고정이 해제되었습니다.');
+      } else {
+        pinnedQuestionsList.push(targetItem);
+        showToast('문제가 고정되었습니다.');
+      }
+      
+      // IndexedDB 저장/업데이트 트랜잭션
+      const tx = dbMatrix.transaction('pinned_questions', 'readwrite');
+      const store = tx.objectStore('pinned_questions');
+      
+      if (pinnedQuestionsList.length > 0) {
+        store.put({ targetKey: mapKey, list: pinnedQuestionsList });
+      } else {
+        store.delete(mapKey);
+      }
+
+      tx.oncomplete = () => {
+        renderFilteredQuestions();
+      };
+    }
+
+    function fetchQuestions(topicId, round) {
+      currentTopicId = topicId;
+      currentRound = round;
+      
       const guide = document.getElementById('viewerGuide');
       const list = document.getElementById('questionList');
-      guide.style.display = 'none'; list.style.display = 'flex';
-      list.innerHTML = '<div style="text-align:center; padding: 20px; color:#6b7280;">문제를 불러오는 중...</div>';
-
+      guide.style.display = 'none'; 
+      list.style.display = 'flex';
+      
+      const topic = currentCategoryTopics.find(t => t.id === topicId);
+      const keywords = topic ? topic.keywords : '';
+      
       if (!dbBank) return list.innerHTML = `<div style="text-align:center; padding: 20px; color:red;">TopicBankDB 미연결</div>`;
 
-      const tx = dbBank.transaction('items', 'readonly');
-      const store = tx.objectStore('items');
-      const req = store.getAll();
+      // 1. IndexedDB에서 해당 토픽_회차의 고정 데이터 로드
+      const mTx = dbMatrix.transaction('pinned_questions', 'readonly');
+      const mStore = mTx.objectStore('pinned_questions');
+      const mapKey = `${topicId}_${round}`;
+      const getReq = mStore.get(mapKey);
 
-      req.onsuccess = (e) => {
-        const allItems = e.target.result || [];
-        const keywordArr = keywords.split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
-        currentFetchedQuestions = allItems.filter(item => {
-          if (String(item.round) !== round) return false;
-          const probText = String(item.problem || '').toLowerCase();
-          return keywordArr.some(kw => probText.includes(kw));
-        });
-        renderFilteredQuestions();
+      getReq.onsuccess = (e) => {
+        const data = e.target.result;
+        pinnedQuestionsList = data ? data.list : [];
+
+        // 2. 검색 키워드로 기출문제 DB 검색
+        const tx = dbBank.transaction('items', 'readonly');
+        const store = tx.objectStore('items');
+        const req = store.getAll();
+
+        req.onsuccess = (evt) => {
+          const allItems = evt.target.result || [];
+          const keywordArr = keywords.split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
+          
+          currentFetchedQuestions = allItems.filter(item => {
+            if (String(item.round) !== round) return false;
+            const probText = String(item.problem || '').toLowerCase();
+            
+            return keywordArr.some(kw => {
+              const escapedKw = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              const regex = new RegExp('(^|[^a-z])' + escapedKw + '([^a-z]|$)');
+              return regex.test(probText);
+            });
+          });
+          renderFilteredQuestions();
+        };
       };
     }
 
     function renderFilteredQuestions() {
       const list = document.getElementById('questionList');
-      if (currentFetchedQuestions.length === 0) return list.innerHTML = `<div style="text-align:center; padding: 40px; color:var(--text-muted);">해당 회차에 매칭되는 DB 문제가 없습니다.</div>`;
+      
+      // IndexedDB에서 불러온 고정 리스트와 현재 조회된 결과 병합
+      let combinedQuestions = [...pinnedQuestionsList];
+      currentFetchedQuestions.forEach(item => {
+        const isDuplicate = combinedQuestions.some(p => p.problem === item.problem && p.round === item.round);
+        if (!isDuplicate) {
+          combinedQuestions.push(item);
+        }
+      });
+
+      if (combinedQuestions.length === 0) {
+        return list.innerHTML = `<div style="text-align:center; padding: 40px; color:var(--text-muted);">해당 회차에 매칭되는 DB 문제가 없거나 고정된 문제가 없습니다.</div>`;
+      }
       
       const checkedInputs = Array.from(document.querySelectorAll('#categoryFilter input:checked'));
       const selectedCats = checkedInputs.map(input => input.value);
-      const matched = currentFetchedQuestions.filter(item => {
+      
+      const matched = combinedQuestions.filter(item => {
         if (selectedCats.length === 0) return true;
         const cat = item.category?.trim() || '';
         return selectedCats.some(selected => cat.includes(selected));
       });
 
-      if (matched.length === 0) return list.innerHTML = `<div style="text-align:center; padding: 40px; color:var(--text-muted);">선택한 종목에 해당하는 문제가 없습니다.</div>`;
+      if (matched.length === 0) {
+        return list.innerHTML = `<div style="text-align:center; padding: 40px; color:var(--text-muted);">선택한 종목에 해당하는 문제가 없습니다.</div>`;
+      }
 
-      list.innerHTML = matched.map(item => `
-        <div class="question-card">
-          <div class="question-meta"><span>제${item.round}회</span> | <span>${item.category || '종목미상'}</span> | <span>${item.type || '교시미상'}</span></div>
-          <div class="question-text">${(item.problem || '').replace(/\n/g, '<br>')}</div>
-        </div>
-      `).join('');
+      list.innerHTML = matched.map(item => {
+        // 현재 아이템이 고정된 문제인지 확인
+        const isItemPinned = pinnedQuestionsList.some(p => p.problem === item.problem && p.round === item.round);
+        const itemJson = encodeURIComponent(JSON.stringify(item));
+        
+        return `
+          <div class="question-card ${isItemPinned ? 'pinned' : ''}">
+            <button class="pin-btn" data-item="${itemJson}" title="${isItemPinned ? '고정 해제' : '문제 고정'}">
+              ${isItemPinned ? '📌' : '📍'}
+            </button>
+            <div class="question-meta"><span>제${item.round}회</span> | <span>${item.category || '종목미상'}</span> | <span>${item.type || '교시미상'}</span></div>
+            <div class="question-text">${(item.problem || '').replace(/\n/g, '<br>')}</div>
+          </div>
+        `;
+      }).join('');
     }
 
     // === 토픽 이동 기능 모달 ===
@@ -555,7 +660,6 @@
         const allTopics = e.target.result || [];
         if (allTopics.length === 0) return alert('이동할 토픽이 존재하지 않습니다.');
 
-        // 카테고리별로 그룹화하여 셀렉트 리스트 생성
         TOPIC_CATEGORIES.forEach(cat => {
           const topicsInCat = allTopics.filter(t => (t.category || TOPIC_CATEGORIES[0]) === cat).sort((a,b) => (a.order||0) - (b.order||0));
           if (topicsInCat.length > 0) {
@@ -591,14 +695,14 @@
         const topic = e.target.result;
         if (topic) {
           topic.category = targetCategory;
-          topic.order = 9999; // 타겟 카테고리의 맨 아래로 이동
+          topic.order = 9999; 
           store.put(topic);
         }
       };
 
       tx.oncomplete = () => {
         closeMoveTopicModal();
-        changeCategory(targetCategory); // 이동한 카테고리 탭으로 화면 자동 전환
+        changeCategory(targetCategory); 
         showToast('토픽 카테고리가 변경되었습니다.');
       };
     }
@@ -673,24 +777,34 @@
     function deleteTopic() {
       if (!editingTopicId) return;
       if (confirm('해당 토픽을 완전히 삭제하시겠습니까?')) {
-        const tx = dbMatrix.transaction('topics', 'readwrite');
+        const tx = dbMatrix.transaction(['topics', 'pinned_questions'], 'readwrite');
         tx.objectStore('topics').delete(editingTopicId);
+        
+        // 해당 토픽의 모든 고정 기록도 함께 삭제 처리
+        const pStore = tx.objectStore('pinned_questions');
+        const request = pStore.openCursor();
+        request.onsuccess = (e) => {
+          const cursor = e.target.result;
+          if (cursor) {
+            if (cursor.key.startsWith(editingTopicId + '_')) {
+              cursor.delete();
+            }
+            cursor.continue();
+          }
+        };
+
         tx.oncomplete = () => {
           closeTopicModal();
           loadMatrixData();
-          showToast('토픽이 삭제되었습니다.');
+          showToast('토픽 및 고정 정보가 삭제되었습니다.');
         };
       }
     }
 
-    // === 이미지 저장 기능 로직 수정 (전체 스크롤 영역 캡처) ===
     function saveMatrixAsImage() {
       const targetElement = document.getElementById('matrixSection');
-      
-      // 숨겨진 스크롤 영역 전체를 강제로 노출시키는 임시 클래스 부여
       document.body.classList.add('capture-mode');
 
-      // 렌더링 변경(DOM 길이 늘어남)이 확실히 반영되도록 아주 짧은 지연 후 캡처
       setTimeout(() => {
         html2canvas(targetElement, { 
           scale: 2, 
@@ -705,7 +819,6 @@
           console.error('이미지 저장 오류:', err);
           alert('이미지 저장에 실패했습니다.');
         }).finally(() => {
-          // 캡처 완료(성공/실패 무관) 후 원래 레이아웃으로 즉시 복구
           document.body.classList.remove('capture-mode');
         });
       }, 100);
