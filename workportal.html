@@ -50,13 +50,14 @@
     
     .header-actions { display: flex; align-items: center; gap: 16px; }
 
-    /* 시스템 버튼 (메뉴 관리) */
+    /* 시스템 버튼 (사이즈 통일 적용) */
     .sys-btn {
       background: var(--bg-surface); color: var(--text-main); border: 1px solid var(--border-base);
       padding: 10px 16px; border-radius: 20px; cursor: pointer; font-size: 13px; font-weight: 600;
       transition: all 0.2s; display: flex; align-items: center; gap: 6px; box-shadow: var(--shadow-card);
     }
     .sys-btn:hover { border-color: var(--primary); color: var(--primary); }
+    .fixed-size-btn { width: 110px; justify-content: center; }
 
     /* 검색창 디자인 */
     .search-container { position: relative; width: 260px; }
@@ -73,6 +74,19 @@
       flex: 1; overflow-y: auto; padding: 40px;
       background-image: radial-gradient(var(--border-focus) 1px, transparent 0); background-size: 24px 24px;
     }
+
+    /* FLOW 스타일 이식 */
+    #flowGridContainer { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+    .flow-block { background: var(--bg-surface); border: 1px solid var(--border-base); border-radius: var(--radius-md); padding: 20px; box-shadow: var(--shadow-card); }
+    .top-menu-grid { display: flex; flex-wrap: nowrap; gap: 12px; overflow-x: auto; align-items: center; padding: 8px 4px 16px 4px; margin-top: -8px; }
+    .top-menu-grid::-webkit-scrollbar { height: 6px; }
+    .top-menu-grid::-webkit-scrollbar-thumb { background: var(--border-focus); border-radius: 10px; }
+    .top-menu-card { flex: 0 0 110px; background: var(--bg-surface); border: 1px solid var(--border-focus); border-radius: 12px; padding: 12px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; cursor: pointer; box-shadow: var(--shadow-card); transition: all 0.3s; text-align: center; height: 96px; }
+    .top-menu-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-hover); border-color: var(--primary); color: var(--primary); }
+    .top-menu-icon { font-size: 26px; }
+    .top-menu-title { font-size: 13px; font-weight: 600; color: inherit; word-break: keep-all; line-height: 1.2; }
+    .flow-arrow { flex-shrink: 0; display: flex; align-items: center; font-size: 20px; font-weight: 700; color: var(--primary); }
+    .flow-arrow.pipe { font-weight: 400; color: var(--border-focus); }
 
     /* 핀터레스트 스타일 레이아웃 */
     .dashboard-grid { column-width: 360px; column-gap: 24px; max-width: 1400px; margin: 0 auto; }
@@ -127,7 +141,9 @@
     .btn:hover { background: #e2e8f0; }
     .btn-primary { background: var(--primary); color: #fff; border: none;}
     .btn-primary:hover { background: var(--primary-dark); }
-    .btn-danger { background: #fee2e2; color: #ef4444; border:none; flex: 0.5; }
+    
+    /* 기존 flex: 0.5 제거하여 다른 버튼과 가로 너비 통일 */
+    .btn-danger { background: #fee2e2; color: #ef4444; border: none; }
     .btn-danger:hover { background: #fecaca; }
 
     /* JSON Editor */
@@ -149,6 +165,9 @@
     ::-webkit-scrollbar-thumb { background: #D1D1CE; border-radius: 4px; }
     ::-webkit-scrollbar-thumb:hover { background: #8E8E93; }
 
+    @media (max-width: 1200px) {
+      #flowGridContainer { grid-template-columns: repeat(2, 1fr); }
+    }
     @media (max-width: 768px) {
       .top-bar { flex-direction: column; height: auto; padding: 16px 20px; gap: 16px; align-items: stretch; }
       .header-actions { flex-direction: column; width: 100%; gap: 12px; }
@@ -156,6 +175,7 @@
       .main-content { padding: 20px; }
       .dashboard-grid { column-count: 1; }
       .item-grid { grid-template-columns: 1fr; }
+      #flowGridContainer { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -171,11 +191,19 @@
         <i class="ph-bold ph-magnifying-glass search-icon"></i>
         <input type="text" id="searchInput" class="search-input" placeholder="메뉴 이름 검색..." onkeyup="filterMenus()">
       </div>
-      <button class="sys-btn" onclick="openMenuManager()"><i class="ph-bold ph-gear"></i> 메뉴 관리</button>
+      <div style="display: flex; gap: 10px;">
+        <button class="sys-btn fixed-size-btn" onclick="openFlowModal()"><i class="ph-bold ph-git-branch"></i> Flow 설정</button>
+        <button class="sys-btn fixed-size-btn" onclick="openMenuManager()"><i class="ph-bold ph-gear"></i> 메뉴 관리</button>
+      </div>
     </div>
   </header>
 
   <main class="main-content">
+    <!-- Flow 렌더링 컨테이너 이식 -->
+    <div id="flow-menus-section" style="display: none; max-width: 1400px; margin: 0 auto 32px;">
+      <div id="flowGridContainer"></div>
+    </div>
+
     <div class="dashboard-grid" id="dashboardGrid"></div>
     <div id="noResults" class="no-results">
       <i class="ph ph-warning-circle" style="font-size: 24px; margin-bottom: 8px; display: block;"></i>
@@ -195,15 +223,64 @@
       </div>
   </div>
 
+  <!-- Flow 설정 모달 이식 -->
+  <div class="modal" id="flow-modal" style="width: 90%; max-width: 500px;">
+      <h3 class="modal-title">FLOW 설정 (최대 6개)</h3>
+      <p class="modal-sub">연속으로 진행할 업무명과 메뉴를 구성하세요. 항목을 드래그하여 순서를 바꿀 수 있습니다.</p>
+      
+      <select id="flow-slot-select" style="width:100%; padding:12px; margin-bottom:12px; border-radius:8px; border:1px solid var(--border-base); font-family:inherit; outline:none; background:#f8fafc;" onchange="loadFlowSlot()">
+          <option value="0">FLOW 슬롯 1</option>
+          <option value="1">FLOW 슬롯 2</option>
+          <option value="2">FLOW 슬롯 3</option>
+          <option value="3">FLOW 슬롯 4</option>
+          <option value="4">FLOW 슬롯 5</option>
+          <option value="5">FLOW 슬롯 6</option>
+      </select>
+
+      <input type="text" id="flow-task-input" placeholder="업무명 (이모지 없으면 기본 🚀 표시)" style="width:100%; padding:12px; border-radius:8px; border:1px solid var(--border-base); font-family:inherit; margin-bottom:12px;">
+      
+      <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 16px;">
+          <span style="font-size: 13px; color: var(--text-muted); font-weight: 600;">구분자 선택:</span>
+          <label style="font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+              <input type="radio" name="flow-sep" value="arrow" checked> 화살표 (➞)
+          </label>
+          <label style="font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+              <input type="radio" name="flow-sep" value="pipe"> 수직선 (|)
+          </label>
+      </div>
+
+      <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+          <select id="flow-menu-select" style="flex:1; padding:12px; border-radius:8px; border:1px solid var(--border-base); font-family:inherit; outline:none;"></select>
+          <button class="btn btn-primary" onclick="addMenuToFlow()" style="flex: 0 0 70px; padding: 12px 0;">추가</button>
+      </div>
+
+      <ul id="flow-selected-list" style="list-style:none; padding:0; margin:0; max-height:200px; overflow-y:auto; border: 1px solid var(--border-base); border-radius:12px; background: #f8fafc;">
+      </ul>
+
+      <div class="modal-actions" style="margin-top: 20px;">
+          <button class="btn btn-danger" onclick="clearFlow()">현재 비우기</button>
+          <button class="btn" onclick="closeAllModals()">취소</button>
+          <button class="btn btn-primary" onclick="saveFlow()">저장</button>
+      </div>
+  </div>
+
   <div class="toast" id="toast">알림 메시지</div>
 
   <script>
     /* ------------------------------------------------
-       1. IndexedDB 설정 (워킹 마스터 전용 DB)
+       1. IndexedDB 설정 및 공통 변수
        ------------------------------------------------ */
     const DB_NAME = "WorkingMasterDB";
     const STORE_NAME = "sys_store";
     const MENU_KEY = "global_menu_data";
+
+    let activeMenuData = {};
+    
+    // Flow 관련 변수 선언
+    let flowDataArray = [];
+    let currentSlotIndex = 0;
+    let currentFlowDraft = [];
+    let dragStartIndex;
 
     const defaultMenuData = {
       "📌 주요 업무": [
@@ -271,8 +348,6 @@
       ]      
     };
 
-    let activeMenuData = {};
-
     function initDB() {
         return new Promise((resolve, reject) => {
             const req = indexedDB.open(DB_NAME, 1);
@@ -286,11 +361,16 @@
                 const store = tx.objectStore(STORE_NAME);
                 const getReq = store.get(MENU_KEY);
                 getReq.onsuccess = () => {
-                    if(getReq.result) resolve(getReq.result);
-                    else {
+                    if(getReq.result) {
+                        resolve(getReq.result);
+                        db.close();
+                    } else {
                         const txW = db.transaction(STORE_NAME, "readwrite");
                         txW.objectStore(STORE_NAME).put(defaultMenuData, MENU_KEY);
-                        txW.oncomplete = () => resolve(defaultMenuData);
+                        txW.oncomplete = () => {
+                            resolve(defaultMenuData);
+                            db.close();
+                        };
                     }
                 };
             };
@@ -305,8 +385,14 @@
                 const db = e.target.result;
                 const tx = db.transaction(STORE_NAME, "readwrite");
                 tx.objectStore(STORE_NAME).put(data, MENU_KEY);
-                tx.oncomplete = () => resolve();
-                tx.onerror = () => reject();
+                tx.oncomplete = () => {
+                    resolve();
+                    db.close();
+                };
+                tx.onerror = () => {
+                    reject();
+                    db.close();
+                };
             };
         });
     }
@@ -319,10 +405,244 @@
             activeMenuData = defaultMenuData;
         }
         renderDashboard(activeMenuData);
+        
+        // Flow 기능 초기화
+        renderFlowMenus();
+        setupFlowListEvents();
+        document.getElementById('flowGridContainer').addEventListener('click', handleMenuExecClick);
     };
 
     /* ------------------------------------------------
-       2. 메뉴 관리 모달 (JSON 에디터)
+       2. FLOW 기능 이식 (이벤트 위임 패턴 적용)
+       ------------------------------------------------ */
+    function setupFlowListEvents() {
+        const flowList = document.getElementById('flow-selected-list');
+
+        flowList.addEventListener('dragstart', (e) => {
+            const li = e.target.closest('li');
+            if(!li) return;
+            dragStartIndex = Array.from(flowList.children).indexOf(li);
+            li.style.opacity = '0.5';
+        });
+
+        flowList.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            const li = e.target.closest('li');
+            if(li) li.style.background = '#f1f5f9';
+        });
+
+        flowList.addEventListener('dragleave', (e) => {
+            const li = e.target.closest('li');
+            if(li) li.style.background = 'transparent';
+        });
+
+        flowList.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const li = e.target.closest('li');
+            if(li) {
+                const dragEndIndex = Array.from(flowList.children).indexOf(li);
+                if (dragStartIndex !== dragEndIndex && dragStartIndex !== undefined) {
+                    const draggedItem = currentFlowDraft.splice(dragStartIndex, 1)[0];
+                    currentFlowDraft.splice(dragEndIndex, 0, draggedItem);
+                    renderFlowDraftList();
+                }
+                li.style.background = 'transparent';
+            }
+        });
+
+        flowList.addEventListener('dragend', (e) => {
+            const li = e.target.closest('li');
+            if(li) li.style.opacity = '1';
+            dragStartIndex = undefined;
+        });
+
+        flowList.addEventListener('click', (e) => {
+            const btn = e.target.closest('.btn-remove-flow');
+            if(btn) {
+                const li = btn.closest('li');
+                if(li) {
+                    const idx = Array.from(flowList.children).indexOf(li);
+                    removeMenuFromFlow(idx);
+                }
+            }
+        });
+    }
+
+    function openFlowModal() {
+        const select = document.getElementById('flow-menu-select');
+        select.innerHTML = '<option value="">진행할 메뉴 선택...</option>';
+        
+        for (const [category, items] of Object.entries(activeMenuData)) {
+            const optgroup = document.createElement('optgroup');
+            optgroup.label = category.replace(/^(\p{Emoji_Presentation}|\p{Emoji}\uFE0F)\s*/u, '');
+            items.forEach(item => {
+                if(item.title) {
+                    const opt = document.createElement('option');
+                    opt.value = JSON.stringify({ title: item.title, src: item.src, icon: item.icon });
+                    opt.textContent = `${item.icon} ${item.title}`;
+                    optgroup.appendChild(opt);
+                }
+            });
+            select.appendChild(optgroup);
+        }
+
+        let savedData = localStorage.getItem('workPortalFlowDataArray');
+        if (savedData) {
+            flowDataArray = JSON.parse(savedData);
+        } else {
+            flowDataArray = Array(6).fill(null);
+        }
+
+        document.getElementById('flow-slot-select').value = "0";
+        loadFlowSlot();
+        
+        document.getElementById('overlay').classList.add('show');
+        document.getElementById('flow-modal').classList.add('show');
+    }
+
+    function loadFlowSlot() {
+        currentSlotIndex = parseInt(document.getElementById('flow-slot-select').value);
+        let flow = flowDataArray[currentSlotIndex] || { taskName: '', menus: [], separator: 'arrow' };
+        
+        document.getElementById('flow-task-input').value = flow.taskName || '';
+        currentFlowDraft = flow.menus || [];
+        
+        if (flow.separator === 'pipe') {
+            document.querySelector('input[name="flow-sep"][value="pipe"]').checked = true;
+        } else {
+            document.querySelector('input[name="flow-sep"][value="arrow"]').checked = true;
+        }
+
+        renderFlowDraftList();
+    }
+
+    function addMenuToFlow() {
+        const select = document.getElementById('flow-menu-select');
+        if(!select.value) return;
+        
+        const menu = JSON.parse(select.value);
+        currentFlowDraft.push(menu);
+        renderFlowDraftList();
+    }
+
+    function removeMenuFromFlow(index) {
+        currentFlowDraft.splice(index, 1);
+        renderFlowDraftList();
+    }
+
+    function renderFlowDraftList() {
+        const list = document.getElementById('flow-selected-list');
+        list.innerHTML = '';
+        currentFlowDraft.forEach((menu) => {
+            const li = document.createElement('li');
+            li.draggable = true;
+            li.style.cssText = "display:flex; justify-content:space-between; padding:12px 16px; border-bottom:1px solid var(--border-base); align-items:center; font-size:14px; font-weight:500; cursor:grab; transition: background 0.2s;";
+            
+            li.innerHTML = `
+                <div style="display:flex; align-items:center; gap:8px; pointer-events:none;">
+                    <i class="ph ph-list" style="color:var(--text-muted);"></i>
+                    <span>${menu.icon} ${menu.title}</span>
+                </div>
+                <button class="btn-remove-flow" style="background:transparent; border:none; color:#ef4444; font-size:16px; cursor:pointer;" title="제거"><i class="ph-bold ph-x"></i></button>
+            `;
+            list.appendChild(li);
+        });
+    }
+
+    function saveFlow() {
+        const taskName = document.getElementById('flow-task-input').value.trim();
+        const separator = document.querySelector('input[name="flow-sep"]:checked').value;
+        
+        flowDataArray[currentSlotIndex] = { taskName, menus: currentFlowDraft, separator };
+        localStorage.setItem('workPortalFlowDataArray', JSON.stringify(flowDataArray));
+        
+        renderFlowMenus();
+        closeAllModals();
+        showToast("✅ FLOW가 저장되었습니다.");
+    }
+
+    function clearFlow() {
+        if(confirm("현재 슬롯의 구성된 FLOW를 비우시겠습니까?")) {
+            flowDataArray[currentSlotIndex] = null;
+            localStorage.setItem('workPortalFlowDataArray', JSON.stringify(flowDataArray));
+            
+            document.getElementById('flow-task-input').value = '';
+            currentFlowDraft = [];
+            
+            renderFlowDraftList();
+            renderFlowMenus();
+            showToast("🗑️ 선택된 FLOW 슬롯이 비워졌습니다.");
+        }
+    }
+
+    function renderFlowMenus() {
+        const section = document.getElementById('flow-menus-section');
+        const container = document.getElementById('flowGridContainer');
+        
+        let savedData = localStorage.getItem('workPortalFlowDataArray');
+        let flows = savedData ? JSON.parse(savedData) : [];
+        
+        const activeFlows = flows.filter(f => f && f.menus && f.menus.length > 0);
+        
+        if (activeFlows.length === 0) { 
+            section.style.display = 'none'; 
+            return; 
+        }
+
+        section.style.display = 'block';
+        let html = '';
+        
+        activeFlows.forEach((flow) => {
+            let taskName = flow.taskName || "업무 FLOW";
+            
+            const emojiRegexCheck = /^[\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/;
+            let hasEmoji = emojiRegexCheck.test(taskName);
+            try {
+                if(!hasEmoji) hasEmoji = /^(\p{Emoji_Presentation}|\p{Emoji}\uFE0F)/u.test(taskName);
+            } catch(e) {} 
+            
+            let displayTitle = hasEmoji ? taskName : "🚀 " + taskName;
+            const separatorChar = flow.separator === 'pipe' ? '|' : '➞';
+            const separatorClass = flow.separator === 'pipe' ? 'pipe' : '';
+
+            html += `
+            <div class="flow-block">
+                <div class="category-header" style="margin-bottom: 12px; border-bottom: none; cursor: default; padding-bottom: 0;">
+                    <div class="category-header-title"><span style="font-size: 16px;">${displayTitle}</span></div>
+                </div>
+                <div class="top-menu-grid">`;
+            
+            flow.menus.forEach((menu, index) => {
+                const escTitle = menu.title.replace(/"/g, '&quot;');
+                const escSrc = (menu.src || '').replace(/"/g, '&quot;');
+                
+                html += `
+                <div class="top-menu-card" data-action="open-menu" data-src="${escSrc}">
+                    <div class="top-menu-icon">${menu.icon || '📁'}</div>
+                    <div class="top-menu-title" title="${escTitle}">${menu.title}</div>
+                </div>`;
+                
+                if (index < flow.menus.length - 1) {
+                    html += `<div class="flow-arrow ${separatorClass}">${separatorChar}</div>`;
+                }
+            });
+            
+            html += `</div></div>`;
+        });
+        
+        container.innerHTML = html;
+    }
+
+    function handleMenuExecClick(e) {
+        const btn = e.target.closest('[data-action="open-menu"]');
+        if (btn) {
+            const src = btn.getAttribute('data-src');
+            if(src) window.open(src, '_blank');
+        }
+    }
+
+    /* ------------------------------------------------
+       3. 메뉴 관리 모달 및 공통 로직
        ------------------------------------------------ */
     function openMenuManager() {
         const editor = document.getElementById('jsonEditor');
@@ -360,18 +680,22 @@
         }
     }
 
+    let toastTimer;
     function showToast(msg) {
         const toast = document.getElementById("toast");
-        toast.textContent = msg; toast.classList.add("show");
-        setTimeout(() => toast.classList.remove("show"), 3000);
+        toast.textContent = msg; 
+        toast.classList.add("show");
+        
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toast.classList.remove("show"), 1000);
     }
 
     /* ------------------------------------------------
-       3. 렌더링 및 UI 로직
+       4. 렌더링 및 UI 로직
        ------------------------------------------------ */
     function renderDashboard(data) {
       const container = document.getElementById('dashboardGrid');
-      container.innerHTML = '';
+      container.replaceChildren();
 
       for (const [category, items] of Object.entries(data)) {
         const card = document.createElement('div');
@@ -419,7 +743,15 @@
     function filterMenus() {
       const query = document.getElementById('searchInput').value.toLowerCase();
       const cards = document.querySelectorAll('.category-card');
+      const flowSection = document.getElementById('flow-menus-section');
       let visibleCount = 0;
+
+      // 검색어가 존재하면 Flow 화면 감추기
+      if (query !== "") { 
+          if(flowSection) flowSection.style.display = 'none'; 
+      } else { 
+          renderFlowMenus(); 
+      }
 
       cards.forEach(card => {
         const buttons = card.querySelectorAll('.item-btn');
