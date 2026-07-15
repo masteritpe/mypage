@@ -72,7 +72,7 @@
     .container { padding: 40px 32px; max-width: 1400px; margin: 0 auto; width: 100%; flex: 1; }
     .keynote-card { background: var(--bg-surface); border: 1px solid var(--border-base); border-radius: var(--radius-lg); padding: 32px; margin-bottom: 28px; box-shadow: var(--shadow-md); position: relative; }
     
-    .html-textarea { width: 100%; height: 480px; padding: 20px; border: 1px solid var(--border-base); border-radius: var(--radius-md); font-family: monospace; font-size: 14px; line-height: 1.6; resize: vertical; outline: none; transition: 0.2s; margin-top:16px;}
+    .html-textarea { width: 100%; height: 480px; padding: 20px; border: 1px solid var(--border-base); border-radius: var(--radius-md); font-family: monospace; font-size: 14px; line-height: 1.6; resize: vertical; outline: none; transition: 0.2s; }
     .html-textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.05); }
 
     /* 테이블 스타일 */
@@ -93,7 +93,7 @@
     /* 숨기기/해제 관련 스타일 */
     .row-checkbox { cursor: pointer; width: 16px; height: 16px; accent-color: var(--primary); }
     .hidden-row { display: none !important; }
-    .hidden-col { display: none !important; } /* 컬럼 숨기기용 */
+    .hidden-col { display: none !important; } 
     .unhide-btn { cursor: pointer; transition: color 0.2s; font-size: 16px; }
     .unhide-btn:hover { color: var(--primary-hover); }
 
@@ -130,10 +130,31 @@
   <main class="container">
     
     <div id="panelInput" class="keynote-card">
-      <div style="margin-bottom: 12px;">
-        <h3 style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;"><i class="ph-fill ph-textbox"></i> 원본 웹 페이지 복사/붙여넣기</h3>
-        <p style="color: var(--text-muted); font-size: 14px;">웹 브라우저에서 복사한 영역(텍스트, 표, 그림 포함)을 아래 공간에 클릭 후 붙여넣기(Ctrl+V) 하세요.</p>        
+      <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 12px;">
+        <div>
+          <h3 style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;"><i class="ph-fill ph-textbox"></i> 원본 웹 페이지 복사/붙여넣기</h3>
+          <p style="color: var(--text-muted); font-size: 14px;">웹 브라우저에서 복사한 영역(텍스트, 표, 그림 포함)을 아래 공간에 클릭 후 붙여넣기(Ctrl+V) 하세요.</p>        
+        </div>
+        
+        <!-- 조판부호 토글 및 가이드 버튼 -->
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <button class="btn btn-outline" style="padding: 4px 10px; font-size: 13px; border-radius: 6px;" onclick="toggleGuide()"><i class="ph ph-info"></i> 가이드</button>
+          <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 14px; font-weight: 600; color: var(--primary); user-select: none;">
+            <input type="checkbox" id="chkShowMarks" onchange="toggleMarks()" style="width: 16px; height: 16px; accent-color: var(--primary);">
+            조판부호 표시
+          </label>
+        </div>
       </div>
+
+      <!-- 조판부호 가이드 패널 (기본 숨김) -->
+      <div id="marksGuide" class="hidden" style="margin-bottom: 12px; padding: 12px 16px; background: #F3F4F6; border-radius: var(--radius-md); font-size: 13px; color: var(--text-main); border: 1px solid var(--border-base); display: flex; gap: 20px; align-items: center;">
+        <strong style="color:var(--text-main); display: flex; align-items: center; gap: 4px;"><i class="ph-fill ph-question"></i> 조판부호 매핑:</strong>
+        <span>공백 ➔ <code style="color:#2563EB; font-weight:bold; font-size:14px;">␣</code></span>
+        <span>탭(Tab) ➔ <code style="color:#2563EB; font-weight:bold; font-size:14px;">→</code></span>
+        <span>줄바꿈(Enter) ➔ <code style="color:#2563EB; font-weight:bold; font-size:14px;">↵</code></span>
+        <span>특수공백(NBSP) ➔ <code style="color:#2563EB; font-weight:bold; font-size:14px;">◇</code></span>
+      </div>
+
       <textarea id="txtSource" class="html-textarea" spellcheck="false" placeholder="클릭 후 Ctrl+V (또는 Cmd+V)를 눌러 복사한 HTML 내용을 붙여넣으세요..."></textarea>
     </div>
 
@@ -162,6 +183,44 @@
   <script>
     let clipboardHtmlData = null;
 
+    // --- 조판부호(Typesetting Marks) 관련 기능 ---
+    function toggleGuide() {
+      document.getElementById('marksGuide').classList.toggle('hidden');
+    }
+
+    function applyMarks() {
+      const txtSource = document.getElementById('txtSource');
+      let text = txtSource.value;
+      text = removeMarksText(text); // 중복 적용 방지
+      text = text.replace(/ /g, '␣')
+                 .replace(/\t/g, '→\t')
+                 .replace(/\n/g, '↵\n')
+                 .replace(/\xA0/g, '◇');
+      txtSource.value = text;
+    }
+
+    function removeMarksText(text) {
+      if (!text) return text;
+      return text.replace(/␣/g, ' ')
+                 .replace(/→\t/g, '\t')
+                 .replace(/→/g, '') // 사용자가 탭을 지우고 화살표만 남긴 경우 제거
+                 .replace(/↵\n/g, '\n')
+                 .replace(/↵/g, '') // 사용자가 줄바꿈을 지우고 엔터기호만 남긴 경우 제거
+                 .replace(/◇/g, '\xA0');
+    }
+
+    function removeMarks() {
+      const txtSource = document.getElementById('txtSource');
+      txtSource.value = removeMarksText(txtSource.value);
+    }
+
+    function toggleMarks() {
+      const isChecked = document.getElementById('chkShowMarks').checked;
+      if (isChecked) applyMarks();
+      else removeMarks();
+    }
+    // --- 조판부호 관련 기능 끝 ---
+
     document.addEventListener('DOMContentLoaded', () => {
       const txtSource = document.getElementById('txtSource');
       
@@ -169,6 +228,13 @@
         const html = e.clipboardData.getData('text/html');
         if (html) clipboardHtmlData = html;
         else clipboardHtmlData = null;
+
+        // 붙여넣기 완료 직후 조판부호 렌더링 업데이트
+        setTimeout(() => {
+          if (document.getElementById('chkShowMarks').checked) {
+            applyMarks();
+          }
+        }, 10);
       });
 
       txtSource.addEventListener('input', (e) => {
@@ -246,19 +312,21 @@
     function analyzeAndRender() {
       let sourceText = document.getElementById('txtSource').value;
 
+      // 조판부호가 켜져있을 수 있으므로 텍스트 파싱 전 깨끗한 상태로 복원
+      sourceText = removeMarksText(sourceText);
+
       if (!sourceText.trim() && !clipboardHtmlData) {
           showToast("분석할 텍스트 데이터를 입력해주세요.");
           return;
       }
 
-      // [핵심 수정사항] 이미지 객체의 '대표' 찌꺼기 글자 청소
-      // 일반 문장의 '대표'는 보존하고, 셀/줄에 단독으로 존재하거나 태그 사이에 단독으로 있는 경우만 삭제합니다.
-      sourceText = sourceText.replace(/(^|\n|\t)\s*대표\s*(?=\n|\t|$)/g, '$1');
+      // [핵심 수정사항] 이미지 객체의 '대표' 찌꺼기 글자 청소 (정교화된 정규식)
+      const daepyoRegex = /(^|[^가-힣a-zA-Z0-9])(대표)+(?=[^가-힣a-zA-Z0-9]|$)/g;
+      sourceText = sourceText.replace(daepyoRegex, '$1').replace(daepyoRegex, '$1');
+
       if (clipboardHtmlData) {
-          // HTML 태그 (예: <span>대표</span>) 내부에 단독 존재하는 '대표' 삭제
-          clipboardHtmlData = clipboardHtmlData.replace(/>\s*대표\s*</g, '><');
-          // 이미지 alt 속성이 '대표'인 경우 제거
-          clipboardHtmlData = clipboardHtmlData.replace(/alt=(["'])대표\1/g, 'alt=$1$1');
+          clipboardHtmlData = clipboardHtmlData.replace(daepyoRegex, '$1').replace(daepyoRegex, '$1');
+          clipboardHtmlData = clipboardHtmlData.replace(/alt=(["'])(대표)+\1/g, 'alt=$1$1');
       }
 
       let rawRows = [];
@@ -274,12 +342,10 @@
           rows.forEach(row => {
             let cells = Array.from(row.querySelectorAll('th, td, [role="cell"], [role="gridcell"]'));
             
-            // 맨 첫 열이 무의미한 빈 칸(체크박스 열)인 경우: 무조건 삭제하지 않고 5열 이상일 때만 삭제 (4열 규격 보존)
             if(cells.length >= 5 && cells[0].innerText.trim() === '') {
                 cells.shift();
             }
 
-            // 내부 태그 정제 및 텍스트 추출
             let rowData = cells.map(cell => {
                 let html = cell.innerHTML
                     .replace(/<br\s*[\/]?>/gi, '\n')
@@ -317,7 +383,6 @@
                 
                 currentRow.push(currentCell.trim());
                 if (currentRow.length > 0 && currentRow.some(c => c !== '')) {
-                    // 무조건 지우지 않고 5열 이상일 때만 체크박스 찌꺼기로 간주 (4열 규격 보존)
                     if (currentRow.length >= 5 && currentRow[0] === '') currentRow.shift(); 
                     rawRows.push(currentRow);
                 }
@@ -345,14 +410,12 @@
             if (r.length === 0 || r.every(c => c === '')) return;
             if (r.some(c => c === '번호' || c === '토픽' || c === 'No')) return;
 
-            // 4열 구조를 강제로 맞춤 (혹시 누락된 칸이 있으면 빈칸으로 채움)
             while (r.length < 4) r.push('');
 
             let firstCell = r[0] ? r[0].trim() : '';
             let idMatch = firstCell.match(/^[^0-9]*(\d+)[^0-9]*$/);
 
             if (idMatch) {
-                // 규칙 1: 첫 번째 열에 숫자가 있는 경우 (번호 ➔ 토픽 ➔ 키워드 ➔ 비고)
                 if (currentItem) structuredItems.push(currentItem);
 
                 currentItem = {
@@ -363,8 +426,6 @@
                     contents: []
                 };
             } else if (currentItem) {
-                // 규칙 2: 숫자가 없는 경우 (상세 설명)
-                // 뒤쪽 2, 3, 4번째 칸에 있는 내용을 전부 모아서 하나의 상세 설명으로 취합
                 let detailCells = [r[1], r[2], r[3]];
                 let detailText = detailCells
                     .filter(c => c !== undefined && c.trim() !== '')
