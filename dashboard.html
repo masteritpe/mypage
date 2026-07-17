@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>COMMAND CENTER : TACTICAL DASHBOARD</title>
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
+    :root {
+      --bg-dark: #050814;
+      --bg-panel: #0a1128;
+      --neon-blue: #00f0ff;
+      --neon-red: #ff2a2a;
+      --neon-green: #39ff14;
+      --neon-gold: #ffb800;
+      --text-main: #e2e8f0;
+      --grid-color: rgba(0, 240, 255, 0.1);
+      
+      --hud-border: 1px solid rgba(0, 240, 255, 0.3);
+      --hud-shadow: 0 0 15px rgba(0, 240, 255, 0.2);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 0;
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: 'Pretendard', sans-serif;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      user-select: none;
+    }
+
+    /* 배경 HUD 그리드 및 스캔라인 효과 */
+    body::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background-image: 
+        linear-gradient(var(--grid-color) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+      background-size: 40px 40px;
+      z-index: -2;
+    }
+    body::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+      background-size: 100% 2px, 3px 100%;
+      z-index: 999;
+      pointer-events: none;
+      opacity: 0.4;
+    }
+
+    /* TOP HEADER */
+    .top-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 15px 40px;
+      background: linear-gradient(90deg, rgba(10,17,40,0.9) 0%, rgba(0,0,0,0.8) 50%, rgba(10,17,40,0.9) 100%);
+      border-bottom: 2px solid var(--neon-blue);
+      box-shadow: 0 0 20px rgba(0, 240, 255, 0.2);
+      z-index: 10;
+    }
+    .mission-title {
+      font-size: 24px;
+      font-weight: 900;
+      color: var(--neon-blue);
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      text-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
+    }
+    .clock-display {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 22px;
+      color: var(--neon-green);
+      text-shadow: 0 0 10px rgba(57, 255, 20, 0.5);
+    }
+    .d-day-badge {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 24px;
+      font-weight: bold;
+      color: var(--neon-red);
+      background: rgba(255, 42, 42, 0.1);
+      padding: 8px 24px;
+      border: 1px solid var(--neon-red);
+      border-radius: 4px;
+      cursor: pointer;
+      text-shadow: 0 0 10px rgba(255, 42, 42, 0.6);
+      box-shadow: inset 0 0 15px rgba(255, 42, 42, 0.2);
+      transition: all 0.2s;
+    }
+    .d-day-badge:hover {
+      background: rgba(255, 42, 42, 0.2);
+      box-shadow: inset 0 0 25px rgba(255, 42, 42, 0.4);
+    }
+
+    /* MAIN CONTENT */
+    .main-content {
+      flex: 1;
+      padding: 40px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 40px;
+    }
+    .main-content::-webkit-scrollbar { width: 6px; }
+    .main-content::-webkit-scrollbar-track { background: transparent; }
+    .main-content::-webkit-scrollbar-thumb { background: var(--neon-blue); border-radius: 3px; }
+
+    /* DB STATUS PANELS (전술 지표) */
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 30px;
+    }
+    .status-panel {
+      background: rgba(10, 17, 40, 0.75);
+      border: var(--hud-border);
+      padding: 30px;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      box-shadow: var(--hud-shadow);
+      backdrop-filter: blur(5px);
+    }
+    /* 코너 디자인 */
+    .status-panel::before, .status-panel::after {
+      content: ''; position: absolute; width: 20px; height: 20px; border: 2px solid var(--neon-blue);
+    }
+    .status-panel::before { top: 0; left: 0; border-right: none; border-bottom: none; }
+    .status-panel::after { bottom: 0; right: 0; border-left: none; border-top: none; }
+
+    .panel-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #94a3b8;
+      letter-spacing: 2px;
+      margin-bottom: 10px;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .live-dot {
+      width: 8px; height: 8px; background: var(--neon-red); border-radius: 50%;
+      box-shadow: 0 0 10px var(--neon-red); animation: blink 1s infinite;
+    }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
+
+    .panel-value {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 64px;
+      color: var(--neon-blue);
+      text-shadow: 0 0 20px rgba(0, 240, 255, 0.6);
+      line-height: 1;
+    }
+    
+    .status-panel.gold .panel-value { color: var(--neon-gold); text-shadow: 0 0 20px rgba(255, 184, 0, 0.6); }
+    .status-panel.gold::before, .status-panel.gold::after { border-color: var(--neon-gold); }
+    .status-panel.gold { border-color: rgba(255, 184, 0, 0.3); box-shadow: 0 0 15px rgba(255, 184, 0, 0.2); }
+
+    .status-panel.green .panel-value { color: var(--neon-green); text-shadow: 0 0 20px rgba(57, 255, 20, 0.6); }
+    .status-panel.green::before, .status-panel.green::after { border-color: var(--neon-green); }
+    .status-panel.green { border-color: rgba(57, 255, 20, 0.3); box-shadow: 0 0 15px rgba(57, 255, 20, 0.2); }
+
+    /* 세부 정보 오버레이 (Hover 시 표시) */
+    .hover-detail-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(5, 8, 20, 0.95);
+      backdrop-filter: blur(10px);
+      z-index: 10;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(15px);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex;
+      flex-direction: column;
+      padding: 20px 24px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    
+    .status-panel:hover .hover-detail-overlay {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+    }
+
+    .hover-detail-header {
+      font-size: 12px;
+      color: #94a3b8;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding-bottom: 8px;
+      margin-bottom: 12px;
+      text-align: center;
+      letter-spacing: 2px;
+      flex-shrink: 0;
+    }
+
+    .hover-detail-content {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    
+    .hover-detail-content::-webkit-scrollbar { width: 4px; }
+    .hover-detail-content::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 2px; }
+
+    .detail-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 0;
+      border-bottom: 1px dashed rgba(255, 255, 255, 0.05);
+      font-size: 13px;
+      color: #cbd5e1;
+    }
+
+    .detail-name {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 75%;
+    }
+
+    .detail-count {
+      font-family: 'Share Tech Mono', monospace;
+      font-weight: bold;
+      font-size: 15px;
+    }
+
+    /* DEPLOYMENT MODULES (액션 메뉴) */
+    .module-section-title {
+      font-size: 18px;
+      color: var(--neon-blue);
+      letter-spacing: 2px;
+      border-bottom: 1px solid rgba(0, 240, 255, 0.3);
+      padding-bottom: 8px;
+      margin-bottom: 20px;
+      text-shadow: 0 0 5px rgba(0, 240, 255, 0.5);
+    }
+
+    .deployment-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 20px;
+    }
+
+    .deploy-btn {
+      background: rgba(10, 17, 40, 0.6);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      color: var(--text-main);
+      padding: 16px 20px;
+      font-size: 16px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.3s ease;
+      font-family: inherit;
+      text-align: left;
+    }
+    .deploy-btn::before {
+      content: '►';
+      font-size: 12px;
+      color: var(--neon-blue);
+      opacity: 0;
+      transform: translateX(-10px);
+      transition: all 0.3s;
+    }
+    .deploy-btn:hover {
+      background: rgba(0, 240, 255, 0.1);
+      border-color: var(--neon-blue);
+      box-shadow: inset 0 0 20px rgba(0, 240, 255, 0.15), 0 0 15px rgba(0, 240, 255, 0.2);
+      color: #fff;
+    }
+    .deploy-btn:hover::before {
+      opacity: 1;
+      transform: translateX(0);
+    }
+
+    /* Modal Overlay */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0, 0, 0, 0.85);
+      z-index: 2000; display: none; justify-content: center; align-items: center;
+      backdrop-filter: blur(4px);
+    }
+    .modal-overlay.show { display: flex; }
+    .modal-content {
+      background: var(--bg-panel); border: 2px solid var(--neon-red);
+      padding: 30px; width: 400px;
+      box-shadow: 0 0 30px rgba(255, 42, 42, 0.4);
+      position: relative;
+    }
+    .modal-title { color: var(--neon-red); margin: 0 0 20px 0; font-size: 20px; letter-spacing: 2px; text-transform: uppercase; }
+    .modal-input {
+      width: 100%; padding: 12px; background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 42, 42, 0.5); color: #fff; font-family: 'Share Tech Mono', monospace; font-size: 16px; outline: none;
+    }
+    .modal-btn {
+      width: 100%; padding: 12px; margin-top: 20px; background: rgba(255, 42, 42, 0.2);
+      border: 1px solid var(--neon-red); color: var(--neon-red); font-weight: bold; cursor: pointer; transition: 0.3s;
+      text-transform: uppercase; letter-spacing: 2px;
+    }
+    .modal-btn:hover { background: var(--neon-red); color: #000; }
+  </style>
+</head>
+<body>
+
+  <!-- TOP HEADER -->
+  <header class="top-header">
+    <div class="mission-title">TACTICAL COMMAND CENTER</div>
+    <div class="clock-display" id="live-clock">00:00:00</div>
+    <div class="d-day-badge" id="d-day-badge" onclick="document.getElementById('dday-modal').classList.add('show')">
+      OP-DAY NOT SET
+    </div>
+  </header>
+
+  <!-- MAIN CONTENT -->
+  <main class="main-content">
+    
+    <!-- DATABASE STATUS (3개 메인 카운터 + Hover 리스트) -->
+    <div class="status-grid">
+      <!-- 1. Topic Bank -->
+      <div class="status-panel">
+        <div class="panel-title"><div class="live-dot"></div> 전술 자산 (TOPIC BANK)</div>
+        <div class="panel-value" id="val-topic-bank">0000</div>
+        <!-- 세부 리스트 오버레이 -->
+        <div class="hover-detail-overlay">
+          <div class="hover-detail-header">▶ 분류별 자산 현황 (SHEET)</div>
+          <div class="hover-detail-content" id="detail-topic-bank">
+            <!-- JS 데이터 주입 영역 -->
+          </div>
+        </div>
+      </div>
+      
+      <!-- 2. Keynote -->
+      <div class="status-panel gold">
+        <div class="panel-title"><div class="live-dot" style="background:var(--neon-gold); box-shadow:0 0 10px var(--neon-gold)"></div> 작전 교리 (KEYNOTE)</div>
+        <div class="panel-value" id="val-keynote">0000</div>
+        <!-- 세부 리스트 오버레이 -->
+        <div class="hover-detail-overlay">
+          <div class="hover-detail-header">▶ 시즌별 교리 현황 (TITLE)</div>
+          <div class="hover-detail-content" id="detail-keynote">
+            <!-- JS 데이터 주입 영역 -->
+          </div>
+        </div>
+      </div>
+      
+      <!-- 3. 5R Checklist -->
+      <div class="status-panel green">
+        <div class="panel-title"><div class="live-dot" style="background:var(--neon-green); box-shadow:0 0 10px var(--neon-green)"></div> 탄약고 (5R CHECKLIST)</div>
+        <div class="panel-value" id="val-5r">0000</div>
+        <!-- 세부 리스트 오버레이 -->
+        <div class="hover-detail-overlay">
+          <div class="hover-detail-header">▶ 도메인별 탄약 현황 (DOMAIN)</div>
+          <div class="hover-detail-content" id="detail-5r">
+            <!-- JS 데이터 주입 영역 -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TACTICAL DEPLOYMENT (메뉴) -->
+    <div>
+      <div class="module-section-title">▶ 작전 전개 시스템 (DEPLOYMENT)</div>
+      <div class="deployment-grid">
+        <button class="deploy-btn" onclick="window.open('pass/5Rchecklist_topic.html', '_blank')">전술 자산 뱅크 (Topic Bank)</button>
+        <button class="deploy-btn" onclick="window.open('pass/keynote.html', '_blank')">작전 교리 열람 (Keynote)</button>
+        <button class="deploy-btn" onclick="window.open('pass/5Rchecklist.html', '_blank')">탄약고 점검 (5R Checklist)</button>
+        
+        <button class="deploy-btn" onclick="window.open('pass/workbook.html', '_blank')">전술 풀이 교본 (Workbook)</button>
+        <button class="deploy-btn" onclick="window.open('pass/deepdive.html', '_blank')">심층 분석 보고서 (Deep Dive)</button>
+        <button class="deploy-btn" onclick="window.open('pass/writingdrillZR.html', '_blank')">핵심 타격 훈련 (Drill)</button>
+
+        <button class="deploy-btn" onclick="window.open('tool/studyplanner.html', '_blank')">작전 기획서 (Study Planner)</button>
+        <button class="deploy-btn" onclick="window.open('pass/bestcase.html', '_blank')">모범 전술 사례 (Best Case)</button>
+        <button class="deploy-btn" onclick="window.open('pass/pastpapers.html', '_blank')">적군 패턴 분석 (Past Papers)</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="module-section-title">▶ 외부 정보망 연결 (INTELLIGENCE)</div>
+      <div class="deployment-grid">
+        <button class="deploy-btn" onclick="window.open('newslist/techdashboard.html', '_blank')">글로벌 동향 스캔 (Tech Journal)</button>
+        <button class="deploy-btn" onclick="window.open('newslist/searchhub.html', '_blank')">통합 정보 조회 (Search Hub)</button>
+        <button class="deploy-btn" onclick="window.open('newslist/newsinsight.html', '_blank')">인사이트 발굴 (News Insight)</button>
+        
+        <button class="deploy-btn" onclick="window.open('pass/blogeditor.html', '_blank')">전술 기록 송신 (Blog Editor)</button>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- D-DAY MODAL -->
+  <div class="modal-overlay" id="dday-modal">
+    <div class="modal-content">
+      <h3 class="modal-title">TARGET OPERATION DATE</h3>
+      <input type="date" id="dday-input" class="modal-input">
+      <div style="display:flex; gap:10px;">
+        <button class="modal-btn" style="background:transparent; border-color:rgba(255,255,255,0.2); color:#fff;" onclick="document.getElementById('dday-modal').classList.remove('show')">ABORT</button>
+        <button class="modal-btn" onclick="saveDday()">ENGAGE</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- 1. Live Clock ---
+    function updateClock() {
+      const now = new Date();
+      const h = String(now.getHours()).padStart(2, '0');
+      const m = String(now.getMinutes()).padStart(2, '0');
+      const s = String(now.getSeconds()).padStart(2, '0');
+      document.getElementById('live-clock').innerText = `${h}:${m}:${s} KST`;
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // --- 2. D-Day Tracker ---
+    function saveDday() {
+      const inputVal = document.getElementById('dday-input').value;
+      if (!inputVal) return;
+      localStorage.setItem('tacticalExamDate', inputVal);
+      document.getElementById('dday-modal').classList.remove('show');
+      loadDday(); 
+    }
+
+    function loadDday() {
+      const savedDate = localStorage.getItem('tacticalExamDate');
+      const badge = document.getElementById('d-day-badge');
+      if (!savedDate) {
+        badge.innerText = "OP-DAY NOT SET";
+        return;
+      }
+      
+      const target = new Date(savedDate); target.setHours(0,0,0,0);
+      const today = new Date(); today.setHours(0,0,0,0);
+      const diffDays = Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+
+      if (diffDays > 0) badge.innerText = `T-MINUS ${diffDays} DAYS`;
+      else if (diffDays === 0) {
+        badge.innerText = `OPERATION INITIATED`;
+        badge.style.background = 'rgba(57, 255, 20, 0.2)';
+        badge.style.borderColor = 'var(--neon-green)';
+        badge.style.color = 'var(--neon-green)';
+        badge.style.boxShadow = 'inset 0 0 15px rgba(57, 255, 20, 0.3)';
+      }
+      else badge.innerText = `T-PLUS ${Math.abs(diffDays)} DAYS`;
+    }
+    loadDday();
+
+    // --- 3. IndexedDB Fetch, Grouping, Custom Sorting & Animate ---
+    function fetchDBDataAndRenderDetails(dbName, storeName, valId, detailId, groupField, panelType) {
+        const req = indexedDB.open(dbName);
+        
+        req.onsuccess = (e) => {
+            const db = e.target.result;
+            
+            // 스토어가 존재하지 않을 경우 안전 종료
+            if (!db.objectStoreNames.contains(storeName)) {
+                document.getElementById(valId).innerText = "0000";
+                db.close();
+                return;
+            }
+            
+            try {
+                const tx = db.transaction(storeName, "readonly");
+                const store = tx.objectStore(storeName);
+                const request = store.openCursor();
+                
+                let total = 0;
+                let groups = {};
+                
+                request.onsuccess = (event) => {
+                    try {
+                        const cursor = event.target.result;
+                        if (cursor) {
+                            const val = cursor.value;
+                            let count = 1;
+                            
+                            let gName = (val && val[groupField]) ? String(val[groupField]).trim() : '미분류';
+                            let itemDate = (val && (val.ts || val.date)) || ''; 
+
+                            if (panelType === 'keynote') {
+                                count = (val && val.items && Array.isArray(val.items)) ? val.items.length : 0;
+                                if (count > 0) gName = gName.replace(/_COM/g, '').trim();
+                            }
+                            
+                            if (count > 0) {
+                                total += count;
+                                if (!groups[gName]) groups[gName] = { count: 0, latestDate: '' };
+                                groups[gName].count += count;
+                                
+                                if (itemDate > groups[gName].latestDate) {
+                                    groups[gName].latestDate = itemDate;
+                                }
+                            }
+                            cursor.continue();
+                        } else {
+                            animateValue(valId, 0, total, 1500);
+                            renderHoverDetails(detailId, groups, valId, panelType);
+                        }
+                    } catch (err) {
+                        console.error(`[Tactical HUD] Cursor Error in ${dbName}:`, err);
+                    }
+                };
+                
+                tx.oncomplete = () => db.close();
+            } catch (error) {
+                console.error(`[Tactical HUD] ${dbName} Transaction Error:`, error);
+                document.getElementById(valId).innerText = "ERR";
+                db.close();
+            }
+        };
+        
+        req.onerror = () => {
+            console.error(`[Tactical HUD] ${dbName} Load Failed`);
+            document.getElementById(valId).innerText = "OFFL";
+        };
+    }
+
+    function renderHoverDetails(detailId, groups, valId, panelType) {
+        const container = document.getElementById(detailId);
+        if (!container) return;
+        
+        let html = '';
+        let sortedGroups = Object.entries(groups);
+
+        // [패널별 맞춤 정렬 로직 적용]
+        if (panelType === 'topic-bank') {
+            const SHEET_ORDER = ["기출", "주모(빅업)", "모의(빅업)", "합숙(빅업)", "모의(ITPE)", "합숙(ITPE)", "모의(KPC)", "합숙(KPC)", "기출(통신)", "모의(KPC통신)"];
+            const getSheetIdx = s => SHEET_ORDER.indexOf(s) === -1 ? 999 : SHEET_ORDER.indexOf(s);
+            
+            sortedGroups.sort((a, b) => {
+                const diff = getSheetIdx(a[0]) - getSheetIdx(b[0]);
+                if (diff !== 0) return diff;
+                return b[1].count - a[1].count; 
+            });
+        } else if (panelType === 'keynote') {
+            sortedGroups.sort((a, b) => b[0].localeCompare(a[0], undefined, { numeric: true, sensitivity: 'base' }));
+        } else if (panelType === '5r') {
+            sortedGroups.sort((a, b) => {
+                const dateA = a[1].latestDate;
+                const dateB = b[1].latestDate;
+                if (dateA > dateB) return -1;
+                if (dateA < dateB) return 1;
+                return b[1].count - a[1].count; 
+            });
+        }
+
+        if (sortedGroups.length === 0) {
+            html = '<div style="text-align:center; color:#64748b; font-size:12px; margin-top:20px;">NO DATA DETECTED</div>';
+        } else {
+            let highlightColor = 'var(--neon-blue)';
+            if (valId.includes('keynote')) highlightColor = 'var(--neon-gold)';
+            if (valId.includes('5r')) highlightColor = 'var(--neon-green)';
+
+            sortedGroups.forEach(([name, data]) => {
+                html += `
+                <div class="detail-item">
+                    <span class="detail-name" title="${name}">${name}</span>
+                    <span class="detail-count" style="color: ${highlightColor}">${String(data.count).padStart(3, '0')}</span>
+                </div>`;
+            });
+        }
+        container.innerHTML = html;
+    }
+
+    function animateValue(id, start, end, duration) {
+        if (start === end) {
+            document.getElementById(id).innerHTML = String(end).padStart(4, '0');
+            return;
+        }
+        
+        let range = end - start;
+        let current = start;
+        let increment = end > start ? Math.ceil(range / 60) : -1; 
+        let stepTime = Math.abs(Math.floor(duration / (range / increment)));
+        let obj = document.getElementById(id);
+        
+        let timer = setInterval(function() {
+            current += increment;
+            if (current >= end) {
+                current = end;
+                clearInterval(timer);
+            }
+            obj.innerHTML = String(current).padStart(4, '0');
+        }, stepTime);
+    }
+
+    // 초기 로딩 시 데이터베이스 연동 호출
+    window.addEventListener('DOMContentLoaded', () => {
+        // TopicBankDB -> 맞춤 배열 순서 (topic-bank)
+        fetchDBDataAndRenderDetails('TopicBankDB', 'items', 'val-topic-bank', 'detail-topic-bank', 'sheet', 'topic-bank'); 
+        
+        // StudyNoteDB -> 번호 내림차순 정렬 (keynote)
+        fetchDBDataAndRenderDetails('StudyNoteDB', 'notes', 'val-keynote', 'detail-keynote', 'title', 'keynote');
+        
+        // 5RChecklistDB -> 수정일자 최신순 정렬 (5r)
+        fetchDBDataAndRenderDetails('5RChecklistDB', 'items', 'val-5r', 'detail-5r', 'domain', '5r');
+    });
+  </script>
+</body>
+</html>
