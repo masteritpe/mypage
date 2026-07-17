@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>COMMAND CENTER : TACTICAL DASHBOARD</title>
+  <title>TACTICAL COMMAND CENTER</title>
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
@@ -222,11 +222,23 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 6px 0;
+      padding: 8px 12px;
       border-bottom: 1px dashed rgba(255, 255, 255, 0.05);
       font-size: 13px;
       color: #cbd5e1;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: all 0.2s ease;
     }
+    
+    .detail-item:hover {
+      background: rgba(255, 255, 255, 0.1);
+      transform: translateX(4px);
+    }
+    
+    .status-panel:nth-child(1) .detail-item:hover { border-left: 3px solid var(--neon-blue); }
+    .status-panel:nth-child(2) .detail-item:hover { border-left: 3px solid var(--neon-gold); }
+    .status-panel:nth-child(3) .detail-item:hover { border-left: 3px solid var(--neon-green); }
 
     .detail-name {
       white-space: nowrap;
@@ -386,7 +398,7 @@
         
         <button class="deploy-btn" onclick="window.open('pass/workbook.html', '_blank')">전술 풀이 교본 (Workbook)</button>
         <button class="deploy-btn" onclick="window.open('pass/deepdive.html', '_blank')">심층 분석 보고서 (Deep Dive)</button>
-        <button class="deploy-btn" onclick="window.open('pass/writingdrillZR.html', '_blank')">핵심 타격 훈련 (Drill)</button>
+        <button class="deploy-btn" onclick="window.open('pass/writingdrillZR(Answer).html', '_blank')">핵심 타격 훈련 (Drill)</button>
 
         <button class="deploy-btn" onclick="window.open('tool/studyplanner.html', '_blank')">작전 기획서 (Study Planner)</button>
         <button class="deploy-btn" onclick="window.open('pass/bestcase.html', '_blank')">모범 전술 사례 (Best Case)</button>
@@ -464,14 +476,13 @@
     }
     loadDday();
 
-    // --- 3. IndexedDB Fetch, Grouping, Custom Sorting & Animate ---
+    // --- 3. IndexedDB Fetch, Grouping, Custom Sorting & Deep Linking ---
     function fetchDBDataAndRenderDetails(dbName, storeName, valId, detailId, groupField, panelType) {
         const req = indexedDB.open(dbName);
         
         req.onsuccess = (e) => {
             const db = e.target.result;
             
-            // 스토어가 존재하지 않을 경우 안전 종료
             if (!db.objectStoreNames.contains(storeName)) {
                 document.getElementById(valId).innerText = "0000";
                 db.close();
@@ -503,11 +514,15 @@
                             
                             if (count > 0) {
                                 total += count;
-                                if (!groups[gName]) groups[gName] = { count: 0, latestDate: '' };
+                                // targetId 속성을 추가하여 해당 그룹의 대표 ID(최신)를 저장합니다.
+                                if (!groups[gName]) {
+                                    groups[gName] = { count: 0, latestDate: '', targetId: val.id };
+                                }
                                 groups[gName].count += count;
                                 
                                 if (itemDate > groups[gName].latestDate) {
                                     groups[gName].latestDate = itemDate;
+                                    groups[gName].targetId = val.id; // 가장 최신 데이터의 ID를 타겟으로 지정
                                 }
                             }
                             cursor.continue();
@@ -567,12 +582,18 @@
             html = '<div style="text-align:center; color:#64748b; font-size:12px; margin-top:20px;">NO DATA DETECTED</div>';
         } else {
             let highlightColor = 'var(--neon-blue)';
-            if (valId.includes('keynote')) highlightColor = 'var(--neon-gold)';
-            if (valId.includes('5r')) highlightColor = 'var(--neon-green)';
+            let targetUrl = '';
+            
+            // 패널별 베이스 경로 및 컬러 매핑
+            if (panelType === 'topic-bank') { highlightColor = 'var(--neon-blue)'; targetUrl = 'pass/5Rchecklist_topic.html'; }
+            if (panelType === 'keynote') { highlightColor = 'var(--neon-gold)'; targetUrl = 'pass/keynote.html'; }
+            if (panelType === '5r') { highlightColor = 'var(--neon-green)'; targetUrl = 'pass/5Rchecklist.html'; }
 
             sortedGroups.forEach(([name, data]) => {
+                // 클릭 시 해당 항목의 uid를 포함한 파라미터 딥링크 연결
+                const link = `${targetUrl}?uid=${data.targetId}`;
                 html += `
-                <div class="detail-item">
+                <div class="detail-item" onclick="window.open('${link}', '_blank')">
                     <span class="detail-name" title="${name}">${name}</span>
                     <span class="detail-count" style="color: ${highlightColor}">${String(data.count).padStart(3, '0')}</span>
                 </div>`;
@@ -605,13 +626,8 @@
 
     // 초기 로딩 시 데이터베이스 연동 호출
     window.addEventListener('DOMContentLoaded', () => {
-        // TopicBankDB -> 맞춤 배열 순서 (topic-bank)
         fetchDBDataAndRenderDetails('TopicBankDB', 'items', 'val-topic-bank', 'detail-topic-bank', 'sheet', 'topic-bank'); 
-        
-        // StudyNoteDB -> 번호 내림차순 정렬 (keynote)
         fetchDBDataAndRenderDetails('StudyNoteDB', 'notes', 'val-keynote', 'detail-keynote', 'title', 'keynote');
-        
-        // 5RChecklistDB -> 수정일자 최신순 정렬 (5r)
         fetchDBDataAndRenderDetails('5RChecklistDB', 'items', 'val-5r', 'detail-5r', 'domain', '5r');
     });
   </script>
