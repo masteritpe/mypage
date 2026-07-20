@@ -282,8 +282,9 @@ window.MathJax = {
     let articleCount = 0;
     let currentEditId = null;
     let mdDirHandle = null; 
+    let toastTimeout = null;
 
-    const defaultCategories = ["소프트웨어공학", "데이터베이스", "네트워크", "정보보안", "IT경영", "시스템구조", "AI데이터분석", "신기술융합"];
+    const defaultCategories = ["IT기술", "정보처리", "기출문제", "문제분석", "에세이"];
 
     document.addEventListener('keydown', function(e) {
         if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'n') {
@@ -383,8 +384,7 @@ window.MathJax = {
                     reader.onerror = (e) => reject(e);
                     reader.readAsDataURL(file);
                 });
-                
-                insertText += `![${fileName}](${base64Data})\n`;
+                insertText += `![${fileName}](${base64Data.replace(/\s+/g, '')})\n`;
             } catch(e) {
                 console.error("이미지 변환 실패", e);
                 alert(`[${fileName}] 이미지를 내장 가능한 데이터로 변환하는데 실패했습니다.`);
@@ -418,13 +418,14 @@ window.MathJax = {
         if (!html) return '';
         let md = html;
         
-        md = md.replace(/<img[^>]+src=["']([^"']+)["'][^>]*>/gi, '![image]($1)');
+        md = md.replace(/<img[^>]+src=["']([^"']+)["'][^>]*>/gi, function(match, p1) {
+            return '![image](' + p1.replace(/\s+/g, '') + ')';
+        });
         md = md.replace(/<h[1-6][^>]*>([\s\S]*?)<\/h[1-6]>/gi, '\n**$1**\n\n');
 
         md = md.replace(/<pre[^>]*><code[^>]*>([\s\S]*?)<\/code><\/pre>/gi, '\n```\n$1\n```\n');
         md = md.replace(/<code[^>]*>([\s\S]*?)<\/code>/gi, '`$1`');
 
-        // [수정사항 반영] 정교한 마크다운 표(Table) 변환 로직
         md = md.replace(/<table[^>]*>([\s\S]*?)<\/table>/gi, function(match, tbl) {
             let res = '\n\n';
             let rows = tbl.match(/<tr[^>]*>[\s\S]*?<\/tr\s*>/gi) || [];
@@ -446,7 +447,6 @@ window.MathJax = {
             return res + '\n';
         });
         
-        // 마크다운 표 변환 후 남은 HTML 표 관련 태그 잔여물 완벽 제거
         md = md.replace(/<\/?(table|thead|tbody|tfoot|tr|th|td)[^>]*>/gi, '');
 
         md = md.replace(/<p[^>]*>/gi, '\n');
@@ -545,7 +545,7 @@ window.MathJax = {
         
         for (const m of matches) {
             const fullImgTag = m[0];
-            const base64Data = m[1];
+            const base64Data = m[1].replace(/\s+/g, '');
             const fileName = `embedded_${indexPrefix}_img_${imgCount++}.png`;
             processedHtml = processedHtml.replace(fullImgTag, `\n![${fileName}](${base64Data})\n`);
         }
@@ -571,7 +571,7 @@ window.MathJax = {
         const reader = new FileReader();
         reader.onload = async (e) => {
             try {
-                const json = JSON.parse(e.target.result);
+                let json = JSON.parse(e.target.result);
                 const today = new Date().toISOString().split('T')[0];
                 
                 let importDate = today;
@@ -594,11 +594,13 @@ window.MathJax = {
                 }
 
                 addArticle({ title: '상세 내용', content: content, visualType: 'none' });
-                
                 showToast("✅ Chat JSON 데이터를 성공적으로 불러왔습니다.");
+                
+                json = null; 
             } catch (error) {
                 alert("JSON 파일 파싱 중 오류가 발생했습니다. 포맷을 확인해주세요.");
             }
+            e.target.result = null; 
             event.target.value = '';
         };
         reader.readAsText(file);
@@ -612,7 +614,7 @@ window.MathJax = {
         const reader = new FileReader();
         reader.onload = async (e) => {
             try {
-                const json = JSON.parse(e.target.result);
+                let json = JSON.parse(e.target.result);
                 
                 const today = new Date().toISOString().split('T')[0];
                 let importDate = today;
@@ -667,9 +669,11 @@ window.MathJax = {
                     addArticle();
                 }
                 showToast("✅ Link 노드맵 데이터를 성공적으로 불러왔습니다.");
+                json = null; nodes = null;
             } catch (error) {
                 alert("JSON 파일 파싱 중 오류가 발생했습니다. 포맷을 확인해주세요.");
             }
+            e.target.result = null; 
             event.target.value = '';
         };
         reader.readAsText(file);
@@ -683,7 +687,7 @@ window.MathJax = {
         const reader = new FileReader();
         reader.onload = async (e) => {
             try {
-                const json = JSON.parse(e.target.result);
+                let json = JSON.parse(e.target.result);
                 const today = new Date().toISOString().split('T')[0];
                 
                 document.getElementById('issueDate').value = json.date ? new Date(json.date).toISOString().split('T')[0] : today;
@@ -712,10 +716,11 @@ window.MathJax = {
                         
                         const imgData = item._img1Data || item.image || item.imgData || item.img || item.imageUrl;
                         if (imgData) {
-                            if (imgData.startsWith('data:image')) {
-                                content += `![KN_image_${index + 1}](${imgData})\n\n`;
+                            let cleanImg = imgData.replace(/\s+/g, '');
+                            if (cleanImg.startsWith('data:image')) {
+                                content += `![KN_image_${index + 1}](${cleanImg})\n\n`;
                             } else {
-                                content += `![참고 이미지](${imgData})\n\n`;
+                                content += `![참고 이미지](${imgData.trim()})\n\n`;
                             }
                         }
                         
@@ -725,9 +730,11 @@ window.MathJax = {
                     addArticle();
                 }
                 showToast("✅ 키노트 JSON 데이터를 성공적으로 불러왔습니다.");
+                json = null;
             } catch (error) {
                 alert("JSON 파일 파싱 중 오류가 발생했습니다. 포맷을 확인해주세요.");
             }
+            e.target.result = null;
             event.target.value = '';
         };
         reader.readAsText(file);
@@ -741,7 +748,7 @@ window.MathJax = {
         const reader = new FileReader();
         reader.onload = async (e) => {
             try {
-                const json = JSON.parse(e.target.result);
+                let json = JSON.parse(e.target.result);
                 const today = new Date().toISOString().split('T')[0];
 
                 let items = [];
@@ -796,10 +803,11 @@ window.MathJax = {
                         
                         const imgData = item._img1Data || item.image || item.imgData || item.img || item.imageUrl;
                         if (imgData) {
-                            if (imgData.startsWith('data:image')) {
-                                content += `![ISMSP_image_${index + 1}](${imgData})\n\n`;
+                            let cleanImg = imgData.replace(/\s+/g, '');
+                            if (cleanImg.startsWith('data:image')) {
+                                content += `![ISMSP_image_${index + 1}](${cleanImg})\n\n`;
                             } else {
-                                content += `![참고 이미지](${imgData})\n\n`;
+                                content += `![참고 이미지](${imgData.trim()})\n\n`;
                             }
                         }
                         
@@ -809,9 +817,11 @@ window.MathJax = {
                     addArticle();
                 }
                 showToast("✅ ISMS-P JSON 데이터를 성공적으로 불러왔습니다.");
+                json = null; items = null;
             } catch (error) {
                 alert("JSON 파일 파싱 중 오류가 발생했습니다. 포맷을 확인해주세요.");
             }
+            e.target.result = null;
             event.target.value = '';
         };
         reader.readAsText(file);
@@ -825,7 +835,7 @@ window.MathJax = {
         const reader = new FileReader();
         reader.onload = async (e) => {
             try {
-                const jsonArr = JSON.parse(e.target.result);
+                let jsonArr = JSON.parse(e.target.result);
                 if (!Array.isArray(jsonArr)) throw new Error("배열 형태의 데이터가 아닙니다.");
 
                 const today = new Date().toISOString().split('T')[0];
@@ -851,17 +861,20 @@ window.MathJax = {
                         
                         const imgData = item._img1Data || item.image || item.imgData || item.img || item.imageUrl;
                         if (imgData) {
-                            if (imgData.startsWith('data:image')) {
-                                content += `![Dueum_image_${index + 1}](${imgData})\n\n`;
+                            let cleanImg = imgData.replace(/\s+/g, ''); 
+                            if (cleanImg.startsWith('data:image')) {
+                                content += `![Dueum_image_${index + 1}](${cleanImg})\n\n`;
                             } else { 
-                                content += `![참고 이미지](${imgData})\n\n`; 
+                                content += `![참고 이미지](${imgData.trim()})\n\n`; 
                             }
                         }
                         addArticle({ title: title, content: content.trim(), visualType: 'none' });
                     }
                 } else { addArticle(); }
                 showToast("✅ 두음마스터 JSON 데이터를 성공적으로 불러왔습니다.");
+                jsonArr = null;
             } catch (error) { alert("JSON 파일 파싱 중 오류가 발생했습니다."); }
+            e.target.result = null;
             event.target.value = '';
         };
         reader.readAsText(file);
@@ -875,7 +888,7 @@ window.MathJax = {
         const reader = new FileReader();
         reader.onload = async (e) => {
             try {
-                const jsonArr = JSON.parse(e.target.result);
+                let jsonArr = JSON.parse(e.target.result);
                 if (!Array.isArray(jsonArr)) throw new Error("배열 형태의 데이터가 아닙니다.");
 
                 jsonArr.sort((a, b) => {
@@ -927,10 +940,11 @@ window.MathJax = {
 
                         imgList.forEach((imgData, imgIdx) => {
                             if (imgData) {
-                                if (imgData.startsWith('data:image')) {
-                                    content += `![5R_image_${index + 1}_${imgIdx + 1}](${imgData})\n\n`;
+                                let cleanImg = imgData.replace(/\s+/g, '');
+                                if (cleanImg.startsWith('data:image')) {
+                                    content += `![5R_image_${index + 1}_${imgIdx + 1}](${cleanImg})\n\n`;
                                 } else { 
-                                    content += `![참고 이미지 ${imgIdx + 1}](${imgData})\n\n`; 
+                                    content += `![참고 이미지 ${imgIdx + 1}](${imgData.trim()})\n\n`; 
                                 }
                             }
                         });
@@ -939,7 +953,9 @@ window.MathJax = {
                     }
                 } else { addArticle(); }
                 showToast("✅ 5R JSON 데이터를 성공적으로 불러왔습니다.");
+                jsonArr = null;
             } catch (error) { alert("JSON 파일 파싱 중 오류가 발생했습니다."); }
+            e.target.result = null;
             event.target.value = '';
         };
         reader.readAsText(file);
@@ -953,7 +969,7 @@ window.MathJax = {
         const reader = new FileReader();
         reader.onload = async (e) => {
             try {
-                const jsonArr = JSON.parse(e.target.result);
+                let jsonArr = JSON.parse(e.target.result);
                 if (!Array.isArray(jsonArr)) throw new Error("배열 형태의 데이터가 아닙니다.");
 
                 const today = new Date().toISOString().split('T')[0];
@@ -979,17 +995,20 @@ window.MathJax = {
                         
                         const imgData = item._img1Data || item.image || item.imgData || item.img || item.imageUrl;
                         if (imgData) {
-                            if (imgData.startsWith('data:image')) {
-                                content += `![Drill_image_${index + 1}](${imgData})\n\n`;
+                            let cleanImg = imgData.replace(/\s+/g, '');
+                            if (cleanImg.startsWith('data:image')) {
+                                content += `![Drill_image_${index + 1}](${cleanImg})\n\n`;
                             } else { 
-                                content += `![참고 이미지](${imgData})\n\n`; 
+                                content += `![참고 이미지](${imgData.trim()})\n\n`; 
                             }
                         }
                         addArticle({ title: title, content: content.trim(), visualType: 'none' });
                     }
                 } else { addArticle(); }
                 showToast("✅ Drill JSON 데이터를 성공적으로 불러왔습니다.");
+                jsonArr = null;
             } catch (error) { alert("JSON 파일 파싱 중 오류가 발생했습니다."); }
+            e.target.result = null;
             event.target.value = '';
         };
         reader.readAsText(file);
@@ -1007,17 +1026,25 @@ window.MathJax = {
             dataList.sort((a, b) => new Date(b.date) - new Date(a.date));
 
             const container = document.getElementById('timelineList');
-            container.innerHTML = '';
+            container.replaceChildren(); 
+            
             if (dataList.length === 0) {
-                container.innerHTML = '<div class="empty-list">저장된 내역이 없습니다.</div>'; return;
+                const emptyDiv = document.createElement('div');
+                emptyDiv.className = 'empty-list';
+                emptyDiv.textContent = '저장된 내역이 없습니다.';
+                container.appendChild(emptyDiv);
+                return;
             }
+            
             const currentId = document.getElementById('issueDate').value + "-" + document.getElementById('postTitle').value;
+            const fragment = document.createDocumentFragment(); 
 
             dataList.forEach(item => {
                 const itemId = generateId(item.date, item.postTitle);
                 const div = document.createElement('div');
                 div.className = `timeline-item ${itemId === currentId ? 'active' : ''}`;
-                div.onclick = () => loadDataToForm(item.id);
+                div.setAttribute('onclick', `loadDataToForm(${item.id})`);
+                
                 div.innerHTML = `
                     <div class="tl-item-header">
                         <div class="tl-date" title="${item.postTitle || "제목 없음"}">${item.postTitle || "제목 없음"}</div>
@@ -1025,8 +1052,11 @@ window.MathJax = {
                     </div>
                     <div class="tl-meta"><span>${item.date}</span><span>${item.category}</span></div>
                 `;
-                container.appendChild(div);
+                fragment.appendChild(div);
             });
+            
+            container.appendChild(fragment);
+            dataList = null; 
         };
     }
 
@@ -1180,7 +1210,13 @@ window.MathJax = {
         }
     }
 
-    function showToast(msg) { const toast = document.getElementById("toast"); toast.textContent = msg; toast.className = "show"; setTimeout(() => toast.className = toast.className.replace("show", ""), 1000); }
+    function showToast(msg) { 
+        const toast = document.getElementById("toast"); 
+        toast.textContent = msg; 
+        toast.className = "show"; 
+        if (toastTimeout) clearTimeout(toastTimeout);
+        toastTimeout = setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 1000); 
+    }
     
     function handleSave() { 
         const data = gatherFormData(); 
@@ -1195,7 +1231,7 @@ window.MathJax = {
         return true; 
     }
 
-    function generateMarkdownString(data, isPreview = false) {
+    function generateMarkdownParts(data, isPreview = false) {
         const convertArrows = (str) => {
             if (!str) return ''; return str.replace(/->/g, '→').replace(/<-/g, '←');
         };
@@ -1216,28 +1252,104 @@ window.MathJax = {
                              .replace(/>/g, "&gt;")
                     );
         };
+        
+        const extractBase64Images = (mdText) => {
+            if (!mdText) return mdText;
+            return mdText.replace(/!\[([^\]]*)\]\(\s*(data:image\/[^;]+;base64,[^\)]+)\)/gi, (match, alt, dataUrl) => {
+                return `<img src="${dataUrl.replace(/\s+/g, '')}" alt="${alt}" style="max-width: 100%; height: auto; margin: 16px 0;" />`;
+            });
+        };
 
-        let md = "";
+        let header = "";
         
         if (!isPreview) {
             const tagsArr = data.tags ? data.tags.split(',').map(t => t.trim()).filter(t => t) : []; 
             const tagsStr = tagsArr.length > 0 ? `[${tagsArr.join(', ')}]` : '[]';
             const mathJaxScript = `\n<script>\n    window.MathJax = {\n        tex: {\n            inlineMath: [['$', '$'], ['\\\\(', '\\\\)']],\n            displayMath: [['$$', '$$'], ['\\\\[', '\\\\]']],\n            processEscapes: true\n        }\n    };\n<\/script>\n<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"><\/script>\n`;
-            md += `---\nlayout: post\ntitle: "${data.postTitle.replace(/"/g, '\\"')}"\ndate: ${data.date}\ncategories: ${data.category}\ntags: ${tagsStr}\n---\n\n${mathJaxScript}\n\n`;
+            header += `---\nlayout: post\ntitle: "${data.postTitle.replace(/"/g, '\\"')}"\ndate: ${data.date}\ncategories: ${data.category}\ntags: ${tagsStr}\n---\n\n${mathJaxScript}\n\n`;
         }
 
-        md += `<style>\n.easy-box { background: linear-gradient(135deg, #fff8e1 0%, #fef5e7 100%); border-left: 4px solid #d68910; border-radius: 8px; padding: 16px 20px; margin-bottom: 28px; }\n.easy-box .easy-title { font-size: 16px; font-weight: 700; color: #b9770e; margin-bottom: 10px; letter-spacing: 0.5px; }\n.easy-box p { font-size: 15px; line-height: 1.7; color: #3a3a3a; word-break: keep-all; margin: 0; }\n\n.visual-container { background: #fff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; margin-bottom: 32px; }\n.visual-header { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 800; color: #1a3a6c; margin-bottom: 20px; padding-bottom: 14px; border-bottom: 2px solid #e8edf5; }\n\n.table-presentation { width: 100%; border-radius: 8px; overflow: hidden; border: 1px solid #1a3a6c; }\n.tp-header { display: flex; background: #1a3a6c; color: white; font-weight: 700; text-align: center; font-size: 15px; }\n.tp-header-col { flex: 1; padding: 14px 10px; border-right: 1px solid rgba(255,255,255,0.2); word-break: keep-all; display: flex; align-items: center; justify-content: center; }\n.tp-header-col:last-child { border-right: none; }\n.tp-row { display: flex; border-bottom: 1px solid #e2e8f0; background: white; }\n.tp-row:last-child { border-bottom: none; }\n.tp-row:nth-child(even) { background: #f8fafc; }\n.tp-col { flex: 1; padding: 14px 10px; font-size: 14.5px; text-align: center; border-right: 1px solid #e2e8f0; word-break: keep-all; color: #2d3748; display: flex; align-items: center; justify-content: center; }\n.tp-col:last-child { border-right: none; }\n\n.quote-card { background: linear-gradient(135deg, #f7f4ec 0%, #faf8f1 100%); border-radius: 12px; padding: 26px 28px; border-left: 5px solid #c0392b; box-shadow: 0 4px 12px rgba(0,0,0,0.06); margin-bottom: 32px; }\n.quote-card .quote-header { font-size: 14px; font-weight: 700; color: #c0392b; letter-spacing: 2px; margin-bottom: 14px; }\n.quote-card .quote-ko { font-size: 18px; line-height: 1.6; color: #1a1a1a; font-weight: 600; word-break: keep-all; margin: 0; }\n\n.split-2 { display: flex; align-items: stretch; gap: 12px; margin-bottom: 20px; }\n.split-2-card { flex: 1; padding: 24px 20px; border-radius: 12px; background: #f8fafc; border: 1px solid #e2e8f0; text-align: center; font-size: 15px; font-weight: 700; color: #2d3748; line-height: 1.7; word-break: keep-all; }\n.split-2-connector { font-size: 28px; font-weight: 900; color: #4a5568; display: flex; align-items: center; justify-content: center; }\n\n.split-3 { display: flex; gap: 10px; margin-bottom: 20px;}\n.split-3-item { flex: 1; padding: 16px 10px; border-radius: 12px; text-align: center; background: #f8fafc; border: 1px solid #e2e8f0; }\n.split-3-item.c1 { background: #fff5f5; border-top: 4px solid #fc8181; }\n.split-3-item.c2 { background: #fffaf0; border-top: 4px solid #fbd38d; }\n.split-3-item.c3 { background: #f0fff4; border-top: 4px solid #9ae6b4; }\n.split-label { font-size: 12px; color: #718096; margin-bottom: 6px; font-weight: 700; }\n.split-val { font-size: 15px; font-weight: 800; color: #2d3748; line-height: 1.4; }\n\n.dueum-box { background-color: #1a3a6c; color: #ffffff; border-radius: 8px; padding: 16px 20px; margin-top: 8px; margin-bottom: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }\n#previewText .dueum-box p, .dueum-box p { font-size: 16.5px !important; line-height: 1.7 !important; color: #ffffff !important; word-break: keep-all !important; margin: 0 !important; font-weight: 700 !important; }\n</style>\n\n`;
+        header += `<style>\n.easy-box { background: linear-gradient(135deg, #fff8e1 0%, #fef5e7 100%); border-left: 4px solid #d68910; border-radius: 8px; padding: 16px 20px; margin-bottom: 28px; }\n.easy-box .easy-title { font-size: 16px; font-weight: 700; color: #b9770e; margin-bottom: 10px; letter-spacing: 0.5px; }\n.easy-box p { font-size: 15px; line-height: 1.7; color: #3a3a3a; word-break: keep-all; margin: 0; }\n\n.visual-container { background: #fff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; margin-bottom: 32px; }\n.visual-header { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 800; color: #1a3a6c; margin-bottom: 20px; padding-bottom: 14px; border-bottom: 2px solid #e8edf5; }\n\n.table-presentation { width: 100%; border-radius: 8px; overflow: hidden; border: 1px solid #1a3a6c; }\n.tp-header { display: flex; background: #1a3a6c; color: white; font-weight: 700; text-align: center; font-size: 15px; }\n.tp-header-col { flex: 1; padding: 14px 10px; border-right: 1px solid rgba(255,255,255,0.2); word-break: keep-all; display: flex; align-items: center; justify-content: center; }\n.tp-header-col:last-child { border-right: none; }\n.tp-row { display: flex; border-bottom: 1px solid #e2e8f0; background: white; }\n.tp-row:last-child { border-bottom: none; }\n.tp-row:nth-child(even) { background: #f8fafc; }\n.tp-col { flex: 1; padding: 14px 10px; font-size: 14.5px; text-align: center; border-right: 1px solid #e2e8f0; word-break: keep-all; color: #2d3748; display: flex; align-items: center; justify-content: center; }\n.tp-col:last-child { border-right: none; }\n\n.quote-card { background: linear-gradient(135deg, #f7f4ec 0%, #faf8f1 100%); border-radius: 12px; padding: 26px 28px; border-left: 5px solid #c0392b; box-shadow: 0 4px 12px rgba(0,0,0,0.06); margin-bottom: 32px; }\n.quote-card .quote-header { font-size: 14px; font-weight: 700; color: #c0392b; letter-spacing: 2px; margin-bottom: 14px; }\n.quote-card .quote-ko { font-size: 18px; line-height: 1.6; color: #1a1a1a; font-weight: 600; word-break: keep-all; margin: 0; }\n\n.split-2 { display: flex; align-items: stretch; gap: 12px; margin-bottom: 20px; }\n.split-2-card { flex: 1; padding: 24px 20px; border-radius: 12px; background: #f8fafc; border: 1px solid #e2e8f0; text-align: center; font-size: 15px; font-weight: 700; color: #2d3748; line-height: 1.7; word-break: keep-all; }\n.split-2-connector { font-size: 28px; font-weight: 900; color: #4a5568; display: flex; align-items: center; justify-content: center; }\n\n.split-3 { display: flex; gap: 10px; margin-bottom: 20px;}\n.split-3-item { flex: 1; padding: 16px 10px; border-radius: 12px; text-align: center; background: #f8fafc; border: 1px solid #e2e8f0; }\n.split-3-item.c1 { background: #fff5f5; border-top: 4px solid #fc8181; }\n.split-3-item.c2 { background: #fffaf0; border-top: 4px solid #fbd38d; }\n.split-3-item.c3 { background: #f0fff4; border-top: 4px solid #9ae6b4; }\n.split-label { font-size: 12px; color: #718096; margin-bottom: 6px; font-weight: 700; }\n.split-val { font-size: 15px; font-weight: 800; color: #2d3748; line-height: 1.4; }\n\n.dueum-box { background-color: #1a3a6c; color: #ffffff; border-radius: 8px; padding: 16px 20px; margin-top: 8px; margin-bottom: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }\n#previewText .dueum-box p, .dueum-box p { font-size: 16.5px !important; line-height: 1.7 !important; color: #ffffff !important; word-break: keep-all !important; margin: 0 !important; font-weight: 700 !important; }\n</style>\n\n`;
 
-        if (data.quoteKo) md += `<div class="quote-card">\n    <div class="quote-header">💬 오늘의 한 줄</div>\n    <p class="quote-ko">"${escapeHtml(data.quoteKo)}"</p>\n</div>\n\n`;
+        if (data.quoteKo) header += `<div class="quote-card">\n    <div class="quote-header">💬 오늘의 한 줄</div>\n    <p class="quote-ko">"${escapeHtml(data.quoteKo)}"</p>\n</div>\n\n`;
         
-        if (data.introText) md += `${protectMath(data.introText)}\n\n`;
+        if (data.introText) header += `${extractBase64Images(protectMath(data.introText))}\n\n`;
         
+        let articlesMd = [];
+
         data.articles.forEach((art, index) => {
-            if (art.title) md += `### ${escapeHtml(art.title)}\n\n`;
+            let artMd = "";
+            
+            // 소제목 (번호 있는 타이틀) 헤더 유지
+            if (art.title) artMd += `### ${escapeHtml(art.title)}\n\n`;
             
             if (art.content) {
-                let processedContent = art.content.replace(/^[ \t]*[•○◦▪][ \t]*/gm, '- ');
+                let processedContent = art.content;
+                
+                // 다중 줄 코드 블록 보호 (내부 주석 처리 방지)
+                let codeBlocks = [];
+                processedContent = processedContent.replace(/```[\s\S]*?```/g, (match) => {
+                    codeBlocks.push(match);
+                    return `%%%CODE_BLOCK_${codeBlocks.length - 1}%%%`;
+                });
+
+                // 인라인 코드 블록 보호
+                let inlineCodeBlocks = [];
+                processedContent = processedContent.replace(/`[^`\n]+`/g, (match) => {
+                    inlineCodeBlocks.push(match);
+                    return `%%%INLINE_CODE_${inlineCodeBlocks.length - 1}%%%`;
+                });
+
+                // <레드-블랙 트리의 동작> 같은 설명용 꺽쇠괄호 라벨이 HTML 태그로 오인식되어
+                // 이후 헤더(###)까지 통째로 삼켜버리는 현상 방지 (알려진 태그가 아니면 escape)
+                processedContent = processedContent.replace(/<\/?([가-힣a-zA-Z0-9_\-\s]+)>/g, (match, inner) => {
+                    const knownTags = ['p', 'b', 'strong', 'i', 'em', 'ul', 'ol', 'li', 'br', 'img', 'div', 'span', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'code', 'pre', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'tfoot', 'mark'];
+                    const tagName = inner.trim().split(/\s+/)[0].toLowerCase();
+                    if (knownTags.includes(tagName)) return match;
+                    return match.replace('<', '&lt;').replace('>', '&gt;');
+                });
+
+                processedContent = processedContent.replace(/^[ \t]*[•○◦▪][ \t]*/gm, '- ');
+
+                // 텍스트 줄 바로 아래에 '-'나 '=' 만 있는 줄이 붙으면 Setext 헤더(H1/H2)로
+                // 오인식되는 현상 방지: 그 앞에 빈 줄을 강제로 삽입
+                processedContent = (() => {
+                    const srcLines = processedContent.split('\n');
+                    const outLines = [];
+                    for (let i = 0; i < srcLines.length; i++) {
+                        const line = srcLines[i];
+                        const isSetextUnderline = /^[ \t]*(-+|=+)[ \t]*$/.test(line);
+                        const prevLine = outLines[outLines.length - 1];
+                        if (isSetextUnderline && prevLine !== undefined && prevLine.trim() !== '') {
+                            outLines.push('');
+                        }
+                        outLines.push(line);
+                    }
+                    return outLines.join('\n');
+                })();
+
                 processedContent = protectMath(processedContent);
+                
+                // [수정] 멀티라인 굵게(**) 표시 정상화 (5R 다운로드 시 여러 줄에 걸쳐서 끊기는 현상 방지)
+                processedContent = processedContent.replace(/\*\*([\s\S]*?)\*\*/g, (match, innerText) => {
+                    if (!innerText.includes('\n')) return match;
+                    return innerText.split('\n').map(line => {
+                        let trimmed = line.trim();
+                        if (trimmed === '') return line; // 빈 줄은 건너뜀
+                        
+                        // 원본의 들여쓰기를 유지하면서 내용물만 **로 감싸줌
+                        let lead = line.match(/^(\s*)/)[1] || '';
+                        let trail = line.match(/(\s*)$/)[1] || '';
+                        return `${lead}**${trimmed}**${trail}`;
+                    }).join('\n');
+                });
+                
+                // [수정] 짝이 맞지 않아 찌꺼기로 남은 빈 ** 기호 제거
+                processedContent = processedContent.replace(/\*\*\s*\*\*/g, '');
+                processedContent = processedContent.replace(/^\s*\*\*\s*$/gm, '');
+                
+                // 본문 내의 #(헤더) 기호를 굵은 텍스트(Bold)로 변환하여 책갈피 방지
+                processedContent = processedContent.replace(/^(\s*)#{1,6}\s+(.*)$/gm, '$1**$2**');
                 
                 processedContent = processedContent.replace(/(\*\*\[(?:리드|개념|상세설명 및 해결방안|상세설명|정의\/개념|정의|핵심\/키워드|분류|인증기준|주요 확인사항|결함사례|참조\/Notes)\]\*\*)\n(?!\n)/g, '$1\n\n');
 
@@ -1251,12 +1363,13 @@ window.MathJax = {
                 let rawLines = processedContent.split('\n');
                 let newLines = [];
                 let currentRow = "";
+                let inTable = false;
 
                 for (let i = 0; i < rawLines.length; i++) {
                     let line = rawLines[i].trimEnd();
                     let isTableStart = line.trimStart().startsWith('|');
 
-                    if (currentRow !== "") {
+                    if (inTable) {
                         if (isTableStart) {
                             newLines.push(currentRow);
                             currentRow = line;
@@ -1267,19 +1380,20 @@ window.MathJax = {
                                     addStr = addStr.substring(4); 
                                 }
                                 currentRow += (currentRow.endsWith(' ') ? "" : " ") + addStr;
+                            } else {
+                                newLines.push(currentRow);
+                                newLines.push("");
+                                currentRow = "";
+                                inTable = false;
                             }
                         }
                     } else {
                         if (isTableStart) {
+                            inTable = true;
                             currentRow = line;
                         } else {
                             newLines.push(line);
                         }
-                    }
-
-                    if (currentRow !== "" && currentRow.endsWith('|')) {
-                        newLines.push(currentRow);
-                        currentRow = "";
                     }
                 }
                 if (currentRow !== "") newLines.push(currentRow);
@@ -1288,14 +1402,26 @@ window.MathJax = {
                 let lines = processedContent.split('\n');
                 lines = lines.map(line => {
                     let trimmed = line.trimEnd();
-                    if (trimmed.length > 0 && !trimmed.startsWith('```') && !trimmed.startsWith('|') && !trimmed.startsWith('<')) {
+                    if (trimmed.length > 0 && !trimmed.startsWith('%%%CODE_BLOCK_') && !trimmed.startsWith('%%%INLINE_CODE_') && !trimmed.startsWith('|') && !trimmed.startsWith('<') && !trimmed.startsWith('![') && !trimmed.startsWith('#')) {
                         return trimmed + '  '; 
                     }
                     return trimmed.length === 0 ? '' : line;
                 });
                 processedContent = lines.join('\n');
 
-                md += `${processedContent}\n\n`;
+                processedContent = extractBase64Images(processedContent);
+
+                // 보호했던 인라인 코드 블록 복구
+                inlineCodeBlocks.forEach((block, i) => {
+                    processedContent = processedContent.replace(`%%%INLINE_CODE_${i}%%%`, block);
+                });
+
+                // 보호했던 다중 줄 코드 블록 복구
+                codeBlocks.forEach((block, i) => {
+                    processedContent = processedContent.replace(`%%%CODE_BLOCK_${i}%%%`, block);
+                });
+
+                artMd += `${processedContent}\n\n`;
             }
             
             if (art.easy) { 
@@ -1304,15 +1430,15 @@ window.MathJax = {
                     if(text.length === 0) return '';
                     return `<p>${text}</p>`;
                 }).join(''); 
-                md += `<div class="easy-box">\n    <div class="easy-title">💡 쉽게 풀어쓰면</div>\n    ${easyPs}\n</div>\n\n`; 
+                artMd += `<div class="easy-box">\n    <div class="easy-title">💡 쉽게 풀어쓰면</div>\n    ${easyPs}\n</div>\n\n`; 
             }
             
             if (art.visualType !== 'none') {
-                md += `<div class="visual-container">\n`;
-                if (art.vIcon || art.vTitle) md += `    <div class="visual-header"><span class="v-icon">${escapeHtml(art.vIcon) || ''}</span> <span class="v-title">${escapeHtml(art.vTitle) || ''}</span></div>\n`;
+                artMd += `<div class="visual-container">\n`;
+                if (art.vIcon || art.vTitle) artMd += `    <div class="visual-header"><span class="v-icon">${escapeHtml(art.vIcon) || ''}</span> <span class="v-title">${escapeHtml(art.vTitle) || ''}</span></div>\n`;
                 
                 if (art.visualType === 'table') {
-                    md += `    <div class="table-presentation">\n`; 
+                    artMd += `    <div class="table-presentation">\n`; 
                     let hasHeader = false; let trs = '';
                     for(let i=1; i<=6; i++) {
                         const k = escapeHtml(art[`igK${i}`] || ''); 
@@ -1320,46 +1446,48 @@ window.MathJax = {
                         const d = escapeHtml(art[`igD${i}`] || '');
                         if (!k && !v && !d) continue;
                         if(i===1 && !hasHeader) { 
-                            md += `        <div class="tp-header"><div class="tp-header-col">${k}</div><div class="tp-header-col">${v}</div><div class="tp-header-col">${d}</div></div>\n`; 
+                            artMd += `        <div class="tp-header"><div class="tp-header-col">${k}</div><div class="tp-header-col">${v}</div><div class="tp-header-col">${d}</div></div>\n`; 
                             hasHeader = true; 
                         } else { 
                             trs += `        <div class="tp-row"><div class="tp-col">${k}</div><div class="tp-col"><strong>${v}</strong></div><div class="tp-col">${d}</div></div>\n`; 
                         }
                     }
-                    md += trs; md += `    </div>\n`;
+                    artMd += trs; artMd += `    </div>\n`;
                 } else if(art.visualType === 'pres1') {
                     const pd = art.presData || {};
                     if(art.presType === 'split3') {
-                        md += `    <div class="split-3">\n`;
-                        if(pd.v1) md += `        <div class="split-3-item c1">${pd.l1 ? `<div class="split-label">${escapeHtml(pd.l1)}</div>` : ''}<div class="split-val">${escapeHtml(pd.v1).replace(/\n/g, '<br>')}</div></div>\n`;
-                        if(pd.v2) md += `        <div class="split-3-item c2">${pd.l2 ? `<div class="split-label">${escapeHtml(pd.l2)}</div>` : ''}<div class="split-val">${escapeHtml(pd.v2).replace(/\n/g, '<br>')}</div></div>\n`;
-                        if(pd.v3) md += `        <div class="split-3-item c3">${pd.l3 ? `<div class="split-label">${escapeHtml(pd.l3)}</div>` : ''}<div class="split-val">${escapeHtml(pd.v3).replace(/\n/g, '<br>')}</div></div>\n`;
-                        md += `    </div>\n`;
+                        artMd += `    <div class="split-3">\n`;
+                        if(pd.v1) artMd += `        <div class="split-3-item c1">${pd.l1 ? `<div class="split-label">${escapeHtml(pd.l1)}</div>` : ''}<div class="split-val">${escapeHtml(pd.v1).replace(/\n/g, '<br>')}</div></div>\n`;
+                        if(pd.v2) artMd += `        <div class="split-3-item c2">${pd.l2 ? `<div class="split-label">${escapeHtml(pd.l2)}</div>` : ''}<div class="split-val">${escapeHtml(pd.v2).replace(/\n/g, '<br>')}</div></div>\n`;
+                        if(pd.v3) artMd += `        <div class="split-3-item c3">${pd.l3 ? `<div class="split-label">${escapeHtml(pd.l3)}</div>` : ''}<div class="split-val">${escapeHtml(pd.v3).replace(/\n/g, '<br>')}</div></div>\n`;
+                        artMd += `    </div>\n`;
                     } else if(art.presType === 'split2') {
                         let colorStyle1 = "", colorStyle2 = "";
                         if (pd.color === 'green') { colorStyle1 = 'style="border-top: 5px solid #68d391; background: #f0fff4;"'; colorStyle2 = 'style="border-top: 5px solid #68d391; background: #f0fff4;"'; } 
                         else if (pd.color === 'blue') { colorStyle1 = 'style="border-top: 5px solid #63b3ed; background: #ebf8ff;"'; colorStyle2 = 'style="border-top: 5px solid #63b3ed; background: #ebf8ff;"'; } 
                         else { colorStyle1 = 'style="border-top: 5px solid #fc8181; background: #fff5f5;"'; colorStyle2 = 'style="border-top: 5px solid #90cdf4; background: #ebf8ff;"'; }
-                        md += `    <div class="split-2">\n        <div class="split-2-card" ${colorStyle1}>${escapeHtml(pd.v1||'').replace(/\n/g, '<br>')}</div>\n        <div class="split-2-connector">${escapeHtml(pd.connector || 'VS')}</div>\n        <div class="split-2-card" ${colorStyle2}>${escapeHtml(pd.v2||'').replace(/\n/g, '<br>')}</div>\n    </div>\n`;
+                        artMd += `    <div class="split-2">\n        <div class="split-2-card" ${colorStyle1}>${escapeHtml(pd.v1||'').replace(/\n/g, '<br>')}</div>\n        <div class="split-2-connector">${escapeHtml(pd.connector || 'VS')}</div>\n        <div class="split-2-card" ${colorStyle2}>${escapeHtml(pd.v2||'').replace(/\n/g, '<br>')}</div>\n    </div>\n`;
                     } else if(art.presType === 'table_p') {
-                        md += `    <div class="table-presentation">\n`; 
+                        artMd += `    <div class="table-presentation">\n`; 
                         const hCols = (pd.header || '').split('|'); 
-                        md += `        <div class="tp-header">${hCols.map(c => `<div class="tp-header-col">${escapeHtml(c.trim())}</div>`).join('')}</div>\n`;
+                        artMd += `        <div class="tp-header">${hCols.map(c => `<div class="tp-header-col">${escapeHtml(c.trim())}</div>`).join('')}</div>\n`;
                         const rows = (pd.rows || '').split('\n').filter(r => r.trim());
                         rows.forEach(r => { 
                             const cols = r.split('|'); 
-                            md += `        <div class="tp-row">${cols.map(c => `<div class="tp-col">${escapeHtml(c.trim())}</div>`).join('')}</div>\n`; 
+                            artMd += `        <div class="tp-row">${cols.map(c => `<div class="tp-col">${escapeHtml(c.trim())}</div>`).join('')}</div>\n`; 
                         });
-                        md += `    </div>\n`;
+                        artMd += `    </div>\n`;
                     }
                 }
                 if (art.vFooter) { 
-                    md += `    <div style="margin-top: 20px; padding: 16px; background: #f8fafc; border-radius: 8px; text-align: center; font-size: 15.5px; color: #4a5568; font-weight: 700; border: 1px dashed #cbd5e1;">\n        👉 ${escapeHtml(art.vFooter)}\n    </div>\n`; 
+                    artMd += `    <div style="margin-top: 20px; padding: 16px; background: #f8fafc; border-radius: 8px; text-align: center; font-size: 15.5px; color: #4a5568; font-weight: 700; border: 1px dashed #cbd5e1;">\n        👉 ${escapeHtml(art.vFooter)}\n    </div>\n`; 
                 }
-                md += `</div>\n\n`;
+                artMd += `</div>\n\n`;
             }
+            articlesMd.push(artMd);
         });
-        return md;
+        
+        return { header, articlesMd };
     }
 
     function escapeMathHtml(str) {
@@ -1369,7 +1497,8 @@ window.MathJax = {
     function handlePreviewMD() {
         const data = gatherFormData(); if (!data) return alert('발행일자와 포스트 제목을 반드시 입력해주세요.');
         
-        let mdStrProcessed = generateMarkdownString(data, true); 
+        const parts = generateMarkdownParts(data, true);
+        let mdStrProcessed = parts.header + parts.articlesMd.join(''); 
         
         let mathBlocks = [];
         
@@ -1394,6 +1523,7 @@ window.MathJax = {
         finalHTML = finalHTML.replace(/<\/div><\/p>/g, '</div>');
         
         if (window.MathJax) {
+            MathJax.texReset(); 
             MathJax.typesetClear([document.getElementById('previewText')]); 
         }
 
@@ -1410,24 +1540,104 @@ window.MathJax = {
     async function handleDownloadMD() {
         const data = gatherFormData(); if (!data) return alert('발행일자와 포스트 제목을 반드시 입력해주세요.');
         
-        const mdStr = generateMarkdownString(data, false); 
+        const parts = generateMarkdownParts(data, false);
         const safeTitle = data.postTitle.replace(/[^a-zA-Z0-9가-힣]/g, '-').replace(/-+/g, '-');
-        const filename = `${data.date}-${safeTitle}.md`; 
+        const baseFilename = `${data.date}-${safeTitle}`; 
+        
+        const encoder = new TextEncoder();
+        const MAX_BYTES = 50 * 1024 * 1024; // 50MB 기준
+        const headerBytes = encoder.encode(parts.header).length;
+        
+        let filesToSave = [];
+        let blocks = [];
+        
+        parts.articlesMd.forEach(artMd => {
+            const artBytes = encoder.encode(artMd).length;
+            if (artBytes > MAX_BYTES) {
+                const subBlocks = artMd.split('\n\n');
+                subBlocks.forEach(sb => {
+                    if (sb.trim()) blocks.push(sb + '\n\n');
+                });
+            } else {
+                blocks.push(artMd);
+            }
+        });
+
+        let totalBodyBytes = 0;
+        blocks.forEach(b => totalBodyBytes += encoder.encode(b).length);
+        
+        if (headerBytes + totalBodyBytes <= MAX_BYTES) {
+            let finalContent = parts.header + blocks.join('');
+            finalContent = finalContent.replace(/\r?\n/g, '\r\n'); // 다운로드 줄바꿈 정규화 (CRLF 적용)
+            filesToSave.push({ name: `${baseFilename}.md`, content: finalContent });
+        } else {
+            let currentBody = "";
+            let currentBytes = headerBytes;
+            let partIndex = 1;
+            
+            for (let i = 0; i < blocks.length; i++) {
+                const block = blocks[i];
+                const blockBytes = encoder.encode(block).length;
+                
+                if (currentBytes + blockBytes > MAX_BYTES && currentBody.length > 0) {
+                    let finalContent = parts.header + currentBody;
+                    finalContent = finalContent.replace(/\r?\n/g, '\r\n'); 
+                    filesToSave.push({
+                        name: `${baseFilename}-${partIndex}.md`,
+                        content: finalContent
+                    });
+                    partIndex++;
+                    currentBody = "";
+                    currentBytes = headerBytes;
+                }
+                
+                currentBody += block;
+                currentBytes += blockBytes;
+            }
+            
+            if (currentBody.trim().length > 0) {
+                let finalContent = parts.header + currentBody;
+                finalContent = finalContent.replace(/\r?\n/g, '\r\n'); 
+                filesToSave.push({
+                    name: `${baseFilename}-${partIndex}.md`,
+                    content: finalContent
+                });
+            }
+        }
+
+        blocks = null;
         
         if (mdDirHandle) {
             try {
-                const fileHandle = await mdDirHandle.getFileHandle(filename, { create: true });
-                const writable = await fileHandle.createWritable();
-                await writable.write(mdStr); await writable.close();
-                showToast(`✅ [${filename}] 연동된 폴더에 저장되었습니다!`); return;
+                for (const file of filesToSave) {
+                    const fileHandle = await mdDirHandle.getFileHandle(file.name, { create: true });
+                    const writable = await fileHandle.createWritable();
+                    await writable.write(file.content); 
+                    await writable.close();
+                }
+                showToast(`✅ [${baseFilename}] 연동된 폴더에 ${filesToSave.length > 1 ? filesToSave.length + '개로 분할 ' : ''}저장되었습니다!`); 
+                filesToSave = null; return;
             } catch (e) {
                 alert('연동된 폴더에 파일을 저장하는데 실패했습니다. 일반 다운로드로 진행합니다.');
             }
         }
         
-        const blob = new Blob([mdStr], { type: 'text/markdown;charset=utf-8' });
-        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click(); URL.revokeObjectURL(a.href);
-        showToast("📥 .md 다운로드가 완료되었습니다.");
+        for (let i = 0; i < filesToSave.length; i++) {
+            const file = filesToSave[i];
+            const blob = new Blob([file.content], { type: 'text/markdown;charset=utf-8' });
+            const a = document.createElement('a'); 
+            a.href = URL.createObjectURL(blob); 
+            a.download = file.name; 
+            a.click(); 
+            URL.revokeObjectURL(a.href);
+            
+            if (i < filesToSave.length - 1) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        }
+        
+        showToast(`📥 .md 다운로드가 완료되었습니다. ${filesToSave.length > 1 ? `(${filesToSave.length}개 분할)` : ''}`);
+        filesToSave = null;
     }
     
     window.onload = () => { loadCategories(); initDB(); createNew(); };
