@@ -306,7 +306,7 @@
             if (audioFiles.length > 0) {
                 listHeader.style.display = 'flex';
                 fileCountDisplay.textContent = audioFiles.length;
-                exportBtn.disabled = false; // 1개 이상이면 무조건 활성화 (1개면 속도변환기로 동작)
+                exportBtn.disabled = false; // 1개 이상이면 무조건 활성화
 
                 audioFiles.forEach(file => {
                     const li = document.createElement('li');
@@ -381,26 +381,38 @@
                     decodedBuffers.push(audioBuffer);
                 }
 
-                // 2. 총 길이 및 최대 채널 수 계산 (병합용)
+                // 2. 총 길이 및 최대 채널 수 계산 (파일 사이 2초 휴지 추가)
+                const sampleRate = decodedBuffers[0].sampleRate;
+                const pauseDurationSec = 2; // 파일 사이 휴지 시간(초)
+                const pauseSamples = Math.floor(sampleRate * pauseDurationSec);
+
                 let totalLength = 0;
                 let maxChannels = 1;
-                const sampleRate = decodedBuffers[0].sampleRate;
 
-                decodedBuffers.forEach(buffer => {
+                decodedBuffers.forEach((buffer, index) => {
                     totalLength += buffer.length;
+                    // 마지막 파일이 아닌 경우에만 2초 간격(pauseSamples) 추가
+                    if (index < decodedBuffers.length - 1) {
+                        totalLength += pauseSamples;
+                    }
                     maxChannels = Math.max(maxChannels, buffer.numberOfChannels);
                 });
 
-                // 3. 임시 버퍼에 모든 오디오 이어 붙이기 (Merge)
+                // 3. 임시 버퍼에 모든 오디오 이어 붙이기 (파일 사이에 2초 공백 포함)
                 const mergedBuffer = audioContext.createBuffer(maxChannels, totalLength, sampleRate);
                 let offset = 0;
 
-                decodedBuffers.forEach(buffer => {
+                decodedBuffers.forEach((buffer, index) => {
                     for (let channel = 0; channel < maxChannels; channel++) {
                         const sourceChannel = channel < buffer.numberOfChannels ? channel : 0;
                         mergedBuffer.getChannelData(channel).set(buffer.getChannelData(sourceChannel), offset);
                     }
                     offset += buffer.length;
+
+                    // 다음 파일이 있는 경우 offset을 2초 분량만큼 뒤로 밀어 무음(휴지) 추가
+                    if (index < decodedBuffers.length - 1) {
+                        offset += pauseSamples;
+                    }
                 });
 
                 // 4. 합쳐진 버퍼에 재생 속도 적용 렌더링 (Speed Change)
