@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>청킹마스터</title>
+  
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+  <style>
+    :root {
+      --bg-body: #F9FAFB;
+      --bg-surface: #FFFFFF;
+      --bg-sidebar: #F3F4F6;
+      --border-light: #F3F4F6;
+      --border-base: #E5E7EB;
+      --border-dark: #D1D5DB;
+      --text-main: #111827;
+      --text-muted: #6B7280;
+      --primary: #111827;
+      --secondary: #FFFFFF;
+      --secondary-hover: #F9FAFB;
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+      --radius-md: 8px;
+      --radius-lg: 12px;
+
+      --mn-bg: #059669; 
+      --mn-text: #ffffff;
+      --mn-light-bg: #D1FAE5;
+      --mn-light-text: #065F46;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background: var(--bg-body); color: var(--text-main); margin: 0; padding: 0;
+      -webkit-font-smoothing: antialiased; height: 100vh; display: flex; overflow: hidden;
+    }
+
+    /* 사이드바 */
+    .sidebar { width: 300px; background: var(--bg-surface); border-right: 1px solid var(--border-base); display: flex; flex-direction: column; z-index: 10; }
+    .sidebar-header { height: 72px; min-height: 72px; padding: 0 20px; border-bottom: 1px solid var(--border-base); display: flex; align-items: center; justify-content: space-between; }
+    .app-title { font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 8px; margin: 0; color: var(--mn-bg); }
+    
+    .sidebar-search { padding: 16px 20px; border-bottom: 1px solid var(--border-light); background: var(--bg-surface); }
+    .search-box { width: 100%; padding: 12px 14px; border-radius: var(--radius-md); border: 1px solid var(--border-base); font-size: 15px; background: var(--bg-body); outline: none; transition: 0.2s; }
+    .search-box:focus { border-color: var(--mn-bg); box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1); }
+
+    .category-list { flex: 1; overflow-y: auto; padding: 12px; margin: 0; list-style: none; }
+    .category-item { padding: 12px 16px; border-radius: var(--radius-md); cursor: pointer; margin-bottom: 4px; transition: background 0.2s; display: flex; align-items: center; justify-content: space-between; font-size: 16px; font-weight: 600; color: var(--text-muted); }
+    .category-item:hover { background: var(--bg-sidebar); color: var(--text-main); }
+    .category-item.active { background: var(--mn-light-bg); color: var(--mn-bg); }
+    .category-count { background: var(--border-base); color: var(--text-muted); padding: 4px 10px; border-radius: 12px; font-size: 13px; }
+    .category-item.active .category-count { background: var(--mn-bg); color: var(--mn-text); }
+
+    .main-content { flex: 1; display: flex; flex-direction: column; overflow-y: auto; background: var(--bg-body); position: relative; scroll-behavior: smooth; }
+    
+    .top-bar { position: sticky; top: 0; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(8px); height: 72px; min-height: 72px; padding: 0 30px; border-bottom: 1px solid var(--border-base); display: flex; justify-content: space-between; align-items: center; z-index: 5; }
+    .page-title { font-size: 24px; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
+    .actions { display: flex; gap: 8px; align-items: center; }
+    .divider { width: 1px; height: 24px; background: var(--border-dark); margin: 0 6px; }
+
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 16px; border-radius: var(--radius-md); font-size: 15px; font-weight: 600; cursor: pointer; transition: 0.2s; border: 1px solid transparent; outline: none; }
+    .btn-icon-only { padding: 8px; font-size: 18px; color: var(--text-muted); background: transparent; }
+    .btn-icon-only:hover { background: var(--bg-sidebar); color: var(--text-main); }
+    .btn-primary { background: var(--primary); color: white; box-shadow: var(--shadow-sm); }
+    .btn-mnemonic { background: var(--mn-bg); color: white; box-shadow: var(--shadow-sm); }
+    .btn-mnemonic:hover { background: #047857; transform: translateY(-1px); }
+    .btn-outline { background: var(--secondary); color: var(--text-main); border-color: var(--border-base); }
+    .btn-outline:hover { background: var(--secondary-hover); border-color: #D1D5DB; }
+    .btn-outline.active { background: var(--mn-light-bg); border-color: #6EE7B7; color: var(--mn-bg); }
+
+    .grid-container { padding: 30px; display: grid; grid-template-columns: repeat(auto-fill, minmax(460px, 1fr)); gap: 24px; max-width: 1600px; margin: 0 auto; width: 100%; }
+    
+    .mn-card { background: var(--bg-surface); border: 1px solid var(--border-base); border-radius: var(--radius-lg); padding: 24px; box-shadow: var(--shadow-md); display: flex; flex-direction: column; transition: transform 0.2s, box-shadow 0.2s; position: relative; }
+    .mn-card:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1); border-color: #D1D5DB; }
+    
+    .mn-header { display: flex; flex-direction: column; gap: 12px; margin-bottom: 12px; border-bottom: 2px solid var(--border-light); padding-bottom: 16px; }
+    .mn-card.no-sub-chunks .mn-header { border-bottom: none; margin-bottom: 0; padding-bottom: 0; } 
+
+    .mn-header-top { display: flex; justify-content: space-between; align-items: flex-start; }
+    .mn-keyword { font-size: 24px; font-weight: 800; color: var(--mn-text); background: var(--mn-bg); padding: 8px 14px; border-radius: 8px; letter-spacing: 4px; display: inline-block; box-shadow: inset 0 -2px 0 rgba(0,0,0,0.2); }
+    .mn-source { font-size: 14px; font-weight: 600; color: var(--text-muted); background: var(--bg-sidebar); padding: 6px 10px; border-radius: 6px; display: flex; align-items: center; gap: 6px; }
+    .mn-title { font-size: 20px; font-weight: 700; color: var(--text-main); line-height: 1.4; }
+
+    .mn-body { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .mn-body[data-count="1"] { grid-template-columns: 1fr; }
+
+    /* 계층형 렌더링 스타일 */
+    .master-block { background: var(--bg-body); border-radius: 8px; padding: 12px; border: 1px solid var(--border-light); }
+    .master-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; border-bottom: 1px dashed var(--border-dark); padding-bottom: 8px; }
+    .master-acronym { font-size: 15px; font-weight: 800; color: var(--mn-bg); background: var(--mn-light-bg); padding: 4px 8px; border-radius: 6px; letter-spacing: 1px; }
+    .master-content { font-size: 16px; font-weight: 700; color: var(--text-main); }
+    
+    .sub-chunk-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+    .sub-chunk-item { display: flex; gap: 8px; font-size: 14px; color: var(--text-muted); line-height: 1.5; align-items: flex-start; }
+    .sub-chunk-acronym { font-weight: 700; color: white; background: var(--text-muted); padding: 2px 6px; border-radius: 4px; font-size: 12px; white-space: nowrap; }
+
+    .mn-footer { margin-top: 18px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--border-light); padding-top: 14px; }
+    .mn-icon-btn { color: var(--text-muted); cursor: pointer; transition: 0.2s; font-size: 20px; padding: 6px; display: flex; align-items: center; justify-content: center; border-radius: 6px; }
+    .mn-icon-btn:hover { background: var(--bg-sidebar); color: var(--text-main); }
+    .mn-icon-btn.edit:hover { background: #EFF6FF; color: #2563EB; }
+    .mn-icon-btn.delete:hover { background: #FEE2E2; color: #DC2626; }
+
+    /* 블라인드 학습 모드 (타이틀 제외) */
+    body.learning-mode .master-content, body.learning-mode .sub-chunk-item > span:not(.sub-chunk-acronym) { filter: blur(6px); opacity: 0.4; cursor: pointer; transition: all 0.3s ease; user-select: none; }
+    body.learning-mode .master-content.revealed, body.learning-mode .sub-chunk-item > span.revealed { filter: blur(0); opacity: 1; cursor: default; }
+
+    .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(17, 24, 39, 0.4); backdrop-filter: blur(2px); display: none; justify-content: center; align-items: center; z-index: 50; }
+    .modal-content { background: var(--bg-surface); width: 840px; padding: 28px; border-radius: var(--radius-lg); box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1); border: 1px solid var(--border-base); max-height: 90vh; overflow-y: auto; }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+    .modal-title { font-size: 22px; font-weight: 700; display: flex; align-items: center; gap: 8px; color: var(--mn-bg); }
+    
+    .form-group { margin-bottom: 20px; }
+    .form-group label { display: block; font-size: 15px; font-weight: 700; margin-bottom: 10px; color: var(--text-main); }
+    .form-control { width: 100%; padding: 10px 12px; border: 1px solid var(--border-base); border-radius: var(--radius-md); font-size: 14px; font-family: inherit; transition: 0.2s; outline: none; }
+    .form-control:focus { border-color: var(--mn-bg); }
+    
+    .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    
+    /* 계층형 폼 디자인 */
+    #masterChunksContainer { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+    .master-chunk-section { background: var(--bg-body); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border-base); position: relative; display: flex; flex-direction: column; gap: 12px; }
+    .master-chunk-section h4 { margin: 0; font-size: 15px; color: var(--primary); display: flex; align-items: center; gap: 6px; justify-content: space-between; }
+    .master-chunk-section h4 .badge { background: var(--mn-bg); color: white; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+
+    .sub-chunk-row { display: flex; gap: 6px; align-items: center; background: #fff; padding: 8px; border-radius: 6px; border: 1px solid var(--border-base); }
+    
+    .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 60vh; color: var(--text-muted); gap: 16px; font-size: 16px; }
+    .empty-state i { font-size: 56px; color: var(--border-dark); }
+    .settings-list-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--border-light); background: var(--bg-body); border-radius: var(--radius-md); margin-bottom: 8px; font-weight: 600; }
+    .print-only { display: none; }
+
+    @media print {
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+      @page { size: A4; } 
+      body { display: block; overflow: visible; background: white; height: auto; font-family: 'Pretendard', sans-serif; color: #000; }
+      .sidebar, .top-bar, .modal-overlay, .mn-footer, .empty-state { display: none !important; }
+      .main-content { overflow: visible; background: white; padding: 0; display: block; }
+      .print-only { display: block !important; margin-top: 10px; margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 10px; }
+      .print-header-title { font-size: 24pt; font-weight: 800; color: var(--mn-bg); }
+      .grid-container { display: block !important; padding: 0 !important; max-width: 100% !important; }
+      .mn-card { page-break-inside: avoid; break-inside: avoid; border: none !important; border-bottom: 1px solid #E5E7EB !important; box-shadow: none !important; border-radius: 0 !important; margin-bottom: 30px !important; padding: 10px 0 !important; display: block !important; transform: none !important; }
+      .master-content, .sub-chunk-item > span, .mn-title { filter: none !important; opacity: 1 !important; }
+    }
+  </style>
+</head>
+<body>
+
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="app-title"><i class="ph-fill ph-squares-four"></i> 청킹마스터</div>
+      <div style="display: flex; gap: 2px;">
+        <button class="btn btn-icon-only" onclick="openSettingsModal()" title="환경설정 (출처 관리)"><i class="ph ph-gear"></i></button>
+        <button class="btn btn-icon-only" onclick="exportJSON()" title="JSON 백업 (전체 내보내기)"><i class="ph ph-download-simple"></i></button>
+        <button class="btn btn-icon-only" onclick="document.getElementById('importFile').click()" title="JSON 복원 (가져오기 병합)"><i class="ph ph-upload-simple"></i></button>
+        <input type="file" id="importFile" accept=".json" style="display: none;" onchange="importJSON(event)">
+      </div>
+    </div>
+    
+    <div class="sidebar-search">
+      <input type="text" id="searchInput" class="search-box" placeholder="주제, 두음, 내용을 검색하세요..." oninput="filterMnemonics()" spellcheck="false">
+    </div>
+
+    <ul class="category-list" id="categoryList"></ul>
+
+    <div style="padding: 20px; border-top: 1px solid var(--border-base);">
+      <button class="btn btn-outline" style="width: 100%; justify-content: center;" onclick="openAddModal()">
+        <i class="ph ph-plus"></i> 새 청킹 추가 <span style="font-size:12px; color:var(--text-muted); margin-left:4px;">(Ctrl+Alt+N)</span>
+      </button>
+    </div>
+  </aside>
+
+  <main class="main-content" id="mainContent">
+    <div class="top-bar">
+      <div class="page-title" id="pageTitle">전체 청킹</div>
+      <div class="actions">
+        <button class="btn btn-outline" id="btnLearning" onclick="toggleLearningMode()" title="내용을 가리고 두음만 보여줍니다">
+          <i class="ph-fill ph-brain"></i> 학습(블라인드) 모드
+        </button>
+        <button class="btn btn-outline" onclick="prepareAndPrint()" title="리스트 형태 PDF 인쇄">
+          <i class="ph ph-printer"></i> PDF 출력
+        </button>
+        <div class="divider"></div>
+        <button class="btn btn-mnemonic" onclick="openAddModal()"><i class="ph ph-plus"></i> 청킹 추가</button>
+      </div>
+    </div>
+
+    <div class="print-only">
+      <div class="print-header-title" id="printHeaderTitle">청킹마스터</div>
+    </div>
+
+    <div class="grid-container" id="mnemonicGrid"></div>
+  </main>
+
+  <!-- 추가/수정 모달 -->
+  <div id="addModal" class="modal-overlay" onclick="if(event.target===this) closeAddModal()">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title" id="modalTitle"><i class="ph-bold ph-plus-circle"></i> 새로운 계층형 청킹 등록</div>
+        <button class="btn" style="padding: 4px; border: none; background: transparent;" onclick="closeAddModal()">
+          <i class="ph ph-x" style="font-size: 20px;"></i>
+        </button>
+      </div>
+      
+      <input type="hidden" id="editId" value="">
+
+      <div class="form-grid-2">
+        <div class="form-group">
+          <label>출처 분류 (Category)</label>
+          <select id="mnSource" class="form-control"></select>
+        </div>
+        <div class="form-group">
+          <label>최상위 두음 (Main Acronym)</label>
+          <input type="text" id="mnKeyword" class="form-control" placeholder="예: 국자민평 (생략 가능)" spellcheck="false">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>메인 주제 (Topic Title)</label>
+        <input type="text" id="mnTitle" class="form-control" placeholder="예: 대한민국 헌법의 기본원리" spellcheck="false">
+      </div>
+
+      <hr style="border: none; border-top: 1px dashed var(--border-dark); margin: 24px 0;">
+      
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <div style="font-weight: 700; color: var(--primary);">마스터 청킹 항목 (최대 4개)</div>
+        <button class="btn btn-outline" id="addMasterBtn" style="padding: 6px 12px; font-size: 14px;" onclick="addMasterChunkUI()">
+          <i class="ph ph-plus"></i> 마스터 청킹 추가 (0/4) <span style="font-size:11px; margin-left:4px; opacity: 0.8;">(Ctrl+I)</span>
+        </button>
+      </div>
+
+      <!-- 동적 계층형 폼 컨테이너 -->
+      <div id="masterChunksContainer"></div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px;">
+        <button class="btn btn-outline" onclick="closeAddModal()">취소</button>
+        <button class="btn btn-mnemonic" id="saveBtn" onclick="saveMnemonic()" title="단축키: Ctrl + S">저장하기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 설정 모달 -->
+  <div id="settingsModal" class="modal-overlay" onclick="if(event.target===this) closeSettingsModal()">
+    <div class="modal-content" style="width: 480px;">
+      <div class="modal-header">
+        <div class="modal-title"><i class="ph-bold ph-gear"></i> 출처(분류) 관리</div>
+        <button class="btn" style="padding: 4px; border: none; background: transparent;" onclick="closeSettingsModal()"><i class="ph ph-x" style="font-size: 20px;"></i></button>
+      </div>
+      <div class="form-group" style="display: flex; gap: 8px; align-items: flex-start;">
+        <div style="flex: 1;"><input type="text" id="newSourceInput" class="form-control" placeholder="새 분류 이름 입력" onkeypress="if(event.key==='Enter') addSource()" spellcheck="false"></div>
+        <button class="btn btn-primary" onclick="addSource()">추가</button>
+      </div>
+      <div class="form-group">
+        <label>등록된 출처 목록</label>
+        <ul id="settingsSourceList" style="list-style:none; padding:0; margin:0; max-height: 300px; overflow-y: auto;"></ul>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- IndexedDB Setup ---[cite: 1]
+    const DB_NAME = 'SemanticChunkDB';
+    const DB_VERSION = 1;
+    const STORE_NAME = 'chunks';
+    let db;
+
+    function initDB() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        request.onupgradeneeded = (e) => {
+          const database = e.target.result;
+          if (!database.objectStoreNames.contains(STORE_NAME)) {
+            database.createObjectStore(STORE_NAME, { keyPath: 'id' });
+          }
+        };
+        request.onsuccess = (e) => { db = e.target.result; resolve(db); };
+        request.onerror = (e) => reject(e.target.error);
+      });
+    }
+
+    function getAllFromDB() {
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(STORE_NAME, 'readonly');
+        const store = transaction.objectStore(STORE_NAME);
+        const request = store.getAll();
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    function putToDB(item) {
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(STORE_NAME, 'readwrite');
+        const store = transaction.objectStore(STORE_NAME);
+        const request = store.put(item); 
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    function deleteFromDB(id) {
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(STORE_NAME, 'readwrite');
+        const store = transaction.objectStore(STORE_NAME);
+        const request = store.delete(id);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    let mnemonics = [];
+    let currentCategory = 'All';
+    let isLearningMode = false;
+    let sources = JSON.parse(localStorage.getItem('chunk_sources')) || ['전공기초', '핵심요약', '기타'];
+
+    async function init() {
+      try {
+        await initDB();
+        mnemonics = await getAllFromDB();
+        
+        // 데이터 마이그레이션[cite: 1]
+        let migrated = false;
+        for (let m of mnemonics) {
+          if (m.chunks && !m.masterChunks) {
+            m.masterChunks = m.chunks.map(c => ({
+              acronym: c.subKeyword || '',
+              content: c.subTitle || '',
+              subChunks: c.sentences ? c.sentences.split('\n').filter(s => s.trim()).map(s => ({ subAcronym: '', subContent: s })) : []
+            }));
+            delete m.chunks;
+            await putToDB(m);
+            migrated = true;
+          }
+        }
+        if(migrated) mnemonics = await getAllFromDB();
+
+        initSourcesUI();
+        renderGrid();
+      } catch (error) { console.error("데이터베이스 초기화 실패:", error); }
+    }
+
+    // --- 동적 폼 UI 제어 ---
+    let masterCounter = 0;
+
+    function addMasterChunkUI(data = { acronym: '', content: '', subChunks: [] }) {
+      const container = document.getElementById('masterChunksContainer');
+      const currentCount = container.children.length;
+      if (currentCount >= 4) {
+        alert('마스터 청킹은 최대 4개까지만 추가할 수 있습니다.');
+        return;
+      }
+
+      masterCounter++;
+      const mId = masterCounter;
+
+      const div = document.createElement('div');
+      div.className = 'master-chunk-section';
+      div.id = `master_${mId}`;
+      
+      div.innerHTML = `
+        <h4>
+          <div><span class="badge">#${currentCount + 1}</span> 마스터 청킹</div>
+          <button class="btn btn-icon-only" style="color: #DC2626; padding: 4px;" onclick="removeMasterChunk(this)" title="삭제"><i class="ph ph-trash"></i></button>
+        </h4>
+        <div style="display:flex; gap: 6px;">
+          <input type="text" class="form-control master-acronym-input" style="flex: 3;" maxlength="10" placeholder="두음 (최대 10자)" value="${data.acronym}" spellcheck="false">
+          <input type="text" class="form-control master-content-input" style="flex: 7;" maxlength="15" placeholder="청킹내용 (최대 15자)" value="${data.content}" spellcheck="false">
+        </div>
+        
+        <div class="sub-chunks-container" id="subContainer_${mId}" style="display:flex; flex-direction:column; gap:6px; margin-top:8px;"></div>
+        
+        <button class="btn btn-outline" style="width:100%; padding: 6px; font-size: 13px; margin-top: 4px;" onclick="addSubChunkUI(${mId})">
+          <i class="ph ph-arrow-bend-down-right"></i> 서브 청킹 추가 (하위 레벨) <span style="font-size:11px; margin-left:4px; opacity: 0.8;">(항목 포커스시 Ctrl+I)</span>
+        </button>
+      `;
+      container.appendChild(div);
+      
+      if(data.subChunks && data.subChunks.length > 0) {
+        data.subChunks.forEach(sub => addSubChunkUI(mId, sub));
+      }
+      
+      updateMasterBtnText();
+      
+      // 새로 추가된 마스터 청킹의 두음 입력칸으로 자동 포커스
+      setTimeout(() => {
+        div.querySelector('.master-acronym-input').focus();
+      }, 50);
+    }
+
+    function addSubChunkUI(masterId, data = { subAcronym: '', subContent: '' }) {
+      const subContainer = document.getElementById(`subContainer_${masterId}`);
+      
+      const subDiv = document.createElement('div');
+      subDiv.className = 'sub-chunk-row';
+      subDiv.innerHTML = `
+        <input type="text" class="form-control sub-acronym-input" style="flex: 2; font-size:13px; padding:6px 8px;" placeholder="서브 두음" value="${data.subAcronym}" spellcheck="false">
+        <input type="text" class="form-control sub-content-input" style="flex: 8; font-size:13px; padding:6px 8px;" placeholder="서브 내용 / 문장" value="${data.subContent}" spellcheck="false">
+        <button class="btn btn-icon-only" style="color: #DC2626; padding: 4px;" onclick="this.parentElement.remove()" title="삭제"><i class="ph ph-x"></i></button>
+      `;
+      subContainer.appendChild(subDiv);
+      
+      // 새로 추가된 서브 청킹의 두음 입력칸으로 자동 포커스
+      setTimeout(() => {
+        subDiv.querySelector('.sub-acronym-input').focus();
+      }, 50);
+    }
+
+    function removeMasterChunk(btn) {
+      btn.closest('.master-chunk-section').remove();
+      updateMasterLabels();
+      updateMasterBtnText();
+    }
+
+    function updateMasterLabels() {
+      const sections = document.getElementById('masterChunksContainer').querySelectorAll('.master-chunk-section');
+      sections.forEach((sec, idx) => { sec.querySelector('.badge').innerText = '#' + (idx + 1); });
+    }
+
+    function updateMasterBtnText() {
+      const count = document.getElementById('masterChunksContainer').children.length;
+      const btn = document.getElementById('addMasterBtn');
+      btn.innerHTML = `<i class="ph ph-plus"></i> 마스터 청킹 추가 (${count}/4) <span style="font-size:11px; margin-left:4px; opacity: 0.8;">(Ctrl+I)</span>`;
+      btn.style.display = count >= 4 ? 'none' : 'inline-flex';
+    }
+    // ----------------------------
+
+    function getIconForSource(src) {
+      if (src.toLowerCase() === '전공기초') return 'ph-notebook';
+      if (src.toLowerCase() === '핵심요약') return 'ph-check-square-offset';
+      return 'ph-folder';
+    }
+
+    function initSourcesUI() {
+      renderSidebarCategories();
+      populateSourceSelect();
+      updateCounts();
+    }
+    function saveSources() { localStorage.setItem('chunk_sources', JSON.stringify(sources)); initSourcesUI(); }
+
+    function renderSidebarCategories() {
+      const list = document.getElementById('categoryList');
+      list.innerHTML = `<li class="category-item ${currentCategory === 'All' ? 'active' : ''}" onclick="setCategory('All', this)"><div style="display: flex; align-items: center; gap: 8px;"><i class="ph-fill ph-squares-four"></i> 전체 보기</div><span class="category-count" id="countAll">0</span></li>`;
+      sources.forEach((src, index) => {
+        const icon = getIconForSource(src);
+        list.innerHTML += `<li class="category-item ${currentCategory === src ? 'active' : ''}" onclick="setCategory('${src}', this)"><div style="display: flex; align-items: center; gap: 8px;"><i class="ph-fill ${icon}"></i> ${src}</div><span class="category-count" id="count_${index}">0</span></li>`;
+      });
+    }
+
+    function populateSourceSelect() {
+      const select = document.getElementById('mnSource');
+      select.innerHTML = '';
+      sources.forEach(src => { select.innerHTML += `<option value="${src}">${src}</option>`; });
+    }
+
+    function updateCounts() {
+      document.getElementById('countAll').innerText = mnemonics.length;
+      sources.forEach((src, index) => {
+        const el = document.getElementById(`count_${index}`);
+        if(el) el.innerText = mnemonics.filter(m => m.source === src).length;
+      });
+    }
+
+    function openSettingsModal() { document.getElementById('settingsModal').style.display = 'flex'; renderSettingsSources(); document.getElementById('newSourceInput').focus(); }
+    function closeSettingsModal() { document.getElementById('settingsModal').style.display = 'none'; document.getElementById('newSourceInput').value = ''; }
+    function renderSettingsSources() {
+      const list = document.getElementById('settingsSourceList'); list.innerHTML = '';
+      sources.forEach(src => { list.innerHTML += `<li class="settings-list-item"><span>${src}</span><button class="btn btn-icon-only" style="color: #DC2626; padding: 4px;" onclick="deleteSource('${src}')"><i class="ph ph-trash"></i></button></li>`; });
+    }
+    function addSource() {
+      const input = document.getElementById('newSourceInput'); const val = input.value.trim();
+      if (val && !sources.includes(val)) { sources.push(val); input.value = ''; saveSources(); renderSettingsSources(); }
+      else if (sources.includes(val)) { alert('이미 존재하는 출처입니다.'); }
+    }
+    function deleteSource(src) {
+      if (confirm(`'${src}' 출처를 삭제하시겠습니까?\n기존 데이터는 삭제되지 않습니다.`)) {
+        sources = sources.filter(s => s !== src); if (currentCategory === src) currentCategory = 'All'; saveSources(); renderSettingsSources(); renderGrid();
+      }
+    }
+
+    function setCategory(cat, element) {
+      currentCategory = cat; document.querySelectorAll('.category-item').forEach(el => el.classList.remove('active')); element.classList.add('active');
+      document.getElementById('pageTitle').innerText = cat === 'All' ? '전체 청킹 목록' : `${cat} 목록`; document.getElementById('searchInput').value = ''; renderGrid();
+    }
+
+    function toggleLearningMode() {
+      isLearningMode = !isLearningMode; const btn = document.getElementById('btnLearning');
+      if (isLearningMode) { document.body.classList.add('learning-mode'); btn.classList.add('active'); btn.innerHTML = `<i class="ph-bold ph-eye-slash"></i> 학습 모드 ON`; } 
+      else { document.body.classList.remove('learning-mode'); btn.classList.remove('active'); btn.innerHTML = `<i class="ph-fill ph-brain"></i> 학습(블라인드) 모드`; document.querySelectorAll('.revealed').forEach(el => el.classList.remove('revealed')); }
+    }
+    function revealContent(element) { if (isLearningMode) element.classList.toggle('revealed'); }
+    function parseHighlights(text) { return text.replace(/\*(.*?)\*/g, '<strong>$1</strong>'); }
+
+    function renderGrid(searchTerm = '') {
+      const grid = document.getElementById('mnemonicGrid'); grid.innerHTML = '';
+      let filtered = mnemonics.filter(m => currentCategory === 'All' || m.source === currentCategory);
+      
+      if (searchTerm) {
+        const term = searchTerm.toLowerCase();
+        filtered = filtered.filter(m => 
+          (m.keyword && m.keyword.toLowerCase().includes(term)) || 
+          m.title.toLowerCase().includes(term) ||
+          (m.masterChunks && m.masterChunks.some(mc => 
+            (mc.acronym && mc.acronym.toLowerCase().includes(term)) || 
+            (mc.content && mc.content.toLowerCase().includes(term)) || 
+            (mc.subChunks && mc.subChunks.some(sc => (sc.subAcronym && sc.subAcronym.toLowerCase().includes(term)) || (sc.subContent && sc.subContent.toLowerCase().includes(term))))
+          ))
+        );
+      }
+
+      if (filtered.length === 0) { grid.style.display = 'block'; grid.innerHTML = `<div class="empty-state"><i class="ph-thin ph-ghost"></i><div>등록된 청킹이 없습니다.</div></div>`; return; }
+      grid.style.display = 'grid';
+
+      filtered.forEach(m => {
+        const iconClass = getIconForSource(m.source);
+        const mChunks = m.masterChunks || [];
+        const hasMasters = mChunks.length > 0;
+        
+        let mastersHTML = '';
+        if (hasMasters) {
+          mChunks.forEach((mc) => {
+            let subsHTML = '';
+            if(mc.subChunks && mc.subChunks.length > 0) {
+              subsHTML = `<ul class="sub-chunk-list">` + mc.subChunks.map(sc => `
+                <li class="sub-chunk-item">
+                  ${sc.subAcronym ? `<span class="sub-chunk-acronym">${sc.subAcronym}</span>` : ''}
+                  ${sc.subContent ? `<span onclick="revealContent(this)">${parseHighlights(sc.subContent)}</span>` : ''}
+                </li>
+              `).join('') + `</ul>`;
+            }
+            
+            mastersHTML += `
+              <div class="master-block">
+                <div class="master-header">
+                  ${mc.acronym ? `<div class="master-acronym">${mc.acronym}</div>` : ''}
+                  ${mc.content ? `<div class="master-content" onclick="revealContent(this)">${mc.content}</div>` : ''}
+                </div>
+                ${subsHTML}
+              </div>
+            `;
+          });
+        }
+
+        const card = document.createElement('div');
+        card.className = `mn-card ${!hasMasters ? 'no-sub-chunks' : ''}`;
+        const keywordHTML = m.keyword ? `<div class="mn-keyword">${m.keyword}</div>` : '<div></div>';
+
+        card.innerHTML = `
+          <div class="mn-header">
+            <div class="mn-header-top">${keywordHTML}<div class="mn-source"><i class="ph-fill ${iconClass}"></i> ${m.source}</div></div>
+            <div class="mn-title">${m.title}</div>
+          </div>
+          ${hasMasters ? `<div class="mn-body" data-count="${mChunks.length}">${mastersHTML}</div>` : ''}
+          <div class="mn-footer" style="${!hasMasters ? 'border-top: none; padding-top: 0;' : ''}">
+            <div class="mn-icon-btn edit" onclick="openEditModal(${m.id})" title="수정"><i class="ph ph-pencil-simple"></i></div>
+            <div class="mn-icon-btn delete" onclick="deleteMnemonic(${m.id})" title="삭제"><i class="ph ph-trash"></i></div>
+          </div>`;
+        grid.appendChild(card);
+      });
+    }
+
+    function filterMnemonics() { renderGrid(document.getElementById('searchInput').value); }
+
+    function openAddModal() {
+      document.getElementById('modalTitle').innerHTML = '<i class="ph-bold ph-plus-circle"></i> 새로운 계층형 청킹 등록';
+      document.getElementById('saveBtn').innerText = '저장하기';
+      document.getElementById('editId').value = '';
+      document.getElementById('mnTitle').value = '';
+      document.getElementById('mnKeyword').value = '';
+      
+      document.getElementById('masterChunksContainer').innerHTML = '';
+      masterCounter = 0;
+      updateMasterBtnText();
+
+      document.getElementById('addModal').style.display = 'flex';
+      document.getElementById('mnTitle').focus();
+    }
+
+    function openEditModal(id) {
+      const item = mnemonics.find(m => m.id === id);
+      if (!item) return;
+
+      document.getElementById('modalTitle').innerHTML = '<i class="ph-bold ph-pencil-simple"></i> 청킹 수정하기';
+      document.getElementById('saveBtn').innerText = '수정완료';
+      document.getElementById('editId').value = id;
+      
+      if (!sources.includes(item.source)) { document.getElementById('mnSource').innerHTML += `<option value="${item.source}">${item.source}</option>`; }
+      document.getElementById('mnSource').value = item.source;
+      document.getElementById('mnTitle').value = item.title;
+      document.getElementById('mnKeyword').value = item.keyword || '';
+      
+      const container = document.getElementById('masterChunksContainer');
+      container.innerHTML = '';
+      masterCounter = 0;
+      
+      if (item.masterChunks && item.masterChunks.length > 0) {
+        item.masterChunks.forEach(mc => addMasterChunkUI(mc));
+      }
+      
+      updateMasterBtnText();
+      document.getElementById('addModal').style.display = 'flex';
+    }
+
+    function closeAddModal() { document.getElementById('addModal').style.display = 'none'; }
+
+    async function saveMnemonic() {
+      const editId = document.getElementById('editId').value;
+      const source = document.getElementById('mnSource').value;
+      const title = document.getElementById('mnTitle').value.trim();
+      const keyword = document.getElementById('mnKeyword').value.trim();
+
+      if (!title) { alert('메인 주제(Topic Title)는 필수 입력입니다.'); return; }
+
+      const masterChunks = [];
+      document.querySelectorAll('.master-chunk-section').forEach(mSec => {
+        const acronym = mSec.querySelector('.master-acronym-input').value.trim();
+        const content = mSec.querySelector('.master-content-input').value.trim();
+        const subChunks = [];
+        
+        mSec.querySelectorAll('.sub-chunk-row').forEach(sRow => {
+          const subAcronym = sRow.querySelector('.sub-acronym-input').value.trim();
+          const subContent = sRow.querySelector('.sub-content-input').value.trim();
+          if(subAcronym || subContent) {
+            subChunks.push({ subAcronym, subContent });
+          }
+        });
+        
+        if (acronym || content || subChunks.length > 0) {
+          masterChunks.push({ acronym, content, subChunks });
+        }
+      });
+
+      let itemToSave;
+      if (editId) { itemToSave = { id: parseInt(editId), source, title, keyword, masterChunks }; } 
+      else { const newId = mnemonics.length > 0 ? Math.max(...mnemonics.map(m => m.id)) + 1 : 1; itemToSave = { id: newId, source, title, keyword, masterChunks }; }
+
+      await putToDB(itemToSave);
+      mnemonics = await getAllFromDB();
+      updateCounts(); renderGrid(document.getElementById('searchInput').value); closeAddModal();
+    }
+
+    async function deleteMnemonic(id) {
+      if (confirm('이 청킹 카드를 삭제하시겠습니까?')) { await deleteFromDB(id); mnemonics = await getAllFromDB(); updateCounts(); renderGrid(document.getElementById('searchInput').value); }
+    }
+
+    // --- 백업 / 복원 기능 ---[cite: 1]
+    function exportJSON() {
+      const dataStr = JSON.stringify(mnemonics, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = `청킹마스터_백업_${new Date().toISOString().slice(0,10)}.json`; a.click(); URL.revokeObjectURL(url);
+    }
+
+    function importJSON(event) {
+      const file = event.target.files[0]; if (!file) return; const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const importedData = JSON.parse(e.target.result);
+          if (Array.isArray(importedData)) {
+            let newSourceFound = false; let currentMnemonics = await getAllFromDB(); let maxId = currentMnemonics.length > 0 ? Math.max(...currentMnemonics.map(m => m.id)) : 0;
+            for (const item of importedData) {
+              if (item.title) {
+                // 이전 버전 호환성 패치
+                if (item.chunks && !item.masterChunks) {
+                  item.masterChunks = item.chunks.map(c => ({ acronym: c.subKeyword || '', content: c.subTitle || '', subChunks: c.sentences ? c.sentences.split('\n').filter(s=>s.trim()).map(s => ({ subAcronym: '', subContent: s })) : [] }));
+                  delete item.chunks;
+                }
+                if (!item.masterChunks) item.masterChunks = [];
+                
+                const existingByTitle = currentMnemonics.find(m => m.source === item.source && m.title === item.title);
+                if (existingByTitle) { item.id = existingByTitle.id; await putToDB(item); const index = currentMnemonics.findIndex(m => m.id === item.id); if(index !== -1) currentMnemonics[index] = item; } 
+                else { maxId++; item.id = maxId; await putToDB(item); currentMnemonics.push(item); }
+                if(item.source && !sources.includes(item.source)) { sources.push(item.source); newSourceFound = true; }
+              }
+            }
+            if(newSourceFound) saveSources(); mnemonics = await getAllFromDB(); updateCounts(); renderGrid(document.getElementById('searchInput').value); alert('데이터 복원 완료');
+          } else { alert('올바른 백업 파일 형식이 아닙니다.'); }
+        } catch (err) { alert('파일을 읽는 중 오류가 발생했습니다.'); } event.target.value = '';
+      }; reader.readAsText(file);
+    }
+
+    function prepareAndPrint() { document.getElementById('printHeaderTitle').innerText = `청킹마스터(${currentCategory === 'All' ? '전체' : currentCategory})`; window.print(); }
+    
+    document.addEventListener('keydown', function(e) {
+      const isTyping = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable;
+      if (e.key === '`' && !isTyping) { e.preventDefault(); window.location.href = 'about:blank'; }
+      
+      // Ctrl+Alt+N : 새 청킹 추가 모달 열기[cite: 1]
+      if ((e.ctrlKey || e.metaKey) && e.altKey && e.key.toLowerCase() === 'n') { 
+        e.preventDefault(); 
+        openAddModal(); 
+      }
+      
+      // Ctrl+I : 모달 내에서 마스터 청킹 또는 서브 청킹 추가[cite: 1]
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'i') { 
+        const addModal = document.getElementById('addModal');
+        if (addModal.style.display === 'flex') {
+          e.preventDefault();
+          const activeEl = document.activeElement;
+          const masterSection = activeEl ? activeEl.closest('.master-chunk-section') : null;
+          
+          if (masterSection) {
+            // 포커스가 마스터 청킹 구역 내부에 있을 때는 해당 구역에 서브 청킹 추가
+            const mId = masterSection.id.split('_')[1];
+            addSubChunkUI(mId);
+          } else {
+            // 그 외의 곳(메인 주제, 두음 입력칸 등)에 있을 때는 새 마스터 청킹 추가
+            addMasterChunkUI();
+          }
+        }
+      }
+      
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { 
+        const addModal = document.getElementById('addModal'); 
+        if (addModal.style.display === 'flex') { 
+          e.preventDefault(); 
+          saveMnemonic(); 
+        } else { 
+          e.preventDefault(); 
+        } 
+      }
+    });
+    window.onload = init;
+  </script>
+</body>
+</html>
