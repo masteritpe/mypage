@@ -179,9 +179,29 @@
 
         #initial-screen { position: absolute; inset: 0; background: #FFF; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; }
 
-        /* 📝 에미나이 모드 (에디터 패널) */
-        #node-editor-panel { position: absolute; top: 0; right: -600px; width: 600px; height: 100%; background: #FFF; box-shadow: -5px 0 25px rgba(0,0,0,0.05); z-index: 50; transition: right 0.3s ease; display: flex; flex-direction: column; border-left: 1px solid var(--border-medium); }
-        #node-editor-panel.open { right: 0; }
+        /* 📝 에미나이 모드 (에디터 패널) - 너비 조절 및 transform으로 변경 */
+        #node-editor-panel { 
+            position: absolute; top: 0; right: 0; width: 600px; height: 100%; 
+            background: #FFF; box-shadow: -5px 0 25px rgba(0,0,0,0.05); z-index: 50; 
+            transform: translateX(100%); transition: transform 0.3s ease; 
+            display: flex; flex-direction: column; border-left: 1px solid var(--border-medium); 
+        }
+        #node-editor-panel.open { transform: translateX(0); }
+        
+        /* 패널 너비 조절 핸들 바 (클릭 영역 대폭 확대 및 시각적 Pill 디자인 추가) */
+        #panel-resizer {
+            position: absolute; top: 0; left: -10px; width: 20px; height: 100%; 
+            cursor: col-resize; z-index: 100; background-color: transparent; 
+            display: flex; align-items: center; justify-content: center;
+        }
+        #panel-resizer::after {
+            content: ''; width: 4px; height: 48px; border-radius: 4px;
+            background-color: var(--border-medium); transition: all 0.2s ease;
+        }
+        #panel-resizer:hover::after, #panel-resizer.dragging::after {
+            background-color: var(--primary); transform: scaleX(1.5);
+        }
+
         .editor-panel-header { height: 80px; padding: 0 32px; border-bottom: 1px solid var(--border-medium); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; background: #FAFAFA; }
         
         .editor-panel-title { font-size: 18px; font-weight: 700; color: var(--primary); display: flex; align-items: center; gap: 8px;}
@@ -248,6 +268,7 @@
         </div>
 
         <div id="node-editor-panel">
+            <div id="panel-resizer"></div>
             <div class="editor-panel-header">
                 <div class="editor-panel-title" style="flex: 1; max-width: calc(100% - 150px);">
                     <i class="ph-fill ph-article"></i> 
@@ -402,7 +423,6 @@
                 const newZoom = Math.max(0.2, Math.min(currentZoom + zoomFactor, 3));
                 
                 if (newZoom !== currentZoom) {
-                    // 마우스 커서 위치를 기준으로 확대/축소되도록 패닝 보정
                     const ratio = newZoom / currentZoom;
                     panX = mouseX - (mouseX - panX) * ratio;
                     panY = mouseY - (mouseY - panY) * ratio;
@@ -476,6 +496,49 @@
             });
         });
 
+        // --- 패널 리사이징 로직 추가 ---
+        let isResizingPanel = false;
+        let initialPanelWidth = 600;
+        let initialMouseX = 0;
+
+        const resizer = document.getElementById('panel-resizer');
+        const editorPanel = document.getElementById('node-editor-panel');
+
+        resizer.addEventListener('mousedown', function(e) {
+            isResizingPanel = true;
+            initialMouseX = e.clientX;
+            initialPanelWidth = editorPanel.getBoundingClientRect().width;
+            resizer.classList.add('dragging');
+            
+            // 드래그 중 텍스트 선택 방지 및 커서 유지
+            document.body.style.userSelect = 'none';
+            document.body.style.cursor = 'col-resize';
+            e.preventDefault(); 
+        });
+
+        document.addEventListener('mousemove', function(e) {
+            if (!isResizingPanel) return;
+            const deltaX = initialMouseX - e.clientX;
+            let newWidth = initialPanelWidth + deltaX;
+            
+            if (newWidth < 400) newWidth = 400; // 최소 너비 안전값
+            if (newWidth > window.innerWidth * 0.8) newWidth = window.innerWidth * 0.8; // 화면의 80%까지만 확장 가능
+            
+            editorPanel.style.width = newWidth + 'px';
+        });
+
+        document.addEventListener('mouseup', function(e) {
+            if (isResizingPanel) {
+                isResizingPanel = false;
+                resizer.classList.remove('dragging');
+                
+                // 원상복구
+                document.body.style.userSelect = '';
+                document.body.style.cursor = '';
+            }
+        });
+        // -------------------------------
+
         // --- 2. 통합 전역 변수 및 데이터 구조 (Hybrid DB) ---
         const dbName = "ZettelLinkDB"; 
         let db, currentMapId = null;
@@ -521,15 +584,13 @@
         // --- [강력한 수정] 통합 HTML 빈 줄 정리 함수 ---
         function cleanHtmlContent(html) {
             if (!html) return '';
-            let str = html.replace(/\u200B/g, '').trim(); // 유령 문자 제거
+            let str = html.replace(/\u200B/g, '').trim(); 
             
-            // 완벽히 비어있는 껍데기 문서인지 확인하여 깔끔하게 비웁니다.
             const emptyBlockRegex = /^(<p[^>]*>(\s|&nbsp;|<br>)*<\/p>\s*)+$/gi;
             if (emptyBlockRegex.test(str)) {
                 return '';
             }
 
-            // 후행 빈 줄 반복 무한 제거 (문서 맨 끝에 쓸데없이 남은 공백들)
             const trailingEmptyRegex = /(<p[^>]*>(\s|&nbsp;|<br>)*<\/p>\s*)+$/gi;
             str = str.replace(trailingEmptyRegex, '');
             
@@ -577,9 +638,8 @@
                 showToast('백업할 맵이 없습니다.');
                 return;
             }
-            autoSave(); // 내보내기 전 최신 상태 저장
+            autoSave(); 
             
-            // --- HTML Export와 동일한 정렬 로직 적용하여 정렬된 노드 리스트 생성 ---
             const flatNodes = getFlattenedNodes(mapNodes, true);
             
             for (const id in flatNodes) {
@@ -625,9 +685,7 @@
                 }
                 return (a._vx || 0) - (b._vx || 0);
             });
-            // ------------------------------------------------------------------
 
-            // 단일 항목 (현재 맵) 정보 추출 및 정렬된 노드 추가
             const titleInput = document.getElementById('tree-title-input').value || '제목 없음';
             const mapData = {
                 id: currentMapId,
@@ -636,7 +694,7 @@
                 data: { 
                     nodes: mapNodes, 
                     links: mapLinks,
-                    exportedNodes: sortedNodes // ★ 정렬된 배열 데이터 추가
+                    exportedNodes: sortedNodes
                 }
             };
             
@@ -666,25 +724,20 @@
                 try {
                     const importedData = JSON.parse(e.target.result);
                     
-                    // 간단한 유효성 검사
                     if (!importedData.id || !importedData.data || !importedData.data.nodes) {
                         throw new Error("유효하지 않은 Zettelkasten JSON 파일입니다.");
                     }
                     
                     importedData.updatedAt = Date.now();
                     
-                    // 1. 기존에 존재하는 맵인지 확인하여 사용자 피드백 명확화
                     const existingMaps = await getAllMaps();
                     const isNew = !existingMaps.some(m => m.id === importedData.id);
                     
-                    // 2. IndexedDB 저장 (put은 id가 같으면 덮어쓰기, 없으면 새로 추가)
                     await saveToDB(importedData);
                     
-                    // 3. UI 갱신 및 복원된 맵 열기
                     await refreshSidebar();
                     loadMap(importedData); 
                     
-                    // 4. 상황에 따른 정확한 토스트 피드백
                     if (isNew) {
                         showToast('새 맵으로 사이드바에 추가되었습니다.');
                     } else {
@@ -694,7 +747,7 @@
                     console.error(err);
                     alert('JSON 복원 중 오류가 발생했습니다: ' + err.message);
                 } finally {
-                    event.target.value = ''; // 같은 파일을 다시 선택할 수 있도록 input 초기화
+                    event.target.value = ''; 
                 }
             };
             reader.readAsText(file);
@@ -714,10 +767,9 @@
         }
 
         function exportToHTML() {
-            autoSave(); // 최신 상태 저장 후 내보내기
+            autoSave(); 
             const flatNodes = getFlattenedNodes(mapNodes, true);
             
-            // --- 화면에 나타나는 시각적 위치 계산 (정렬용) ---
             for (const id in flatNodes) {
                 const el = document.querySelector(`.node-box[data-id="${id}"]`);
                 if (el) {
@@ -729,7 +781,6 @@
                     flatNodes[id]._rendered = false;
                 }
             }
-            // 접혀있는 노드들에 대한 상대적인 좌표 추정 폴백
             function assignFallback(node, parentX, parentY) {
                 if (!node._rendered) {
                     node._vx = parentX + 50;
@@ -744,7 +795,6 @@
                     root.children.forEach((c, idx) => assignFallback(c, root._vx || root.x, root._vy || root.y + (idx * 60)));
                 }
             });
-            // ----------------------------------------------
 
             const title = document.getElementById('tree-title-input').value || '지식 맵';
             
@@ -783,30 +833,24 @@
             
             htmlContent += `<h1 class="header-title">${title}</h1>`;
 
-            // === [핵심 수정] 진짜 메인 노드(mapNodes의 0번째 요소) ID 추출 ===
             const absoluteMainNodeId = mapNodes.length > 0 ? mapNodes[0].id : null;
 
-            // 추출된 노드 정렬 로직
             const sortedNodes = Object.values(flatNodes).sort((a, b) => {
-                // 1순위: 가장 처음에 생성된 진짜 메인 루트 노드를 무조건 최상단 1순위로 고정
                 if (a.id === absoluteMainNodeId) return -1;
                 if (b.id === absoluteMainNodeId) return 1;
 
-                // 2순위: 캔버스 바탕(mapNodes)에 바로 놓인 다른 메인/독립 노드들 우선
                 const aIsRoot = a._isTopLevel ? 0 : 1;
                 const bIsRoot = b._isTopLevel ? 0 : 1;
                 if (aIsRoot !== bIsRoot) {
                     return aIsRoot - bIsRoot; 
                 }
 
-                // 3순위: 화면에 보이는 위-아래, 좌-우 순서로 정렬
                 if (Math.abs((a._vy || 0) - (b._vy || 0)) > 20) {
                     return (a._vy || 0) - (b._vy || 0); 
                 }
                 return (a._vx || 0) - (b._vx || 0);
             });
 
-            // 정렬된 노드 순서대로 일반 카드 렌더링
             sortedNodes.forEach(n => {
                 const id = n.id;
                 const rawTitle = n.text ? n.text.replace(/<[^>]+>/g, '') : '제목 없음';
@@ -814,14 +858,12 @@
                 htmlContent += `<div class="node-card" id="${id}">`;
                 htmlContent += `<h2 class="node-title"><span>${n.icon || '📝'}</span> ${rawTitle}</h2>`;
                 
-                // === 연결망 ===
                 const relatedLinks = mapLinks.filter(l => l.source === id || l.target === id);
                 if (relatedLinks.length > 0 || (n.children && n.children.length > 0)) {
                     htmlContent += `<div class="relations"><h4>🔗 연결된 지식</h4><ul>`;
                     
                     let relationItems = [];
                     
-                    // 자식 트리 노드
                     if (n.children && n.children.length > 0) {
                         n.children.forEach(c => {
                             const childName = c.text ? c.text.replace(/<[^>]+>/g, '') : '제목 없음';
@@ -833,7 +875,6 @@
                         });
                     }
 
-                    // 자유 연결선 (Map Links)
                     relatedLinks.forEach(l => {
                         const isSource = l.source === id;
                         const targetId = isSource ? l.target : l.source;
@@ -850,7 +891,6 @@
                         }
                     });
                     
-                    // 화면 상의 레이아웃 좌표(Y, X) 기준으로 연결된 리스트 정렬
                     relationItems.sort((a, b) => {
                         if (Math.abs(a.y - b.y) > 20) {
                             return a.y - b.y; 
@@ -865,25 +905,21 @@
                     htmlContent += `</ul></div>`;
                 }
 
-                // 나머지 내용 (메모, 상세, 태그, 첨부파일 등)
                 if (n.memo && n.memo.trim() !== '') {
                     htmlContent += `<div class="node-memo">${n.memo}</div>`;
                 }
                 
-                // --- 통합 빈줄 처리 함수로 HTML 내보내기 ---
                 const cleanedDesc = cleanHtmlContent(n.description);
                 if (cleanedDesc !== '') {
                     htmlContent += `<div class="node-desc">${cleanedDesc}</div>`;
                 }
                 
-                // 태그 렌더링
                 if (n.tags && n.tags.length > 0) {
                     htmlContent += `<div class="tags">`;
                     n.tags.forEach(t => { htmlContent += `<span class="tag">#${t}</span>`; });
                     htmlContent += `</div>`;
                 }
 
-                // 첨부파일 렌더링
                 if (n.attachments && n.attachments.length > 0) {
                     htmlContent += `<div class="attachments"><h4>📎 첨부파일</h4><div class="attach-grid">`;
                     n.attachments.forEach(att => {
@@ -901,7 +937,6 @@
 
             htmlContent += `</body></html>`;
 
-            // HTML 다운로드 트리거
             const blob = new Blob([htmlContent], { type: 'text/html' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -928,7 +963,6 @@
                 activeNodeId = null;
                 document.querySelectorAll('.node-box').forEach(box => box.classList.remove('active-node'));
                 
-                // 캔버스 배경 패닝 시작
                 isPanning = true;
                 startPanMouseX = e.clientX - panX;
                 startPanMouseY = e.clientY - panY;
@@ -939,12 +973,11 @@
         document.addEventListener('mousemove', (e) => {
             const canvasRect = document.getElementById('canvas-container').getBoundingClientRect();
             
-            // 패닝(스크롤) 처리
             if (isPanning) {
                 panX = e.clientX - startPanMouseX;
                 panY = e.clientY - startPanMouseY;
                 updateCanvasTransform();
-                return; // 패닝 중에는 다른 드래그 로직 무시
+                return; 
             }
 
             const mouseX = (e.clientX - canvasRect.left - panX) / currentZoom;
@@ -1024,7 +1057,7 @@
             const id = generateId();
             const rootNode = {
                 id: generateId(), x: 100, y: 150, type: 'root', icon: '🏷️',
-                text: '', memo: '', tags: [], description: '', attachments: [], children: [] // 수정됨: 텍스트를 비워 플레이스홀더 표시 유도
+                text: '', memo: '', tags: [], description: '', attachments: [], children: [] 
             };
             const newMap = { id, title: '새 지식 맵', updatedAt: Date.now(), data: { nodes: [rootNode], links: [] } };
             await saveToDB(newMap); loadMap(newMap); refreshSidebar();
@@ -1040,7 +1073,6 @@
             document.getElementById('toolbar').style.display = 'flex';
             document.getElementById('canvas-container').style.display = 'block';
             
-            // 화면 배율 및 스크롤 위치 초기화
             panX = 0; panY = 0; 
             setMapZoom(1); 
             
@@ -1051,7 +1083,7 @@
         function createNewRootNode(x, y) {
             const newNode = {
                 id: generateId(), x: x, y: y, type: 'root', icon: '📝',
-                text: '', memo: '', tags: [], description: '', attachments: [], children: [] // 수정됨: 텍스트를 비워 플레이스홀더 표시 유도
+                text: '', memo: '', tags: [], description: '', attachments: [], children: [] 
             };
             mapNodes.push(newNode); activeNodeId = newNode.id; renderAll(); autoSave();
         }
@@ -1089,7 +1121,6 @@
             const box = document.createElement('div');
             const hasChildren = node.children && node.children.length > 0;
             
-            // --- 통합 빈줄 처리 함수로 아이콘 표시 여부 판별 ---
             const checkDesc = cleanHtmlContent(node.description);
             const hasDoc = (checkDesc !== '') || (node.attachments && node.attachments.length > 0);
             
@@ -1107,7 +1138,6 @@
                     isDraggingNode = true; dragRootId = rootWrapper.dataset.rootId;
                     const canvasRect = document.getElementById('canvas-container').getBoundingClientRect();
                     const rNode = mapNodes.find(n => n.id === dragRootId);
-                    // 패닝 위치 고려하여 오프셋 계산
                     offsetX = ((e.clientX - canvasRect.left - panX) / currentZoom) - (rNode.x || 0);
                     offsetY = ((e.clientY - canvasRect.top - panY) / currentZoom) - (rNode.y || 0);
                 }
@@ -1128,7 +1158,6 @@
             const title = document.createElement('div'); title.className = 'node-title';
             title.contentEditable = true; title.setAttribute('spellcheck', 'false');
             
-            // 수정됨: 독립 루트 노드일 경우 플레이스홀더 텍스트를 '새 독립 노드'로 처리
             title.setAttribute('data-placeholder', isRoot ? '새 독립 노드' : '제목 입력...');
             title.innerHTML = linkifyHTML(node.text || '');
             title.onblur = (e) => { const linked = linkifyHTML(e.target.innerHTML); if (linked !== e.target.innerHTML) e.target.innerHTML = linked; node.text = e.target.innerHTML; autoSave(); };
@@ -1233,7 +1262,6 @@
                 if (!sourceEl || !targetEl) return;
                 const sRect = sourceEl.getBoundingClientRect(); const tRect = targetEl.getBoundingClientRect();
                 
-                // 패닝 위치(panX, panY)를 반영하여 선 그리기
                 const x1 = (sRect.right - canvasRect.left - panX) / currentZoom; 
                 const y1 = (sRect.top - canvasRect.top + sRect.height / 2 - panY) / currentZoom;
                 const x2 = (tRect.left - canvasRect.left - panX) / currentZoom; 
@@ -1382,12 +1410,8 @@
             currentNodeForEditor = node;
             panelTitle.innerHTML = node.text || ''; 
             
-            // --- [핵심 강력한 수정] 빈 줄 무한 증식 원천 차단 ---
-            // dangerouslyPasteHTML은 내부 클립보드 모듈을 거치면서 <p><br></p> 등을 여러 줄로 오해하는 치명적 버그가 있습니다.
-            // 대신, 원본 HTML을 DOM에 직접 할당하여 클립보드 파서를 완벽하게 우회합니다.
             quill.root.innerHTML = node.description || '<p><br></p>';
             
-            // DOM 직접 주입 후, Quill 내부 상태(Delta)가 꼬이지 않도록 즉시 동기화합니다.
             setTimeout(() => { if (quill) quill.update('silent'); }, 10);
             
             currentFiles = node.attachments || []; renderAttachGrid();
@@ -1403,11 +1427,9 @@
             const tempRoot = document.createElement('div'); tempRoot.innerHTML = quill.root.innerHTML;
             tempRoot.querySelectorAll('.quill-raw-table').forEach(el => { if (el.dataset.raw) el.innerHTML = decodeURIComponent(el.dataset.raw); });
             
-            // --- 통합 빈줄 처리 함수로 상세 문서 저장 ---
             currentNodeForEditor.description = cleanHtmlContent(tempRoot.innerHTML);
             currentNodeForEditor.attachments = currentFiles;
             
-            // 사용자가 저장을 누를 때 편집기의 시각적 상태도 완벽하게 깔끔해진 상태로 리셋합니다.
             if (quill.root.innerHTML !== currentNodeForEditor.description) {
                 quill.root.innerHTML = currentNodeForEditor.description || '<p><br></p>';
                 setTimeout(() => { if (quill) quill.update('silent'); }, 10);
@@ -1527,7 +1549,6 @@
                 return;
             }
 
-            // 단축키 Zoom 보정 (화면 중심을 향하여 줌 적용)
             if (isAlt && !isCtrl && (key === '+' || key === '=' || code === 'Equal' || code === 'NumpadAdd')) { 
                 e.preventDefault(); 
                 const canvasRect = document.getElementById('canvas-container').getBoundingClientRect();
@@ -1560,7 +1581,7 @@
             }
             if (isAlt && !isCtrl && !isShift && (key === '0' || code === 'Digit0' || code === 'Numpad0')) { 
                 e.preventDefault(); 
-                panX = 0; panY = 0; // 패닝 위치 초기화
+                panX = 0; panY = 0; 
                 setMapZoom(1); 
                 return; 
             }
