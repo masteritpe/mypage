@@ -118,6 +118,16 @@ header .header-tools { display: flex; gap: 10px; }
 .code-editor { width: 100%; min-height: 250px; background: #0f172a; color: #e2e8f0; font-family: var(--font-code); font-size: 14px; padding: 24px; border: none; resize: vertical; line-height: 1.6; border-radius: var(--radius-md); }
 .code-editor:focus { outline: none; box-shadow: 0 0 0 3px var(--primary-soft); }
 
+/* === Links UI === */
+.link-list { display: flex; flex-direction: column; gap: 12px; }
+.link-row { display: flex; align-items: center; gap: 8px; }
+.link-input-title { width: 200px; height: 42px; padding: 0 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 14px; background: var(--bg-panel); transition: 0.2s; }
+.link-input-url { flex: 1; height: 42px; padding: 0 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-family: var(--font-code); font-size: 14px; color: var(--primary); background: var(--bg-panel); transition: 0.2s; }
+.link-input-title:focus, .link-input-url:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); outline: none; }
+.btn-link-action { width: 42px; height: 42px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg-panel); cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-sub); transition: 0.2s; flex-shrink: 0; box-shadow: var(--shadow-sm); }
+.btn-link-open:hover { background: var(--primary-soft); color: var(--primary); border-color: var(--primary-light); }
+.btn-link-del:hover { background: var(--danger-light); color: var(--danger); border-color: #fecaca; }
+
 /* Attachments */
 .attach-box { padding: 24px; border-radius: var(--radius-md); border: 1px solid var(--border); background: var(--bg-hover); }
 .attach-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px; }
@@ -283,6 +293,19 @@ header .header-tools { display: flex; gap: 10px; }
                         <div class="title-text"><i class="fas fa-code"></i> 소스 코드 (선택사항)</div>
                     </div>
                     <textarea id="inp-code" class="code-editor" placeholder="필요한 설정값이나 소스코드를 여기에 붙여넣으세요..." spellcheck="false"></textarea>
+                </div>
+
+                <!-- 외부 참조 링크 영역 -->
+                <div class="form-section">
+                    <div class="section-title">
+                        <div class="title-text"><i class="fas fa-link"></i> 외부 참조 링크</div>
+                    </div>
+                    <div style="background:var(--bg-hover); border:1px solid var(--border); padding:24px; border-radius:var(--radius-md);">
+                        <div id="link-container" class="link-list"></div>
+                        <div style="margin-top:16px;">
+                            <button type="button" class="btn btn-secondary" onclick="addLink()" style="border-style:dashed; width:100%; height:42px;"><i class="fas fa-plus"></i> 외부 참조 링크 추가</button>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="form-section">
@@ -491,6 +514,7 @@ const MANUAL_CORE = {
 
 let quillEditor;
 let currentFiles = [];
+let currentLinks = []; // 링크 관리를 위한 배열
 window.exportSelection = new Set();
 let isFirstLoad = true;
 
@@ -737,7 +761,38 @@ async function saveNewOrder() {
     }
 }
 
+// ================= Links Feature (외부 참조 링크) =================
+window.addLink = function() {
+    currentLinks.push({ title: '', url: '' });
+    renderLinkList();
+};
 
+window.renderLinkList = function() {
+    const container = document.getElementById('link-container');
+    container.innerHTML = '';
+    currentLinks.forEach((link, idx) => {
+        const row = document.createElement('div');
+        row.className = 'link-row';
+        row.innerHTML = `
+            <input type="text" class="link-input-title" placeholder="문서 제목" value="${link.title || ''}" oninput="currentLinks[${idx}].title=this.value" spellcheck="false">
+            <input type="text" class="link-input-url" placeholder="URL (Confluence 등)" value="${link.url || ''}" oninput="currentLinks[${idx}].url=this.value" spellcheck="false">
+            <button class="btn-link-action btn-link-open" title="링크 열기" onclick="if(currentLinks[${idx}].url) window.open(currentLinks[${idx}].url, '_blank'); else showToast('이동할 URL을 입력해주세요.', 'error');">
+                <i class="fas fa-external-link-alt"></i>
+            </button>
+            <button class="btn-link-action btn-link-del" title="삭제" onclick="removeLink(${idx})">
+                <i class="fas fa-trash"></i>
+            </button>
+        `;
+        container.appendChild(row);
+    });
+};
+
+window.removeLink = function(idx) {
+    currentLinks.splice(idx, 1);
+    renderLinkList();
+};
+
+// ================= Forms Management =================
 function showNewForm() {
     MANUAL_CORE.selectedId = null;
     document.getElementById('empty-state').classList.add('hidden');
@@ -751,8 +806,13 @@ function showNewForm() {
     document.getElementById('inp-title').value = '';
     quillEditor.setText('');
     document.getElementById('inp-code').value = '';
+    
+    // 상태 초기화
     currentFiles = [];
+    currentLinks = [];
+    
     renderFiles();
+    renderLinkList();
     renderList();
 
     setTimeout(() => {
@@ -778,8 +838,13 @@ function loadPage(page) {
     quillEditor.setSelection(null);
     
     document.getElementById('inp-code').value = page.code || '';
+    
+    // 상태 불러오기
     currentFiles = page.files || [];
+    currentLinks = page.links || [];
+    
     renderFiles();
+    renderLinkList();
     renderList();
 
     setTimeout(() => {
@@ -804,6 +869,7 @@ async function savePage() {
         description: quillEditor.root.innerHTML,
         code: document.getElementById('inp-code').value,
         files: currentFiles,
+        links: currentLinks.filter(l => l.url && l.url.trim() !== ''), // 빈 링크 제외하고 저장
         timestamp: existingItem ? existingItem.timestamp : Date.now(),
         orderIndex: existingItem ? existingItem.orderIndex : MANUAL_CORE.items.length
     };
@@ -934,6 +1000,18 @@ function generateFullHTMLForExport(itemsToExport, forWord = false) {
                         [ 소스 코드 / 설정 ]
                      </h3>
                      <div style="background-color: #f8fafc; border: 1px solid #cbd5e1; padding: 15px; font-family: 'Courier New', Courier, monospace; font-size: 12px; white-space: pre-wrap; word-wrap: break-word; line-height: 1.5; color: #0f172a;">${page.code.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>`;
+        }
+        
+        // 외부 참조 링크 출력
+        if (page.links && page.links.length > 0) {
+            html += `<h3 style="font-family: 'Malgun Gothic', '맑은 고딕', sans-serif; font-size: 15px; font-weight: bold; margin-bottom: 12px; margin-top: 32px; color: #333;">
+                        [ 외부 참조 링크 ]
+                     </h3>
+                     <ul style="font-family: 'Malgun Gothic', '맑은 고딕', sans-serif; font-size: 14px; line-height: 1.6; color: #000; margin-bottom: 24px;">`;
+            page.links.forEach(link => {
+                html += `<li><strong>${link.title || '링크'}</strong> : <a href="${link.url}" target="_blank" style="color:#2563eb;">${link.url}</a></li>`;
+            });
+            html += `</ul>`;
         }
         
         const images = (page.files || []).filter(f => f.type.startsWith('image/'));
