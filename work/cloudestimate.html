@@ -46,6 +46,7 @@
             Code: (p) => <Icon {...p} path={<><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></>} />,
             Grip: (p) => <Icon {...p} path={<><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></>} />,
             Download: (p) => <Icon {...p} path={<><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></>} />,
+            Upload: (p) => <Icon {...p} path={<><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></>} />,
             ListOrdered: (p) => <Icon {...p} path={<><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><path d="M4 6h1v4"/><path d="M4 10h2"/><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/></>} />,
             Settings: (p) => <Icon {...p} path={<><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></>} />,
             Copy: (p) => <Icon {...p} path={<><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></>} />,
@@ -481,9 +482,24 @@
             const [exchangeRate, setExchangeRate] = useState(1350); 
             const [isSettingsOpen, setIsSettingsOpen] = useState(false);
             const [isCalcOpen, setIsCalcOpen] = useState(false);
+            
+            // 토스트 상태
+            const [toastMsg, setToastMsg] = useState('');
+            const toastTimeoutRef = useRef(null);
+
             const fileInputRef = useRef(null);
+            const jsonInputRef = useRef(null);
             const dragItem = useRef(null);
             const dragOverItem = useRef(null);
+
+            // 토스트 표시 함수
+            const showToast = (msg) => {
+                setToastMsg(msg);
+                if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+                toastTimeoutRef.current = setTimeout(() => {
+                    setToastMsg('');
+                }, 1000);
+            };
 
             useEffect(() => {
                 const init = async () => {
@@ -540,6 +556,7 @@
                 const newId = 'q'+Date.now();
                 const q = { id: newId, name: `새 견적 ${quotes.length+1}`, items: [], memo: '' };
                 setQuotes(p => [...p, q]); setActiveQuoteId(newId); setViewMode('edit');
+                showToast('새 견적이 추가되었습니다.');
             };
 
             const duplicateQuote = (e, id) => {
@@ -555,17 +572,18 @@
                     items: source.items.map(i => ({...i}))
                 };
                 setQuotes(p => [...p, newQuote]);
+                showToast('견적이 복사되었습니다.');
             };
 
             const deleteQuote = async (id) => {
                 if(quotes.length <= 1 || !confirm("삭제하시겠습니까?")) return;
                 await idb.delete(id); setQuotes(p => p.filter(q => q.id !== id));
                 if(activeQuoteId === id) setActiveQuoteId(quotes.find(q=>q.id!==id)?.id);
+                showToast('견적이 삭제되었습니다.');
             };
 
             const updateQuote = (k, v) => setQuotes(p => p.map(q => q.id === activeQuoteId ? { ...q, [k]: v } : q));
             
-            // 환경설정 저장 시 현재 활성화된 견적의 항목들도 일괄 업데이트 (1회성 항목 제외)
             const handleSettingsSave = (newMonths, newRate) => {
                 setDefaultMonths(newMonths);
                 setExchangeRate(newRate);
@@ -579,6 +597,7 @@
                     }));
                     updateQuote('items', updatedItems);
                 }
+                showToast('환경 설정이 저장되었습니다.');
             };
 
             const toggleExclude = (id) => {
@@ -591,6 +610,7 @@
                 const newItems = [...activeQuote.items];
                 newItems.splice(index + 1, 0, newItem);
                 updateQuote('items', newItems);
+                showToast('항목이 복사되었습니다.');
             };
 
             const openAddModal = () => { setEditingItem(null); setIsModalOpen(true); };
@@ -600,6 +620,7 @@
                     ? activeQuote.items.map(i => i.id === editingItem.id ? { ...itemData, id: i.id } : i)
                     : [...activeQuote.items, { ...itemData, id: Date.now() }];
                 updateQuote('items', newItems);
+                showToast('항목이 저장되었습니다.');
             };
 
             const sortItems = () => {
@@ -611,6 +632,7 @@
                     return cleanIdxA - cleanIdxB;
                 });
                 updateQuote('items', sorted);
+                showToast('항목이 정렬되었습니다.');
             };
 
             const handleFileSelect = (e) => {
@@ -642,8 +664,10 @@
                         };
                     });
                     updateQuote('items', [...activeQuote.items, ...newItems]);
+                    showToast('엑셀 데이터를 가져왔습니다.');
                 };
                 reader.readAsBinaryString(file);
+                e.target.value = '';
             };
 
             const handleTextImport = () => {
@@ -666,6 +690,7 @@
                 updateQuote('items', [...activeQuote.items, ...newItems]);
                 setIsBulkOpen(false);
                 setBulkText('');
+                showToast('텍스트 데이터를 가져왔습니다.');
             };
 
             const exportExcel = (type) => {
@@ -727,6 +752,49 @@
                     XLSX.utils.book_append_sheet(wb, ws, "비교");
                     XLSX.writeFile(wb, "비교견적.xlsx");
                 }
+                showToast('엑셀 파일이 저장되었습니다.');
+            };
+
+            const backupJson = () => {
+                const targets = sortedQuotes.filter(q => q.name.toLowerCase().includes(searchTerm.toLowerCase()));
+                if (targets.length === 0) {
+                    showToast('백업할 데이터가 없습니다.');
+                    return;
+                }
+                const dataStr = JSON.stringify(targets, null, 2);
+                const blob = new Blob([dataStr], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `Cloud_Estimate_Backup_${new Date().toISOString().slice(0,10)}.json`;
+                link.click();
+                URL.revokeObjectURL(url);
+                showToast('JSON 백업 파일이 다운로드되었습니다.');
+            };
+
+            const restoreJson = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = async (evt) => {
+                    try {
+                        const importedData = JSON.parse(evt.target.result);
+                        if (!Array.isArray(importedData)) throw new Error("Invalid data format");
+
+                        for (const q of importedData) {
+                            await idb.save(q);
+                        }
+                        const data = await idb.getAll();
+                        setQuotes(data);
+                        showToast('데이터 복원이 성공적으로 완료되었습니다.');
+                    } catch (err) {
+                        console.error("Restore error:", err);
+                        showToast('잘못된 형식의 JSON 파일이거나 오류가 발생했습니다.');
+                    } finally {
+                        e.target.value = '';
+                    }
+                };
+                reader.readAsText(file);
             };
 
             const onDragStart = (e, idx) => { dragItem.current = idx; e.currentTarget.classList.add('dragging'); };
@@ -743,7 +811,7 @@
             if(isLoading) return <div className="h-screen flex items-center justify-center text-slate-400">Loading...</div>;
 
             return (
-                <div className="flex h-screen w-full bg-slate-50 overflow-hidden">
+                <div className="flex h-screen w-full bg-slate-50 overflow-hidden relative">
                     {/* Sidebar */}
                     <div className="w-72 bg-white border-r border-slate-200 flex flex-col shrink-0">
                         <div className="p-5 border-b">
@@ -756,7 +824,7 @@
                             </div>
                         </div>
                         <div className="flex-1 overflow-y-auto custom-scroll p-3 space-y-2">
-                            {sortedQuotes.filter(q => q.name.includes(searchTerm)).map(q => (
+                            {sortedQuotes.filter(q => q.name.toLowerCase().includes(searchTerm.toLowerCase())).map(q => (
                                 <div key={q.id} onClick={()=>{setActiveQuoteId(q.id); setViewMode('edit');}} className={`p-3 rounded-lg cursor-pointer border transition-all ${activeQuoteId===q.id && viewMode==='edit' ? 'bg-indigo-50 border-indigo-200 shadow-sm' : 'bg-white border-transparent hover:bg-slate-50'}`}>
                                     <div className="flex justify-between items-start">
                                         <h3 className="text-sm font-semibold truncate">{q.name}</h3>
@@ -790,6 +858,11 @@
                                 )}
                                 <button onClick={()=>setViewMode(viewMode==='edit'?'compare':'edit')} className="px-3 py-1.5 border rounded text-sm font-medium hover:bg-slate-50">{viewMode==='edit'?'비교 모드':'편집 모드'}</button>
                                 <button onClick={()=>exportExcel(viewMode==='edit'?'single':'compare')} className="px-3 py-1.5 bg-green-600 text-white rounded text-sm font-medium flex items-center gap-2 hover:bg-green-700"><Icons.Download size={16}/> 엑셀 저장</button>
+                                
+                                {/* JSON 백업 및 복원 버튼 */}
+                                <button onClick={backupJson} className="px-3 py-1.5 bg-blue-500 text-white rounded text-sm font-medium flex items-center gap-2 hover:bg-blue-600"><Icons.Download size={16}/> JSON 백업</button>
+                                <input type="file" ref={jsonInputRef} onChange={restoreJson} accept=".json" className="hidden" />
+                                <button onClick={()=>jsonInputRef.current.click()} className="px-3 py-1.5 bg-amber-500 text-white rounded text-sm font-medium flex items-center gap-2 hover:bg-amber-600"><Icons.Upload size={16}/> JSON 복원</button>
                             </div>
                         </header>
 
@@ -858,7 +931,11 @@
                                                             <td className="px-2 text-center align-middle">
                                                                 <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                                                     <button onClick={(e)=>{e.stopPropagation(); duplicateItem(item, idx);}} className="text-slate-300 hover:text-indigo-500" title="항목 복사"><Icons.Copy size={16}/></button>
-                                                                    <button onClick={e=>{e.stopPropagation(); updateQuote('items', activeQuote.items.filter(i=>i.id!==item.id))}} className="text-slate-300 hover:text-rose-500" title="삭제"><Icons.Trash size={16}/></button>
+                                                                    <button onClick={e=>{
+                                                                        e.stopPropagation(); 
+                                                                        updateQuote('items', activeQuote.items.filter(i=>i.id!==item.id));
+                                                                        showToast('항목이 삭제되었습니다.');
+                                                                    }} className="text-slate-300 hover:text-rose-500" title="삭제"><Icons.Trash size={16}/></button>
                                                                 </div>
                                                             </td>
                                                         </tr>
@@ -963,6 +1040,13 @@
                                 </div>
                                 <div className="px-6 py-4 border-t flex justify-end gap-2 bg-slate-50"><button onClick={()=>setIsBulkOpen(false)} className="px-4 py-2 text-sm">취소</button><button onClick={handleTextImport} className="px-4 py-2 text-sm text-white bg-indigo-600 rounded">적용</button></div>
                             </div>
+                        </div>
+                    )}
+
+                    {/* Toast Notification */}
+                    {toastMsg && (
+                        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[9999] px-6 py-3 bg-black text-white text-sm rounded-lg shadow-2xl pointer-events-none transition-opacity duration-300">
+                            {toastMsg}
                         </div>
                     )}
                 </div>
