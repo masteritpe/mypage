@@ -269,6 +269,9 @@
     const ITEMS_PER_BATCH = 20;
     let observer = null;
 
+    // [최적화] Base64 메모리 최적화를 위한 관리 배열
+    let activeBlobUrls = [];
+
     // DOMParser 인스턴스를 하나만 생성하여 메모리 누수 원천 차단 (브라우저 GC에 안전함)
     const domParser = new DOMParser();
 
@@ -341,10 +344,40 @@
       return /[가-힣a-zA-Z0-9]/.test(plainText); 
     }
 
-    // DOMParser를 이용한 무누수 텍스트 추출 로직
+    // [최적화] 이전 로드 시 할당된 가상 URL들을 메모리에서 완전히 반환
+    function clearActiveBlobs() {
+      activeBlobUrls.forEach(url => URL.revokeObjectURL(url));
+      activeBlobUrls = [];
+    }
+
+    // [최적화] 무거운 Base64 데이터를 메모리 효율적인 Blob 객체 URL로 변환
+    function convertBase64ToBlobUrl(html) {
+      if (!html || typeof html !== 'string' || !html.includes('data:image')) return html;
+      return html.replace(/(src=["'])(data:image\/([^;]+);base64,([^"']+))(["'])/gi, (match, prefix, fullData, mime, b64, suffix) => {
+        try {
+          const byteString = atob(b64.replace(/\s+/g, ''));
+          const ab = new ArrayBuffer(byteString.length);
+          const ia = new Uint8Array(ab);
+          for (let i = 0; i < byteString.length; i++) {
+            ia[i] = byteString.charCodeAt(i);
+          }
+          const blob = new Blob([ab], { type: mime });
+          const url = URL.createObjectURL(blob);
+          activeBlobUrls.push(url);
+          return prefix + url + suffix;
+        } catch (e) {
+          console.error('Base64 변환 오류', e);
+          return match;
+        }
+      });
+    }
+
+    // DOMParser를 이용한 무누수 텍스트 추출 로직 (메모리 최적화)
     function extractMnemonicsFast(htmlString) {
       if (!htmlString) return [];
-      const doc = domParser.parseFromString(htmlString, 'text/html');
+      // [최적화] DOM 트리 생성 전 용량이 큰 img 태그들을 원천 삭제하여 파싱 부하 대폭 절감
+      const safeHtml = htmlString.replace(/<img[^>]*>/gi, '');
+      const doc = domParser.parseFromString(safeHtml, 'text/html');
       let results = [];
       let currentStr = '';
 
@@ -406,7 +439,7 @@
       });
     }
 
-    // 메인 스레드 멈춤 방지를 위해 청크(Chunk) 처리 적용
+    // 메인 스레드 멈춤 방지를 위해 청크(Chunk) 처리 적용 + Blob 변환
     async function load5R() {
       let items = await fetchFromIndexedDB('5RChecklistDB', 'items');
       const results = [];
@@ -419,8 +452,8 @@
           results.push({
             source: '5R',
             topic: item.topic || '(토픽 없음)',
-            def: item.definition || '',
-            mnemonicDetail: item.mnemonic || '',
+            def: convertBase64ToBlobUrl(item.definition || ''),
+            mnemonicDetail: convertBase64ToBlobUrl(item.mnemonic || ''),
             tags: tags,
             searchStr: `${stripHTML(item.topic)} ${stripHTML(item.definition)} ${stripHTML(item.mnemonic)}`.toLowerCase()
           });
@@ -444,8 +477,8 @@
           results.push({
             source: 'Keynote',
             topic: note.topic || note.title || '(토픽 없음)',
-            def: note.definition || '',
-            mnemonicDetail: note.mnemonic || '',
+            def: convertBase64ToBlobUrl(note.definition || ''),
+            mnemonicDetail: convertBase64ToBlobUrl(note.mnemonic || ''),
             tags: tags,
             searchStr: `${stripHTML(note.topic || note.title)} ${stripHTML(note.definition)} ${stripHTML(note.mnemonic)}`.toLowerCase()
           });
@@ -459,8 +492,8 @@
               results.push({
                 source: 'Keynote',
                 topic: it.problem || '(토픽 없음)',
-                def: it.concept || '',
-                mnemonicDetail: it.solution || '', 
+                def: convertBase64ToBlobUrl(it.concept || ''),
+                mnemonicDetail: convertBase64ToBlobUrl(it.solution || ''), 
                 tags: tags,
                 searchStr: `${stripHTML(it.problem)} ${stripHTML(it.lead)} ${stripHTML(it.concept)} ${stripHTML(it.solution)}`.toLowerCase()
               });
@@ -486,8 +519,8 @@
           results.push({
             source: 'Drill',
             topic: q.topic || '(토픽 없음)',
-            def: q.def || '',
-            mnemonicDetail: q.keys || '',
+            def: convertBase64ToBlobUrl(q.def || ''),
+            mnemonicDetail: convertBase64ToBlobUrl(q.keys || ''),
             tags: tags,
             searchStr: `${stripHTML(q.topic)} ${stripHTML(q.def)} ${stripHTML(q.keys)}`.toLowerCase()
           });
@@ -500,9 +533,10 @@
     }
 
     async function loadAllDatabases() {
-      // 리로드 시 기존 데이터를 비워주어 GC가 메모리를 회수할 수 있도록 조치
+      // [최적화] 리로드 시 기존 데이터를 비워주어 GC가 메모리를 회수할 수 있도록 조치
       globalDictionary = [];
       filteredDictionary = [];
+      clearActiveBlobs(); // 이전 로드 시 생성된 가상 객체 URL 완전 파기
       
       const listContainer = document.getElementById('dictionaryList');
       listContainer.innerHTML = '<div style="text-align: center; padding: 50px; color: var(--text-muted);"><i class="ph ph-spinner ph-spin" style="font-size: 24px;"></i> 데이터를 불러오고 있습니다...</div>';
