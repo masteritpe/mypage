@@ -64,12 +64,18 @@ header .brand i { font-size: 22px; color: var(--accent); }
 .empty-content { text-align: center; max-width: 400px; }
 
 /* Components */
-.item-card { padding: 16px; margin-bottom: 8px; border-radius: var(--radius-md); cursor: pointer; border: 1px solid transparent; background: #fff; transition: 0.2s; }
+.item-card { position: relative; padding: 16px; margin-bottom: 8px; border-radius: var(--radius-md); cursor: grab; border: 1px solid transparent; background: #fff; transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s; }
+.item-card:active { cursor: grabbing; }
 .item-card:hover { transform: translateY(-2px); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
 .item-card.active { border-color: var(--accent-light); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); position: relative; }
 .item-card.active::before { content: ''; position: absolute; left: 0; top: 12px; bottom: 12px; width: 4px; background: var(--accent); border-radius: 0 4px 4px 0; }
-.item-header { display: flex; justify-content: space-between; margin-bottom: 6px; align-items: center; }
-.item-title { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+.item-header { display: flex; justify-content: space-between; margin-bottom: 6px; align-items: center; padding-right: 24px; }
+.item-title { font-size: 15px; font-weight: 600; margin-bottom: 6px; padding-right: 24px; }
+
+/* List Delete Button */
+.btn-list-del { position: absolute; right: 12px; top: 14px; background: transparent; border: none; color: #cbd5e1; cursor: pointer; opacity: 0; transition: 0.2s; font-size: 14px; padding: 4px; border-radius: 4px; }
+.item-card:hover .btn-list-del { opacity: 1; }
+.btn-list-del:hover { color: #ef4444; background: #fee2e2; }
 
 .form-group { margin-bottom: 30px; }
 .grid-cols-3 { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 16px; }
@@ -135,10 +141,6 @@ header .brand i { font-size: 22px; color: var(--accent); }
 /* Modals */
 .modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(2px); z-index: 1000; display: none; align-items: center; justify-content: center; }
 .modal-box { background: #fff; width: 500px; padding: 32px; border-radius: 16px; }
-.image-viewer-content { position: relative; max-width: 90%; max-height: 90%; display: flex; flex-direction: column; align-items: center; gap: 16px; }
-.image-viewer-content img { max-width: 100%; max-height: 80vh; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); object-fit: contain; background: white; }
-.image-viewer-close { position: absolute; top: -40px; right: 0; background: none; border: none; color: white; font-size: 32px; cursor: pointer; padding: 8px; transition: color 0.2s; }
-.image-viewer-close:hover { color: #D1D5DB; }
 
 /* 토스트 위치 중앙 하단으로 변경 */
 #toast { position: fixed; bottom: -50px; left: 50%; transform: translateX(-50%); background: #1e293b; color: #fff; padding: 12px 24px; border-radius: 8px; opacity: 0; transition: 0.3s; z-index: 2000; pointer-events: none; }
@@ -157,12 +159,12 @@ header .brand i { font-size: 22px; color: var(--accent); }
     .p-meta div { margin-bottom: 2px; }
     
     .p-body { font-size: 11pt; line-height: 1.65; margin-bottom: 20px; word-break: keep-all; color: #000; }
-    .p-body img { max-width: 100% !important; height: auto; display: block; margin: 10px auto; }
+    /* 원본 사이즈 유지, 페이지 넘어가면 축소 지원 (max-height 제한) */
+    .p-body img, .p-img-item img { width: auto !important; height: auto !important; max-width: 100% !important; max-height: 250mm !important; object-fit: contain; display: block; margin: 10px auto; }
     .p-note { border: 2px solid #334155; padding: 15px; background: #f8fafc; border-radius: 8px; margin-top: 20px; page-break-inside: avoid; }
     
     .p-img-wrapper { display: flex; flex-direction: column; gap: 20px; margin-top: 20px; }
     .p-img-item { text-align: center; page-break-inside: avoid; border: 1px solid #eee; padding: 5px; }
-    .p-img-item img { max-width: 100%; max-height: 500px; height: auto; }
 }
 </style>
 </head>
@@ -172,6 +174,9 @@ header .brand i { font-size: 22px; color: var(--accent); }
     <div class="brand"><i class="fas fa-layer-group"></i> Tech Note</div>
     <div style="display:flex; gap:10px;">
         <button class="btn btn-secondary" onclick="document.getElementById('shortcut-modal').style.display='flex'"><i class="fas fa-keyboard"></i> 단축키</button>
+        <button class="btn btn-secondary" id="btn-backup"><i class="fas fa-download"></i> 백업</button>
+        <button class="btn btn-secondary" id="btn-restore"><i class="fas fa-upload"></i> 복원</button>
+        <input type="file" id="inp-restore" accept=".json" style="display:none;">
         <button class="btn btn-secondary btn-icon" id="btn-settings" title="Settings"><i class="fas fa-cog"></i></button>
         <button class="btn btn-secondary" id="btn-export"><i class="fas fa-file-excel" style="color:#10b981"></i> Excel</button>
     </div>
@@ -326,7 +331,9 @@ header .brand i { font-size: 22px; color: var(--accent); }
         <ul style="font-size: 14px; color: var(--text-main); padding-left: 20px; line-height: 2; margin: 0;">
             <li><b>새 문서:</b> Ctrl + Alt + N</li>
             <li><b>저장하기:</b> Ctrl + S</li>
-            <li><b>글자 확대/축소:</b> Ctrl + ➕ / ➖</li>
+            <li><b>리스트 순서 조정:</b> 항목을 드래그 앤 드롭</li>
+            <li><b>글자/이미지 확대 및 축소:</b> Ctrl + ➕ / ➖</li>
+            <li><b>모달 이미지 스크롤:</b> 방향키 (↑, ↓, ←, →)</li>
             <li><b>다이어그램 붙여넣기:</b> 에디터 외부 클릭 후 Ctrl + V</li>
             <li><b>이미지 크게 보기:</b> 에디터/다이어그램 내 이미지 <b>더블클릭</b></li>
             <li><b>에디터 굵게:</b> Ctrl + B</li>
@@ -339,14 +346,17 @@ header .brand i { font-size: 22px; color: var(--accent); }
     </div>
 </div>
 
-<div id="imageViewerModal" class="modal-overlay" onclick="closeImageViewer()" style="z-index: 9999; background: rgba(0,0,0,0.85);">
-    <div class="image-viewer-content" onclick="event.stopPropagation()">
-      <div style="position: absolute; top: -45px; left: 0; display: flex; gap: 8px;">
-          <button class="btn btn-secondary" style="height: 32px;" onclick="copyViewerImage()"><i class="fas fa-copy"></i> 복사</button>
-          <button class="btn btn-secondary" style="height: 32px;" onclick="downloadViewerImage()"><i class="fas fa-download"></i> 저장</button>
-      </div>
-      <button class="image-viewer-close" onclick="closeImageViewer()"><i class="fas fa-times"></i></button>
-      <img id="imageViewerImg" src="" alt="확대된 이미지">
+<!-- Scroll이 가능하도록 구조가 변경된 이미지 뷰어 모달 -->
+<div id="imageViewerModal" class="modal-overlay" style="z-index: 9999; background: rgba(0,0,0,0.85);">
+    <div style="position: absolute; top: 0; left: 0; right: 0; padding: 20px; display: flex; gap: 10px; justify-content: center; z-index: 10000; background: linear-gradient(rgba(0,0,0,0.7), transparent);">
+        <button class="btn btn-secondary" onclick="copyViewerImage()"><i class="fas fa-copy"></i> 복사</button>
+        <button class="btn btn-secondary" onclick="downloadViewerImage()"><i class="fas fa-download"></i> 저장</button>
+        <button class="btn btn-secondary" onclick="closeImageViewer()"><i class="fas fa-times"></i> 닫기</button>
+    </div>
+    <!-- overflow: auto를 통해 사이즈 초과 시 스크롤바가 자동 생성됨 -->
+    <div id="imageViewerScroll" style="width: 100%; height: 100%; overflow: auto; text-align: center; padding: 80px 20px 40px 20px; box-sizing: border-box;" onclick="closeImageViewer()">
+        <!-- width 픽셀값을 직접 핸들링하도록 변경 -->
+        <img id="imageViewerImg" src="" alt="확대된 이미지" onclick="event.stopPropagation()" style="display: inline-block; max-width: 100%; max-height: 80vh; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); background: white; transition: width 0.2s ease, max-width 0.2s ease, max-height 0.2s ease;">
     </div>
 </div>
 
@@ -422,6 +432,7 @@ const customBindings = {
 let quillBody, quillNote;
 let activeTargetImage = null;
 let currentEditorFontSize = 16; 
+let currentViewerZoom = 1;
 
 const imgToolbar = document.getElementById('img-toolbar');
 const btnHl = document.getElementById('btn-hl-img');
@@ -468,10 +479,30 @@ btnClr.onclick = (e) => {
     }
 };
 
+// 이미지 모달 열기 함수
+function openImageViewer(src) {
+    const img = document.getElementById('imageViewerImg');
+    img.src = src;
+    
+    // Zoom 및 크기 초기화
+    currentViewerZoom = 1;
+    img.style.width = 'auto';
+    img.style.maxWidth = '100%';
+    img.style.maxHeight = '80vh';
+    
+    const modal = document.getElementById('imageViewerModal');
+    modal.style.display = 'block'; 
+    
+    const scrollArea = document.getElementById('imageViewerScroll');
+    if (scrollArea) {
+        scrollArea.scrollTop = 0;
+        scrollArea.scrollLeft = 0;
+    }
+}
+
 document.addEventListener('dblclick', function(e) {
     if (e.target.tagName === 'IMG' && e.target.closest('.ql-editor')) {
-        document.getElementById('imageViewerImg').src = e.target.src;
-        document.getElementById('imageViewerModal').style.display = 'flex';
+        openImageViewer(e.target.src);
         window.getSelection().removeAllRanges();
     }
 }, true);
@@ -633,6 +664,11 @@ const App = {
         $('btn-print').onclick = () => this.printView();
         $('btn-export').onclick = () => this.exportExcel();
         
+        // JSON Backup and Restore binding
+        $('btn-backup').onclick = () => this.backupJson();
+        $('btn-restore').onclick = () => $('inp-restore').click();
+        $('inp-restore').onchange = (e) => this.restoreJson(e);
+        
         $('item-list').onclick = e => { const card = e.target.closest('.item-card'); if(card) this.load(card.dataset.uid); };
         $('search-input').onkeyup = e => { this.state.search = e.target.value.toLowerCase(); this.renderList(); };
         $('filter-domain').onchange = e => { this.state.filter = e.target.value; this.renderList(); };
@@ -681,6 +717,22 @@ const App = {
             const isCmdCtrl = isMac ? e.metaKey : e.ctrlKey;
             const isAlt = e.altKey;
             
+            const viewerModal = document.getElementById('imageViewerModal');
+
+            // 이미지 모달 화살표 키 스크롤 기능
+            if (viewerModal && viewerModal.style.display === 'block') {
+                if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+                    e.preventDefault();
+                    const scrollArea = document.getElementById('imageViewerScroll');
+                    const step = 80;
+                    if (e.key === 'ArrowUp') scrollArea.scrollTop -= step;
+                    if (e.key === 'ArrowDown') scrollArea.scrollTop += step;
+                    if (e.key === 'ArrowLeft') scrollArea.scrollLeft -= step;
+                    if (e.key === 'ArrowRight') scrollArea.scrollLeft += step;
+                    return;
+                }
+            }
+
             if(isCmdCtrl && !isAlt && e.key.toLowerCase() === 's') { e.preventDefault(); this.save(); return; }
             if(isCmdCtrl && isAlt && e.key.toLowerCase() === 'n') { e.preventDefault(); this.formNew(); return; }
 
@@ -730,9 +782,28 @@ const App = {
 
             if (isCmdCtrl && !isAlt && (e.key === '+' || e.key === '=' || e.key === '-')) {
                 e.preventDefault(); 
-                if (e.key === '+' || e.key === '=') currentEditorFontSize = Math.min(currentEditorFontSize + 1, 30); 
-                else if (e.key === '-') currentEditorFontSize = Math.max(currentEditorFontSize - 1, 10); 
-                document.documentElement.style.setProperty('--editor-font-size', currentEditorFontSize + 'px');
+                if (viewerModal && viewerModal.style.display === 'block') {
+                    // 모달 이미지 실제 크기(width)를 조작하여 스크롤 가능하게 함
+                    if (e.key === '+' || e.key === '=') currentViewerZoom += 0.25; 
+                    else if (e.key === '-') currentViewerZoom = Math.max(0.25, currentViewerZoom - 0.25); 
+                    
+                    const img = document.getElementById('imageViewerImg');
+                    if (currentViewerZoom <= 1) {
+                        img.style.width = 'auto';
+                        img.style.maxWidth = '100%';
+                        img.style.maxHeight = '80vh';
+                    } else {
+                        // 확대 시 제한을 풀고 픽셀 값을 직접 넣어 스크롤 바운더리를 생성함
+                        img.style.maxWidth = 'none';
+                        img.style.maxHeight = 'none';
+                        img.style.width = (img.naturalWidth * currentViewerZoom) + 'px';
+                    }
+                } else {
+                    // 에디터 폰트 크기 확대/축소
+                    if (e.key === '+' || e.key === '=') currentEditorFontSize = Math.min(currentEditorFontSize + 1, 30); 
+                    else if (e.key === '-') currentEditorFontSize = Math.max(currentEditorFontSize - 1, 10); 
+                    document.documentElement.style.setProperty('--editor-font-size', currentEditorFontSize + 'px');
+                }
                 return;
             }
             if (isCmdCtrl && e.type === 'wheel') e.preventDefault();
@@ -744,9 +815,107 @@ const App = {
         }, { passive: false });
     },
 
+    backupJson: function() {
+        const filter = this.state.filter;
+        let itemsToExport = this.state.items;
+        let filename = `TechNote_Backup_${new Date().toISOString().slice(0,10)}.json`;
+        
+        if (filter) {
+            itemsToExport = itemsToExport.filter(i => i.domain === filter);
+            filename = `TechNote_${filter}_${new Date().toISOString().slice(0,10)}.json`;
+        }
+
+        if (itemsToExport.length === 0) {
+            return alert('백업할 데이터가 없습니다.');
+        }
+
+        const dataStr = JSON.stringify(itemsToExport, null, 2);
+        const blob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    },
+
+    restoreJson: function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            try {
+                const data = JSON.parse(event.target.result);
+                if (!Array.isArray(data)) throw new Error('올바른 배열 형태의 데이터가 아닙니다.');
+                
+                let count = 0;
+                for (const item of data) {
+                    if (item.uid && item.title) {
+                        await DB.put(item); 
+                        count++;
+                    }
+                }
+                await this.refresh();
+                this.toast(`${count}개의 토픽이 성공적으로 복원(업데이트/추가)되었습니다.`);
+            } catch (error) {
+                alert('올바른 JSON 백업 파일이 아닙니다.');
+                console.error(error);
+            }
+            e.target.value = ''; 
+        };
+        reader.readAsText(file);
+    },
+
+    // Drag & Drop 처리
+    reorderItems: async function(draggedUid, targetUid, isBefore) {
+        const dragged = this.state.items.find(x => x.uid === draggedUid);
+        const target = this.state.items.find(x => x.uid === targetUid);
+        if(!dragged || !target) return;
+
+        const visibleCards = Array.from(document.querySelectorAll('.item-card')).map(c => c.dataset.uid);
+        const draggedIdx = visibleCards.indexOf(draggedUid);
+        let targetIdx = visibleCards.indexOf(targetUid);
+        
+        if (draggedIdx === -1 || targetIdx === -1) return;
+        
+        // 현재 보여지는 목록에서 항목 재배치
+        visibleCards.splice(draggedIdx, 1);
+        targetIdx = visibleCards.indexOf(targetUid);
+        const insertIdx = isBefore ? targetIdx : targetIdx + 1;
+        visibleCards.splice(insertIdx, 0, draggedUid);
+        
+        const prevUid = visibleCards[insertIdx - 1];
+        const nextUid = visibleCards[insertIdx + 1];
+        
+        let prevOrder = prevUid ? this.state.items.find(x => x.uid === prevUid).order : null;
+        let nextOrder = nextUid ? this.state.items.find(x => x.uid === nextUid).order : null;
+        
+        // order 값 재계산
+        if (prevOrder !== null && nextOrder !== null) {
+            dragged.order = (prevOrder + nextOrder) / 2;
+        } else if (prevOrder !== null) {
+            dragged.order = prevOrder - 1000;
+        } else if (nextOrder !== null) {
+            dragged.order = nextOrder + 1000;
+        }
+        
+        await DB.put(dragged);
+        await this.refresh();
+    },
+
     refresh: async function() {
         this.state.items = await DB.getAll();
-        this.state.items.sort((a,b) => b.uid.localeCompare(a.uid));
+        
+        // order 값이 없는 기존 항목 초기화 (uid를 기준으로 부여)[cite: 1]
+        this.state.items.forEach(item => {
+            if (item.order === undefined) item.order = parseFloat(item.uid) || 0;
+        });
+        
+        // order 기준으로 내림차순 정렬 (값이 클수록 상단)
+        this.state.items.sort((a,b) => b.order - a.order);
         this.renderList();
         document.getElementById('total-count').textContent = this.state.items.length;
     },
@@ -761,10 +930,78 @@ const App = {
         }).forEach(i => {
             const card = document.createElement('div');
             card.className = `item-card ${i.uid === selectedUid ? 'active' : ''}`; card.dataset.uid = i.uid;
+            
+            // Drag and Drop 속성 적용
+            card.draggable = true;
+            card.ondragstart = (e) => {
+                e.dataTransfer.setData('text/plain', i.uid);
+                e.dataTransfer.effectAllowed = 'move';
+                setTimeout(() => card.style.opacity = '0.4', 0);
+            };
+            card.ondragend = (e) => {
+                card.style.opacity = '';
+                document.querySelectorAll('.item-card').forEach(c => {
+                    c.style.borderTop = '';
+                    c.style.borderBottom = '';
+                });
+            };
+            card.ondragover = (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                const rect = card.getBoundingClientRect();
+                const isBefore = (e.clientY < rect.top + rect.height / 2);
+                
+                document.querySelectorAll('.item-card').forEach(c => {
+                    c.style.borderTop = '';
+                    c.style.borderBottom = '';
+                });
+                
+                if (isBefore) card.style.borderTop = '2px solid var(--accent)';
+                else card.style.borderBottom = '2px solid var(--accent)';
+            };
+            card.ondragleave = (e) => {
+                card.style.borderTop = '';
+                card.style.borderBottom = '';
+            };
+            card.ondrop = async (e) => {
+                e.preventDefault();
+                card.style.borderTop = '';
+                card.style.borderBottom = '';
+                const draggedUid = e.dataTransfer.getData('text/plain');
+                if (draggedUid && draggedUid !== i.uid) {
+                    const rect = card.getBoundingClientRect();
+                    const isBefore = (e.clientY < rect.top + rect.height / 2);
+                    await App.reorderItems(draggedUid, i.uid, isBefore);
+                }
+            };
+            
+            // 삭제 아이콘 버튼 추가
             card.innerHTML = `
+                <button class="btn-list-del" title="삭제"><i class="fas fa-trash-alt"></i></button>
                 <div class="item-header"><span class="item-dom" style="font-weight:700; color:#475569; font-size:12px;">${i.domain || 'N/A'}</span></div>
                 <div class="item-title">${i.title || '(No Title)'}</div>
                 <div style="font-size:11px; color:#94a3b8;"><span style="background:#f1f5f9; padding:2px 6px; border-radius:4px; margin-right:6px; color:#6366f1;">${i.docId}</span>${i.source || '-'}</div>`;
+            
+            // 아이콘 클릭 시 리스트에서 바로 삭제하는 로직
+            const delBtn = card.querySelector('.btn-list-del');
+            delBtn.onclick = async (e) => {
+                e.stopPropagation(); // 카드 클릭이 트리거되지 않도록 방지
+                if(confirm(`'${i.title}' 토픽을 정말 삭제하시겠습니까?`)) {
+                    await DB.delete(i.uid);
+                    
+                    // 현재 열려있는 토픽을 삭제한 경우 에디터 초기화
+                    if (this.state.selectedUid === i.uid) {
+                        this.state.selectedUid = null;
+                        document.getElementById('empty-state').style.display = 'flex';
+                        document.getElementById('btn-delete').classList.add('hidden');
+                        ['inp-uid','inp-id','inp-source','inp-title', 'inp-domain'].forEach(id=>document.getElementById(id).value='');
+                        quillBody.setContents([]);
+                        quillNote.setContents([]);
+                    }
+                    await this.refresh();
+                }
+            };
+
             el.appendChild(card);
         });
     },
@@ -830,8 +1067,13 @@ const App = {
         const title = document.getElementById('inp-title').value.trim();
         if(!title) return this.toast('토픽 제목을 입력해주세요.');
 
+        // 기존 항목의 order 유지, 신규일 경우 현재 시간을 할당[cite: 1]
+        const existingItem = this.state.items.find(i => i.uid === document.getElementById('inp-uid').value);
+        const orderValue = existingItem && existingItem.order !== undefined ? existingItem.order : Date.now();
+
         const item = {
             uid: document.getElementById('inp-uid').value || Date.now().toString(),
+            order: orderValue,
             domain: document.getElementById('inp-domain').value,
             docId: document.getElementById('inp-id').value,
             source: document.getElementById('inp-source').value,
@@ -881,8 +1123,7 @@ const App = {
             const div = document.createElement('div'); div.className = 'img-thumb-box';
             div.innerHTML = `<img src="${f.data}"><button class="btn-del-img"><i class="fas fa-times"></i></button>`;
             div.querySelector('img').onclick = () => { 
-                document.getElementById('imageViewerImg').src = f.data; 
-                document.getElementById('imageViewerModal').style.display = 'flex'; 
+                openImageViewer(f.data);
             };
             div.querySelector('.btn-del-img').onclick = (e) => { e.stopPropagation(); currentFiles.splice(i, 1); this.renderFiles(); };
             grid.appendChild(div);
