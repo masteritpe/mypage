@@ -185,6 +185,7 @@ window.MathJax = {
                     <option value="dueum">📚 두음마스터</option>
                     <option value="fiver">📘 5R</option>
                     <option value="drill">📝 Drill</option>
+                    <option value="technote">📑 technote</option>
                     <option value="chat">💬 Chat</option>
                     <option value="ismsp">🛡️ ISMS-P</option>
                     <option value="link">🔗 Link</option>
@@ -301,7 +302,7 @@ window.MathJax = {
     let mdDirHandle = null; 
     let toastTimeout = null;
 
-    const defaultCategories = ["IT기술", "정보처리", "기출문제", "문제분석", "에세이"];
+    const defaultCategories = ["IT기술", "정보처리", "기출문제", "문제분석", "에세이", "technote"];
 
     document.addEventListener('keydown', function(e) {
         if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'n') {
@@ -575,9 +576,78 @@ window.MathJax = {
         else if (type === 'dueum') handleDueumImport(event);
         else if (type === 'fiver') handle5RImport(event);
         else if (type === 'drill') handleDrillImport(event);
+        else if (type === 'technote') handleTechnoteImport(event);
         else if (type === 'chat') handleChatImport(event);
         else if (type === 'ismsp') handleIsmspImport(event);
         else if (type === 'link') handleLinkImport(event);
+    }
+
+    function handleTechnoteImport(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const fileNameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                let jsonArr = JSON.parse(e.target.result);
+                if (!Array.isArray(jsonArr)) throw new Error("배열 형태의 데이터가 아닙니다.");
+
+                const today = new Date().toISOString().split('T')[0];
+                document.getElementById('issueDate').value = today;
+                
+                // 테크노트 포스트 제목 포맷 설정
+                let postTitleStr = fileNameWithoutExt;
+                if (jsonArr.length > 0) {
+                    const firstTitle = jsonArr[0].title || '제목없음';
+                    postTitleStr = jsonArr.length === 1 ? `TechNote(${firstTitle})` : `TechNote(${firstTitle} 외)`;
+                }
+                document.getElementById('postTitle').value = postTitleStr;
+                
+                // 지정된 카테고리/태그 설정
+                setCategoryAndTag('technote', 'technote');
+                document.getElementById('articlesContainer').innerHTML = ''; 
+                articleCount = 0;
+                
+                if (jsonArr.length > 0) {
+                    for (let index = 0; index < jsonArr.length; index++) {
+                        const item = jsonArr[index];
+                        const title = item.title ? `[${item.domain || '미분류'}] ${item.title}` : `Tech Note ${index + 1}`;
+                        let content = '';
+                        
+                        let rawBody = await processEmbeddedImages(item.body || '', `TN_${index+1}_B`);
+                        let rawNote = await processEmbeddedImages(item.note || '', `TN_${index+1}_N`);
+                        
+                        let bodyMd = convertHtmlToMd(rawBody).trim();
+                        let noteMd = convertHtmlToMd(rawNote).trim();
+                        
+                        if (bodyMd) content += `**[상세 내용]**\n\n${bodyMd}\n\n`;
+                        if (noteMd) content += `**[핵심 요약]**\n\n${noteMd}\n\n`;
+                        
+                        // 첨부된 이미지 데이터 파싱
+                        if (item.files && item.files.length > 0) {
+                            item.files.forEach((fileObj, fIdx) => {
+                                if (fileObj.data) {
+                                    let cleanImg = fileObj.data.replace(/\s+/g, '');
+                                    content += `![TN_image_${index + 1}_${fIdx + 1}](${cleanImg})\n\n`;
+                                }
+                            });
+                        }
+                        
+                        addArticle({ title: title, content: content.trim(), visualType: 'none' });
+                    }
+                } else { 
+                    addArticle(); 
+                }
+                showToast("✅ technote JSON 데이터를 성공적으로 불러왔습니다.");
+                jsonArr = null;
+            } catch (error) { 
+                alert("JSON 파일 파싱 중 오류가 발생했습니다."); 
+            }
+            e.target.result = null;
+            event.target.value = '';
+        };
+        reader.readAsText(file);
     }
 
     function handleChatImport(event) {
@@ -1306,7 +1376,7 @@ window.MathJax = {
         
         let articlesMd = [];
         
-        const jsonCategories = ["키노트", "두음마스터", "5R", "Drill", "Chat", "ISMS-P", "Link"];
+        const jsonCategories = ["키노트", "두음마스터", "5R", "Drill", "Chat", "ISMS-P", "Link", "technote"];
         const isJsonImportCategory = jsonCategories.includes(data.category);
 
         data.articles.forEach((art, index) => {

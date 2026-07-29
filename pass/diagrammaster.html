@@ -301,8 +301,15 @@
     <button class="btn btn-secondary" id="btnNew"><i class="ph ph-plus"></i> 새 항목</button>
     <button class="btn btn-secondary" id="btnExcelImport"><i class="ph ph-file-arrow-up"></i> 불러오기</button>
     <button class="btn btn-secondary" id="btnExcelExport"><i class="ph ph-file-arrow-down"></i> 다운로드</button>
+    
+    <!-- JSON 백업/복원 버튼 추가 -->
+    <button class="btn btn-secondary" id="btnJsonExport"><i class="ph ph-brackets-curly"></i> JSON 백업</button>
+    <button class="btn btn-secondary" id="btnJsonImport"><i class="ph ph-brackets-curly"></i> JSON 복원</button>
+    
     <button class="btn btn-primary" id="btnSave"><i class="ph ph-floppy-disk"></i> 저장하기</button>
+    
     <input type="file" id="excelInput" hidden accept=".xlsx">
+    <input type="file" id="jsonInput" hidden accept=".json">
   </div>
 </header>
 
@@ -644,6 +651,59 @@
     } catch(err) { console.error(err); showToast("<i class='ph ph-warning-circle'></i> 불러오기 실패"); }
   };
 
+  // === JSON 백업 및 복원 기능 ===
+  const exportToJson = () => {
+    const filter = document.getElementById('explorerTypeFilter').value; 
+    const search = document.getElementById('explorerSearch').value.toLowerCase();
+    const filteredItems = allItems.filter(i => (filter === 'ALL' || i.type === filter) && i.topic.toLowerCase().includes(search));
+    
+    if (filteredItems.length === 0) return showToast("<i class='ph ph-warning-circle'></i> 백업할 데이터가 없습니다.");
+    
+    const dataStr = JSON.stringify(filteredItems, null, 2);
+    const blob = new Blob([dataStr], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `DiagramBackup_${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    
+    URL.revokeObjectURL(url);
+    showToast("<i class='ph ph-download-simple'></i> JSON 백업 완료");
+  };
+
+  const importFromJson = (e) => {
+    const file = e.target.files[0]; 
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const items = JSON.parse(ev.target.result);
+        if (!Array.isArray(items)) throw new Error("Invalid JSON format");
+        
+        const tx = db.transaction("diagrams", "readwrite");
+        const store = tx.objectStore("diagrams");
+        let count = 0;
+        
+        items.forEach(item => {
+          store.put(item); 
+          count++;
+        });
+        
+        tx.oncomplete = () => { 
+          showToast(`<i class='ph ph-check-circle'></i> ${count}개 복원 완료`); 
+          loadExplorerData(); 
+          e.target.value = ""; 
+        };
+      } catch (err) {
+        console.error(err);
+        showToast("<i class='ph ph-warning-circle'></i> JSON 복원 실패");
+      }
+    };
+    reader.readAsText(file);
+  };
+
   const loadExplorerData = () => { db.transaction("diagrams").objectStore("diagrams").getAll().onsuccess = (e) => { allItems = e.target.result; renderExplorer(); }; };
   
   function renderExplorer() {
@@ -790,6 +850,12 @@
   document.getElementById('btnExcelExport').onclick = exportToExcel;
   document.getElementById('btnExcelImport').onclick = () => document.getElementById('excelInput').click();
   document.getElementById('excelInput').onchange = importFromExcel;
+  
+  // JSON 백업/복원 이벤트 바인딩
+  document.getElementById('btnJsonExport').onclick = exportToJson;
+  document.getElementById('btnJsonImport').onclick = () => document.getElementById('jsonInput').click();
+  document.getElementById('jsonInput').onchange = importFromJson;
+
   document.getElementById('dropZone').onclick = () => document.getElementById('fileInput').click();
   document.getElementById('fileInput').onchange = (e) => { const f = e.target.files[0]; if(f){ const r = new FileReader(); r.onload = (ev) => { currentImage = ev.target.result; document.getElementById('diagramView').innerHTML = `<img src="${currentImage}">`; }; r.readAsDataURL(f); } };
   

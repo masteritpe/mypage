@@ -1938,21 +1938,64 @@
     function importJSON(event) {
       const file = event.target.files[0]; 
       if (!file) return;
+      
       const reader = new FileReader();
       reader.onload = function(e) {
         try {
           const importedNote = JSON.parse(e.target.result);
-          if (!importedNote.items || !Array.isArray(importedNote.items)) return alert("유효한 키노트 백업 파일이 아닙니다."); 
-          importedNote.id = generateId(); 
-          importedNote.date = new Date().toISOString();
+          if (!importedNote.items || !Array.isArray(importedNote.items)) {
+            return alert("유효한 키노트 백업 파일이 아닙니다."); 
+          }
+
           const transaction = db.transaction(['notes'], 'readwrite'); 
-          transaction.objectStore('notes').put(importedNote);
+          const store = transaction.objectStore('notes');
+          const request = store.openCursor();
+          
+          let isUpdated = false;
+
+          request.onsuccess = (ev) => {
+            const cursor = ev.target.result;
+            
+            // 1. DB를 순회하며 동일한 타이틀이 있는지 검사
+            if (cursor && !isUpdated) {
+              if (cursor.value.title === importedNote.title) {
+                importedNote.id = cursor.value.id; // 기존 문서의 ID를 사용하여 업데이트 처리
+                isUpdated = true;
+              } else {
+                cursor.continue();
+                return;
+              }
+            }
+
+            // 2. 동일한 타이틀이 없으면 백업 파일의 ID를 쓰거나 새로 생성
+            if (!isUpdated) {
+              importedNote.id = importedNote.id || generateId();
+            }
+            
+            importedNote.date = new Date().toISOString();
+            
+            // 3. 덮어쓰기 또는 새로 추가
+            store.put(importedNote);
+          };
+
           transaction.oncomplete = () => { 
-            alert('키노트가 성공적으로 복원되었습니다.'); 
+            if (isUpdated) {
+              alert(`'${importedNote.title}' 문서가 성공적으로 업데이트되었습니다.`);
+            } else {
+              alert('새로운 키노트가 성공적으로 복원 및 추가되었습니다.'); 
+            }
             currentNoteId = importedNote.id; 
             renderNoteList().then(() => { loadNote(importedNote); }); 
           };
-        } catch (err) { alert("파일을 읽는 중 오류가 발생했습니다: " + err.message); } 
+
+          transaction.onerror = (err) => {
+            alert("데이터베이스 처리 중 오류가 발생했습니다.");
+            console.error(err);
+          };
+
+        } catch (err) { 
+          alert("파일을 읽는 중 오류가 발생했습니다: " + err.message); 
+        } 
         event.target.value = ''; 
       }; 
       reader.readAsText(file);
