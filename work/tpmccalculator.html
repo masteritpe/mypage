@@ -148,6 +148,9 @@ header .brand i { color: var(--primary); font-size: 18px; }
         <button class="btn btn-secondary" id="btn-toggle-view"><i class="fas fa-columns"></i> 장표 한눈에 보기</button>
         <button class="btn btn-secondary" id="btn-save-img"><i class="fas fa-image" style="color:#8b5cf6"></i> 이미지 저장</button>
         <button class="btn btn-secondary" id="btn-export"><i class="fas fa-file-excel" style="color:#10b981"></i> 다운로드</button>
+        <button class="btn btn-secondary" id="btn-backup"><i class="fas fa-download" style="color:#3b82f6"></i> JSON 백업</button>
+        <button class="btn btn-secondary" id="btn-restore" onclick="document.getElementById('file-restore').click()"><i class="fas fa-upload" style="color:#f59e0b"></i> JSON 복원</button>
+        <input type="file" id="file-restore" accept=".json" style="display:none;" />
         <button class="btn btn-secondary btn-icon" id="btn-settings" title="환경설정"><i class="fas fa-cog"></i></button>
     </div>
 </header>
@@ -497,17 +500,16 @@ header .brand i { color: var(--primary); font-size: 18px; }
         };
     }
 
-    // === View Toggle ===
     function toggleView() {
         isBoardView = !isBoardView;
         const btn = $('btn-toggle-view');
-        const sidebar = document.querySelector('.pane-list'); // 추가: 사이드바 요소 선택
+        const sidebar = document.querySelector('.pane-list'); 
         
         if(isBoardView) {
             $('editor-view').style.display = 'none';
             $('editor-toolbar').style.display = 'none';
             $('board-view').classList.add('active');
-            sidebar.style.display = 'none'; // 추가: 장표 뷰일 때 사이드바 숨김
+            sidebar.style.display = 'none'; 
             btn.innerHTML = `<i class="fas fa-edit"></i> 상세 편집 모드`;
             btn.classList.add('btn-primary');
             btn.classList.remove('btn-secondary');
@@ -516,19 +518,17 @@ header .brand i { color: var(--primary); font-size: 18px; }
             $('editor-view').style.display = 'block';
             $('editor-toolbar').style.display = 'flex';
             $('board-view').classList.remove('active');
-            sidebar.style.display = 'flex'; // 추가: 편집 모드일 때 사이드바 다시 표시
+            sidebar.style.display = 'flex'; 
             btn.innerHTML = `<i class="fas fa-columns"></i> 장표 한눈에 보기`;
             btn.classList.add('btn-secondary');
             btn.classList.remove('btn-primary');
         }
     }
 
-    // === Board View Rendering (프로젝트별 그룹화) ===
     function renderBoard() {
         const board = $('board-view');
         board.innerHTML = '';
         
-        // 프로젝트명 리스트 추출
         const projects = [...new Set(dataList.map(d => d.name))].sort();
 
         projects.forEach(prjName => {
@@ -572,7 +572,6 @@ header .brand i { color: var(--primary); font-size: 18px; }
         });
     }
 
-    // === DB 연동 List & CRUD ===
     async function refreshDataList() {
         dataList = await getAllFromDB();
         renderList();
@@ -712,7 +711,51 @@ header .brand i { color: var(--primary); font-size: 18px; }
         XLSX.writeFile(wb, `Sizing_${new Date().toISOString().slice(0,10)}.xlsx`);
     }
 
-    // === 이미지 저장 기능 (스크롤 영역 전체 캡처) ===
+    function backupJSON() {
+        const term = $('search-input').value.toLowerCase();
+        const exportData = dataList.filter(d => d.name.toLowerCase().includes(term) || (d.server||'').toLowerCase().includes(term));
+
+        if (exportData.length === 0) return alert('백업할 데이터가 없습니다.');
+        
+        const dataStr = JSON.stringify(exportData, null, 2);
+        const blob = new Blob([dataStr], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `TPS_tpmC_Sizing_Backup_${new Date().toISOString().slice(0,10)}.json`;
+        link.click();
+        
+        URL.revokeObjectURL(url);
+        showToast('JSON 백업 파일이 다운로드되었습니다.', 'success');
+    }
+
+    async function restoreJSON(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+            try {
+                const importedData = JSON.parse(e.target.result);
+                if (!Array.isArray(importedData)) throw new Error("Invalid data format");
+
+                for (const item of importedData) {
+                    await putToDB(item);
+                }
+
+                await refreshDataList();
+                showToast('데이터 복원이 성공적으로 완료되었습니다.', 'success');
+            } catch (error) {
+                console.error("Restore error:", error);
+                alert("잘못된 형식의 JSON 파일이거나 복원 중 오류가 발생했습니다.");
+            } finally {
+                event.target.value = ''; 
+            }
+        };
+        reader.readAsText(file);
+    }
+
     async function saveAsImage() {
         if (!isBoardView) {
             showToast('장표 한눈에 보기 화면에서만 이미지로 저장할 수 있습니다.', 'info');
@@ -724,12 +767,10 @@ header .brand i { color: var(--primary); font-size: 18px; }
         try {
             showToast('이미지 생성을 시작합니다. 잠시만 기다려주세요.', 'info');
             
-            // 1. 원본 스타일 임시 저장
             const originalOverflow = targetEl.style.overflow;
             const originalWidth = targetEl.style.width;
             const originalHeight = targetEl.style.height;
 
-            // 2. 전체 스크롤 영역 측정을 위해 컨테이너 강제 확장
             const scrollWidth = targetEl.scrollWidth;
             const scrollHeight = targetEl.scrollHeight;
             
@@ -737,22 +778,19 @@ header .brand i { color: var(--primary); font-size: 18px; }
             targetEl.style.width = scrollWidth + 'px';
             targetEl.style.height = scrollHeight + 'px';
 
-            // 3. html2canvas 옵션에 전체 크기 명시
             const canvas = await html2canvas(targetEl, {
                 backgroundColor: '#f8fafc',
-                scale: 2, // 고해상도 처리
+                scale: 2, 
                 width: scrollWidth,
                 height: scrollHeight,
-                windowWidth: scrollWidth,    // 가상 윈도우 너비 지정
-                windowHeight: scrollHeight   // 가상 윈도우 높이 지정
+                windowWidth: scrollWidth,    
+                windowHeight: scrollHeight   
             });
             
-            // 4. 캡처 완료 후 스타일 원래대로 복구
             targetEl.style.overflow = originalOverflow;
             targetEl.style.width = originalWidth;
             targetEl.style.height = originalHeight;
 
-            // 5. 이미지 다운로드
             const link = document.createElement('a');
             link.download = `TPS_tpmC_Sizing_장표뷰_${new Date().toISOString().slice(0,10)}.png`;
             link.href = canvas.toDataURL('image/png');
@@ -765,11 +803,9 @@ header .brand i { color: var(--primary); font-size: 18px; }
         }
     }
 
-    // === App Initialization ===
     window.onload = async () => {
         loadConfig();
         
-        // 이벤트 바인딩
         [...Object.values(inps)].forEach(el => {
             if(el) el.addEventListener('input', calculate);
         });
@@ -777,8 +813,10 @@ header .brand i { color: var(--primary); font-size: 18px; }
         $('btn-new').onclick = resetForm; 
         $('btn-save').onclick = saveItem; 
         $('btn-delete').onclick = deleteItem;
-        $('btn-save-img').onclick = saveAsImage; // 이미지 저장 기능 연결
+        $('btn-save-img').onclick = saveAsImage; 
         $('btn-export').onclick = exportExcel; 
+        $('btn-backup').onclick = backupJSON;
+        $('file-restore').addEventListener('change', restoreJSON);
         $('btn-toggle-view').onclick = toggleView;
         $('search-input').onkeyup = renderList;
         $('btn-settings').onclick = () => { loadConfig(); $('settings-modal').style.display = 'flex'; };

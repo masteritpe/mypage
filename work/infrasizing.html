@@ -154,6 +154,10 @@ header .brand i { color: var(--primary); font-size: 18px; }
         <button class="btn btn-secondary" id="btn-infra-view"><i class="fas fa-network-wired"></i> 인프라 보기</button>
         <button class="btn btn-secondary" id="btn-save-img"><i class="fas fa-image" style="color:#8b5cf6"></i> 이미지 저장</button>
         <button class="btn btn-secondary" id="btn-export"><i class="fas fa-file-excel" style="color:#10b981"></i> 엑셀 다운로드</button>
+        <!-- 백업/복원 버튼 -->
+        <button class="btn btn-secondary" id="btn-backup"><i class="fas fa-download" style="color:#3b82f6"></i> JSON 백업</button>
+        <button class="btn btn-secondary" id="btn-restore" onclick="document.getElementById('file-restore').click()"><i class="fas fa-upload" style="color:#f59e0b"></i> JSON 복원</button>
+        <input type="file" id="file-restore" accept=".json" style="display:none;" />
     </div>
 </header>
 
@@ -320,7 +324,7 @@ header .brand i { color: var(--primary); font-size: 18px; }
         return new Promise((resolve) => {
             const tx = db.transaction(STORE_NAME, "readwrite");
             const store = tx.objectStore(STORE_NAME);
-            store.put(item);
+            store.put(item); // 추가 및 덮어쓰기 기능 지원
             tx.oncomplete = () => resolve();
         });
     }
@@ -1046,6 +1050,55 @@ header .brand i { color: var(--primary); font-size: 18px; }
         XLSX.writeFile(wb, `Infra_Sizing_${new Date().toISOString().slice(0,10)}.xlsx`);
     }
 
+    // === JSON 백업 및 복원 기능 추가 ===
+    function backupJSON() {
+        // 검색창의 값으로 필터링하여 좌측에 조회되는 항목만 대상으로 함
+        const term = $('search-input').value.toLowerCase();
+        const exportData = dataList.filter(d => d.name.toLowerCase().includes(term) || d.env.toLowerCase().includes(term));
+
+        if (exportData.length === 0) return alert('백업할 데이터가 없습니다.');
+        
+        // 검색된/표시된 데이터를 JSON 형식으로 변환
+        const dataStr = JSON.stringify(exportData, null, 2);
+        const blob = new Blob([dataStr], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `Infra_Sizing_Backup_${new Date().toISOString().slice(0,10)}.json`;
+        link.click();
+        
+        URL.revokeObjectURL(url);
+        showToast('JSON 백업 파일이 다운로드되었습니다.', 'success');
+    }
+
+    async function restoreJSON(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+            try {
+                const importedData = JSON.parse(e.target.result);
+                if (!Array.isArray(importedData)) throw new Error("Invalid data format");
+
+                // 복원시 기존 항목이 있으면 업데이트, 없으면 추가
+                for (const item of importedData) {
+                    await putToDB(item);
+                }
+
+                await refreshDataList();
+                showToast('데이터 복원이 성공적으로 완료되었습니다.', 'success');
+            } catch (error) {
+                console.error("Restore error:", error);
+                alert("잘못된 형식의 JSON 파일이거나 복원 중 오류가 발생했습니다.");
+            } finally {
+                event.target.value = ''; // 입력 초기화
+            }
+        };
+        reader.readAsText(file);
+    }
+
     // === 이미지 저장 기능 (스크롤 영역 전체 캡처) ===
     async function saveAsImage() {
         if (currentView === 'editor') {
@@ -1117,10 +1170,13 @@ header .brand i { color: var(--primary); font-size: 18px; }
     $('btn-toggle-view').onclick = () => setView('board');
     $('btn-infra-view').onclick = () => setView('infra');
     $('btn-save-img').onclick = saveAsImage; // 이미지 저장 이벤트 연결
+    $('btn-export').onclick = exportExcel; 
+    $('btn-backup').onclick = backupJSON; // 백업 이벤트 연결
+    $('file-restore').addEventListener('change', restoreJSON); // 복원(파일 첨부) 이벤트 연결
+    
     $('btn-new').onclick = () => resetForm(false); 
     $('btn-save').onclick = saveItem; 
     $('btn-delete').onclick = deleteItem;
-    $('btn-export').onclick = exportExcel; 
     $('search-input').onkeyup = renderList;
     $('btn-add-docker').onclick = addDockerRow;
 

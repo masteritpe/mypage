@@ -142,6 +142,9 @@ header .brand i { color: var(--primary); font-size: 18px; }
         <button class="btn btn-secondary" id="btn-toggle-view"><i class="fas fa-columns"></i> 장표 한눈에 보기</button>
         <button class="btn btn-secondary" id="btn-save-img"><i class="fas fa-image" style="color:#8b5cf6"></i> 이미지 저장</button>
         <button class="btn btn-secondary" id="btn-export"><i class="fas fa-file-excel" style="color:#10b981"></i> 엑셀 다운로드</button>
+        <button class="btn btn-secondary" id="btn-backup"><i class="fas fa-download" style="color:#3b82f6"></i> JSON 백업</button>
+        <button class="btn btn-secondary" id="btn-restore" onclick="document.getElementById('file-restore').click()"><i class="fas fa-upload" style="color:#f59e0b"></i> JSON 복원</button>
+        <input type="file" id="file-restore" accept=".json" style="display:none;" />
     </div>
 </header>
 
@@ -270,7 +273,6 @@ header .brand i { color: var(--primary); font-size: 18px; }
         });
     }
     
-    // 배열 전체의 순서(order)를 IndexedDB에 일괄 업데이트하는 함수
     function updateAllOrdersInDB() {
         return new Promise((resolve, reject) => {
             const tx = db.transaction(STORE_NAME, "readwrite");
@@ -289,9 +291,8 @@ header .brand i { color: var(--primary); font-size: 18px; }
     let stackItems = []; 
     let isBoardView = false;
     let dragStartIndex = null; 
-    let listDragStartId = null; // 리스트 드래그 앤 드롭용 상태
+    let listDragStartId = null; 
 
-    // DOM Elements
     const $ = id => document.getElementById(id);
     const inps = { env: $('inp-env'), name: $('inp-name'), os: $('inp-os') };
     const stackListContainer = $('stack-list');
@@ -304,7 +305,6 @@ header .brand i { color: var(--primary); font-size: 18px; }
         "우회": { class: "bg-bypass", hex: "#ef4444", label: "우회 (Bypass)" }
     };
 
-    // === Toast UI ===
     function showToast(message, type = 'success') {
         const container = $('toast-container');
         const toast = document.createElement('div');
@@ -318,7 +318,6 @@ header .brand i { color: var(--primary); font-size: 18px; }
 
     function generateId() { return Date.now().toString() + Math.floor(Math.random() * 1000).toString(); }
 
-    // === S/W Stack Editor Rows ===
     function renderStackRows() {
         stackListContainer.innerHTML = '';
         if(stackItems.length === 0) {
@@ -377,7 +376,6 @@ header .brand i { color: var(--primary); font-size: 18px; }
         renderStackRows();
     }
 
-    // === Left List Rendering ===
     function renderList() {
         const term = $('search-input').value.toLowerCase();
         const isSearchActive = term.trim().length > 0;
@@ -389,7 +387,6 @@ header .brand i { color: var(--primary); font-size: 18px; }
             d.stacks.some(s => s.name.toLowerCase().includes(term))
         );
         
-        // order 속성 기반으로 정렬 (drag & drop 지원)
         filtered.sort((a, b) => (a.order || 0) - (b.order || 0));
 
         const list = $('history-list'); list.innerHTML = '';
@@ -412,7 +409,6 @@ header .brand i { color: var(--primary); font-size: 18px; }
             
             const envConf = envConfig[d.env] || envConfig["운영"];
             
-            // 리스트 항목 생성 (그립 아이콘 추가하여 드래그 앤 드롭 인지 향상)
             el.innerHTML = `
                 <div class="item-head">
                     <span class="item-prj">
@@ -429,7 +425,6 @@ header .brand i { color: var(--primary); font-size: 18px; }
                 loadItem(d);
             };
 
-            // 검색 중이 아닐 때만 Drag & Drop 활성화
             if (!isSearchActive) {
                 el.draggable = true;
                 el.title = "드래그하여 순서를 변경할 수 있습니다.";
@@ -463,14 +458,11 @@ header .brand i { color: var(--primary); font-size: 18px; }
                         const endIndex = dataList.findIndex(x => x.id === dropId);
                         
                         if(startIndex > -1 && endIndex > -1) {
-                            // 배열 요소 이동
                             const [movedItem] = dataList.splice(startIndex, 1);
                             dataList.splice(endIndex, 0, movedItem);
                             
-                            // 새 순서 부여
                             dataList.forEach((item, index) => item.order = index);
                             
-                            // DB 반영 및 다시 렌더링
                             await updateAllOrdersInDB();
                             renderList();
                         }
@@ -489,7 +481,6 @@ header .brand i { color: var(--primary); font-size: 18px; }
         $('total-sw-count').textContent = totalSw;
     }
 
-    // 리스트 내 복사 버튼 (바로 밑에 복사본 추가되도록 개선)
     window.duplicateFromList = async function(id) {
         const itemIdx = dataList.findIndex(d => d.id === id);
         if(itemIdx === -1) return;
@@ -503,10 +494,9 @@ header .brand i { color: var(--primary); font-size: 18px; }
             name: item.name + ' - 복사본',
             os: item.os,
             stacks: cleanStacks,
-            order: item.order // 임시 부여
+            order: item.order 
         };
         
-        // 원본 바로 밑에 삽입 후 전체 순서 재조정
         dataList.splice(itemIdx + 1, 0, newItem);
         dataList.forEach((d, index) => d.order = index);
         
@@ -519,7 +509,6 @@ header .brand i { color: var(--primary); font-size: 18px; }
         showToast('항목이 성공적으로 복사되었습니다.', 'success');
     };
 
-    // === Board View Rendering ===
     function renderBoard() {
         const board = $('board-view');
         board.innerHTML = '';
@@ -566,7 +555,6 @@ header .brand i { color: var(--primary); font-size: 18px; }
         });
     }
 
-    // === Logic ===
     function loadItem(d) {
         selectedId = d.id;
         $('editor-title').textContent = `${d.env} ${d.name} 편집`;
@@ -611,7 +599,6 @@ header .brand i { color: var(--primary); font-size: 18px; }
         
         const cleanStacks = stackItems.filter(s => s.name.trim() !== '');
         
-        // 기존 아이템이면 원래 순서를, 새 아이템이면 맨 끝(order)을 할당
         const existingItem = dataList.find(d => d.id === selectedId);
         const itemOrder = existingItem !== undefined ? existingItem.order : dataList.length;
 
@@ -635,7 +622,6 @@ header .brand i { color: var(--primary); font-size: 18px; }
         showToast('성공적으로 저장되었습니다.', 'success');
     }
 
-    // 에디터 상단 툴바의 복사 기능
     async function copyItem() {
         if(!selectedId) return;
 
@@ -652,7 +638,7 @@ header .brand i { color: var(--primary); font-size: 18px; }
             name: inps.name.value + ' - 복사본',
             os: inps.os.value,
             stacks: cleanStacks,
-            order: dataList[itemIdx].order // 임시 부여
+            order: dataList[itemIdx].order 
         };
         
         dataList.splice(itemIdx + 1, 0, newItem);
@@ -681,7 +667,6 @@ header .brand i { color: var(--primary); font-size: 18px; }
         let needsSave = false;
         const legacyOrder = ["운영", "개발", "검증", "관리", "우회"];
         
-        // 기존 데이터에 order 속성이 없을 경우 초기화
         dataList.sort((a, b) => {
             if (a.order !== undefined && b.order !== undefined) {
                 return a.order - b.order;
@@ -705,7 +690,6 @@ header .brand i { color: var(--primary); font-size: 18px; }
         renderBoard();
     }
 
-    // === View Toggle ===
     function toggleView() {
         isBoardView = !isBoardView;
         const btn = $('btn-toggle-view');
@@ -731,7 +715,6 @@ header .brand i { color: var(--primary); font-size: 18px; }
         }
     }
 
-    // === Excel Export ===
     function exportExcel() {
         if(dataList.length === 0) return alert('추출할 데이터가 없습니다.');
         
@@ -759,7 +742,56 @@ header .brand i { color: var(--primary); font-size: 18px; }
         XLSX.writeFile(wb, `Server_SW_Stack_${new Date().toISOString().slice(0,10)}.xlsx`);
     }
 
-    // === 이미지 저장 기능 (스크롤 영역 전체 캡처) ===
+    function backupJSON() {
+        const term = $('search-input').value.toLowerCase();
+        const exportData = dataList.filter(d => 
+            d.name.toLowerCase().includes(term) || 
+            d.env.toLowerCase().includes(term) ||
+            d.os.toLowerCase().includes(term) ||
+            d.stacks.some(s => s.name.toLowerCase().includes(term))
+        );
+
+        if (exportData.length === 0) return alert('백업할 데이터가 없습니다.');
+        
+        const dataStr = JSON.stringify(exportData, null, 2);
+        const blob = new Blob([dataStr], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `Server_SW_Stack_Backup_${new Date().toISOString().slice(0,10)}.json`;
+        link.click();
+        
+        URL.revokeObjectURL(url);
+        showToast('JSON 백업 파일이 다운로드되었습니다.', 'success');
+    }
+
+    async function restoreJSON(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+            try {
+                const importedData = JSON.parse(e.target.result);
+                if (!Array.isArray(importedData)) throw new Error("Invalid data format");
+
+                for (const item of importedData) {
+                    await putToDB(item);
+                }
+
+                await refreshDataList();
+                showToast('데이터 복원이 성공적으로 완료되었습니다.', 'success');
+            } catch (error) {
+                console.error("Restore error:", error);
+                alert("잘못된 형식의 JSON 파일이거나 복원 중 오류가 발생했습니다.");
+            } finally {
+                event.target.value = ''; 
+            }
+        };
+        reader.readAsText(file);
+    }
+
     async function saveAsImage() {
         if (!isBoardView) {
             showToast('장표 한눈에 보기 화면에서만 이미지로 저장할 수 있습니다.', 'info');
@@ -771,12 +803,10 @@ header .brand i { color: var(--primary); font-size: 18px; }
         try {
             showToast('이미지 생성을 시작합니다. 잠시만 기다려주세요.', 'info');
             
-            // 1. 원본 스타일 임시 저장
             const originalOverflow = targetEl.style.overflow;
             const originalWidth = targetEl.style.width;
             const originalHeight = targetEl.style.height;
 
-            // 2. 전체 스크롤 영역 측정을 위해 컨테이너 강제 확장
             const scrollWidth = targetEl.scrollWidth;
             const scrollHeight = targetEl.scrollHeight;
             
@@ -784,22 +814,19 @@ header .brand i { color: var(--primary); font-size: 18px; }
             targetEl.style.width = scrollWidth + 'px';
             targetEl.style.height = scrollHeight + 'px';
 
-            // 3. html2canvas 옵션에 전체 크기 명시
             const canvas = await html2canvas(targetEl, {
                 backgroundColor: '#f8fafc',
-                scale: 2, // 고해상도 처리
+                scale: 2, 
                 width: scrollWidth,
                 height: scrollHeight,
-                windowWidth: scrollWidth,    // 가상 윈도우 너비 지정
-                windowHeight: scrollHeight   // 가상 윈도우 높이 지정
+                windowWidth: scrollWidth,    
+                windowHeight: scrollHeight   
             });
             
-            // 4. 캡처 완료 후 스타일 원래대로 복구
             targetEl.style.overflow = originalOverflow;
             targetEl.style.width = originalWidth;
             targetEl.style.height = originalHeight;
 
-            // 5. 이미지 다운로드
             const link = document.createElement('a');
             link.download = `SW_Stack_장표뷰_${new Date().toISOString().slice(0,10)}.png`;
             link.href = canvas.toDataURL('image/png');
@@ -812,7 +839,6 @@ header .brand i { color: var(--primary); font-size: 18px; }
         }
     }
 
-    // === Keyboard Shortcuts ===
     document.addEventListener('keydown', function(e) {
         if (e.ctrlKey && (e.key === 's' || e.key === 'S')) {
             e.preventDefault(); 
@@ -824,13 +850,14 @@ header .brand i { color: var(--primary); font-size: 18px; }
         }
     });
 
-    // Event Listeners
     $('btn-new').onclick = resetForm; 
     $('btn-save').onclick = saveItem; 
     $('btn-copy').onclick = copyItem; 
     $('btn-delete').onclick = deleteItem;
-    $('btn-save-img').onclick = saveAsImage; // 이미지 저장 이벤트 연결
+    $('btn-save-img').onclick = saveAsImage; 
     $('btn-export').onclick = exportExcel; 
+    $('btn-backup').onclick = backupJSON;
+    $('file-restore').addEventListener('change', restoreJSON);
     $('btn-add-stack').onclick = addStackRow;
     $('btn-toggle-view').onclick = toggleView;
     $('search-input').onkeyup = renderList;

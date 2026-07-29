@@ -67,7 +67,7 @@ header .header-actions { display: flex; gap: 8px; }
 .summary-box b { color: var(--text-main); font-size: 13px; }
 
 /* Main Editor Pane */
-.pane-editor { flex: 1; background: #fff; display: flex; flex-direction: column; overflow: hidden; } /* overflow: hidden 추가 (스크롤 문제 해결) */
+.pane-editor { flex: 1; background: #fff; display: flex; flex-direction: column; overflow: hidden; } 
 .toolbar { height: 60px; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 32px; justify-content: space-between; background: #fff; flex-shrink: 0; }
 
 .editor-scroll { flex: 1; overflow-y: auto; background: #f8fafc; display: block; }
@@ -165,6 +165,9 @@ header .header-actions { display: flex; gap: 8px; }
         <button class="btn btn-secondary" id="btn-toggle-view"><i class="fas fa-columns"></i> 장표 한눈에 보기</button>
         <button class="btn btn-secondary" id="btn-save-img"><i class="fas fa-image" style="color:#8b5cf6"></i> 이미지 저장</button>
         <button class="btn btn-secondary" id="btn-export"><i class="fas fa-file-excel" style="color:#10b981"></i> 엑셀 다운로드</button>
+        <button class="btn btn-secondary" id="btn-backup"><i class="fas fa-download" style="color:#3b82f6"></i> JSON 백업</button>
+        <button class="btn btn-secondary" id="btn-restore" onclick="document.getElementById('file-restore').click()"><i class="fas fa-upload" style="color:#f59e0b"></i> JSON 복원</button>
+        <input type="file" id="file-restore" accept=".json" style="display:none;" />
     </div>
 </header>
 
@@ -507,7 +510,6 @@ header .header-actions { display: flex; gap: 8px; }
         return 'env-prod';
     }
 
-    // 전역 배포 여유율 변경 시 UI 업데이트
     inps.deploy.addEventListener('change', () => {
         renderPodRows();
         calculateTotals();
@@ -527,9 +529,8 @@ header .header-actions { display: flex; gap: 8px; }
             const baseCount = parseFloat(p.baseCount) || 0;
             const vcpu = parseFloat(p.vcpu) || 0;
             const ram = parseFloat(p.ram) || 0;
-            const hpa = parseFloat(p.hpa) || 1; // Pod별 HPA 값 (없으면 1)
+            const hpa = parseFloat(p.hpa) || 1; 
 
-            // 전역 배포여유율과 개별 HPA 중 더 큰 값을 스케일링 배수로 적용
             const mult = Math.max(globalDeploy, hpa);
             const maxPods = Math.ceil(baseCount * mult);
             const maxVcpu = (maxPods * vcpu).toFixed(2);
@@ -582,7 +583,6 @@ header .header-actions { display: flex; gap: 8px; }
             podListContainer.appendChild(row);
         });
 
-        // Event listeners
         document.querySelectorAll('.pod-preset').forEach(el => el.addEventListener('change', e => handlePresetChange(e.target.dataset.id, e.target.value)));
         document.querySelectorAll('.pod-name').forEach(el => el.addEventListener('change', e => handlePodDataChange(e.target.dataset.id, 'name', e.target.value)));
         document.querySelectorAll('.pod-count').forEach(el => el.addEventListener('change', e => handlePodDataChange(e.target.dataset.id, 'baseCount', e.target.value)));
@@ -597,7 +597,6 @@ header .header-actions { display: flex; gap: 8px; }
         const defaultVcpu = firstPresetKey === 'custom' ? 1.0 : podPresets[firstPresetKey].vcpu;
         const defaultRam = firstPresetKey === 'custom' ? 2.0 : podPresets[firstPresetKey].ram;
 
-        // 신규 추가 시 HPA 기본값 3으로 설정 (기존 전역 설정과 유사한 흐름)
         podItems.push({ id: generateId(), preset: firstPresetKey, name: defaultName, baseCount: 2, hpa: 3, vcpu: defaultVcpu, ram: defaultRam });
         renderPodRows();
         calculateTotals();
@@ -658,17 +657,16 @@ header .header-actions { display: flex; gap: 8px; }
         $('res-total-ram').textContent = tRam % 1 !== 0 ? tRam.toFixed(2) : tRam;
     }
 
-    // === View Toggle ===
     function toggleView() {
         isBoardView = !isBoardView;
         const btn = $('btn-toggle-view');
-        const sidebar = document.querySelector('.pane-list'); // 사이드바 요소 선택
+        const sidebar = document.querySelector('.pane-list'); 
         
         if(isBoardView) {
             $('editor-view').style.display = 'none';
             $('editor-toolbar').style.display = 'none';
             $('board-view').classList.add('active');
-            sidebar.style.display = 'none'; // 보드 뷰일 때 사이드바 숨김
+            sidebar.style.display = 'none'; 
             btn.innerHTML = `<i class="fas fa-edit"></i> 상세 편집 모드`;
             btn.classList.add('btn-primary');
             btn.classList.remove('btn-secondary');
@@ -677,14 +675,13 @@ header .header-actions { display: flex; gap: 8px; }
             $('editor-view').style.display = 'block';
             $('editor-toolbar').style.display = 'flex';
             $('board-view').classList.remove('active');
-            sidebar.style.display = 'flex'; // 편집 모드일 때 사이드바 표시
+            sidebar.style.display = 'flex'; 
             btn.innerHTML = `<i class="fas fa-columns"></i> 장표 한눈에 보기`;
             btn.classList.add('btn-secondary');
             btn.classList.remove('btn-primary');
         }
     }
 
-    // === Board View Rendering (장표 화면) ===
     function renderBoard() {
         const board = $('board-view');
         board.innerHTML = '';
@@ -764,7 +761,6 @@ header .header-actions { display: flex; gap: 8px; }
         });
     }
 
-    // List & CRUD (DB 연동)
     async function refreshDataList() {
         dataList = await getAllFromDB();
         renderList();
@@ -814,7 +810,6 @@ header .header-actions { display: flex; gap: 8px; }
 
             if (d.pods) {
                 d.pods.forEach(p => {
-                    // 과거 데이터 호환성을 위해 개별 hpa가 없으면 과거 전역 scale 값을 대체 사용
                     const hpa = parseFloat(p.hpa) || parseFloat(d.scale) || 1; 
                     const mult = Math.max(globalDeploy, hpa);
                     const maxP = Math.ceil((parseFloat(p.baseCount) || 0) * mult);
@@ -861,7 +856,6 @@ header .header-actions { display: flex; gap: 8px; }
         inps.deploy.value = d.deploy;
         inps.reason.value = d.reason;
         
-        // 과거 데이터 불러오기 시 hpa 속성 주입
         podItems = JSON.parse(JSON.stringify(d.pods || [])).map(p => {
             if(!p.hpa) p.hpa = parseFloat(d.scale) || 1;
             return p;
@@ -1008,7 +1002,51 @@ header .header-actions { display: flex; gap: 8px; }
         XLSX.writeFile(wb, `Container_Resource_Sizing_${new Date().toISOString().slice(0,10)}.xlsx`);
     }
 
-    // === 이미지 저장 기능 (스크롤 영역 전체 캡처) ===
+    function backupJSON() {
+        const term = $('search-input').value.toLowerCase();
+        const exportData = dataList.filter(d => d.name.toLowerCase().includes(term) || d.env.toLowerCase().includes(term));
+
+        if (exportData.length === 0) return alert('백업할 데이터가 없습니다.');
+        
+        const dataStr = JSON.stringify(exportData, null, 2);
+        const blob = new Blob([dataStr], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `Container_Resource_Sizing_Backup_${new Date().toISOString().slice(0,10)}.json`;
+        link.click();
+        
+        URL.revokeObjectURL(url);
+        showToast('JSON 백업 파일이 다운로드되었습니다.', 'success');
+    }
+
+    async function restoreJSON(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+            try {
+                const importedData = JSON.parse(e.target.result);
+                if (!Array.isArray(importedData)) throw new Error("Invalid data format");
+
+                for (const item of importedData) {
+                    await putToDB(item);
+                }
+
+                await refreshDataList();
+                showToast('데이터 복원이 성공적으로 완료되었습니다.', 'success');
+            } catch (error) {
+                console.error("Restore error:", error);
+                alert("잘못된 형식의 JSON 파일이거나 복원 중 오류가 발생했습니다.");
+            } finally {
+                event.target.value = ''; 
+            }
+        };
+        reader.readAsText(file);
+    }
+
     async function saveAsImage() {
         if (!isBoardView) {
             showToast('장표 한눈에 보기 화면에서만 이미지로 저장할 수 있습니다.', 'info');
@@ -1021,12 +1059,10 @@ header .header-actions { display: flex; gap: 8px; }
         try {
             showToast('이미지 생성을 시작합니다. 잠시만 기다려주세요.', 'info');
             
-            // 1. 원본 스타일 임시 저장
             const originalOverflow = targetEl.style.overflow;
             const originalWidth = targetEl.style.width;
             const originalHeight = targetEl.style.height;
 
-            // 2. 전체 스크롤 영역 측정을 위해 컨테이너 강제 확장
             const scrollWidth = targetEl.scrollWidth;
             const scrollHeight = targetEl.scrollHeight;
             
@@ -1034,22 +1070,19 @@ header .header-actions { display: flex; gap: 8px; }
             targetEl.style.width = scrollWidth + 'px';
             targetEl.style.height = scrollHeight + 'px';
 
-            // 3. html2canvas 옵션에 전체 크기 명시
             const canvas = await html2canvas(targetEl, {
                 backgroundColor: '#f8fafc',
-                scale: 2, // 고해상도 처리
+                scale: 2, 
                 width: scrollWidth,
                 height: scrollHeight,
-                windowWidth: scrollWidth,    // 가상 윈도우 너비 지정
-                windowHeight: scrollHeight   // 가상 윈도우 높이 지정
+                windowWidth: scrollWidth,    
+                windowHeight: scrollHeight   
             });
             
-            // 4. 캡처 완료 후 스타일 원래대로 복구
             targetEl.style.overflow = originalOverflow;
             targetEl.style.width = originalWidth;
             targetEl.style.height = originalHeight;
 
-            // 5. 이미지 다운로드
             const link = document.createElement('a');
             link.download = `Pod_Sizing_장표뷰_${new Date().toISOString().slice(0,10)}.png`;
             link.href = canvas.toDataURL('image/png');
@@ -1071,11 +1104,13 @@ header .header-actions { display: flex; gap: 8px; }
     });
 
     $('btn-toggle-view').onclick = toggleView;
-    $('btn-save-img').onclick = saveAsImage; // 이미지 저장 이벤트 연결
+    $('btn-save-img').onclick = saveAsImage; 
     $('btn-new').onclick = () => resetForm(false); 
     $('btn-save').onclick = saveItem; 
     $('btn-delete').onclick = deleteItem;
     $('btn-export').onclick = exportExcel; 
+    $('btn-backup').onclick = backupJSON;
+    $('file-restore').addEventListener('change', restoreJSON);
     $('search-input').onkeyup = renderList;
     $('btn-add-pod').onclick = addPodRow;
     $('btn-settings').onclick = openSettingsModal;
