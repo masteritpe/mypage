@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Memory Manager</title>
+  
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+  <style>
+    /* 공통 디자인 시스템 변수 */
+    :root {
+      --bg-body: #F9FAFB;
+      --bg-surface: #FFFFFF;
+      --border-light: #F3F4F6;
+      --border-base: #E5E7EB;
+      --text-main: #111827;
+      --text-muted: #6B7280;
+      --primary: #111827;       
+      --primary-hover: #374151;
+      --secondary: #FFFFFF;
+      --secondary-hover: #F9FAFB;
+      --danger: #EF4444;
+      --danger-hover: #DC2626;
+      --success: #10B981;
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background: var(--bg-body);
+      color: var(--text-main);
+      padding: 20px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* 상단 헤더 */
+    .dashboard-header {
+      max-width: 1100px;
+      margin: 0 auto 16px auto;
+    }
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .title-area {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .title-area i { font-size: 26px; color: var(--text-main); }
+    h2 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
+    
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+    /* 버튼 스타일 */
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 14px; border-radius: var(--radius-md);
+      font-size: 13px; font-weight: 600; cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      border: 1px solid transparent;
+      outline: none;
+    }
+    .btn-outline {
+      background: var(--secondary); color: var(--text-main);
+      border-color: var(--border-base); box-shadow: var(--shadow-sm);
+    }
+    .btn-outline:hover { background: var(--secondary-hover); border-color: #D1D5DB; }
+    .btn-primary {
+      background: var(--primary); color: white;
+      box-shadow: var(--shadow-sm);
+    }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-danger {
+      background: var(--danger); color: white;
+      box-shadow: var(--shadow-sm);
+    }
+    .btn-danger:hover { background: var(--danger-hover); transform: translateY(-1px); }
+
+    /* 상태 칩스 */
+    .chips-bar {
+      display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+      background: var(--bg-surface); padding: 10px 14px;
+      border-radius: var(--radius-md); border: 1px solid var(--border-base);
+      font-size: 13px; color: var(--text-muted);
+    }
+    .chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: #F3F4F6; padding: 4px 10px; border-radius: 99px;
+      border: 1px solid var(--border-base); color: var(--text-main); font-weight: 500;
+    }
+    .chip i { color: var(--text-muted); font-size: 14px; }
+    .chip strong { color: var(--primary); font-weight: 700; margin-left: 2px; }
+    .chip.danger strong { color: var(--danger); }
+    .chip.success strong { color: var(--success); }
+
+    /* 메인 레이아웃 */
+    main.layout-grid {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: minmax(0, 2fr) minmax(320px, 1.2fr);
+      gap: 20px;
+      align-items: start;
+    }
+
+    /* 카드 */
+    .card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-base);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-md);
+      overflow: hidden;
+    }
+    .card-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border-light);
+      font-weight: 600; font-size: 15px;
+      display: flex; justify-content: space-between; align-items: center;
+      background: #FAFAFA;
+    }
+    .card-header .ph { margin-right: 6px; color: var(--text-muted); font-size: 18px; vertical-align: middle; }
+    .card-body { padding: 18px; display: flex; flex-direction: column; gap: 20px; }
+
+    /* 섹션 공통 */
+    .section-title { font-size: 14px; font-weight: 700; margin: 0 0 4px 0; display: flex; align-items: center; gap: 6px; color: var(--text-main); }
+    .section-desc { font-size: 12px; color: var(--text-muted); margin: 0 0 10px 0; line-height: 1.4; }
+    
+    /* 프로그레스 바 (메모리 표시용) */
+    .progress-wrapper {
+      background: #F3F4F6;
+      border-radius: 99px;
+      height: 16px;
+      width: 100%;
+      overflow: hidden;
+      margin: 10px 0;
+      position: relative;
+    }
+    .progress-bar {
+      height: 100%;
+      background: var(--success);
+      width: 0%;
+      transition: width 0.3s ease, background-color 0.3s ease;
+    }
+    .progress-text {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 700; color: #111827;
+      text-shadow: 0 0 2px rgba(255,255,255,0.8);
+    }
+
+    /* 컨트롤 박스 */
+    .control-box {
+      border: 1px solid var(--border-base);
+      border-radius: var(--radius-md);
+      padding: 14px;
+      background: var(--bg-body);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    /* 우측 로그창 (Sticky) */
+    .right-card { position: sticky; top: 20px; }
+    #logArea {
+      width: 100%; min-height: 250px; max-height: calc(100vh - 180px);
+      background: #111827; color: #E5E7EB;
+      padding: 16px; border-radius: var(--radius-md);
+      font-size: 12px; line-height: 1.6; overflow-y: auto;
+      font-family: 'JetBrains Mono', 'Courier New', monospace;
+      white-space: pre-wrap; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+    }
+    #logArea::-webkit-scrollbar { width: 8px; }
+    #logArea::-webkit-scrollbar-thumb { background: #4B5563; border-radius: 4px; }
+    
+    .hint { font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 4px; margin-top: 8px; }
+    
+    .info-list { font-size: 12.5px; padding-left: 20px; margin: 0; color: var(--text-main); line-height: 1.5; }
+    .info-list li { margin-bottom: 6px; }
+
+    @media (max-width: 992px) {
+      main.layout-grid { grid-template-columns: 1fr; }
+      .right-card { position: static; }
+      #logArea { min-height: 200px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="dashboard-header">
+  <div class="header-top">
+    <div class="title-area">
+      <i class="ph ph-cpu"></i>
+      <h2>메모리 관리자</h2>
+    </div>
+    <div class="actions">
+      <label style="font-size: 12px; display: flex; align-items: center; gap:4px; margin-right: 10px;">
+        <input type="checkbox" id="autoRefresh" checked style="accent-color: var(--primary);"> 
+        실시간 모니터링 (1초)
+      </label>
+      <button class="btn btn-outline" id="btnManualRefresh">
+        <i class="ph ph-arrows-clockwise"></i> 갱신
+      </button>
+      <button class="btn btn-danger" id="btnForceFree">
+        <i class="ph ph-broom"></i> 변수 및 캐시 해제
+      </button>
+    </div>
+  </div>
+
+  <div class="chips-bar">
+    <div class="chip"><i class="ph ph-memory"></i> 사용 중: <strong id="chipUsed">0 MB</strong></div>
+    <div class="chip"><i class="ph ph-database"></i> 할당됨: <strong id="chipTotal">0 MB</strong></div>
+    <div class="chip"><i class="ph ph-warning"></i> 최대 제한: <strong id="chipLimit">0 MB</strong></div>
+  </div>
+</div>
+
+<main class="layout-grid">
+  <section class="card">
+    <div class="card-header">
+      <div><i class="ph ph-monitor"></i> 실시간 JS 힙(Heap) 상태</div>
+    </div>
+    <div class="card-body">
+      
+      <section>
+        <h3 class="section-title"><i class="ph ph-chart-bar"></i> 메모리 사용량</h3>
+        <p class="section-desc">현재 탭의 JavaScript 객체가 차지하는 메모리입니다. 크로미움(Chrome, Edge 등)에서만 정확히 측정됩니다.</p>
+        
+        <div class="progress-wrapper">
+          <div class="progress-bar" id="memoryBar"></div>
+          <div class="progress-text" id="memoryBarText">0%</div>
+        </div>
+        <p style="text-align: right; font-size: 11px; color: var(--text-muted); margin-top: 4px;" id="memoryDetails">0 / 0 MB</p>
+      </section>
+
+      <hr style="border:0; border-top:1px dashed var(--border-base); margin:0;">
+
+      <section>
+        <h3 class="section-title"><i class="ph ph-flask"></i> 메모리 부하 테스트 (가비지 컬렉터 확인용)</h3>
+        <p class="section-desc">대용량 데이터를 강제로 생성하여 메모리 점유율을 높입니다. 이후 '해제'를 누르면 브라우저의 가비지 컬렉터(GC)가 메모리를 회수하는 과정을 볼 수 있습니다.</p>
+        
+        <div class="control-box">
+          <div style="font-size: 13px; font-weight: 600;">임시 배열 메모리 할당</div>
+          <div class="btn-group">
+            <button class="btn btn-outline" id="btnAlloc50"><i class="ph ph-plus"></i> + 50 MB</button>
+            <button class="btn btn-outline" id="btnAlloc100"><i class="ph ph-plus"></i> + 100 MB</button>
+            <button class="btn btn-outline" id="btnAlloc500"><i class="ph ph-plus"></i> + 500 MB</button>
+          </div>
+          <p style="font-size: 12px; color: var(--text-muted); margin: 0;">현재 강제 할당된 배열 수: <strong id="dummyCount" style="color:var(--text-main)">0</strong> 개</p>
+        </div>
+      </section>
+
+      <hr style="border:0; border-top:1px dashed var(--border-base); margin:0;">
+
+      <section>
+        <h3 class="section-title"><i class="ph ph-info"></i> 시스템 메모리 확보 팁</h3>
+        <ul class="info-list">
+          <li><strong>JS 가비지 컬렉션:</strong> 위 "변수 및 캐시 해제"를 누르면 연결이 끊긴 데이터가 메모리에서 지워질 준비를 합니다. 실제 메모리 반환은 브라우저의 GC 엔진이 여유가 있을 때 자동으로 수행합니다.</li>
+          <li><strong>브라우저 작업 관리자:</strong> Chrome 등에서 <kbd>Shift</kbd> + <kbd>Esc</kbd>를 누르면 탭별 실제 RAM 사용량을 보고 강제 종료할 수 있습니다.</li>
+          <li><strong>DOM 노드 누수:</strong> 화면에서 사라졌지만 JS 변수에 참조된 요소(DOM)도 메모리를 차지합니다.</li>
+        </ul>
+      </section>
+
+    </div>
+  </section>
+
+  <aside class="card right-card">
+    <div class="card-header">
+      <div><i class="ph ph-terminal-window"></i> 작업 로그</div>
+    </div>
+    <div class="card-body" style="padding: 16px;">
+      <div id="logArea">메모리 모니터링 시스템이 준비되었습니다.</div>
+      <div class="hint"><i class="ph ph-info"></i> 최신 로그가 아래에 추가됩니다.</div>
+    </div>
+  </aside>
+</main>
+
+<script>
+  // 더미 데이터를 저장하여 메모리를 차지할 전역 변수
+  let memoryLeakContainer = [];
+
+  // ============ 공통 유틸 ============
+  function log(msg, type = 'info'){
+    const pre = document.getElementById('logArea');
+    const time = new Date().toLocaleTimeString('ko-KR', { hour12: false });
+    let prefix = '';
+    if (type === 'ok') prefix = '🟢 [OK] ';
+    else if (type === 'warn') prefix = '🟠 [WARN] ';
+    else if (type === 'err') prefix = '🔴 [ERR] ';
+    else prefix = '⚪ ';
+
+    if(pre.textContent === '메모리 모니터링 시스템이 준비되었습니다.') pre.textContent = '';
+    pre.textContent += `[${time}] ${prefix}${msg}\n`;
+    pre.scrollTop = pre.scrollHeight;
+  }
+
+  function formatMB(bytes) {
+    return (bytes / 1024 / 1024).toFixed(1);
+  }
+
+  // ============ 메모리 모니터링 로직 ============
+  function updateMemoryStats() {
+    if (!performance.memory) {
+      document.getElementById('memoryDetails').textContent = "지원되지 않는 브라우저입니다 (Chrome/Edge 권장).";
+      return;
+    }
+
+    const memory = performance.memory;
+    const used = memory.usedJSHeapSize;
+    const total = memory.totalJSHeapSize;
+    const limit = memory.jsHeapSizeLimit;
+
+    // Chips 업데이트
+    document.getElementById('chipUsed').textContent = `${formatMB(used)} MB`;
+    document.getElementById('chipTotal').textContent = `${formatMB(total)} MB`;
+    document.getElementById('chipLimit').textContent = `${formatMB(limit)} MB`;
+
+    // 프로그레스 바 업데이트
+    const percentage = ((used / limit) * 100).toFixed(1);
+    const progressBar = document.getElementById('memoryBar');
+    const progressText = document.getElementById('memoryBarText');
+    const details = document.getElementById('memoryDetails');
+
+    progressBar.style.width = `${percentage}%`;
+    progressText.textContent = `${percentage}%`;
+    details.textContent = `Used: ${formatMB(used)} MB / Limit: ${formatMB(limit)} MB`;
+
+    // 상태에 따른 색상 변경
+    if (percentage > 85) {
+      progressBar.style.backgroundColor = 'var(--danger)';
+    } else if (percentage > 60) {
+      progressBar.style.backgroundColor = '#F59E0B'; // 경고(주황색)
+    } else {
+      progressBar.style.backgroundColor = 'var(--success)';
+    }
+  }
+
+  // ============ 메모리 부하 생성 ============
+  // JS에서 대략적으로 메모리를 차지하도록 문자열/숫자 배열을 쑤셔넣습니다.
+  function allocateMemory(megabytes) {
+    log(`임시 배열 할당 시작: 약 ${megabytes}MB`, 'warn');
+    
+    // 1MB 문자열 뭉치 생성 (대략적인 크기)
+    // UTF-16 환경에서 글자 1개당 2바이트 계산
+    const size = megabytes * 1024 * 1024 / 2;
+    const dummyString = "A".repeat(size); 
+    
+    memoryLeakContainer.push(dummyString);
+    document.getElementById('dummyCount').textContent = memoryLeakContainer.length;
+    
+    log(`할당 완료 (현재 배열 갯수: ${memoryLeakContainer.length})`, 'info');
+    updateMemoryStats();
+  }
+
+  // ============ 메모리 해제 ============
+  function freeMemory() {
+    if (memoryLeakContainer.length === 0) {
+      log('해제할 임시 배열이 없습니다.', 'warn');
+      return;
+    }
+
+    const count = memoryLeakContainer.length;
+    // 변수 참조를 끊어 가비지 컬렉터(GC)가 수거해갈 수 있도록 함
+    memoryLeakContainer = [];
+    document.getElementById('dummyCount').textContent = 0;
+
+    log(`임시 배열 ${count}개 참조 해제 완료. (GC가 조만간 메모리를 회수합니다)`, 'ok');
+    
+    // 콘솔 이미지 캐시 등 간접적인 해제 유도
+    console.clear();
+    log(`메모리 해제 요청됨 - 브라우저의 GC 동작을 기다립니다...`, 'info');
+    
+    updateMemoryStats();
+  }
+
+  // ============ 이벤트 리스너 및 초기화 ============
+  let monitorInterval = null;
+
+  function toggleMonitoring(isActive) {
+    if (isActive) {
+      monitorInterval = setInterval(updateMemoryStats, 1000);
+      log('실시간 모니터링 활성화 (1초 주기)', 'info');
+    } else {
+      clearInterval(monitorInterval);
+      log('실시간 모니터링 중지됨', 'warn');
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    // 초기 메모리 상태 렌더링
+    updateMemoryStats();
+    toggleMonitoring(true);
+
+    // 실시간 모니터링 토글
+    const autoRefreshCb = document.getElementById('autoRefresh');
+    autoRefreshCb.addEventListener('change', (e) => {
+      toggleMonitoring(e.target.checked);
+    });
+
+    // 수동 갱신
+    document.getElementById('btnManualRefresh').addEventListener('click', () => {
+      updateMemoryStats();
+      log('수동으로 메모리 상태를 갱신했습니다.', 'info');
+    });
+
+    // 메모리 강제 할당
+    document.getElementById('btnAlloc50').addEventListener('click', () => allocateMemory(50));
+    document.getElementById('btnAlloc100').addEventListener('click', () => allocateMemory(100));
+    document.getElementById('btnAlloc500').addEventListener('click', () => allocateMemory(500));
+
+    // 메모리 참조 해제
+    document.getElementById('btnForceFree').addEventListener('click', freeMemory);
+  });
+</script>
+</body>
+</html>
