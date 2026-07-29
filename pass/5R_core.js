@@ -1,6 +1,6 @@
 /* ===========================================================================
  * 1. 5R_core.js : Data, State, Utility
- * (Update: 부분 폰트 확대/축소용 f태그 파싱 추가)
+ * (Update: 초록색 두음 강조 <gdueum> 파싱/렌더링 추가)
  * =========================================================================== */
 {
   window.SELTE = window.SELTE || {};
@@ -98,13 +98,16 @@
   }
 
   // === Logic: HTML Normalization ===
-  const ALLOWED_INLINE_TAGS=['mark','red','blue','green','del','u','dueum','hl1','hl2','hl3','hl4','hl5','hl6','hl7','f\\d+'];
+  const ALLOWED_INLINE_TAGS=['mark','red','blue','green','del','u','dueum','gdueum','hl1','hl2','hl3','hl4','hl5','hl6','hl7','f\\d+'];
 
   function standardToCustomHTML(src=''){
     let s = String(src);
 
-    // 1. Dueum (Ctrl+Alt+M)
+    // 1. Dueum (남색 강조)
     s = s.replace(/<\s*span\b[^>]*style="[^"]*background-color:\s*(?:rgb\(\s*13,\s*58,\s*158\s*\)|#0d3a9e)[^"]*"[^>]*>([\s\S]*?)<\s*\/\s*span\s*>/gi, '<dueum>$1</dueum>');
+
+    // 1-2. GDueum (초록 강조)
+    s = s.replace(/<\s*span\b[^>]*style="[^"]*background-color:\s*(?:rgb\(\s*41,\s*110,\s*1\s*\)|#296e01)[^"]*"[^>]*>([\s\S]*?)<\s*\/\s*span\s*>/gi, '<gdueum>$1</gdueum>');
 
     // 2. 형광펜 (<mark>)
     s = s.replace(/<\s*span\b[^>]*style="[^"]*background-color:\s*(?:rgb\(\s*255,\s*229,\s*143\s*\)|#ffe58f|yellow)[^"]*"[^>]*>([\s\S]*?)<\s*\/\s*span\s*>/gi, '<mark>$1</mark>');
@@ -153,7 +156,10 @@
   function customToStandardHTML(src=''){
     let s = String(src);
     s = s.replace(/<\s*mark\s*>/gi, '<span style="background-color:#ffe58f; padding:0 2px; border-radius:2px;">').replace(/<\s*\/\s*mark\s*>/gi, '</span>');
+    
+    // 남색, 초록색 강조 렌더링 (Padding, Border-radius 일치)
     s = s.replace(/<\s*dueum\s*>/gi, '<span style="background-color:#0d3a9e; color:#ffffff; font-weight:bold; padding:1px 4px; border-radius:3px;">').replace(/<\s*\/\s*dueum\s*>/gi, '</span>');
+    s = s.replace(/<\s*gdueum\s*>/gi, '<span style="background-color:#296e01; color:#ffffff; font-weight:bold; padding:1px 4px; border-radius:3px;">').replace(/<\s*\/\s*gdueum\s*>/gi, '</span>');
     
     s = s.replace(/<\s*hl1\s*>/gi, '<span style="background-color:#ffedd5;">').replace(/<\s*\/\s*hl1\s*>/gi, '</span>');
     s = s.replace(/<\s*hl2\s*>/gi, '<span style="background-color:#e0f2fe;">').replace(/<\s*\/\s*hl2\s*>/gi, '</span>');
@@ -191,6 +197,7 @@
         /<\s*blue\s*>/gi, /<\s*\/\s*blue\s*>/gi,
         /<\s*green\s*>/gi, /<\s*\/\s*green\s*>/gi,
         /<\s*dueum\s*>/gi, /<\s*\/\s*dueum\s*>/gi,
+        /<\s*gdueum\s*>/gi, /<\s*\/\s*gdueum\s*>/gi,
         /<\s*hl1\s*>/gi, /<\s*\/\s*hl1\s*>/gi,
         /<\s*hl2\s*>/gi, /<\s*\/\s*hl2\s*>/gi,
         /<\s*hl3\s*>/gi, /<\s*\/\s*hl3\s*>/gi,

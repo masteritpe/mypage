@@ -3,7 +3,7 @@
  * =========================================================================== */
 {
   const S = window.SELTE;
-  const XL_COLOR={ red:'FFE53935', blue:'FF1E88E5', green:'FF43A047', ink:'FF1A202C', navy: 'FF0D3A9E' };
+  const XL_COLOR={ red:'FFE53935', blue:'FF1E88E5', green:'FF43A047', ink:'FF1A202C', navy: 'FF0D3A9E', darkgreen: 'FF296E01' };
 
   function cssColorToArgb(colorStr) {
     if(!colorStr) return null;
@@ -46,7 +46,7 @@
                 const tag = node.tagName.toLowerCase();
                 const s = node.style;
 
-                if (['b','strong','mark','dueum'].includes(tag) || s.fontWeight === 'bold') newStyle.bold = true;
+                if (['b','strong','mark','dueum','gdueum'].includes(tag) || s.fontWeight === 'bold') newStyle.bold = true;
                 if (tag === 'mark') newStyle.underline = true;
                 if (['u','ins'].includes(tag) || s.textDecoration.includes('underline')) newStyle.underline = true;
                 if (['del','strike','s'].includes(tag) || s.textDecoration.includes('line-through')) newStyle.strike = true;
@@ -54,7 +54,8 @@
                 if (tag === 'red') newStyle.color = { argb: XL_COLOR.red };
                 if (tag === 'blue') newStyle.color = { argb: XL_COLOR.blue };
                 if (tag === 'green') newStyle.color = { argb: XL_COLOR.green };
-                if (tag === 'dueum') newStyle.color = { argb: XL_COLOR.navy }; // 엑셀 배경색 미지원 이슈로 텍스트 남색 처리
+                if (tag === 'dueum') newStyle.color = { argb: XL_COLOR.navy }; 
+                if (tag === 'gdueum') newStyle.color = { argb: XL_COLOR.darkgreen }; 
                 
                 if (s.color) {
                     const argb = cssColorToArgb(s.color);
@@ -91,6 +92,7 @@
       else if(c===XL_COLOR.blue) tags.push('blue');
       else if(c===XL_COLOR.green) tags.push('green');
       else if(c===XL_COLOR.navy) tags.push('dueum');
+      else if(c===XL_COLOR.darkgreen) tags.push('gdueum');
       
       while(cur.length && !cur.every((t,i)=>tags[i]===t)) out+=`</${cur.pop()}>`;
       tags.slice(cur.length).forEach(t=>{ out+=`<${t}>`; cur.push(t); });

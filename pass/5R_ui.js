@@ -194,8 +194,8 @@
     div.contentEditable = true;
     div.spellcheck = false; 
     div.dataset.for = id; 
-    div.style.fontSize = '18px';  // ✨ 기본 폰트 사이즈 확대
-    div.style.lineHeight = '1.6'; // ✨ 줄간격 확보
+    div.style.fontSize = '18px';
+    div.style.lineHeight = '1.6';
     
     div.innerHTML = S.renderWithMark(ta.value);
     
@@ -243,15 +243,13 @@
               const sel = window.getSelection();
               
               if (sel.rangeCount > 0 && !sel.isCollapsed) {
-                  // 선택 영역의 시작 노드의 폰트 사이즈를 기준으로 확대/축소
                   const parentEl = sel.anchorNode.nodeType === 3 ? sel.anchorNode.parentElement : sel.anchorNode;
                   let sizeStr = window.getComputedStyle(parentEl).fontSize;
-                  let size = parseInt(sizeStr) || 18; // ✨ 기준 폰트 18px
+                  let size = parseInt(sizeStr) || 18;
 
-                  if (key === '+' || key === '=') size = Math.min(size + 4, 80); // ✨ 최대 80px, 증가폭 +4
-                  else if (key === '-') size = Math.max(size - 4, 10);           // ✨ 최소 10px, 감소폭 -4
+                  if (key === '+' || key === '=') size = Math.min(size + 4, 80);
+                  else if (key === '-') size = Math.max(size - 4, 10);
 
-                  // execCommand의 브라우저 표준 변환 트릭을 사용해 폰트 태그를 씌우고 리플레이스
                   document.execCommand('styleWithCSS', false, false);
                   document.execCommand('fontSize', false, "7");
                   
@@ -285,13 +283,59 @@
               return;
           }
 
-          // 4. 두음 강조 (Ctrl + Alt + M) - 남색 배경 + 흰색 텍스트
-          if (isCtrl && isAlt && key === 'm') {
-              e.preventDefault();
-              document.execCommand('styleWithCSS', false, true);
-              document.execCommand('hiliteColor', false, '#0d3a9e');
-              document.execCommand('foreColor', false, '#ffffff');
-              return;
+          // 두음 강조 추가 (Alt+N, Alt+L)
+          if (isAlt && !isCtrl && !isShift) {
+              // 11) 두음 강조 (남색 배경, 흰색 글씨, 굵게) : Alt+N
+              if (key === 'n') { 
+                  e.preventDefault(); 
+                  const sel = window.getSelection();
+                  if (sel.rangeCount && !sel.isCollapsed) {
+                      const range = sel.getRangeAt(0);
+                      const text = range.toString();
+                      const span = document.createElement('span');
+                      span.style.backgroundColor = '#0d3a9e';
+                      span.style.color = 'white';
+                      span.style.fontWeight = 'bold';
+                      span.style.padding = '1px 4px';       // 추가된 부분: 내부 여백
+                      span.style.borderRadius = '3px';      // 추가된 부분: 모서리 둥글게
+                      span.textContent = text;
+                      
+                      range.deleteContents();
+                      range.insertNode(span);
+                      
+                      const newRange = document.createRange();
+                      newRange.selectNodeContents(span);
+                      sel.removeAllRanges();
+                      sel.addRange(newRange);
+                  }
+                  return; 
+              }
+
+              // 12) 두음 강조 추가 (초록색 배경, 흰색 글씨, 굵게) : Alt+L
+              if (key === 'l') { 
+                  e.preventDefault(); 
+                  const sel = window.getSelection();
+                  if (sel.rangeCount && !sel.isCollapsed) {
+                      const range = sel.getRangeAt(0);
+                      const text = range.toString();
+                      const span = document.createElement('span');
+                      span.style.backgroundColor = '#296e01'; 
+                      span.style.color = 'white';
+                      span.style.fontWeight = 'bold';
+                      span.style.padding = '1px 4px';       // 추가된 부분: 내부 여백
+                      span.style.borderRadius = '3px';      // 추가된 부분: 모서리 둥글게
+                      span.textContent = text;
+                      
+                      range.deleteContents();
+                      range.insertNode(span);
+                      
+                      const newRange = document.createRange();
+                      newRange.selectNodeContents(span);
+                      sel.removeAllRanges();
+                      sel.addRange(newRange);
+                  }
+                  return; 
+              }
           }
 
           // 5. 텍스트 컬러 (Ctrl + Alt + R/B/G)
@@ -331,7 +375,6 @@
       }
     }, true);
 
-    // Ctrl + 휠 줌 기본 동작 방지
     window.addEventListener('wheel', e => {
         if (e.ctrlKey || e.metaKey) e.preventDefault();
     }, { passive: false });
@@ -681,8 +724,9 @@
           const strip = (val) => {
               let s = String(val || '');
               s = S.stripStoredMarkTags(s);
-              s = s.replace(/<\/?(span|b|strong|i|em|u|strike|s|font|mark|red|blue|green|del|dueum|hl[1-7]|f\d+)\b[^>]*>/gi, '');
-              s = s.replace(/&lt;\/?(span|b|strong|i|em|u|strike|s|font|mark|red|blue|green|del|dueum|hl[1-7]|f\d+)\b[^>]*&gt;/gi, '');
+              // 정규식에 gdueum 추가됨
+              s = s.replace(/<\/?(span|b|strong|i|em|u|strike|s|font|mark|red|blue|green|del|dueum|gdueum|hl[1-7]|f\d+)\b[^>]*>/gi, '');
+              s = s.replace(/&lt;\/?(span|b|strong|i|em|u|strike|s|font|mark|red|blue|green|del|dueum|gdueum|hl[1-7]|f\d+)\b[^>]*&gt;/gi, '');
               return s;
           };
 
@@ -732,8 +776,9 @@
       const strip = (val) => {
           let s = String(val || '');
           s = S.stripStoredMarkTags(s);
-          s = s.replace(/<\/?(span|b|strong|i|em|u|strike|s|font|mark|red|blue|green|del|dueum|hl[1-7]|f\d+)\b[^>]*>/gi, '');
-          s = s.replace(/&lt;\/?(span|b|strong|i|em|u|strike|s|font|mark|red|blue|green|del|dueum|hl[1-7]|f\d+)\b[^>]*&gt;/gi, '');
+          // 정규식에 gdueum 추가됨
+          s = s.replace(/<\/?(span|b|strong|i|em|u|strike|s|font|mark|red|blue|green|del|dueum|gdueum|hl[1-7]|f\d+)\b[^>]*>/gi, '');
+          s = s.replace(/&lt;\/?(span|b|strong|i|em|u|strike|s|font|mark|red|blue|green|del|dueum|gdueum|hl[1-7]|f\d+)\b[^>]*&gt;/gi, '');
           return s;
       };
 
@@ -940,7 +985,6 @@
 
         await refreshAll(); 
 
-        // ✨ URL 파라미터(?uid=...) 감지 및 자동 로드 기능
         const urlParams = new URLSearchParams(window.location.search);
         const deepLinkUid = urlParams.get('uid');
         let isLoadedViaDeepLink = false;
