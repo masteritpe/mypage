@@ -7,7 +7,6 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<!-- 최신 트렌드 SUIT 폰트 및 Pretendard 적용 -->
 <link href="https://cdn.jsdelivr.net/gh/sunn-us/SUIT/fonts/static/woff2/SUIT.css" rel="stylesheet">
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css" />
 
@@ -28,10 +27,9 @@
     --text-main: #0f172a; --text-sub: #64748b; --text-muted: #94a3b8;
     --border: #e2e8f0; --radius-md: 10px;
     --shadow-float: 0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
-    /* 트렌디한 SUIT 폰트를 1순위로 지정 */
     --font-ui: 'SUIT', 'Pretendard', 'Inter', sans-serif;
     --font-code: 'JetBrains Mono', monospace;
-    --editor-font-size: 16px;
+    --editor-font-size: 18px; /* 폰트 사이즈 18px 고정 */
 }
 
 * { box-sizing: border-box; outline: none; }
@@ -159,7 +157,6 @@ header .brand i { font-size: 22px; color: var(--accent); }
     .p-meta div { margin-bottom: 2px; }
     
     .p-body { font-size: 11pt; line-height: 1.65; margin-bottom: 20px; word-break: keep-all; color: #000; }
-    /* 원본 사이즈 유지, 페이지 넘어가면 축소 지원 (max-height 제한) */
     .p-body img, .p-img-item img { width: auto !important; height: auto !important; max-width: 100% !important; max-height: 250mm !important; object-fit: contain; display: block; margin: 10px auto; }
     .p-note { border: 2px solid #334155; padding: 15px; background: #f8fafc; border-radius: 8px; margin-top: 20px; page-break-inside: avoid; }
     
@@ -346,16 +343,13 @@ header .brand i { font-size: 22px; color: var(--accent); }
     </div>
 </div>
 
-<!-- Scroll이 가능하도록 구조가 변경된 이미지 뷰어 모달 -->
 <div id="imageViewerModal" class="modal-overlay" style="z-index: 9999; background: rgba(0,0,0,0.85);">
     <div style="position: absolute; top: 0; left: 0; right: 0; padding: 20px; display: flex; gap: 10px; justify-content: center; z-index: 10000; background: linear-gradient(rgba(0,0,0,0.7), transparent);">
         <button class="btn btn-secondary" onclick="copyViewerImage()"><i class="fas fa-copy"></i> 복사</button>
         <button class="btn btn-secondary" onclick="downloadViewerImage()"><i class="fas fa-download"></i> 저장</button>
         <button class="btn btn-secondary" onclick="closeImageViewer()"><i class="fas fa-times"></i> 닫기</button>
     </div>
-    <!-- overflow: auto를 통해 사이즈 초과 시 스크롤바가 자동 생성됨 -->
     <div id="imageViewerScroll" style="width: 100%; height: 100%; overflow: auto; text-align: center; padding: 80px 20px 40px 20px; box-sizing: border-box;" onclick="closeImageViewer()">
-        <!-- width 픽셀값을 직접 핸들링하도록 변경 -->
         <img id="imageViewerImg" src="" alt="확대된 이미지" onclick="event.stopPropagation()" style="display: inline-block; max-width: 100%; max-height: 80vh; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); background: white; transition: width 0.2s ease, max-width 0.2s ease, max-height 0.2s ease;">
     </div>
 </div>
@@ -431,7 +425,7 @@ const customBindings = {
 
 let quillBody, quillNote;
 let activeTargetImage = null;
-let currentEditorFontSize = 16; 
+let currentEditorFontSize = 18; // 에디터 폰트 기본값 18px
 let currentViewerZoom = 1;
 
 const imgToolbar = document.getElementById('img-toolbar');
@@ -479,12 +473,10 @@ btnClr.onclick = (e) => {
     }
 };
 
-// 이미지 모달 열기 함수
 function openImageViewer(src) {
     const img = document.getElementById('imageViewerImg');
     img.src = src;
     
-    // Zoom 및 크기 초기화
     currentViewerZoom = 1;
     img.style.width = 'auto';
     img.style.maxWidth = '100%';
@@ -580,6 +572,8 @@ const App = {
     state: { items: [], search: '', filter: '', selectedUid: null },
     
     init: async function() { 
+        document.documentElement.style.setProperty('--editor-font-size', currentEditorFontSize + 'px');
+
         quillBody = new Quill('#editor-body', {
             theme: 'snow', placeholder: '상세 내용을 작성하거나 이미지를 붙여넣으세요...',
             scrollingContainer: '.editor-wrapper',
@@ -595,21 +589,84 @@ const App = {
         document.querySelector('#editor-note .ql-editor').classList.add('note-editor');
 
         const Delta = Quill.import('delta');
+        
         const tableMatcher = function(node, delta) {
             return new Delta().insert({ rawTable: node.outerHTML });
         };
         quillBody.clipboard.addMatcher('TABLE', tableMatcher);
         quillNote.clipboard.addMatcher('TABLE', tableMatcher);
 
-        const removeEmptyLinesMatcher = function(node, delta) {
-            const text = node.textContent.trim();
-            if (text === '' && node.querySelectorAll('img, iframe, .quill-raw-table').length === 0) {
-                return new Delta();
+        // --- 1. 정식 리스트 (LI) 매처 ---
+        // 불릿 기호만 제거 (들여쓰기는 Quill 자동 처리)
+        const liMatcher = function(node, delta) {
+            delta.ops.forEach(op => {
+                if (typeof op.insert === 'string') {
+                    op.insert = op.insert.replace(/(^|\n)[ \t\u00A0\u200B]*[\u2022\u00B7\u25E6\u25AA\u25A0\u25CB\u25CF\u2013\u2014・◦◎◇◆□△▲▽▼※➢\-\u318D]+[ \t\u00A0\u200B]*/g, '$1');
+                }
+            });
+            return delta;
+        };
+        quillBody.clipboard.addMatcher('LI', liMatcher);
+        quillNote.clipboard.addMatcher('LI', liMatcher);
+
+        // --- 2. 가짜 리스트 (P, DIV 등) 매처 ---
+        // 웹에서 공백/마진으로 만든 가짜 리스트를 감지하여 Quill 실제 리스트(+들여쓰기)로 강제 변환
+        const fakeListMatcher = function(node, delta) {
+            const text = node.textContent || '';
+            const match = text.match(/^([ \t\u00A0\u200B]*)([\u2022\u00B7\u25E6\u25AA\u25A0\u25CB\u25CF・◦\u318D]+)[ \t\u00A0\u200B]*/);
+
+            if (match) {
+                let indentLevel = 0;
+                
+                // 실제 렌더링된 요소의 패딩, 마진값 추출하여 뎁스 계산
+                const compStyle = window.getComputedStyle(node);
+                const pl = parseInt(compStyle.paddingLeft || '0');
+                const ml = parseInt(compStyle.marginLeft || '0');
+                const totalIndentPx = pl + ml;
+
+                if (totalIndentPx >= 15) {
+                    // 보통 15px 이상부터 들여쓰기로 간주하고, 이후 20px마다 +1 레벨
+                    indentLevel = Math.max(0, Math.floor((totalIndentPx - 5) / 20));
+                } else if (match[1].length > 0) {
+                    // CSS 없이 띄어쓰기/공백으로만 띄워진 경우 공백 갯수로 추정 (3칸당 1뎁스)
+                    indentLevel = Math.floor(match[1].replace(/\t/g, '    ').length / 3);
+                }
+                
+                // Quill 들여쓰기 최대치 제한 (0~8)
+                indentLevel = Math.max(0, Math.min(indentLevel, 8));
+
+                // 불릿 기호 텍스트 삭제
+                let removed = false;
+                delta.ops.forEach(op => {
+                    if (!removed && typeof op.insert === 'string') {
+                        const orig = op.insert;
+                        op.insert = op.insert.replace(/^([ \t\u00A0\u200B]*)([\u2022\u00B7\u25E6\u25AA\u25A0\u25CB\u25CF\u2013\u2014・◦◎◇◆□△▲▽▼※➢\-\u318D]+)[ \t\u00A0\u200B]*/, '');
+                        if (orig !== op.insert) removed = true;
+                    }
+                });
+
+                // 블록 마지막을 강제로 Quill 리스트로 변환
+                const lastOp = delta.ops[delta.ops.length - 1];
+                if (lastOp && typeof lastOp.insert === 'string' && lastOp.insert.endsWith('\n')) {
+                    lastOp.attributes = lastOp.attributes || {};
+                    lastOp.attributes.list = 'bullet';
+                    if (indentLevel > 0) lastOp.attributes.indent = indentLevel;
+                } else {
+                    delta.insert('\n', indentLevel > 0 ? { list: 'bullet', indent: indentLevel } : { list: 'bullet' });
+                }
+            } else {
+                 // 리스트가 아닌 일반 문단이라면 빈 줄 무시 로직만 적용
+                 if (text.trim() === '' && node.querySelectorAll('img, iframe, .quill-raw-table').length === 0) {
+                     return new Delta();
+                 }
             }
             return delta;
         };
-        quillBody.clipboard.addMatcher('P', removeEmptyLinesMatcher);
-        quillNote.clipboard.addMatcher('P', removeEmptyLinesMatcher);
+        
+        ['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6'].forEach(tag => {
+            quillBody.clipboard.addMatcher(tag, fakeListMatcher);
+            quillNote.clipboard.addMatcher(tag, fakeListMatcher);
+        });
 
         const replaceLatexArrowsMatcher = function(node, delta) {
             delta.ops.forEach(op => {
@@ -664,7 +721,6 @@ const App = {
         $('btn-print').onclick = () => this.printView();
         $('btn-export').onclick = () => this.exportExcel();
         
-        // JSON Backup and Restore binding
         $('btn-backup').onclick = () => this.backupJson();
         $('btn-restore').onclick = () => $('inp-restore').click();
         $('inp-restore').onchange = (e) => this.restoreJson(e);
@@ -719,7 +775,6 @@ const App = {
             
             const viewerModal = document.getElementById('imageViewerModal');
 
-            // 이미지 모달 화살표 키 스크롤 기능
             if (viewerModal && viewerModal.style.display === 'block') {
                 if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
                     e.preventDefault();
@@ -736,10 +791,8 @@ const App = {
             if(isCmdCtrl && !isAlt && e.key.toLowerCase() === 's') { e.preventDefault(); this.save(); return; }
             if(isCmdCtrl && isAlt && e.key.toLowerCase() === 'n') { e.preventDefault(); this.formNew(); return; }
 
-            // 두음 강조 (Alt + N) - 남색 배경
             if (!isCmdCtrl && isAlt && e.key.toLowerCase() === 'n') {
                 e.preventDefault();
-
                 let activeQuill = null;
                 if(quillBody && quillBody.hasFocus()) activeQuill = quillBody;
                 else if(quillNote && quillNote.hasFocus()) activeQuill = quillNote;
@@ -758,10 +811,8 @@ const App = {
                 return;
             }
 
-            // 두음 강조 신규 (Alt + L) - 초록색 배경
             if (!isCmdCtrl && isAlt && e.key.toLowerCase() === 'l') {
                 e.preventDefault();
-
                 let activeQuill = null;
                 if(quillBody && quillBody.hasFocus()) activeQuill = quillBody;
                 else if(quillNote && quillNote.hasFocus()) activeQuill = quillNote;
@@ -783,7 +834,6 @@ const App = {
             if (isCmdCtrl && !isAlt && (e.key === '+' || e.key === '=' || e.key === '-')) {
                 e.preventDefault(); 
                 if (viewerModal && viewerModal.style.display === 'block') {
-                    // 모달 이미지 실제 크기(width)를 조작하여 스크롤 가능하게 함
                     if (e.key === '+' || e.key === '=') currentViewerZoom += 0.25; 
                     else if (e.key === '-') currentViewerZoom = Math.max(0.25, currentViewerZoom - 0.25); 
                     
@@ -793,13 +843,11 @@ const App = {
                         img.style.maxWidth = '100%';
                         img.style.maxHeight = '80vh';
                     } else {
-                        // 확대 시 제한을 풀고 픽셀 값을 직접 넣어 스크롤 바운더리를 생성함
                         img.style.maxWidth = 'none';
                         img.style.maxHeight = 'none';
                         img.style.width = (img.naturalWidth * currentViewerZoom) + 'px';
                     }
                 } else {
-                    // 에디터 폰트 크기 확대/축소
                     if (e.key === '+' || e.key === '=') currentEditorFontSize = Math.min(currentEditorFontSize + 1, 30); 
                     else if (e.key === '-') currentEditorFontSize = Math.max(currentEditorFontSize - 1, 10); 
                     document.documentElement.style.setProperty('--editor-font-size', currentEditorFontSize + 'px');
@@ -816,13 +864,21 @@ const App = {
     },
 
     backupJson: function() {
-        const filter = this.state.filter;
-        let itemsToExport = this.state.items;
+        const { search, filter, items } = this.state;
+        
+        // 좌측 리스트(renderList)와 동일한 필터링 조건 적용
+        let itemsToExport = items.filter(i => {
+            if(filter && i.domain !== filter) return false;
+            if(search) return (i.title + i.docId + i.domain).toLowerCase().includes(search);
+            return true;
+        });
+
         let filename = `TechNote_Backup_${new Date().toISOString().slice(0,10)}.json`;
         
-        if (filter) {
-            itemsToExport = itemsToExport.filter(i => i.domain === filter);
-            filename = `TechNote_${filter}_${new Date().toISOString().slice(0,10)}.json`;
+        // 필터나 검색어가 적용된 경우 파일명 변경
+        if (filter || search) {
+            let prefix = filter ? filter : 'Filtered';
+            filename = `TechNote_${prefix}_${new Date().toISOString().slice(0,10)}.json`;
         }
 
         if (itemsToExport.length === 0) {
@@ -869,7 +925,6 @@ const App = {
         reader.readAsText(file);
     },
 
-    // Drag & Drop 처리
     reorderItems: async function(draggedUid, targetUid, isBefore) {
         const dragged = this.state.items.find(x => x.uid === draggedUid);
         const target = this.state.items.find(x => x.uid === targetUid);
@@ -881,7 +936,6 @@ const App = {
         
         if (draggedIdx === -1 || targetIdx === -1) return;
         
-        // 현재 보여지는 목록에서 항목 재배치
         visibleCards.splice(draggedIdx, 1);
         targetIdx = visibleCards.indexOf(targetUid);
         const insertIdx = isBefore ? targetIdx : targetIdx + 1;
@@ -893,7 +947,6 @@ const App = {
         let prevOrder = prevUid ? this.state.items.find(x => x.uid === prevUid).order : null;
         let nextOrder = nextUid ? this.state.items.find(x => x.uid === nextUid).order : null;
         
-        // order 값 재계산
         if (prevOrder !== null && nextOrder !== null) {
             dragged.order = (prevOrder + nextOrder) / 2;
         } else if (prevOrder !== null) {
@@ -909,12 +962,10 @@ const App = {
     refresh: async function() {
         this.state.items = await DB.getAll();
         
-        // order 값이 없는 기존 항목 초기화 (uid를 기준으로 부여)[cite: 1]
         this.state.items.forEach(item => {
             if (item.order === undefined) item.order = parseFloat(item.uid) || 0;
         });
         
-        // order 기준으로 내림차순 정렬 (값이 클수록 상단)
         this.state.items.sort((a,b) => b.order - a.order);
         this.renderList();
         document.getElementById('total-count').textContent = this.state.items.length;
@@ -931,7 +982,6 @@ const App = {
             const card = document.createElement('div');
             card.className = `item-card ${i.uid === selectedUid ? 'active' : ''}`; card.dataset.uid = i.uid;
             
-            // Drag and Drop 속성 적용
             card.draggable = true;
             card.ondragstart = (e) => {
                 e.dataTransfer.setData('text/plain', i.uid);
@@ -975,21 +1025,18 @@ const App = {
                 }
             };
             
-            // 삭제 아이콘 버튼 추가
             card.innerHTML = `
                 <button class="btn-list-del" title="삭제"><i class="fas fa-trash-alt"></i></button>
                 <div class="item-header"><span class="item-dom" style="font-weight:700; color:#475569; font-size:12px;">${i.domain || 'N/A'}</span></div>
                 <div class="item-title">${i.title || '(No Title)'}</div>
                 <div style="font-size:11px; color:#94a3b8;"><span style="background:#f1f5f9; padding:2px 6px; border-radius:4px; margin-right:6px; color:#6366f1;">${i.docId}</span>${i.source || '-'}</div>`;
             
-            // 아이콘 클릭 시 리스트에서 바로 삭제하는 로직
             const delBtn = card.querySelector('.btn-list-del');
             delBtn.onclick = async (e) => {
-                e.stopPropagation(); // 카드 클릭이 트리거되지 않도록 방지
+                e.stopPropagation();
                 if(confirm(`'${i.title}' 토픽을 정말 삭제하시겠습니까?`)) {
                     await DB.delete(i.uid);
                     
-                    // 현재 열려있는 토픽을 삭제한 경우 에디터 초기화
                     if (this.state.selectedUid === i.uid) {
                         this.state.selectedUid = null;
                         document.getElementById('empty-state').style.display = 'flex';
@@ -1067,7 +1114,6 @@ const App = {
         const title = document.getElementById('inp-title').value.trim();
         if(!title) return this.toast('토픽 제목을 입력해주세요.');
 
-        // 기존 항목의 order 유지, 신규일 경우 현재 시간을 할당[cite: 1]
         const existingItem = this.state.items.find(i => i.uid === document.getElementById('inp-uid').value);
         const orderValue = existingItem && existingItem.order !== undefined ? existingItem.order : Date.now();
 

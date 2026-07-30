@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>블로그 에디터</title>
+<!-- 외부 CSS 및 JS 라이브러리 경로 (이 부분이 깨지지 않아야 정상 작동합니다) -->
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css" />
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-
 <script>
 window.MathJax = {
     tex: {
@@ -418,109 +418,147 @@ window.MathJax = {
     }
 
     function stripHtmlTags(str) {
-        if(!str) return '';
-        let temp = str.replace(/<([가-힣a-zA-Z0-9_\s]+)>/g, function(match, p1) {
-            const knownTags = ['p', 'b', 'strong', 'i', 'em', 'ul', 'ol', 'li', 'br', 'img', 'div', 'span', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'code', 'pre', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'tfoot', 'mark'];
-            if (knownTags.includes(p1.toLowerCase())) return match;
-            return `&lt;${p1}&gt;`;
-        });
-        temp = temp.replace(/<\/([가-힣a-zA-Z0-9_\s]+)>/g, function(match, p1) {
-            const knownTags = ['p', 'b', 'strong', 'i', 'em', 'ul', 'ol', 'li', 'br', 'img', 'div', 'span', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'code', 'pre', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'tfoot', 'mark'];
-            if (knownTags.includes(p1.toLowerCase())) return match;
-            return `&lt;/${p1}&gt;`;
-        });
-        return temp.replace(/<\/?[a-z][^>]*>/gi, ""); 
+        if (!str) return '';
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = str;
+        tempDiv.querySelectorAll('script, style, source-footnote, sources-carousel-inline, button, mat-icon').forEach(el => el.remove());
+        return tempDiv.textContent || tempDiv.innerText || '';
     }
 
     function convertHtmlToMd(html) {
         if (!html) return '';
-        let md = html;
         
-        md = md.replace(/<img[^>]+src=["']([^"']+)["'][^>]*>/gi, function(match, p1) {
-            return '![image](' + p1.replace(/\s+/g, '') + ')';
+        let cleanHtml = html.replace(/<!--[\s\S]*?-->/g, '');
+        
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(cleanHtml, 'text/html');
+        const body = doc.body;
+
+        const tagsToRemove = ['source-footnote', 'sources-carousel-inline', 'button', 'mat-icon', 'svg', 'script', 'style'];
+        tagsToRemove.forEach(tag => {
+            body.querySelectorAll(tag).forEach(el => el.remove());
         });
-        md = md.replace(/<h[1-6][^>]*>([\s\S]*?)<\/h[1-6]>/gi, '\n**$1**\n\n');
 
-        md = md.replace(/<pre[^>]*><code[^>]*>([\s\S]*?)<\/code><\/pre>/gi, '\n```\n$1\n```\n');
-        md = md.replace(/<code[^>]*>([\s\S]*?)<\/code>/gi, '`$1`');
+        function processNode(node, listDepth = 0, isCode = false) {
+            if (node.nodeType === Node.TEXT_NODE) {
+                return node.textContent.replace(/\n/g, ' '); 
+            }
+            if (node.nodeType !== Node.ELEMENT_NODE) return '';
 
-        md = md.replace(/<table[^>]*>([\s\S]*?)<\/table>/gi, function(match, tbl) {
-            let res = '\n\n';
-            let rows = tbl.match(/<tr[^>]*>[\s\S]*?<\/tr\s*>/gi) || [];
-            rows.forEach(function(r, i) {
-                let cells = [];
-                let cellMatches = r.match(/<(td|th)[^>]*>([\s\S]*?)<\/\1\s*>/gi) || [];
-                cellMatches.forEach(function(c) {
-                    let text = c.replace(/<(td|th)[^>]*>/i, '').replace(/<\/(td|th)\s*>/i, '').trim();
-                    text = text.replace(/<br\s*[\/]?>/gi, ' ').replace(/\n/g, ' ');
-                    cells.push(text);
-                });
-                if (cells.length > 0) {
-                    res += '| ' + cells.join(' | ') + ' |\n';
-                    if (i === 0) {
-                        res += '|' + cells.map(function() { return '---'; }).join('|') + '|\n';
+            let tag = node.tagName.toLowerCase();
+            
+            if (tag === 'table') {
+                let res = '\n\n';
+                Array.from(node.querySelectorAll('tr')).forEach((tr, i) => {
+                    let cells = Array.from(tr.querySelectorAll('td, th')).map(c => {
+                        let cellInner = '';
+                        Array.from(c.childNodes).forEach(child => cellInner += processNode(child, listDepth, isCode));
+                        return cellInner.trim().replace(/\n/g, ' ');
+                    });
+                    if (cells.length > 0) {
+                        res += '| ' + cells.join(' | ') + ' |\n';
+                        if (i === 0) res += '|' + cells.map(() => '---').join('|') + '|\n';
                     }
-                }
+                });
+                return res + '\n\n';
+            }
+            if (['tr', 'td', 'th', 'thead', 'tbody', 'tfoot'].includes(tag)) return '';
+
+            let inner = '';
+            let nextDepth = (tag === 'ul' || tag === 'ol') ? listDepth + 1 : listDepth;
+            let currentIsCode = isCode || tag === 'pre' || tag === 'code';
+
+            Array.from(node.childNodes).forEach(child => {
+                inner += processNode(child, nextDepth, currentIsCode);
             });
-            return res + '\n';
-        });
+
+            const trimmedInner = inner.trim();
+            if (!trimmedInner && !['img', 'br', 'hr'].includes(tag)) return '';
+
+            switch (tag) {
+                case 'h1': return `\n\n# ${trimmedInner}\n\n`;
+                case 'h2': return `\n\n## ${trimmedInner}\n\n`;
+                case 'h3': return `\n\n### ${trimmedInner}\n\n`;
+                case 'h4': return `\n\n#### ${trimmedInner}\n\n`;
+                case 'h5': return `\n\n##### ${trimmedInner}\n\n`;
+                case 'h6': return `\n\n###### ${trimmedInner}\n\n`;
+                case 'strong':
+                case 'b': return `**${trimmedInner}**`;
+                case 'em':
+                case 'i': return `*${trimmedInner}*`;
+                case 'code':
+                    if (node.parentNode && node.parentNode.tagName.toLowerCase() === 'pre') return inner; 
+                    return `\`${trimmedInner}\``;
+                case 'pre': 
+                    return `\n\n\`\`\`\n${trimmedInner}\n\`\`\`\n\n`;
+                case 'p': 
+                case 'div': {
+                    let parentTag = node.parentNode ? node.parentNode.tagName.toLowerCase() : '';
+                    if (parentTag === 'li') {
+                        return `${trimmedInner}<br>`;
+                    }
+                    return `\n\n${trimmedInner}\n\n`;
+                }
+                case 'br': 
+                    return `<br>`; 
+                case 'hr':
+                    return `\n\n---\n\n`;
+                case 'ul': 
+                case 'ol': 
+                    return `\n${inner.replace(/^\n+|\n+$/g, '')}\n`;
+                case 'li': {
+                    let indent = '  '.repeat(Math.max(0, listDepth - 1));
+                    let prefix = node.parentNode && node.parentNode.tagName.toLowerCase() === 'ol' ? '1. ' : '- ';
+                    let content = inner.replace(/^\n+|\n+$/g, '').replace(/(<br>)+$/, '').trim();
+                    return `\n${indent}${prefix}${content}`;
+                }
+                case 'img': {
+                    let alt = node.getAttribute('alt') || 'image';
+                    let src = node.getAttribute('src') || '';
+                    if (src.startsWith('data:image')) src = src.replace(/\s+/g, '');
+                    return `\n\n![${alt}](${src})\n\n`;
+                }
+                default:
+                    return inner;
+            }
+        }
+
+        let mdResult = processNode(body);
         
-        md = md.replace(/<\/?(table|thead|tbody|tfoot|tr|th|td)[^>]*>/gi, '');
+        mdResult = mdResult.replace(/\n{3,}/g, '\n\n');
 
-        md = md.replace(/<p[^>]*>/gi, '\n');
-        md = md.replace(/<\/p>/gi, '\n\n');
-        md = md.replace(/<div[^>]*>/gi, '\n');
-        md = md.replace(/<\/div>/gi, '\n');
-        md = md.replace(/<br\s*[\/]?>/gi, '\n');
-
-        md = md.replace(/<strong[^>]*>([\s\S]*?)<\/strong>/gi, '**$1**');
-        md = md.replace(/<b[^>]*>([\s\S]*?)<\/b>/gi, '**$1**');
-        md = md.replace(/<mark[^>]*>([\s\S]*?)<\/mark>/gi, '**$1**');
-        md = md.replace(/<em[^>]*>([\s\S]*?)<\/em>/gi, '*$1*');
-        md = md.replace(/<i[^>]*>([\s\S]*?)<\/i>/gi, '*$1*');
-
-        let temp = md;
-        const olRegex = /<ol[^>]*>([\s\S]*?)<\/ol>/gi;
-        temp = temp.replace(olRegex, function(match, olContent) {
-            let parsedOl = olContent.replace(/<li[^>]*>/gi, '\n1. ');
-            return `\n${parsedOl}\n`;
-        });
-        md = temp;
-
-        md = md.replace(/<ul[^>]*>/gi, ''); md = md.replace(/<\/ul>/gi, '\n');
-        md = md.replace(/<ol[^>]*>/gi, ''); md = md.replace(/<\/ol>/gi, '\n'); 
-        md = md.replace(/<li[^>]*>/gi, '- '); md = md.replace(/<\/li>/gi, '\n');
-        
-        md = stripHtmlTags(md);
-        md = md.replace(/\n\s*\n/g, '\n\n');
-        
-        let lines = md.split('\n');
-        let counters = {}; 
+        let lines = mdResult.split('\n');
+        let counters = {};
 
         for (let i = 0; i < lines.length; i++) {
             let line = lines[i];
             let match = line.match(/^(\s*)\d+\.\s+(.*)/); 
-            
             if (match) {
                 let indent = match[1].length;
                 let content = match[2];
-                
-                if (!counters[indent]) {
-                    counters[indent] = 1;
-                } else {
-                    counters[indent]++;
-                }
-                
+                if (!counters[indent]) counters[indent] = 1;
+                else counters[indent]++;
                 for (let key in counters) {
                     if (parseInt(key) > indent) delete counters[key];
                 }
-                
                 lines[i] = `${match[1]}${counters[indent]}. ${content}`;
+            } else if (line.match(/^(\s*)-\s+/)) {
+                let indent = line.match(/^(\s*)/)[1].length;
+                for (let key in counters) {
+                    if (parseInt(key) > indent) delete counters[key];
+                }
             }
         }
-        md = lines.join('\n');
+        
+        mdResult = lines.join('\n');
 
-        return md.trim();
+        mdResult = mdResult.replace(/&lt;/gi, '<');
+        mdResult = mdResult.replace(/&gt;/gi, '>');
+        mdResult = mdResult.replace(/&amp;/gi, '&');
+        mdResult = mdResult.replace(/&nbsp;/gi, ' ');
+        mdResult = mdResult.replace(/&quot;/gi, '"');
+
+        return mdResult.trim();
     }
 
     function convertAsterisks(text) {
@@ -1001,15 +1039,9 @@ window.MathJax = {
                         let rawMne = await processEmbeddedImages(item.mnemonic || '', `5R_${index+1}_Mne`);
                         let rawNote = await processEmbeddedImages(item.note || item.notes || item.reference || item.desc || item.description || '', `5R_${index+1}_Note`);
                         
-                        const clean5RText = (str) => {
-                            if(!str) return '';
-                            let s = str.replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&amp;/gi, '&').replace(/&nbsp;/gi, ' ');
-                            return s.replace(/<\/?(red|blue|green|color|font)[^>]*>/gi, '');
-                        };
-
-                        let def = convertHtmlToMd(clean5RText(rawDef)).trim();
-                        let mne = convertHtmlToMd(clean5RText(rawMne)).trim();
-                        let note = convertHtmlToMd(clean5RText(rawNote)).trim();
+                        let def = convertHtmlToMd(rawDef).trim();
+                        let mne = convertHtmlToMd(rawMne).trim();
+                        let note = convertHtmlToMd(rawNote).trim();
                         
                         if (def) content += `**[정의/개념]**\n\n${def}\n\n`;
                         if (mne) content += `**[두음/키워드]**\n\n${mne}\n\n`;
@@ -1077,17 +1109,11 @@ window.MathJax = {
                         const title = item.topic ? `[${item.domain || '분야'}] ${item.topic}` : `Drill 주제 ${index + 1}`;
                         let content = '';
                         
-                        const cleanDrillText = (str) => {
-                            if(!str) return '';
-                            let s = str.replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&amp;/gi, '&').replace(/&nbsp;/gi, ' ');
-                            return s.replace(/<\/?(red|blue|green|color|font|span)[^>]*>/gi, '');
-                        };
-                        
                         let rawDef = await processEmbeddedImages(item.def || '', `DR_${index+1}_Def`);
                         let rawKeys = await processEmbeddedImages(item.keys || '', `DR_${index+1}_Keys`);
                         
-                        let def = convertHtmlToMd(cleanDrillText(rawDef)).trim();
-                        let keys = convertHtmlToMd(cleanDrillText(rawKeys)).trim();
+                        let def = convertHtmlToMd(rawDef).trim();
+                        let keys = convertHtmlToMd(rawKeys).trim();
                         
                         if (def) content += `**[정의]**\n\n${def}\n\n`;
                         if (keys) content += `**[핵심/키워드]**\n\n${keys}\n\n`;
@@ -1400,7 +1426,7 @@ window.MathJax = {
                 });
 
                 processedContent = processedContent.replace(/<\/?([가-힣a-zA-Z0-9_\-\s]+)>/g, (match, inner) => {
-                    const knownTags = ['p', 'b', 'strong', 'i', 'em', 'ul', 'ol', 'li', 'br', 'img', 'div', 'span', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'code', 'pre', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'tfoot', 'mark'];
+                    const knownTags = ['p', 'b', 'strong', 'i', 'em', 'ul', 'ol', 'li', 'br', 'img', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'code', 'pre', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'tfoot', 'mark'];
                     const tagName = inner.trim().split(/\s+/)[0].toLowerCase();
                     if (knownTags.includes(tagName)) return match;
                     return match.replace('<', '&lt;').replace('>', '&gt;');
@@ -1425,22 +1451,17 @@ window.MathJax = {
 
                 processedContent = protectMath(processedContent);
                 
-                // 단일 라인 내에서 짝이 맞는 ** 처리 및 짝 잃은 잉여 ** 완벽 제거
                 let plines = processedContent.split('\n');
                 for (let j = 0; j < plines.length; j++) {
                     let line = plines[j];
                     
-                    // 1. 정상적인 쌍(짝)이 있는 ** 추출 및 내부 공백 제거
                     line = line.replace(/\*\*(.*?)\*\*/g, (match, inner) => {
-                        // 빈 강조(****)나 공백만 있는 강조(** **)는 그냥 무시/제거 대상이 되도록 빈 문자열 반환
                         if (inner.trim() === '') return '';
                         return '@@B_START@@' + inner.trim() + '@@B_END@@';
                     });
                     
-                    // 2. 짝이 맞지 않아 홀로 남은 잉여 ** 제거 (위의 정규식에 매칭되지 않은 찌꺼기)
                     line = line.replace(/\*\*/g, '');
                     
-                    // 3. 임시 치환자 복구
                     line = line.replace(/@@B_START@@/g, '**').replace(/@@B_END@@/g, '**');
                     
                     plines[j] = line;
@@ -1451,27 +1472,21 @@ window.MathJax = {
                     processedContent = processedContent.replace(/^(\s*)#{1,6}\s+(.*)$/gm, '$1**$2**');
                 }
                 
-                // ===== [구분] 태그 안전 분리 로직 =====
                 const tagsStr = "리드|개념|상세설명 및 해결방안|상세설명|정의\\/개념|정의|핵심\\/키워드|두음\\/키워드|분류|인증기준|주요 확인사항|결함사례|참조\\/Notes";
                 
-                // A. 기존 **[태그]** 형태에서 ** 제거 (표준화를 위해, 줄바꿈 무시하고 같은 줄 공백만 허용)
                 const tagRegexA = new RegExp(`\\*\\*[ \\t]*\\[(${tagsStr})\\][ \\t]*\\*\\*`, 'g');
                 processedContent = processedContent.replace(tagRegexA, '[$1]');
                 
-                // B. 태그 앞이나 뒤에 붙은 잉여 ** 제거 (같은 줄에 있는 경우에만 처리)
                 const tagRegexB1 = new RegExp(`\\*\\*[ \\t]*\\[(${tagsStr})\\]`, 'g');
                 processedContent = processedContent.replace(tagRegexB1, '[$1]');
                 
                 const tagRegexB2 = new RegExp(`\\[(${tagsStr})\\][ \\t]*\\*\\*`, 'g');
                 processedContent = processedContent.replace(tagRegexB2, '[$1]');
                 
-                // C. [태그] 앞뒤로 줄바꿈과 ** 추가
                 const tagRegexC = new RegExp(`\\[(${tagsStr})\\]`, 'g');
                 processedContent = processedContent.replace(tagRegexC, '\n\n**[$1]**\n\n');
                 
-                // D. 불필요한 줄바꿈 정리
                 processedContent = processedContent.replace(/\n{3,}/g, '\n\n');
-                // ======================================
 
                 processedContent = processedContent.replace(/^(\s*\d+)\.(\s+)/gm, '$1\\.$2');
                 
