@@ -270,7 +270,7 @@
             <input type="text" id="tree-title-input" class="tree-title-input" onblur="autoSaveAndRefresh()" spellcheck="false" placeholder="맵 제목 입력...">
             <div class="toolbar-actions">
                 <button class="btn-action" onclick="openShortcutModal()" title="단축키 안내"><i class="ph ph-keyboard"></i> 단축키</button>
-                <button class="btn-action" onclick="restoreFromJSON()" title="JSON 복 복원"><i class="ph ph-upload-simple"></i> 복원</button>
+                <button class="btn-action" onclick="restoreFromJSON()" title="JSON 복원"><i class="ph ph-upload-simple"></i> 복원</button>
                 <button class="btn-action" onclick="backupToJSON()" title="JSON 백업"><i class="ph ph-download-simple"></i> 백업</button>
                 <button class="btn-action" onclick="exportToHTML()" title="HTML 내보내기"><i class="ph ph-export"></i> 내보내기</button>
                 <button class="btn-action btn-primary" onclick="saveMap()" title="저장 (Ctrl+S)"><i class="ph ph-floppy-disk"></i> 저장</button>
@@ -349,6 +349,7 @@
                 <div class="shortcut-item"><span>몰입 모드 (사이드바/상단바 숨김)</span> <div><kbd>Ctrl</kbd> + <kbd>H</kbd></div></div>
                 <div class="shortcut-item"><span>상세 문서 패널 닫기</span> <div><kbd>Alt</kbd> + <kbd>L</kbd> (입력 중 아닐 때)</div></div>
                 <div class="shortcut-item"><span>상세 문서 순차 열기</span> <div><kbd>Alt</kbd> + <kbd>K</kbd></div></div>
+                <div class="shortcut-item"><span>중요도(🚩) 마커 토글</span> <div><kbd>Alt</kbd> + <kbd>1</kbd></div></div>
                 
                 <hr style="border: 0; border-top: 1px solid var(--border-medium); margin: 18px 0;">
                 <div style="font-size: 13px; color: var(--text-muted); margin-bottom: 10px;"><b>캔버스 제어</b></div>
@@ -1078,7 +1079,7 @@
             const id = generateId();
             const rootNode = {
                 id: generateId(), x: 100, y: 150, type: 'root', icon: '🏷️', width: 280, height: null,
-                text: '', memo: '', tags: [], description: '', attachments: [], children: [] 
+                text: '', memo: '', tags: [], description: '', attachments: [], children: [], isImportant: false
             };
             const newMap = { id, title: '새 지식 맵', updatedAt: Date.now(), data: { nodes: [rootNode], links: [] } };
             await saveToDB(newMap); loadMap(newMap); refreshSidebar();
@@ -1104,7 +1105,7 @@
         function createNewRootNode(x, y) {
             const newNode = {
                 id: generateId(), x: x, y: y, type: 'root', icon: '📝', width: 280, height: null,
-                text: '', memo: '', tags: [], description: '', attachments: [], children: [] 
+                text: '', memo: '', tags: [], description: '', attachments: [], children: [], isImportant: false
             };
             mapNodes.push(newNode); activeNodeId = newNode.id; renderAll(); autoSave();
         }
@@ -1116,7 +1117,7 @@
             const newNodeId = generateId();
             const defIcon = type === 'folder' ? '📁' : '🔗'; 
             parentNode.children.push({
-                id: newNodeId, type: type, icon: defIcon, text: '', memo: '', tags: [], description: '', attachments: [], children: [], width: 280, height: null
+                id: newNodeId, type: type, icon: defIcon, text: '', memo: '', tags: [], description: '', attachments: [], children: [], width: 280, height: null, isImportant: false
             });
             parentNode.isCollapsed = false; activeNodeId = newNodeId; renderAll(); autoSave();
         }
@@ -1212,6 +1213,23 @@
             });
 
             const header = document.createElement('div'); header.className = 'node-header';
+            
+            // 🚩 깃발과 아이콘을 하나의 그룹으로 묶어 간격 최소화
+            const iconGroup = document.createElement('div');
+            iconGroup.style.display = 'flex';
+            iconGroup.style.alignItems = 'center';
+            iconGroup.style.gap = '2px'; // 마커와 아이콘 사이 간격 줄임
+
+            // --- 🚩 중요도 표시 (ALT+1 누를 시 활성화) ---
+            if (node.isImportant) {
+                const importantFlag = document.createElement('div');
+                importantFlag.innerHTML = '🚩';
+                importantFlag.style.fontSize = '20px';
+                importantFlag.style.lineHeight = '1.4';
+                importantFlag.style.userSelect = 'none';
+                iconGroup.appendChild(importantFlag);
+            }
+
             const icon = document.createElement('div'); icon.className = 'node-icon';
             const defaultIcon = node.type === 'root' ? '🏷️' : (node.type === 'folder' ? '📁' : '🔗');
             icon.innerHTML = node.icon || defaultIcon; icon.title = "클릭하여 아이콘 변경";
@@ -1221,7 +1239,9 @@
                 const rect = e.currentTarget.getBoundingClientRect();
                 picker.style.left = `${rect.left}px`; picker.style.top = `${rect.bottom + 8}px`;
             });
-            header.appendChild(icon);
+            
+            iconGroup.appendChild(icon);
+            header.appendChild(iconGroup);
 
             const title = document.createElement('div'); title.className = 'node-title';
             title.contentEditable = true; title.setAttribute('spellcheck', 'false');
@@ -1613,6 +1633,21 @@
             
             const activeEl = document.activeElement;
             const isInput = activeEl && (activeEl.tagName === 'INPUT' || activeEl.isContentEditable);
+
+            // --- 🚩 중요도 표시 단축키 추가 (ALT+1) ---
+            if (isAlt && !isCtrl && !isShift && key === '1') {
+                e.preventDefault();
+                if (!isInput && activeNodeId) {
+                    const nodeToToggle = findNodeById(mapNodes, activeNodeId);
+                    if (nodeToToggle) {
+                        nodeToToggle.isImportant = !nodeToToggle.isImportant;
+                        renderAll();
+                        autoSave();
+                        showToast(nodeToToggle.isImportant ? '중요도(🚩) 마커가 추가되었습니다.' : '중요도 마커가 해제되었습니다.');
+                    }
+                }
+                return;
+            }
             
             if (isCtrl && !isAlt && !isShift && key === 'h') {
                 e.preventDefault();

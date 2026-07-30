@@ -441,7 +441,11 @@ window.MathJax = {
 
         function processNode(node, listDepth = 0, isCode = false) {
             if (node.nodeType === Node.TEXT_NODE) {
-                return node.textContent.replace(/\n/g, ' '); 
+                let text = node.textContent.replace(/\n/g, ' ');
+                // 보이지 않는 제로 너비 문자들 완전 제거 및 특수 공백 치환
+                text = text.replace(/[\u200B-\u200D\uFEFF]/g, '');
+                text = text.replace(/\u00A0/g, ' ');
+                return text; 
             }
             if (node.nodeType !== Node.ELEMENT_NODE) return '';
 
@@ -493,6 +497,9 @@ window.MathJax = {
                     return `\n\n\`\`\`\n${trimmedInner}\n\`\`\`\n\n`;
                 case 'p': 
                 case 'div': {
+                    if (trimmedInner === '<br>' || trimmedInner === '<br/>' || trimmedInner === '<br />') {
+                        return `\n\n`; 
+                    }
                     let parentTag = node.parentNode ? node.parentNode.tagName.toLowerCase() : '';
                     if (parentTag === 'li') {
                         return `${trimmedInner}<br>`;
@@ -660,16 +667,27 @@ window.MathJax = {
                         let noteMd = convertHtmlToMd(rawNote).trim();
                         
                         if (bodyMd) content += `**[상세 내용]**\n\n${bodyMd}\n\n`;
-                        if (noteMd) content += `**[핵심 요약]**\n\n${noteMd}\n\n`;
                         
+                        let filesMd = '';
                         // 첨부된 이미지 데이터 파싱
                         if (item.files && item.files.length > 0) {
                             item.files.forEach((fileObj, fIdx) => {
                                 if (fileObj.data) {
                                     let cleanImg = fileObj.data.replace(/\s+/g, '');
-                                    content += `![TN_image_${index + 1}_${fIdx + 1}](${cleanImg})\n\n`;
+                                    filesMd += `![TN_image_${index + 1}_${fIdx + 1}](${cleanImg})\n\n`;
                                 }
                             });
+                        }
+
+                        // <br> 태그나 공백 등 보이지 않는 문자만 있는 경우를 필터링
+                        let cleanNoteMd = noteMd.replace(/<br>/gi, '').replace(/\s+/g, '');
+                        let cleanFilesMd = filesMd.replace(/\s+/g, '');
+
+                        // 참고 이미지가 실제로 존재할 때만 헤더 렌더링
+                        if (cleanNoteMd.length > 0 || cleanFilesMd.length > 0) {
+                            content += `**[참고 이미지]**\n\n`;
+                            if (cleanNoteMd.length > 0) content += `${noteMd}\n\n`;
+                            if (cleanFilesMd.length > 0) content += `${filesMd}`;
                         }
                         
                         addArticle({ title: title, content: content.trim(), visualType: 'none' });
@@ -1412,6 +1430,8 @@ window.MathJax = {
             
             if (art.content) {
                 let processedContent = art.content;
+                // 보이지 않는 제로 너비 문자 및 변형 공백문자 렌더링 전 청소
+                processedContent = processedContent.replace(/[\u200B-\u200D\uFEFF]/g, '').replace(/\u00A0/g, ' ');
                 
                 let codeBlocks = [];
                 processedContent = processedContent.replace(/```[\s\S]*?```/g, (match) => {
@@ -1535,9 +1555,13 @@ window.MathJax = {
                 processedContent = newLines.join('\n');
 
                 let lines = processedContent.split('\n');
-                lines = lines.map(line => {
+                lines = lines.map((line, index, arr) => {
                     let trimmed = line.trimEnd();
                     if (trimmed.length > 0 && !trimmed.startsWith('%%%CODE_BLOCK_') && !trimmed.startsWith('%%%INLINE_CODE_') && !trimmed.startsWith('|') && !trimmed.startsWith('<') && !trimmed.startsWith('![') && !trimmed.startsWith('#')) {
+                        // 다음 줄이 빈 줄이거나 마지막 줄이면 공백 2개(하드 브레이크)를 추가하지 않음
+                        if (index === arr.length - 1 || arr[index + 1].trimEnd().length === 0) {
+                            return trimmed;
+                        }
                         return trimmed + '  '; 
                     }
                     return trimmed.length === 0 ? '' : line;
@@ -1553,6 +1577,9 @@ window.MathJax = {
                 codeBlocks.forEach((block, i) => {
                     processedContent = processedContent.replace(`%%%CODE_BLOCK_${i}%%%`, block);
                 });
+
+                // 최종적으로 불필요하게 3줄 이상 누적된 공백 줄들을 정상적인 문단 간격(2줄)으로 압축
+                processedContent = processedContent.replace(/\n{3,}/g, '\n\n');
 
                 artMd += `${processedContent}\n\n`;
             }
