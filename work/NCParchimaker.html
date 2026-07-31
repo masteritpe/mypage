@@ -169,10 +169,10 @@
     .w-box-external .content-area .ext-body { flex: 1; padding: 10px; }
 
     /* Icons */
-    .w-ncp-icon .content-area, .w-custom-icon .content-area { background: transparent; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
-    .w-ncp-icon i { font-size: 32px; color: #333; margin-bottom: 6px; pointer-events: none; }
-    .w-ncp-icon span, .w-custom-icon span { font-size: 12px; font-weight: 600; color: #333; line-height: 1.2; word-break: keep-all; pointer-events: none; }
-    .w-custom-icon img { width: 32px; height: 32px; object-fit: contain; margin-bottom: 6px; pointer-events: none; }
+    .w-ncp-icon .content-area, .w-custom-icon .content-area { background: transparent; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; height: 100%; }
+    .w-ncp-icon i { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 32px; color: #333; margin-bottom: 4px; pointer-events: none; transition: font-size 0.1s; }
+    .w-custom-icon img { width: 100%; height: 100%; flex: 1; min-height: 0; object-fit: contain; margin-bottom: 4px; pointer-events: none; }
+    .w-ncp-icon span, .w-custom-icon span { font-size: 12px; font-weight: 600; color: #333; line-height: 1.2; word-break: keep-all; pointer-events: none; flex-shrink: 0; }
 
     /* Lines */
     .w-line .content-area, .w-line_arrow .content-area, .w-line_arrow_both .content-area { background: transparent !important; border-top-width: 1px; border-top-style: solid; border-top-color: #333; border-left: none !important; border-right: none !important; border-bottom: none !important; height: 0 !important; position: absolute; top: 50%; width: 100%; margin-top: 0 !important; transform: translateY(-50%); overflow: visible !important; }
@@ -639,7 +639,6 @@
           showToast('추가되었습니다.');
       }
       clearPendingMainIcon();
-      openMainIconManageModal();
   }
 
   function deleteMainIcon(id, event) {
@@ -680,8 +679,11 @@
   }
 
   async function openIconManageModal() {
-    const listContainer = document.getElementById('custom-icon-manage-list'); listContainer.innerHTML = '';
     const icons = await loadCustomIconList();
+    
+    const listContainer = document.getElementById('custom-icon-manage-list'); 
+    listContainer.innerHTML = '';
+    
     if (icons.length === 0) listContainer.innerHTML = '<div class="empty-state" style="padding: 20px;">등록된 커스텀 아이콘이 없습니다.</div>';
     else {
       icons.forEach((icon, index) => {
@@ -803,7 +805,6 @@
         if(pendingCustomIconDataUrl) {
             iconToSave.dataUrl = pendingCustomIconDataUrl;
         } else {
-            // Keep existing image if not changed during edit
             const existing = customIconsListCache.find(i => i.id === editingCustomIconId);
             iconToSave.dataUrl = existing.dataUrl;
         }
@@ -814,7 +815,6 @@
         tx.oncomplete = () => { 
             showToast(editingCustomIconId ? '수정되었습니다.' : '등록되었습니다.'); 
             clearPendingCustomIcon();
-            openIconManageModal(); 
         };
     } catch(e) { showToast('등록/수정 실패'); }
   }
@@ -826,8 +826,8 @@
     tx.objectStore(ICON_STORE).delete(id);
     tx.oncomplete = () => { 
         if (editingCustomIconId === id) clearPendingCustomIcon();
+        else openIconManageModal();
         showToast('삭제되었습니다.'); 
-        openIconManageModal(); 
     };
   }
 
@@ -946,6 +946,23 @@
       }
   }
 
+  // --- 아이콘 리사이즈를 위한 함수 추가 ---
+  function updateIconSize(widget) {
+      if (widget.dataset.type === 'ncp-icon') {
+          const iElem = widget.querySelector('i');
+          const spanElem = widget.querySelector('span');
+          if (iElem && spanElem) {
+              const w = widget.offsetWidth;
+              const h = widget.offsetHeight;
+              const textH = spanElem.offsetHeight || 15;
+              const padding = 8;
+              // 위젯의 넓이와 높이(텍스트 영역 제외) 중 작은 값에 맞춰 폰트 사이즈 조절
+              const maxIconSize = Math.max(12, Math.min(w, h - textH - padding));
+              iElem.style.fontSize = maxIconSize + 'px';
+          }
+      }
+  }
+
   function addWidget(type, src = null, defaultText = null, color = null) {
     if(!activeSlideId) return; const slide = document.getElementById(activeSlideId); const widget = document.createElement('div');
     widget.className = `widget w-${type}`; widget.id = generateId(); widget.dataset.type = type; widget.dataset.angle = 0; widget.style.transform = `rotate(0deg)`;
@@ -983,7 +1000,10 @@
     `;
     slide.appendChild(widget);
 
-    setTimeout(() => selectWidget(widget, false), 10);
+    setTimeout(() => { 
+        selectWidget(widget, false); 
+        if(type === 'ncp-icon') updateIconSize(widget); // 초기 사이즈 렌더링 시 적용
+    }, 10);
   }
 
   function selectWidget(widget, isMulti = false) {
@@ -1011,7 +1031,11 @@
   
   function changeElemSize(prop, value) {
       const val = Math.max(10, parseInt(value) || 10);
-      selectedWidgets.forEach(w => { if (prop === 'width') w.style.width = val + 'px'; if (prop === 'height') w.style.height = val + 'px'; });
+      selectedWidgets.forEach(w => { 
+          if (prop === 'width') w.style.width = val + 'px'; 
+          if (prop === 'height') w.style.height = val + 'px'; 
+          if (w.dataset.type === 'ncp-icon') updateIconSize(w); // 직접 입력으로 사이즈 수정 시 폰트 재조정
+      });
   }
 
   function toggleTextFormat(command) { document.execCommand(command, false, null); }
@@ -1082,6 +1106,9 @@
         if (newH < 20) { newH = 20; if (resizeDir.includes('n')) newT = startT + startH - 20; } 
         activeActionWidget.style.width = `${newW}px`; activeActionWidget.style.height = `${newH}px`; activeActionWidget.style.left = `${newL}px`; activeActionWidget.style.top = `${newT}px`; 
         document.getElementById('elem-width').value = Math.round(newW); document.getElementById('elem-height').value = Math.round(newH);
+        
+        if (activeActionWidget.dataset.type === 'ncp-icon') updateIconSize(activeActionWidget); // 드래그 중 폰트 사이즈 재조정
+
         return; 
     }
     
@@ -1203,10 +1230,10 @@
                 }
             } else if (type === 'ncp-icon' || type === 'custom-icon') { 
                 const textSpan = content.querySelector('span'); const text = textSpan ? textSpan.innerText : '';
-                slide.addText(text, { x: x, y: y + height*0.6, w: width, h: height*0.4, align: 'center', valign: 'middle', fontSize: 9, color: '333333', bold: true });
+                slide.addText(text, { x: x, y: y + height - 0.25, w: width, h: 0.25, align: 'center', valign: 'middle', fontSize: 9, color: '333333', bold: true });
                 if (type === 'custom-icon') {
                     const img = content.querySelector('img'); 
-                    if(img && img.dataset.src) slide.addImage({ data: img.dataset.src, x: x + width*0.25, y: y, w: width*0.5, h: height*0.5 }); 
+                    if(img && img.dataset.src) slide.addImage({ data: img.dataset.src, x: x + width*0.1, y: y, w: width*0.8, h: height - 0.25 }); 
                 } else {
                     slide.addShape(pres.ShapeType.rect, { x: x + width*0.25, y: y, w: width*0.5, h: height*0.5, fill: { color: 'E5E7EB' } });
                 }
