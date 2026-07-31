@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>NCP Architecture Diagram Maker</title>
+  <title>NCP Archi Diagram Maker</title>
   
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <script src="https://unpkg.com/@phosphor-icons/web"></script>
@@ -170,6 +170,9 @@
 
     /* Icons */
     .w-ncp-icon .content-area, .w-custom-icon .content-area { background: transparent; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; height: 100%; }
+    .w-image .content-area { background: transparent; display: flex; align-items: center; justify-content: center; height: 100%; padding: 0; }
+    .w-image img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+
     .w-ncp-icon i { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 32px; color: #333; margin-bottom: 4px; pointer-events: none; transition: font-size 0.1s; }
     .w-custom-icon img { width: 100%; height: 100%; flex: 1; min-height: 0; object-fit: contain; margin-bottom: 4px; pointer-events: none; }
     .w-ncp-icon span, .w-custom-icon span { font-size: 12px; font-weight: 600; color: #333; line-height: 1.2; word-break: keep-all; pointer-events: none; flex-shrink: 0; }
@@ -234,7 +237,7 @@
 <header>
   <div class="logo">
     <div style="width:16px; height:16px; background:#03C75A;"></div>
-    NCP Architecture Diagram Maker
+    NCP Archi Diagram Maker
   </div>
   
   <div class="header-actions">
@@ -880,6 +883,131 @@
     } catch (e) { showToast("저장 중 오류가 발생했습니다."); }
   }
 
+  /* === Project Load & Manage === */
+  // 1. 불러오기 모달 열기 및 목록 렌더링
+  async function openLoadModal() {
+      const listContainer = document.getElementById('project-list');
+      listContainer.innerHTML = '';
+      
+      try {
+          const db = await initDB();
+          const tx = db.transaction(STORE_NAME, "readonly");
+          const store = tx.objectStore(STORE_NAME);
+          const req = store.getAll();
+          
+          req.onsuccess = () => {
+              const projects = req.result;
+              if (projects.length === 0) {
+                  listContainer.innerHTML = '<div class="empty-state" style="padding: 20px; text-align: center; color: var(--text-muted);">저장된 아키텍처가 없습니다.</div>';
+              } else {
+                  // 최신 저장 순으로 정렬
+                  projects.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+                  
+                  projects.forEach(p => {
+                      const dateStr = new Date(p.updatedAt).toLocaleString();
+                      const div = document.createElement('div');
+                      div.className = 'project-item';
+                      
+                      div.innerHTML = `
+                          <div class="project-item-info" onclick="loadProject('${p.id}')" style="flex:1; cursor:pointer;">
+                              <strong>${p.name || 'NCP 아키텍처'}</strong>
+                              <span>${dateStr} | 슬라이드: ${p.slideCount}장</span>
+                          </div>
+                          <button class="btn btn-icon-only" onclick="deleteProject('${p.id}', event)"><i class="ph ph-trash" style="color:var(--danger)"></i></button>
+                      `;
+                      listContainer.appendChild(div);
+                  });
+              }
+              document.getElementById('loadModal').style.display = 'flex';
+          };
+      } catch (e) {
+          showToast("목록을 불러오는 중 오류가 발생했습니다.");
+      }
+  }
+
+  // 2. 불러오기 모달 닫기
+  function closeLoadModal() {
+      document.getElementById('loadModal').style.display = 'none';
+  }
+
+  // 3. 선택한 프로젝트 캔버스로 불러오기
+  async function loadProject(id) {
+      try {
+          const db = await initDB();
+          const tx = db.transaction(STORE_NAME, "readonly");
+          const store = tx.objectStore(STORE_NAME);
+          const req = store.get(id);
+          
+          req.onsuccess = () => {
+              const project = req.result;
+              if (!project) return;
+              
+              currentProjectId = project.id;
+              document.getElementById('project-name').value = project.name;
+              slideCount = project.slideCount;
+              zIndexCounter = project.maxZ || 10;
+              
+              // 캔버스와 슬라이드 목록 초기화
+              canvasWrapper.innerHTML = '';
+              slideList.innerHTML = '';
+              
+              // 슬라이드 데이터 복원
+              project.slidesData.forEach((sData) => {
+                  // 슬라이드 본문 복원
+                  const slideDiv = document.createElement('div');
+                  slideDiv.className = 'ppt-slide';
+                  slideDiv.id = sData.id;
+                  slideDiv.style.transform = `scale(${currentScale})`;
+                  slideDiv.innerHTML = sData.html;
+                  canvasWrapper.appendChild(slideDiv);
+                  
+                  // 썸네일 복원 및 이벤트 재바인딩
+                  const thumbDiv = document.createElement('div');
+                  thumbDiv.className = 'slide-thumb';
+                  thumbDiv.id = 'thumb-' + sData.id;
+                  thumbDiv.innerHTML = sData.thumbHtml;
+                  
+                  thumbDiv.onclick = () => selectSlide(sData.id);
+                  const delBtn = thumbDiv.querySelector('.btn-del-slide');
+                  if (delBtn) {
+                      delBtn.onclick = (e) => { e.stopPropagation(); deleteSlide(sData.id); };
+                  }
+                  slideList.appendChild(thumbDiv);
+              });
+              
+              closeLoadModal();
+              
+              // 첫 번째 슬라이드 활성화
+              if (project.slidesData.length > 0) {
+                  selectSlide(project.slidesData[0].id);
+              }
+              
+              showToast(`'${project.name}' 불러오기 완료!`);
+          };
+      } catch (e) {
+          showToast("아키텍처를 불러오는 중 오류가 발생했습니다.");
+      }
+  }
+
+  // 4. 저장된 프로젝트 삭제하기
+  async function deleteProject(id, event) {
+      if (event) event.stopPropagation();
+      if (!confirm('해당 아키텍처를 삭제하시겠습니까?')) return;
+      
+      try {
+          const db = await initDB();
+          const tx = db.transaction(STORE_NAME, "readwrite");
+          tx.objectStore(STORE_NAME).delete(id);
+          
+          tx.oncomplete = () => {
+              if (currentProjectId === id) currentProjectId = null;
+              showToast('삭제되었습니다.');
+              openLoadModal(); // 목록 새로고침
+          };
+      } catch (e) {
+          showToast('삭제 중 오류가 발생했습니다.');
+      }
+  }
 
   document.getElementById('btn-export-png').addEventListener('click', async () => {
       if(!activeSlideId) return showToast('슬라이드를 선택해주세요.'); 
@@ -989,9 +1117,10 @@
         defaultWidth = 80; defaultHeight = 80; 
     }
     else if (type === 'custom-icon') { contentHTML = `<img src="${src}" data-src="${src}"/><span>${defaultText}</span>`; defaultWidth = 80; defaultHeight = 80; }
+    else if (type === 'image') { contentHTML = `<img src="${src}" data-src="${src}"/>`; defaultWidth = 200; defaultHeight = 200; }
 
     widget.style.width = `${defaultWidth}px`; widget.style.height = `${defaultHeight}px`; 
-    const isEditable = !type.includes('line') && !type.includes('icon') && type !== 'box-external';
+    const isEditable = !type.includes('line') && !type.includes('icon') && type !== 'box-external' && type !== 'image';
     
     widget.innerHTML = `
       <div class="rotate-handle"></div>
@@ -1175,7 +1304,7 @@
                   } else {
                       const isInputOrEditor = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable || (document.activeElement && document.activeElement.isContentEditable);
                       if (!isInputOrEditor) {
-                          addWidget('custom-icon', event.target.result, 'Pasted Icon'); 
+                          addWidget('image', event.target.result); 
                       }
                   }
               };
@@ -1237,6 +1366,9 @@
                 } else {
                     slide.addShape(pres.ShapeType.rect, { x: x + width*0.25, y: y, w: width*0.5, h: height*0.5, fill: { color: 'E5E7EB' } });
                 }
+            } else if (type === 'image') {
+                const img = content.querySelector('img'); 
+                if(img && img.dataset.src) slide.addImage({ data: img.dataset.src, x: x, y: y, w: width, h: height }); 
             }
         });
     });
