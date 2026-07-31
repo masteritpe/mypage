@@ -189,11 +189,14 @@ window.MathJax = {
                     <option value="chat">💬 Chat</option>
                     <option value="ismsp">🛡️ ISMS-P</option>
                     <option value="link">🔗 Link</option>
+                    <!-- 신규 추가된 항목 -->
+                    <option value="mdSplit">📄 MD</option>
                 </select>
-                <button class="btn" onclick="document.getElementById('commonImportInput').click()" title="선택한 양식의 JSON 파일을 불러옵니다.">
+                <!-- accept 속성에 .md, .txt 추가 -->
+                <button class="btn" onclick="document.getElementById('commonImportInput').click()" title="선택한 양식의 데이터를 불러옵니다.">
                     <span>불러오기</span>
                 </button>
-                <input type="file" id="commonImportInput" accept=".json" style="display: none;" onchange="handleCommonImport(event)">
+                <input type="file" id="commonImportInput" accept=".json, .md, .txt" style="display: none;" onchange="handleCommonImport(event)">
             </div>
             
             <button class="btn" id="linkMdFolderBtn" onclick="linkMdFolder()">
@@ -442,7 +445,6 @@ window.MathJax = {
         function processNode(node, listDepth = 0, isCode = false) {
             if (node.nodeType === Node.TEXT_NODE) {
                 let text = node.textContent.replace(/\n/g, ' ');
-                // 보이지 않는 제로 너비 문자들 완전 제거 및 특수 공백 치환
                 text = text.replace(/[\u200B-\u200D\uFEFF]/g, '');
                 text = text.replace(/\u00A0/g, ' ');
                 return text; 
@@ -625,6 +627,68 @@ window.MathJax = {
         else if (type === 'chat') handleChatImport(event);
         else if (type === 'ismsp') handleIsmspImport(event);
         else if (type === 'link') handleLinkImport(event);
+        else if (type === 'mdSplit') handleMdSplitImport(event); // MD 분리 기능 연결
+    }
+
+    // 신규 추가된 'MD 구분' 파싱 로직
+    function handleMdSplitImport(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const fileNameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const text = e.target.result;
+                const today = new Date().toISOString().split('T')[0];
+                
+                document.getElementById('issueDate').value = today;
+                document.getElementById('postTitle').value = fileNameWithoutExt;
+                
+                // 카테고리, 태그는 문제분석으로 고정
+                setCategoryAndTag('문제분석', '문제분석');
+                
+                document.getElementById('articlesContainer').innerHTML = ''; 
+                articleCount = 0;
+
+                // '## '를 기준으로 마크다운 텍스트 분리
+                const sections = text.split(/(?:^|\n)##\s+/);
+                
+                // 첫 번째 파트는 파일 상단 설명(서론/인사말)으로 적용
+                const introText = sections[0].trim();
+                if(introText) {
+                    document.getElementById('introText').value = introText;
+                }
+
+                // 두 번째 파트부터 실제 블록 본문으로 취급
+                const topics = sections.slice(1);
+                
+                if (topics.length > 0) {
+                    for (let index = 0; index < topics.length; index++) {
+                        const topicText = topics[index];
+                        const lines = topicText.split('\n');
+                        const title = lines[0].trim();
+                        // 첫 번째 줄은 소제목, 나머지는 본문 내용으로 합침
+                        const content = lines.slice(1).join('\n').trim();
+                        
+                        addArticle({ 
+                            title: title, 
+                            content: content, 
+                            visualType: 'none' 
+                        });
+                    }
+                } else {
+                    // 데이터가 하나도 없을 경우 빈 블록 생성
+                    addArticle();
+                }
+                showToast("✅ MD 구분 데이터를 성공적으로 불러왔습니다.");
+            } catch (error) {
+                alert("파일 파싱 중 오류가 발생했습니다. 포맷을 확인해주세요.");
+            }
+            e.target.result = null; 
+            event.target.value = '';
+        };
+        reader.readAsText(file);
     }
 
     function handleTechnoteImport(event) {
@@ -641,7 +705,6 @@ window.MathJax = {
                 const today = new Date().toISOString().split('T')[0];
                 document.getElementById('issueDate').value = today;
                 
-                // 테크노트 포스트 제목 포맷 설정
                 let postTitleStr = fileNameWithoutExt;
                 if (jsonArr.length > 0) {
                     const firstTitle = jsonArr[0].title || '제목없음';
@@ -649,7 +712,6 @@ window.MathJax = {
                 }
                 document.getElementById('postTitle').value = postTitleStr;
                 
-                // 지정된 카테고리/태그 설정
                 setCategoryAndTag('technote', 'technote');
                 document.getElementById('articlesContainer').innerHTML = ''; 
                 articleCount = 0;
@@ -669,7 +731,6 @@ window.MathJax = {
                         if (bodyMd) content += `**[상세 내용]**\n\n${bodyMd}\n\n`;
                         
                         let filesMd = '';
-                        // 첨부된 이미지 데이터 파싱
                         if (item.files && item.files.length > 0) {
                             item.files.forEach((fileObj, fIdx) => {
                                 if (fileObj.data) {
@@ -679,11 +740,9 @@ window.MathJax = {
                             });
                         }
 
-                        // <br> 태그나 공백 등 보이지 않는 문자만 있는 경우를 필터링
                         let cleanNoteMd = noteMd.replace(/<br>/gi, '').replace(/\s+/g, '');
                         let cleanFilesMd = filesMd.replace(/\s+/g, '');
 
-                        // 참고 이미지가 실제로 존재할 때만 헤더 렌더링
                         if (cleanNoteMd.length > 0 || cleanFilesMd.length > 0) {
                             content += `**[참고 이미지]**\n\n`;
                             if (cleanNoteMd.length > 0) content += `${noteMd}\n\n`;
@@ -1420,7 +1479,7 @@ window.MathJax = {
         
         let articlesMd = [];
         
-        const jsonCategories = ["키노트", "두음마스터", "5R", "Drill", "Chat", "ISMS-P", "Link", "technote"];
+        const jsonCategories = ["키노트", "두음마스터", "5R", "Drill", "Chat", "ISMS-P", "Link", "technote", "문제분석"];
         const isJsonImportCategory = jsonCategories.includes(data.category);
 
         data.articles.forEach((art, index) => {
@@ -1430,7 +1489,6 @@ window.MathJax = {
             
             if (art.content) {
                 let processedContent = art.content;
-                // 보이지 않는 제로 너비 문자 및 변형 공백문자 렌더링 전 청소
                 processedContent = processedContent.replace(/[\u200B-\u200D\uFEFF]/g, '').replace(/\u00A0/g, ' ');
                 
                 let codeBlocks = [];
@@ -1558,7 +1616,6 @@ window.MathJax = {
                 lines = lines.map((line, index, arr) => {
                     let trimmed = line.trimEnd();
                     if (trimmed.length > 0 && !trimmed.startsWith('%%%CODE_BLOCK_') && !trimmed.startsWith('%%%INLINE_CODE_') && !trimmed.startsWith('|') && !trimmed.startsWith('<') && !trimmed.startsWith('![') && !trimmed.startsWith('#')) {
-                        // 다음 줄이 빈 줄이거나 마지막 줄이면 공백 2개(하드 브레이크)를 추가하지 않음
                         if (index === arr.length - 1 || arr[index + 1].trimEnd().length === 0) {
                             return trimmed;
                         }
@@ -1578,7 +1635,6 @@ window.MathJax = {
                     processedContent = processedContent.replace(`%%%CODE_BLOCK_${i}%%%`, block);
                 });
 
-                // 최종적으로 불필요하게 3줄 이상 누적된 공백 줄들을 정상적인 문단 간격(2줄)으로 압축
                 processedContent = processedContent.replace(/\n{3,}/g, '\n\n');
 
                 artMd += `${processedContent}\n\n`;
@@ -1669,7 +1725,6 @@ window.MathJax = {
             mathBlocks.push(match); return `%%%MATH_INLINE_${mathBlocks.length - 1}%%%`;
         });
 
-        // 미리보기용 임시 H1 (MD 다운로드 시에는 YAML 영역에 포함됨)
         const headerHTML = `<h1>${data.postTitle}</h1>`; 
         
         const parsedHTML = marked.parse(mdStrProcessed, { breaks: true, gfm: true });
@@ -1690,7 +1745,6 @@ window.MathJax = {
 
         document.getElementById('previewText').innerHTML = headerHTML + finalHTML; 
         
-        // 동적 책갈피 생성
         const previewContainer = document.getElementById('previewText');
         const tocContainer = document.getElementById('previewToc');
         tocContainer.innerHTML = '<h3>📑 목차 (책갈피)</h3>';
@@ -1699,7 +1753,6 @@ window.MathJax = {
         let isFirstH1 = true;
         
         headers.forEach((header, index) => {
-            // MD다운로드시 H1이 본문에 없으므로, 미리보기용으로 추가된 첫번째 H1은 책갈피 생성에서 무시하여 동기화
             if (header.tagName === 'H1' && isFirstH1) {
                 isFirstH1 = false;
                 return;
@@ -1713,7 +1766,6 @@ window.MathJax = {
             link.href = '#' + header.id;
             link.className = `toc-item toc-${header.tagName.toLowerCase()}`;
             
-            // 책갈피(TOC)에서 [카테고리] 등 대괄호로 시작하는 접두어 제거
             let tocText = header.textContent.replace(/^\[.*?\]\s*/, '');
             link.textContent = tocText;
             
@@ -1765,7 +1817,7 @@ window.MathJax = {
         
         if (headerBytes + totalBodyBytes <= MAX_BYTES) {
             let finalContent = parts.header + blocks.join('');
-            finalContent = finalContent.replace(/\r?\n/g, '\r\n'); // 다운로드 줄바꿈 정규화 (CRLF 적용)
+            finalContent = finalContent.replace(/\r?\n/g, '\r\n'); 
             filesToSave.push({ name: `${baseFilename}.md`, content: finalContent });
         } else {
             let currentBody = "";
