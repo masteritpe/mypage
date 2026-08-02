@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>키워드 맵</title>
+    
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <style>
+        :root {
+            --bg-body: #FDFDFD; --bg-canvas: #FAFAFA;
+            --text-main: #111827; --text-muted: #6B7280;
+            --border-light: #F3F4F6; --border-medium: #E5E7EB;
+            --accent-dark: #18181B; --accent-hover: #27272A;
+            --node-shadow: 0 4px 20px rgba(0, 0, 0, 0.03), 0 1px 3px rgba(0, 0, 0, 0.02);
+            --node-hover-shadow: 0 10px 30px rgba(0, 0, 0, 0.06), 0 4px 8px rgba(0, 0, 0, 0.03);
+            --line-color: #D1D5DB; 
+            --primary: #0ea5e9;
+            --danger: #EF4444; 
+        }
+
+        * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+        body, html { 
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            background-color: var(--bg-body); 
+            font-family: 'Pretendard', sans-serif; 
+            color: var(--text-main); 
+            overflow: hidden; 
+        }
+
+        #main-area {
+            display: flex; flex-direction: column;
+            width: 100vw; height: 100vh; position: relative;
+        }
+
+        /* 💾 툴바 */
+        #toolbar {
+            position: absolute; top: 20px; right: 20px;
+            display: flex; gap: 10px; z-index: 100;
+        }
+        .btn-action {
+            padding: 10px 18px; border-radius: 10px; border: 1px solid var(--border-medium);
+            background: #FFFFFF; color: var(--text-main); font-weight: 600; font-size: 15px;
+            cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; gap: 6px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        }
+        .btn-action:hover { border-color: var(--primary); box-shadow: 0 4px 12px rgba(14,165,233,0.15); color: var(--primary); }
+
+        /* 🎨 캔버스 및 레이어 */
+        #canvas-container { 
+            flex: 1; width: 100%; height: 100%; position: relative; 
+            background-image: radial-gradient(#E5E7EB 1.5px, transparent 1.5px); 
+            background-size: 24px 24px; background-color: var(--bg-canvas);
+            overflow: hidden;
+        }
+        
+        #link-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+        .connection-line { stroke: var(--line-color); stroke-width: 2.5; fill: none; transition: stroke 0.2s, stroke-width 0.2s; }
+        .connection-line:hover { stroke: var(--primary); stroke-width: 3.5; }
+
+        #node-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; }
+
+        /* 🎯 노드 디자인 */
+        .node-box { 
+            position: absolute; background: #FFFFFF; border: 1.5px solid var(--border-medium); 
+            border-radius: 16px; padding: 16px 28px; min-width: 100px; text-align: center;
+            box-shadow: var(--node-shadow); z-index: 2; 
+            pointer-events: auto; transform: translate(-50%, -50%) scale(0);
+            display: flex; align-items: center; justify-content: center;
+            cursor: grab;
+            transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.2s, border-color 0.2s; 
+        }
+        .node-box.visible { transform: translate(-50%, -50%) scale(1); }
+        .node-box:hover { box-shadow: var(--node-hover-shadow); border-color: var(--primary); z-index: 10; }
+        
+        .node-box.root-node {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.1);
+            padding: 20px 48px; background: #F0F9FF;
+        }
+
+        .node-box.dragging {
+            cursor: grabbing; z-index: 100;
+            box-shadow: var(--node-hover-shadow); border-color: var(--primary);
+            transition: none !important;
+        }
+
+        .node-box.selected {
+            border-color: var(--danger) !important;
+            box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.15) !important;
+            z-index: 20;
+        }
+
+        .node-title { 
+            font-size: 16px; font-weight: 600; line-height: 1.4; white-space: nowrap; outline: none; 
+            cursor: text; 
+        }
+        .root-node .node-title { font-size: 22px; font-weight: 700; color: #0369a1; }
+
+        /* 🚀 하단 고정 입력창 */
+        #input-container {
+            position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 10px; z-index: 100;
+            background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(12px);
+            padding: 16px; border-radius: 20px; border: 1px solid rgba(0,0,0,0.05);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
+            width: 100%; max-width: 600px;
+        }
+        #keyword-input { 
+            flex: 1; padding: 16px 20px; border: 1px solid var(--border-medium); 
+            border-radius: 14px; font-size: 18px; font-family: inherit; font-weight: 500;
+            background-color: #FFFFFF; outline: none; transition: all 0.25s ease; 
+        }
+        #keyword-input:focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.15); }
+        
+        .btn-submit { 
+            padding: 0 28px; background-color: var(--accent-dark); color: #FFFFFF; 
+            border: none; border-radius: 14px; cursor: pointer; font-size: 16px; font-weight: 700;
+            transition: all 0.3s ease; display: flex; align-items: center; gap: 8px;
+        }
+        .btn-submit:hover { background-color: #27272A; transform: translateY(-2px); }
+
+        /* 💡 토스트 알림 (중앙 상단, 검정색) */
+        #toast {
+            position: fixed; top: -60px; left: 50%; transform: translateX(-50%);
+            background: #000000; color: white; padding: 12px 24px; border-radius: 8px;
+            font-size: 15px; font-weight: 600; opacity: 0; transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+            z-index: 10000; display: flex; align-items: center; gap: 8px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        #toast.show { top: 24px; opacity: 1; }
+
+        /* 📂 공통 모달 레이어 */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.4); backdrop-filter: blur(4px);
+            z-index: 2000; display: none; align-items: center; justify-content: center;
+        }
+        .modal-content {
+            background: #FFFFFF; width: 440px; border-radius: 20px; padding: 28px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.15);
+        }
+        .modal-title { margin: 0 0 20px 0; font-size: 20px; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
+        
+        .modal-input {
+            width: 100%; padding: 14px 16px; border: 1px solid var(--border-medium); 
+            border-radius: 12px; font-size: 16px; font-family: inherit;
+            background-color: var(--bg-canvas); outline: none; transition: 0.2s;
+        }
+        .modal-input:focus { border-color: var(--primary); background: #FFF; box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1); }
+
+        #map-list { max-height: 300px; overflow-y: auto; margin-bottom: 20px; display: flex; flex-direction: column; gap: 10px; }
+        .map-item {
+            padding: 14px 16px; border: 1px solid var(--border-medium); border-radius: 12px;
+            display: flex; justify-content: space-between; align-items: center;
+            cursor: pointer; transition: all 0.2s ease;
+        }
+        .map-item:hover { border-color: var(--primary); background: #F0F9FF; }
+        .map-item-title { font-size: 16px; font-weight: 600; color: var(--text-main); }
+        .map-item-date { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+        
+        .btn-delete-map {
+            background: #FEF2F2; color: var(--danger); border: 1px solid #FECACA;
+            border-radius: 8px; padding: 6px 10px; cursor: pointer; font-size: 13px; font-weight: 600;
+            transition: all 0.2s;
+        }
+        .btn-delete-map:hover { background: var(--danger); color: #FFF; }
+        
+        #map-list::-webkit-scrollbar { width: 6px; }
+        #map-list::-webkit-scrollbar-thumb { background: var(--border-medium); border-radius: 10px; }
+    </style>
+</head>
+<body>
+
+    <main id="main-area">
+        <!-- 상단 툴바 -->
+        <div id="toolbar">
+            <button class="btn-action" id="btn-load"><i class="ph ph-folder-open"></i> 불러오기</button>
+            <button class="btn-action" id="btn-save" title="단축키: Ctrl + S"><i class="ph ph-floppy-disk"></i> 저장</button>
+        </div>
+
+        <div id="canvas-container">
+            <svg id="link-layer"></svg>
+            <div id="node-layer"></div>
+        </div>
+
+        <div id="input-container">
+            <input type="text" id="keyword-input" placeholder="생각나는 키워드를 입력하세요..." autocomplete="off">
+            <button class="btn-submit" id="add-keyword-btn"><i class="ph-bold ph-paper-plane-tilt"></i> 추가</button>
+        </div>
+    </main>
+
+    <!-- 검정색 상단 토스트 -->
+    <div id="toast"><i class="ph-bold ph-info"></i> <span id="toast-msg">메시지</span></div>
+
+    <!-- 저장용 모달 -->
+    <div id="save-modal-overlay" class="modal-overlay">
+        <div class="modal-content">
+            <h3 class="modal-title"><i class="ph-fill ph-floppy-disk"></i> 키워드맵 저장</h3>
+            <div style="margin-bottom: 24px;">
+                <label for="save-map-name" style="display:block; margin-bottom: 8px; font-size: 14px; font-weight: 600; color: var(--text-muted);">키워드맵 이름</label>
+                <input type="text" id="save-map-name" class="modal-input" placeholder="저장할 이름을 입력하세요" autocomplete="off">
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn-action" style="flex: 1; background: var(--border-light); justify-content: center;" onclick="closeSaveModal()">취소</button>
+                <button class="btn-action" style="flex: 1; background: var(--primary); color: white; border-color: var(--primary); justify-content: center;" onclick="confirmSaveMap()">저장하기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 불러오기 모달 -->
+    <div id="load-modal-overlay" class="modal-overlay">
+        <div class="modal-content">
+            <h3 class="modal-title"><i class="ph-fill ph-folder-open"></i> 저장된 키워드맵</h3>
+            <div id="map-list"></div>
+            <button class="btn-action" style="width: 100%; padding: 12px; background: var(--border-light);" onclick="closeLoadModal()">닫기</button>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const canvasContainer = document.getElementById('canvas-container');
+            const nodeLayer = document.getElementById('node-layer');
+            const linkLayer = document.getElementById('link-layer');
+            const keywordInput = document.getElementById('keyword-input');
+            const addBtn = document.getElementById('add-keyword-btn');
+            const saveMapNameInput = document.getElementById('save-map-name');
+
+            let nodes = [];
+            let centerX, centerY;
+            let placementIndex = 0;
+
+            // 저장 상태 관리 변수
+            let currentMapId = null;
+            let currentMapName = "";
+
+            // 드래그 및 선택 상태 관리 변수
+            let isDragging = false;
+            let currentDragNodeData = null;
+            let dragOffsetX = 0;
+            let dragOffsetY = 0;
+            let selectedNodeData = null; 
+
+            // IndexedDB 설정
+            const DB_NAME = 'RadialMindMapDB';
+            const STORE_NAME = 'maps';
+
+            function initDB() {
+                return new Promise((resolve, reject) => {
+                    const request = indexedDB.open(DB_NAME, 1);
+                    request.onupgradeneeded = (e) => {
+                        const db = e.target.result;
+                        if (!db.objectStoreNames.contains(STORE_NAME)) {
+                            db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+                        }
+                    };
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => reject(request.error);
+                });
+            }
+
+            // 💡 토스트 알림 (1초 동안 표시)
+            let toastTimer;
+            function showToast(msg) {
+                const toast = document.getElementById('toast');
+                document.getElementById('toast-msg').innerText = msg;
+                toast.classList.add('show');
+                
+                clearTimeout(toastTimer);
+                toastTimer = setTimeout(() => {
+                    toast.classList.remove('show');
+                }, 1000); 
+            }
+
+            function attachTitleEvents(titleEl, nodeData) {
+                titleEl.addEventListener('focus', () => {
+                    const range = document.createRange();
+                    range.selectNodeContents(titleEl);
+                    const sel = window.getSelection();
+                    sel.removeAllRanges();
+                    sel.addRange(range);
+                });
+                titleEl.addEventListener('blur', (e) => {
+                    nodeData.text = e.target.innerText;
+                });
+            }
+
+            // 1. 중앙 노드 초기화
+            function initCentralNode() {
+                const rect = canvasContainer.getBoundingClientRect();
+                centerX = rect.width / 2;
+                centerY = rect.height / 2 - 60; 
+
+                const rootNode = { id: 'root', text: '메인 주제', x: centerX, y: centerY };
+                
+                const nodeEl = document.createElement('div');
+                nodeEl.className = 'node-box root-node visible';
+                nodeEl.style.left = `${centerX}px`;
+                nodeEl.style.top = `${centerY}px`;
+                
+                nodeEl.innerHTML = `<div class="node-title" contenteditable="true" spellcheck="false">${rootNode.text}</div>`;
+                
+                attachTitleEvents(nodeEl.querySelector('.node-title'), rootNode);
+                nodeLayer.appendChild(nodeEl);
+                
+                rootNode.el = nodeEl; 
+                nodes.push(rootNode);
+                
+                bindDragEvents(nodeEl, rootNode);
+            }
+
+            // 2. 키워드 추가 렌더링
+            function addKeywordNode(text) {
+                if (!text.trim()) return;
+
+                let layer, radius, angle, targetX, targetY;
+                let foundPlace = false;
+                
+                while (!foundPlace) {
+                    placementIndex++;
+                    const itemsPerLayer = 8;
+                    layer = Math.floor((placementIndex - 1) / itemsPerLayer) + 1; 
+                    radius = 160 + (layer * 110);
+                    
+                    const angleStep = (Math.PI * 2) / (itemsPerLayer + (layer * 2)); 
+                    const angleOffset = layer * 0.5; 
+                    angle = (placementIndex * angleStep) + angleOffset;
+
+                    targetX = centerX + radius * Math.cos(angle);
+                    targetY = centerY + radius * Math.sin(angle);
+                    
+                    const bottomLimit = window.innerHeight - 160; 
+                    if (targetY > bottomLimit) continue; 
+                    
+                    foundPlace = true; 
+                }
+                
+                const newNodeId = `node_${Date.now()}_${placementIndex}`;
+                const newNode = { id: newNodeId, text: text, x: targetX, y: targetY };
+
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', centerX);
+                line.setAttribute('y1', centerY);
+                line.setAttribute('x2', centerX); 
+                line.setAttribute('y2', centerY);
+                line.setAttribute('class', 'connection-line');
+                line.style.transition = 'all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+                linkLayer.appendChild(line);
+
+                const nodeEl = document.createElement('div');
+                nodeEl.className = 'node-box';
+                nodeEl.style.left = `${targetX}px`;
+                nodeEl.style.top = `${targetY}px`;
+                nodeEl.innerHTML = `<div class="node-title" contenteditable="true" spellcheck="false">${text}</div>`;
+                nodeLayer.appendChild(nodeEl);
+
+                newNode.el = nodeEl;
+                newNode.lineEl = line;
+                nodes.push(newNode);
+
+                attachTitleEvents(nodeEl.querySelector('.node-title'), newNode);
+                bindDragEvents(nodeEl, newNode);
+
+                requestAnimationFrame(() => {
+                    setTimeout(() => {
+                        nodeEl.classList.add('visible');
+                        line.setAttribute('x2', targetX);
+                        line.setAttribute('y2', targetY);
+                        setTimeout(() => { line.style.transition = ''; }, 500);
+                    }, 10);
+                });
+
+                keywordInput.value = '';
+                keywordInput.focus();
+            }
+
+            // 3. 마우스 드래그 및 선택 바인딩
+            function bindDragEvents(element, nodeData) {
+                element.addEventListener('mousedown', (e) => {
+                    document.querySelectorAll('.node-box').forEach(el => el.classList.remove('selected'));
+                    element.classList.add('selected');
+                    selectedNodeData = nodeData;
+
+                    if (e.target.classList.contains('node-title')) return; 
+                    
+                    isDragging = true;
+                    currentDragNodeData = nodeData;
+                    dragOffsetX = e.clientX - nodeData.x;
+                    dragOffsetY = e.clientY - nodeData.y;
+                    
+                    element.classList.add('dragging');
+                    document.body.style.cursor = 'grabbing';
+                });
+            }
+
+            canvasContainer.addEventListener('mousedown', (e) => {
+                if (e.target === canvasContainer || e.target.id === 'canvas-container' || e.target.tagName === 'svg') {
+                    document.querySelectorAll('.node-box').forEach(el => el.classList.remove('selected'));
+                    selectedNodeData = null;
+                }
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!isDragging || !currentDragNodeData) return;
+                
+                const newX = e.clientX - dragOffsetX;
+                const newY = e.clientY - dragOffsetY;
+                
+                currentDragNodeData.x = newX;
+                currentDragNodeData.y = newY;
+                
+                currentDragNodeData.el.style.left = `${newX}px`;
+                currentDragNodeData.el.style.top = `${newY}px`;
+                
+                if (currentDragNodeData.id === 'root') {
+                    centerX = newX; centerY = newY;
+                    nodes.forEach(n => {
+                        if (n.lineEl) { n.lineEl.setAttribute('x1', newX); n.lineEl.setAttribute('y1', newY); }
+                    });
+                } else {
+                    currentDragNodeData.lineEl.setAttribute('x2', newX);
+                    currentDragNodeData.lineEl.setAttribute('y2', newY);
+                }
+            });
+
+            document.addEventListener('mouseup', () => {
+                if (isDragging && currentDragNodeData) {
+                    currentDragNodeData.el.classList.remove('dragging');
+                    isDragging = false;
+                    currentDragNodeData = null;
+                    document.body.style.cursor = '';
+                }
+            });
+
+            // ⌨️ 키보드 단축키 처리 (Ctrl+S 및 삭제)
+            document.addEventListener('keydown', (e) => {
+                // Ctrl + S (저장)
+                if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
+                    e.preventDefault();
+                    triggerSaveMap();
+                    return;
+                }
+
+                // Delete / Backspace (노드 삭제)
+                if ((e.key === 'Delete' || e.key === 'Backspace') && selectedNodeData) {
+                    const activeEl = document.activeElement;
+                    if (activeEl.tagName === 'INPUT' || activeEl.isContentEditable) return; 
+
+                    e.preventDefault();
+
+                    if (selectedNodeData.id === 'root') {
+                        showToast('메인 주제는 삭제할 수 없습니다.');
+                        return;
+                    }
+
+                    if (selectedNodeData.el) selectedNodeData.el.remove();
+                    if (selectedNodeData.lineEl) selectedNodeData.lineEl.remove();
+
+                    nodes = nodes.filter(n => n.id !== selectedNodeData.id);
+                    selectedNodeData = null; 
+
+                    showToast('노드가 삭제되었습니다.');
+                }
+            });
+
+            // 💾 저장 관련 함수 (모달 오픈 및 실행)
+            window.triggerSaveMap = function() {
+                if (!currentMapId) {
+                    // 최초 저장 시 모달 오픈
+                    const rootText = nodes.find(n => n.id === 'root')?.text || '새 마인드맵';
+                    saveMapNameInput.value = rootText;
+                    document.getElementById('save-modal-overlay').style.display = 'flex';
+                    saveMapNameInput.focus();
+                } else {
+                    // 이미 저장된 맵이면 바로 덮어쓰기
+                    executeSaveData();
+                }
+            };
+
+            window.closeSaveModal = function() {
+                document.getElementById('save-modal-overlay').style.display = 'none';
+                keywordInput.focus();
+            };
+
+            window.confirmSaveMap = function() {
+                const name = saveMapNameInput.value.trim();
+                if (!name) {
+                    showToast('이름을 입력해주세요.');
+                    return;
+                }
+                currentMapId = 'map_' + Date.now();
+                currentMapName = name;
+                closeSaveModal();
+                executeSaveData();
+            };
+
+            // 저장 모달창 내부 엔터 처리
+            saveMapNameInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.isComposing) {
+                    e.preventDefault();
+                    window.confirmSaveMap();
+                }
+            });
+
+            async function executeSaveData() {
+                const mapData = {
+                    id: currentMapId,
+                    name: currentMapName,
+                    updatedAt: Date.now(),
+                    placementIndex: placementIndex,
+                    nodes: nodes.map(n => ({
+                        id: n.id,
+                        text: n.text,
+                        x: n.x,
+                        y: n.y,
+                        isRoot: n.id === 'root'
+                    }))
+                };
+
+                try {
+                    const db = await initDB();
+                    const tx = db.transaction(STORE_NAME, 'readwrite');
+                    tx.objectStore(STORE_NAME).put(mapData);
+                    tx.oncomplete = () => showToast(`'${currentMapName}' 저장 완료`);
+                } catch (err) {
+                    console.error(err);
+                    alert('저장 중 오류가 발생했습니다.');
+                }
+            }
+
+            // 📂 불러오기 관련 함수 (모달 오픈 및 실행)
+            window.openLoadModal = async function() {
+                try {
+                    const db = await initDB();
+                    const tx = db.transaction(STORE_NAME, 'readonly');
+                    const store = tx.objectStore(STORE_NAME);
+                    const request = store.getAll();
+
+                    request.onsuccess = () => {
+                        const maps = request.result;
+                        const listEl = document.getElementById('map-list');
+                        listEl.innerHTML = '';
+
+                        if (maps.length === 0) {
+                            listEl.innerHTML = '<div style="text-align:center; color:var(--text-muted); padding:20px;">저장된 맵이 없습니다.</div>';
+                        } else {
+                            maps.sort((a, b) => b.updatedAt - a.updatedAt).forEach(m => {
+                                const item = document.createElement('div');
+                                item.className = 'map-item';
+                                
+                                const dateStr = new Date(m.updatedAt).toLocaleString();
+                                item.innerHTML = `
+                                    <div>
+                                        <div class="map-item-title">${m.name}</div>
+                                        <div class="map-item-date">${dateStr}</div>
+                                    </div>
+                                    <button class="btn-delete-map">삭제</button>
+                                `;
+
+                                item.querySelector('.btn-delete-map').onclick = async (e) => {
+                                    e.stopPropagation();
+                                    if(confirm(`'${m.name}' 맵을 삭제하시겠습니까?`)) {
+                                        await deleteMapData(m.id);
+                                        if (currentMapId === m.id) {
+                                            currentMapId = null; 
+                                            currentMapName = "";
+                                        }
+                                        window.openLoadModal(); 
+                                    }
+                                };
+
+                                item.onclick = () => {
+                                    loadMapData(m);
+                                    window.closeLoadModal();
+                                };
+
+                                listEl.appendChild(item);
+                            });
+                        }
+                        document.getElementById('load-modal-overlay').style.display = 'flex';
+                    };
+                } catch (err) {
+                    console.error(err);
+                    alert('불러오기 목록을 가져오는 중 오류가 발생했습니다.');
+                }
+            };
+
+            window.closeLoadModal = function() {
+                document.getElementById('load-modal-overlay').style.display = 'none';
+                keywordInput.focus();
+            };
+
+            function loadMapData(data) {
+                if (!data || !data.nodes || data.nodes.length === 0) return;
+
+                currentMapId = data.id;
+                currentMapName = data.name;
+
+                nodeLayer.innerHTML = '';
+                linkLayer.innerHTML = '';
+                nodes = [];
+                placementIndex = data.placementIndex || 0;
+                selectedNodeData = null;
+
+                const rootData = data.nodes.find(n => n.isRoot);
+                if (rootData) {
+                    centerX = rootData.x;
+                    centerY = rootData.y;
+                }
+
+                data.nodes.forEach(nData => {
+                    const n = { id: nData.id, text: nData.text, x: nData.x, y: nData.y };
+
+                    const nodeEl = document.createElement('div');
+                    nodeEl.className = 'node-box visible' + (nData.isRoot ? ' root-node' : '');
+                    nodeEl.style.left = `${n.x}px`;
+                    nodeEl.style.top = `${n.y}px`;
+                    nodeEl.innerHTML = `<div class="node-title" contenteditable="true" spellcheck="false">${n.text}</div>`;
+                    
+                    attachTitleEvents(nodeEl.querySelector('.node-title'), n);
+                    nodeLayer.appendChild(nodeEl);
+                    n.el = nodeEl;
+
+                    if (!nData.isRoot) {
+                        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                        line.setAttribute('x1', centerX);
+                        line.setAttribute('y1', centerY);
+                        line.setAttribute('x2', n.x);
+                        line.setAttribute('y2', n.y);
+                        line.setAttribute('class', 'connection-line');
+                        linkLayer.appendChild(line);
+                        n.lineEl = line;
+                    }
+
+                    nodes.push(n);
+                    bindDragEvents(nodeEl, n);
+                });
+
+                showToast(`'${currentMapName}' 불러오기 완료`);
+            }
+
+            async function deleteMapData(id) {
+                const db = await initDB();
+                const tx = db.transaction(STORE_NAME, 'readwrite');
+                tx.objectStore(STORE_NAME).delete(id);
+                return new Promise(resolve => tx.oncomplete = resolve);
+            }
+
+            // 모달 배경 클릭 시 닫기 공통 처리
+            document.querySelectorAll('.modal-overlay').forEach(overlay => {
+                overlay.addEventListener('mousedown', function(e) {
+                    if (e.target === this) {
+                        this.style.display = 'none';
+                        keywordInput.focus();
+                    }
+                });
+            });
+
+            // 이벤트 바인딩
+            addBtn.addEventListener('click', () => addKeywordNode(keywordInput.value));
+            
+            keywordInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.isComposing) {
+                    e.preventDefault(); addKeywordNode(keywordInput.value);
+                }
+            });
+
+            document.getElementById('btn-save').addEventListener('click', window.triggerSaveMap);
+            document.getElementById('btn-load').addEventListener('click', window.openLoadModal);
+
+            // 최초 화면 초기화
+            initCentralNode();
+            keywordInput.focus();
+        });
+    </script>
+</body>
+</html>
