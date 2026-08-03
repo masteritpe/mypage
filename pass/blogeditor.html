@@ -639,7 +639,7 @@ window.MathJax = {
         const reader = new FileReader();
         reader.onload = (e) => {
             try {
-                const text = e.target.result;
+                let text = e.target.result;
                 const today = new Date().toISOString().split('T')[0];
                 
                 document.getElementById('issueDate').value = today;
@@ -650,6 +650,9 @@ window.MathJax = {
                 
                 document.getElementById('articlesContainer').innerHTML = ''; 
                 articleCount = 0;
+
+                // 정규화: OS별 다양한 줄바꿈(CRLF 등)을 \n으로 통일
+                text = text.replace(/\r\n|\r/g, '\n');
 
                 // '## '를 기준으로 마크다운 텍스트 분리
                 const sections = text.split(/(?:^|\n)##\s+/);
@@ -669,7 +672,14 @@ window.MathJax = {
                         const lines = topicText.split('\n');
                         const title = lines[0].trim();
                         // 첫 번째 줄은 소제목, 나머지는 본문 내용으로 합침
-                        const content = lines.slice(1).join('\n').trim();
+                        let content = lines.slice(1).join('\n').trim();
+                        
+                        // [수정사항] 테이블 태그 깨짐 복원 로직
+                        // 1. 가로로 쭉 붙어버린 테이블 행(||)을 줄바꿈(|\n|)으로 분리하여 마크다운 테이블 구조 복원
+                        content = content.replace(/\|\|/g, '|\n|');
+                        
+                        // 2. 테이블 구분선의 em-dash(—)를 hyphen(-)으로 변환하여 marked.js 인식 오류 방지
+                        content = content.replace(/\|(?:\s*—+\s*\|)+/g, (match) => match.replace(/—/g, '-'));
                         
                         addArticle({ 
                             title: title, 
