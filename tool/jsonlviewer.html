@@ -671,10 +671,13 @@ function parseJsonl(text, filename) {
       entries.push(obj);
     } catch {}
   }
-  const messages = entries.filter(e => e.type === 'user' || e.type === 'assistant');
-  const firstMsg = messages.find(m => m.type === 'user');
+  const messages = entries.filter(e => 
+    e.type === 'user' || e.type === 'assistant' || // Claude
+    e.source === 'USER_EXPLICIT' || e.source === 'MODEL' || e.source === 'SYSTEM' // Antigravity
+  );
+  const firstMsg = messages.find(m => m.type === 'user' || (m.source === 'USER_EXPLICIT' && m.type === 'USER_INPUT'));
   const firstText = firstMsg ? getTextPreview(firstMsg) : '(빈 세션)';
-  const timestamps = messages.map(m => m.timestamp).filter(Boolean).sort();
+  const timestamps = messages.map(m => m.timestamp || m.timestamp_ms).filter(Boolean).sort();
   const startTime = timestamps[0] ? new Date(timestamps[0]) : null;
   const session = { filename, sessionId, cwd, messages, firstText, startTime, raw: text };
   
@@ -697,7 +700,7 @@ function parseJsonl(text, filename) {
 }
 
 function getTextPreview(msg) {
-  const content = msg.message?.content;
+  const content = msg.message?.content || msg.content;
   if (typeof content === 'string') return content.slice(0, 60);
   if (Array.isArray(content)) {
     const t = content.find(c => c.type === 'text');
@@ -747,12 +750,20 @@ function renderSession(session) {
   }
   let html = '';
   msgs.forEach((msg, idx) => {
-    const isUser = msg.type === 'user';
-    const isError = msg.isApiErrorMessage;
+    const isUser = msg.type === 'user' || msg.source === 'USER_EXPLICIT';
+    const isError = msg.isApiErrorMessage || msg.status === 'ERROR';
     const cls = isError ? 'msg-error' : (isUser ? 'msg-user' : 'msg-assistant');
-    const label = isUser ? '사용자' : `Claude${msg.message?.model ? ' · ' + msg.message.model.replace('claude-', '') : ''}`;
-    const time = msg.timestamp ? formatTime(new Date(msg.timestamp)) : '';
-    const content = renderContent(msg.message?.content, isUser);
+    
+    let label = '시스템';
+    if (isUser) label = '사용자';
+    else if (msg.type === 'assistant') label = `Claude${msg.message?.model ? ' · ' + msg.message.model.replace('claude-', '') : ''}`;
+    else if (msg.source === 'MODEL') label = `Antigravity (${msg.type})`;
+    else if (msg.source === 'SYSTEM') label = `Antigravity (${msg.type})`;
+
+    const ts = msg.timestamp || msg.timestamp_ms;
+    const time = ts ? formatTime(new Date(ts)) : '';
+    const rawContent = msg.message?.content || msg.content;
+    const content = renderContent(rawContent, msg);
     if (!content) return;
     if (searchQuery && !stripHtml(content).toLowerCase().includes(searchQuery)) return;
     html += `<div class="msg-group ${cls}" data-idx="${idx}">
@@ -775,9 +786,11 @@ function copyMsgMd(idx, btn) {
   if (!currentSession) return;
   const msg = currentSession.messages[idx];
   if (!msg) return;
-  const role = msg.type === 'user' ? '**사용자**' : '**Claude**';
-  const time = msg.timestamp ? new Date(msg.timestamp).toLocaleString('ko-KR') : '';
-  const text = extractPlainText(msg.message?.content);
+  const isUser = msg.type === 'user' || msg.source === 'USER_EXPLICIT';
+  const role = isUser ? '**사용자**' : '**Assistant**';
+  const ts = msg.timestamp || msg.timestamp_ms;
+  const time = ts ? new Date(ts).toLocaleString('ko-KR') : '';
+  const text = extractPlainText(msg);
   const md = `### ${role} — ${time}\n\n${text}`;
   navigator.clipboard.writeText(md).then(() => {
     btn.textContent = '복사됨!';
@@ -786,11 +799,12 @@ function copyMsgMd(idx, btn) {
   });
 }
 
-function renderContent(content, isUser) {
-  if (!content) return '';
-  if (typeof content === 'string') return renderMarkdown(content);
-  if (Array.isArray(content)) {
-    return content.map(part => {
+function renderContent(content, msg) {
+  let html = '';
+  if (typeof content === 'string') {
+    html += renderMarkdown(content);
+  } else if (Array.isArray(content)) {
+    html += content.map(part => {
       if (part.type === 'text') return renderMarkdown(part.text);
       if (part.type === 'thinking') {
         return `<div class="thinking-block">
@@ -824,7 +838,29 @@ function renderContent(content, isUser) {
       return '';
     }).join('');
   }
-  return '';
+
+  // Handle Antigravity Tool Calls
+  if (msg && msg.tool_calls && Array.isArray(msg.tool_calls)) {
+    html += msg.tool_calls.map(tc => {
+      const name = tc.name || tc.function?.name || 'tool';
+      const args = tc.arguments || tc.function?.arguments || tc.args || {};
+      const argsStr = typeof args === 'string' ? args : JSON.stringify(args, null, 2);
+      return `<div class="tool-block">
+          <div class="tool-header">
+            <span>🔧</span>
+            <span class="tool-name">${escHtml(name)}</span>
+            <span class="tool-hint">클릭하여 펼치기</span>
+          </div>
+          <div class="tool-body">${escHtml(argsStr)}</div>
+        </div>`;
+    }).join('');
+  }
+  
+  if (msg && msg.is_truncated) {
+    html += `<div style="color: #ef4444; font-size: 11px; margin-top: 8px; font-weight: 600;">⚠ 텍스트가 너무 길어 일부 내용이 생략되었습니다 (전체 내용은 transcript_full.jsonl 참고)</div>`;
+  }
+  
+  return html;
 }
 
 function renderMarkdown(text) {
@@ -901,9 +937,11 @@ function exportMd() {
   if (!currentSession) return;
   let md = `# ${currentSession.filename}\n\n`;
   for (const msg of currentSession.messages) {
-    const role = msg.type === 'user' ? '**사용자**' : '**Claude**';
-    const time = msg.timestamp ? new Date(msg.timestamp).toLocaleString('ko-KR') : '';
-    md += `### ${role} — ${time}\n\n${extractPlainText(msg.message?.content)}\n\n---\n\n`;
+    const isUser = msg.type === 'user' || msg.source === 'USER_EXPLICIT';
+    const role = isUser ? '**사용자**' : '**Assistant**';
+    const ts = msg.timestamp || msg.timestamp_ms;
+    const time = ts ? new Date(ts).toLocaleString('ko-KR') : '';
+    md += `### ${role} — ${time}\n\n${extractPlainText(msg)}\n\n---\n\n`;
   }
   const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
   const a = document.createElement('a');
@@ -912,7 +950,8 @@ function exportMd() {
   a.click();
 }
 
-function extractPlainText(content) {
+function extractPlainText(msg) {
+  const content = msg.message?.content || msg.content;
   if (!content) return '';
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) return content.filter(c => c.type === 'text').map(c => c.text).join('\n');

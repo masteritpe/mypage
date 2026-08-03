@@ -195,12 +195,13 @@ header .header-tools { display: flex; gap: 8px; }
                 <i class="fas fa-sticky-note" style="color:#f59e0b;"></i> 비고
             </button>
             
-            <select id="inp-theme" class="input-field" style="width:120px;">
+            <select id="inp-theme" class="input-field" style="width:140px;">
                 <option value="default">Default Theme</option>
                 <option value="base">Base</option>
                 <option value="forest">Forest</option>
                 <option value="neutral">Neutral</option>
                 <option value="dark">Dark</option>
+                <option value="antigravity">Antigravity</option>
             </select>
         </div>
 
@@ -640,8 +641,23 @@ async function deleteCurrent() {
     }
 }
 
+// Antigravity Style: 코드 내 classDef/class 색상 구문을 제거하여 클린 렌더링
+function injectAntigravityStyle(code) {
+    return code
+        .split('\n')
+        .filter(line => {
+            const t = line.trim();
+            // classDef 정의 줄 제거
+            if (/^classDef\s+/.test(t)) return false;
+            // class 할당 줄 제거 (예: class GitHub github;)
+            if (/^class\s+[\w,]+\s+\w+;/.test(t)) return false;
+            return true;
+        })
+        .join('\n');
+}
+
 async function renderDiagram() {
-    const code = $('#code-editor').value;
+    let code = $('#code-editor').value;
     const theme = $('#inp-theme').value;
     const output = $('#mermaid-output');
     const errorBox = $('#error-box');
@@ -652,22 +668,59 @@ async function renderDiagram() {
         return;
     }
 
-    mermaid.initialize({ 
-        startOnLoad: false, 
-        theme: theme,
-        securityLevel: 'loose'
-    });
+    const isAntigravity = theme === 'antigravity';
+
+    if (isAntigravity) {
+        // classDef/class 색상 구문을 코드에서 제거 후 렌더링
+        code = injectAntigravityStyle(code);
+        mermaid.initialize({
+            startOnLoad: false,
+            theme: 'base',
+            securityLevel: 'loose',
+            themeVariables: {
+                /* 노드: 흰 배경, 진한 테두리 */
+                primaryColor:           '#ffffff',
+                primaryBorderColor:     '#475569',
+                primaryTextColor:       '#0f172a',
+                /* 연결선 */
+                lineColor:              '#334155',
+                /* subgraph: 거의 흰색 배경 */
+                clusterBkg:             '#fafafa',
+                clusterBorder:          '#475569',
+                /* 에지 라벨 */
+                edgeLabelBackground:    '#ffffff',
+                /* 보조/서브 노드 */
+                secondaryColor:         '#f9fafb',
+                secondaryBorderColor:   '#64748b',
+                secondaryTextColor:     '#1e293b',
+                tertiaryColor:          '#f9fafb',
+                tertiaryBorderColor:    '#64748b',
+                /* 폰트 */
+                fontFamily:             'Inter, Noto Sans KR, sans-serif',
+                fontSize:               '13px',
+                /* 노트 */
+                noteBkgColor:           '#fffbeb',
+                noteTextColor:          '#92400e',
+            }
+        });
+    } else {
+        mermaid.initialize({
+            startOnLoad: false,
+            theme: theme,
+            securityLevel: 'loose'
+        });
+    }
 
     try {
         const id = 'graph-' + Date.now();
-        await mermaid.parse(code); 
+        await mermaid.parse(code);
         const { svg } = await mermaid.render(id, code);
         output.innerHTML = svg;
-        
+
         errorBox.style.display = 'none';
         status.innerHTML = '<i class="fas fa-check-circle"></i> Rendered';
         status.style.color = 'var(--primary)';
-        
+
     } catch (e) {
         console.error(e);
         errorBox.textContent = `Syntax Error: ${e.message}`;
