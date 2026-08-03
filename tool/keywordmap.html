@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>키워드 맵</title>
+    <title>키워드맵</title>
     
     <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
@@ -70,7 +70,7 @@
             pointer-events: auto; transform: translate(-50%, -50%) scale(0);
             display: flex; align-items: center; justify-content: center;
             cursor: grab;
-            transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.2s, border-color 0.2s; 
+            transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.2s, border-color 0.2s, width 0.3s, height 0.3s; 
         }
         .node-box.visible { transform: translate(-50%, -50%) scale(1); }
         .node-box:hover { box-shadow: var(--node-hover-shadow); border-color: var(--primary); z-index: 10; }
@@ -86,6 +86,7 @@
             box-shadow: var(--node-hover-shadow); border-color: var(--primary);
             transition: none !important;
         }
+        .node-box.resizing { transition: none !important; }
 
         .node-box.selected {
             border-color: var(--danger) !important;
@@ -99,6 +100,39 @@
         }
         .root-node .node-title { font-size: 22px; font-weight: 700; color: #0369a1; }
 
+        /* 🖼️ 이미지 노드 전용 디자인 */
+        .node-box.image-node {
+            padding: 0;
+            border-radius: 8px;
+            overflow: visible;
+            min-width: 50px;
+        }
+        .node-box.image-node img {
+            width: 100%;
+            height: 100%;
+            border-radius: 6px;
+            object-fit: cover;
+            pointer-events: none;
+            display: block;
+        }
+
+        /* 🔄 8개의 사각형 조절점 디자인 */
+        .resize-handle {
+            position: absolute; width: 10px; height: 10px;
+            background: #FFFFFF; border: 1.5px solid var(--danger);
+            border-radius: 2px; display: none; z-index: 30;
+        }
+        .node-box.image-node.selected .resize-handle { display: block; }
+        
+        .resize-handle.tl { top: -6px; left: -6px; cursor: nwse-resize; }
+        .resize-handle.tc { top: -6px; left: calc(50% - 5px); cursor: ns-resize; }
+        .resize-handle.tr { top: -6px; right: -6px; cursor: nesw-resize; }
+        .resize-handle.ml { top: calc(50% - 5px); left: -6px; cursor: ew-resize; }
+        .resize-handle.mr { top: calc(50% - 5px); right: -6px; cursor: ew-resize; }
+        .resize-handle.bl { bottom: -6px; left: -6px; cursor: nesw-resize; }
+        .resize-handle.bc { bottom: -6px; left: calc(50% - 5px); cursor: ns-resize; }
+        .resize-handle.br { bottom: -6px; right: -6px; cursor: nwse-resize; }
+
         /* 🚀 하단 고정 입력창 */
         #input-container {
             position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
@@ -106,7 +140,7 @@
             background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(12px);
             padding: 16px; border-radius: 20px; border: 1px solid rgba(0,0,0,0.05);
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
-            width: 100%; max-width: 600px;
+            width: 100%; max-width: 650px;
         }
         #keyword-input { 
             flex: 1; padding: 16px 20px; border: 1px solid var(--border-medium); 
@@ -116,13 +150,13 @@
         #keyword-input:focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.15); }
         
         .btn-submit { 
-            padding: 0 28px; background-color: var(--accent-dark); color: #FFFFFF; 
+            padding: 0 24px; background-color: var(--accent-dark); color: #FFFFFF; 
             border: none; border-radius: 14px; cursor: pointer; font-size: 16px; font-weight: 700;
             transition: all 0.3s ease; display: flex; align-items: center; gap: 8px;
         }
         .btn-submit:hover { background-color: #27272A; transform: translateY(-2px); }
 
-        /* 💡 토스트 알림 (중앙 상단, 검정색) */
+        /* 💡 토스트 알림 */
         #toast {
             position: fixed; top: -60px; left: 50%; transform: translateX(-50%);
             background: #000000; color: white; padding: 12px 24px; border-radius: 8px;
@@ -243,13 +277,20 @@
             let dragOffsetY = 0;
             let selectedNodeData = null; 
 
+            // 크기 조절 상태 관리 변수
+            let isResizing = false;
+            let resizeDir = null;
+            let resizeStartW = 0, resizeStartH = 0;
+            let resizeStartX = 0, resizeStartY = 0;
+            let resizeMouseStartX = 0, resizeMouseStartY = 0;
+
             // IndexedDB 설정
             const DB_NAME = 'RadialMindMapDB';
             const STORE_NAME = 'maps';
 
             function initDB() {
                 return new Promise((resolve, reject) => {
-                    const request = indexedDB.open(DB_NAME, 1);
+                    const request = indexedDB.open(DB_NAME, 2);
                     request.onupgradeneeded = (e) => {
                         const db = e.target.result;
                         if (!db.objectStoreNames.contains(STORE_NAME)) {
@@ -261,7 +302,7 @@
                 });
             }
 
-            // 💡 토스트 알림 (1초 동안 표시)
+            // 💡 토스트 알림
             let toastTimer;
             function showToast(msg) {
                 const toast = document.getElementById('toast');
@@ -275,6 +316,7 @@
             }
 
             function attachTitleEvents(titleEl, nodeData) {
+                if (!titleEl) return;
                 titleEl.addEventListener('focus', () => {
                     const range = document.createRange();
                     range.selectNodeContents(titleEl);
@@ -287,34 +329,7 @@
                 });
             }
 
-            // 1. 중앙 노드 초기화
-            function initCentralNode() {
-                const rect = canvasContainer.getBoundingClientRect();
-                centerX = rect.width / 2;
-                centerY = rect.height / 2 - 60; 
-
-                const rootNode = { id: 'root', text: '메인 주제', x: centerX, y: centerY };
-                
-                const nodeEl = document.createElement('div');
-                nodeEl.className = 'node-box root-node visible';
-                nodeEl.style.left = `${centerX}px`;
-                nodeEl.style.top = `${centerY}px`;
-                
-                nodeEl.innerHTML = `<div class="node-title" contenteditable="true" spellcheck="false">${rootNode.text}</div>`;
-                
-                attachTitleEvents(nodeEl.querySelector('.node-title'), rootNode);
-                nodeLayer.appendChild(nodeEl);
-                
-                rootNode.el = nodeEl; 
-                nodes.push(rootNode);
-                
-                bindDragEvents(nodeEl, rootNode);
-            }
-
-            // 2. 키워드 추가 렌더링
-            function addKeywordNode(text) {
-                if (!text.trim()) return;
-
+            function getNextPosition() {
                 let layer, radius, angle, targetX, targetY;
                 let foundPlace = false;
                 
@@ -336,10 +351,128 @@
                     
                     foundPlace = true; 
                 }
+                return { targetX, targetY };
+            }
+
+            // 1. 중앙 노드 초기화
+            function initCentralNode() {
+                const rect = canvasContainer.getBoundingClientRect();
+                centerX = rect.width / 2;
+                centerY = rect.height / 2 - 60; 
+
+                const rootNode = { id: 'root', type: 'text', text: '메인 주제', x: centerX, y: centerY };
+                
+                const nodeEl = document.createElement('div');
+                nodeEl.className = 'node-box root-node visible';
+                nodeEl.style.left = `${centerX}px`;
+                nodeEl.style.top = `${centerY}px`;
+                
+                nodeEl.innerHTML = `<div class="node-title" contenteditable="true" spellcheck="false">${rootNode.text}</div>`;
+                
+                attachTitleEvents(nodeEl.querySelector('.node-title'), rootNode);
+                nodeLayer.appendChild(nodeEl);
+                
+                rootNode.el = nodeEl; 
+                nodes.push(rootNode);
+                
+                bindDragEvents(nodeEl, rootNode);
+            }
+
+            // 2. 텍스트 키워드 추가 렌더링
+            function addKeywordNode(text) {
+                if (!text.trim()) return;
+
+                const { targetX, targetY } = getNextPosition();
                 
                 const newNodeId = `node_${Date.now()}_${placementIndex}`;
-                const newNode = { id: newNodeId, text: text, x: targetX, y: targetY };
+                const newNode = { id: newNodeId, type: 'text', text: text, x: targetX, y: targetY };
 
+                const line = createConnectionLine(targetX, targetY);
+                const nodeEl = document.createElement('div');
+                nodeEl.className = 'node-box';
+                nodeEl.style.left = `${targetX}px`;
+                nodeEl.style.top = `${targetY}px`;
+                nodeEl.innerHTML = `<div class="node-title" contenteditable="true" spellcheck="false">${text}</div>`;
+                
+                nodeLayer.appendChild(nodeEl);
+                newNode.el = nodeEl;
+                newNode.lineEl = line;
+                nodes.push(newNode);
+
+                attachTitleEvents(nodeEl.querySelector('.node-title'), newNode);
+                bindDragEvents(nodeEl, newNode);
+                animateNodeAppearance(nodeEl, line, targetX, targetY);
+
+                keywordInput.value = '';
+                keywordInput.focus();
+            }
+
+            // 3. 이미지 노드 더블클릭 이벤트 (100% ↔ 원상태 복귀)
+            function bindImageDoubleClick(nodeEl, nodeData) {
+                nodeEl.addEventListener('dblclick', (e) => {
+                    const img = nodeEl.querySelector('img');
+                    if (!img) return;
+
+                    if (!nodeData.isExpanded) {
+                        nodeData.prevWidth = nodeData.width;
+                        nodeData.prevHeight = nodeData.height;
+
+                        const natW = img.naturalWidth || 300;
+                        const natH = img.naturalHeight || 300;
+
+                        nodeData.width = natW;
+                        nodeData.height = natH;
+                        nodeData.isExpanded = true;
+                    } else {
+                        nodeData.width = nodeData.prevWidth || 160;
+                        nodeData.height = nodeData.prevHeight || 120;
+                        nodeData.isExpanded = false;
+                    }
+
+                    nodeEl.style.width = `${nodeData.width}px`;
+                    nodeEl.style.height = `${nodeData.height}px`;
+                });
+            }
+
+            // 4. 이미지 노드 추가 렌더링
+            function addImageNode(src, width = 160, height = 120) {
+                const { targetX, targetY } = getNextPosition();
+                
+                const newNodeId = `img_node_${Date.now()}_${placementIndex}`;
+                const newNode = { id: newNodeId, type: 'image', src: src, x: targetX, y: targetY, width, height, isExpanded: false };
+
+                const line = createConnectionLine(targetX, targetY);
+                const nodeEl = document.createElement('div');
+                nodeEl.className = 'node-box image-node';
+                nodeEl.style.left = `${targetX}px`;
+                nodeEl.style.top = `${targetY}px`;
+                nodeEl.style.width = `${width}px`;
+                nodeEl.style.height = `${height}px`;
+
+                nodeEl.innerHTML = `
+                    <img src="${src}" alt="사용자 추가 이미지">
+                    <div class="resize-handle tl" data-dir="tl"></div>
+                    <div class="resize-handle tc" data-dir="tc"></div>
+                    <div class="resize-handle tr" data-dir="tr"></div>
+                    <div class="resize-handle ml" data-dir="ml"></div>
+                    <div class="resize-handle mr" data-dir="mr"></div>
+                    <div class="resize-handle bl" data-dir="bl"></div>
+                    <div class="resize-handle bc" data-dir="bc"></div>
+                    <div class="resize-handle br" data-dir="br"></div>
+                `;
+                
+                nodeLayer.appendChild(nodeEl);
+                newNode.el = nodeEl;
+                newNode.lineEl = line;
+                nodes.push(newNode);
+
+                bindDragEvents(nodeEl, newNode);
+                bindResizeEvents(nodeEl, newNode);
+                bindImageDoubleClick(nodeEl, newNode); 
+                animateNodeAppearance(nodeEl, line, targetX, targetY);
+            }
+
+            function createConnectionLine(x, y) {
                 const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
                 line.setAttribute('x1', centerX);
                 line.setAttribute('y1', centerY);
@@ -348,37 +481,50 @@
                 line.setAttribute('class', 'connection-line');
                 line.style.transition = 'all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
                 linkLayer.appendChild(line);
+                return line;
+            }
 
-                const nodeEl = document.createElement('div');
-                nodeEl.className = 'node-box';
-                nodeEl.style.left = `${targetX}px`;
-                nodeEl.style.top = `${targetY}px`;
-                nodeEl.innerHTML = `<div class="node-title" contenteditable="true" spellcheck="false">${text}</div>`;
-                nodeLayer.appendChild(nodeEl);
-
-                newNode.el = nodeEl;
-                newNode.lineEl = line;
-                nodes.push(newNode);
-
-                attachTitleEvents(nodeEl.querySelector('.node-title'), newNode);
-                bindDragEvents(nodeEl, newNode);
-
+            function animateNodeAppearance(nodeEl, line, x, y) {
                 requestAnimationFrame(() => {
                     setTimeout(() => {
                         nodeEl.classList.add('visible');
-                        line.setAttribute('x2', targetX);
-                        line.setAttribute('y2', targetY);
+                        line.setAttribute('x2', x);
+                        line.setAttribute('y2', y);
                         setTimeout(() => { line.style.transition = ''; }, 500);
                     }, 10);
                 });
-
-                keywordInput.value = '';
-                keywordInput.focus();
             }
 
-            // 3. 마우스 드래그 및 선택 바인딩
+            // 5. 크기 조절 이벤트 바인딩
+            function bindResizeEvents(nodeEl, nodeData) {
+                const handles = nodeEl.querySelectorAll('.resize-handle');
+                handles.forEach(handle => {
+                    handle.addEventListener('mousedown', (e) => {
+                        e.stopPropagation(); 
+                        isResizing = true;
+                        resizeDir = handle.getAttribute('data-dir');
+                        currentDragNodeData = nodeData;
+                        
+                        currentDragNodeData.isExpanded = false;
+                        nodeEl.classList.add('resizing');
+
+                        resizeStartW = parseFloat(nodeEl.style.width) || nodeEl.offsetWidth;
+                        resizeStartH = parseFloat(nodeEl.style.height) || nodeEl.offsetHeight;
+                        resizeStartX = nodeData.x;
+                        resizeStartY = nodeData.y;
+                        resizeMouseStartX = e.clientX;
+                        resizeMouseStartY = e.clientY;
+
+                        document.body.style.cursor = window.getComputedStyle(handle).cursor;
+                    });
+                });
+            }
+
+            // 6. 마우스 드래그 및 선택 바인딩
             function bindDragEvents(element, nodeData) {
                 element.addEventListener('mousedown', (e) => {
+                    if(e.target.classList.contains('resize-handle')) return;
+
                     document.querySelectorAll('.node-box').forEach(el => el.classList.remove('selected'));
                     element.classList.add('selected');
                     selectedNodeData = nodeData;
@@ -403,6 +549,46 @@
             });
 
             document.addEventListener('mousemove', (e) => {
+                if (isResizing && currentDragNodeData) {
+                    const dx = e.clientX - resizeMouseStartX;
+                    const dy = e.clientY - resizeMouseStartY;
+                    
+                    let validDx = dx;
+                    let validDy = dy;
+                    
+                    // 최소 크기(50px) 제한
+                    if (resizeDir.includes('r') && resizeStartW + dx < 50) validDx = 50 - resizeStartW;
+                    if (resizeDir.includes('l') && resizeStartW - dx < 50) validDx = resizeStartW - 50;
+                    if (resizeDir.includes('b') && resizeStartH + dy < 50) validDy = 50 - resizeStartH;
+                    if (resizeDir.includes('t') && resizeStartH - dy < 50) validDy = resizeStartH - 50;
+                    
+                    let newW = resizeStartW;
+                    let newH = resizeStartH;
+                    let newX = resizeStartX;
+                    let newY = resizeStartY;
+                    
+                    if (resizeDir.includes('r')) { newW = resizeStartW + validDx; newX = resizeStartX + validDx/2; }
+                    if (resizeDir.includes('l')) { newW = resizeStartW - validDx; newX = resizeStartX + validDx/2; } 
+                    if (resizeDir.includes('b')) { newH = resizeStartH + validDy; newY = resizeStartY + validDy/2; }
+                    if (resizeDir.includes('t')) { newH = resizeStartH - validDy; newY = resizeStartY + validDy/2; }
+
+                    currentDragNodeData.width = newW;
+                    currentDragNodeData.height = newH;
+                    currentDragNodeData.x = newX;
+                    currentDragNodeData.y = newY;
+                    
+                    currentDragNodeData.el.style.width = `${newW}px`;
+                    currentDragNodeData.el.style.height = `${newH}px`;
+                    currentDragNodeData.el.style.left = `${newX}px`;
+                    currentDragNodeData.el.style.top = `${newY}px`;
+
+                    if (currentDragNodeData.lineEl) {
+                        currentDragNodeData.lineEl.setAttribute('x2', newX);
+                        currentDragNodeData.lineEl.setAttribute('y2', newY);
+                    }
+                    return;
+                }
+
                 if (!isDragging || !currentDragNodeData) return;
                 
                 const newX = e.clientX - dragOffsetX;
@@ -432,18 +618,23 @@
                     currentDragNodeData = null;
                     document.body.style.cursor = '';
                 }
+                if (isResizing && currentDragNodeData) {
+                    currentDragNodeData.el.classList.remove('resizing');
+                    isResizing = false;
+                    resizeDir = null;
+                    currentDragNodeData = null;
+                    document.body.style.cursor = '';
+                }
             });
 
             // ⌨️ 키보드 단축키 처리 (Ctrl+S 및 삭제)
             document.addEventListener('keydown', (e) => {
-                // Ctrl + S (저장)
                 if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
                     e.preventDefault();
                     triggerSaveMap();
                     return;
                 }
 
-                // Delete / Backspace (노드 삭제)
                 if ((e.key === 'Delete' || e.key === 'Backspace') && selectedNodeData) {
                     const activeEl = document.activeElement;
                     if (activeEl.tagName === 'INPUT' || activeEl.isContentEditable) return; 
@@ -465,16 +656,31 @@
                 }
             });
 
-            // 💾 저장 관련 함수 (모달 오픈 및 실행)
+            // 📋 클립보드 이미지 붙여넣기 기능
+            document.addEventListener('paste', (e) => {
+                const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+                for (let index in items) {
+                    const item = items[index];
+                    if (item.kind === 'file' && item.type.startsWith('image/')) {
+                        const blob = item.getAsFile();
+                        const reader = new FileReader();
+                        reader.onload = function(event) {
+                            addImageNode(event.target.result);
+                            showToast('붙여넣기 이미지 추가 완료');
+                        };
+                        reader.readAsDataURL(blob);
+                    }
+                }
+            });
+
+            // 💾 저장 관련 함수 
             window.triggerSaveMap = function() {
                 if (!currentMapId) {
-                    // 최초 저장 시 모달 오픈
                     const rootText = nodes.find(n => n.id === 'root')?.text || '새 마인드맵';
                     saveMapNameInput.value = rootText;
                     document.getElementById('save-modal-overlay').style.display = 'flex';
                     saveMapNameInput.focus();
                 } else {
-                    // 이미 저장된 맵이면 바로 덮어쓰기
                     executeSaveData();
                 }
             };
@@ -496,11 +702,9 @@
                 executeSaveData();
             };
 
-            // 저장 모달창 내부 엔터 처리
             saveMapNameInput.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' && !e.isComposing) {
-                    e.preventDefault();
-                    window.confirmSaveMap();
+                    e.preventDefault(); window.confirmSaveMap();
                 }
             });
 
@@ -512,7 +716,11 @@
                     placementIndex: placementIndex,
                     nodes: nodes.map(n => ({
                         id: n.id,
+                        type: n.type || 'text',
                         text: n.text,
+                        src: n.src,
+                        width: n.width,
+                        height: n.height,
                         x: n.x,
                         y: n.y,
                         isRoot: n.id === 'root'
@@ -530,7 +738,7 @@
                 }
             }
 
-            // 📂 불러오기 관련 함수 (모달 오픈 및 실행)
+            // 📂 불러오기 관련 함수 
             window.openLoadModal = async function() {
                 try {
                     const db = await initDB();
@@ -549,7 +757,6 @@
                             maps.sort((a, b) => b.updatedAt - a.updatedAt).forEach(m => {
                                 const item = document.createElement('div');
                                 item.className = 'map-item';
-                                
                                 const dateStr = new Date(m.updatedAt).toLocaleString();
                                 item.innerHTML = `
                                     <div>
@@ -558,33 +765,24 @@
                                     </div>
                                     <button class="btn-delete-map">삭제</button>
                                 `;
-
                                 item.querySelector('.btn-delete-map').onclick = async (e) => {
                                     e.stopPropagation();
                                     if(confirm(`'${m.name}' 맵을 삭제하시겠습니까?`)) {
                                         await deleteMapData(m.id);
-                                        if (currentMapId === m.id) {
-                                            currentMapId = null; 
-                                            currentMapName = "";
-                                        }
+                                        if (currentMapId === m.id) { currentMapId = null; currentMapName = ""; }
                                         window.openLoadModal(); 
                                     }
                                 };
-
                                 item.onclick = () => {
                                     loadMapData(m);
                                     window.closeLoadModal();
                                 };
-
                                 listEl.appendChild(item);
                             });
                         }
                         document.getElementById('load-modal-overlay').style.display = 'flex';
                     };
-                } catch (err) {
-                    console.error(err);
-                    alert('불러오기 목록을 가져오는 중 오류가 발생했습니다.');
-                }
+                } catch (err) { console.error(err); alert('불러오기 목록을 가져오는 중 오류가 발생했습니다.'); }
             };
 
             window.closeLoadModal = function() {
@@ -605,30 +803,54 @@
                 selectedNodeData = null;
 
                 const rootData = data.nodes.find(n => n.isRoot);
-                if (rootData) {
-                    centerX = rootData.x;
-                    centerY = rootData.y;
-                }
+                if (rootData) { centerX = rootData.x; centerY = rootData.y; }
 
                 data.nodes.forEach(nData => {
-                    const n = { id: nData.id, text: nData.text, x: nData.x, y: nData.y };
+                    const n = { id: nData.id, type: nData.type || 'text', x: nData.x, y: nData.y };
+                    let nodeEl;
 
-                    const nodeEl = document.createElement('div');
-                    nodeEl.className = 'node-box visible' + (nData.isRoot ? ' root-node' : '');
-                    nodeEl.style.left = `${n.x}px`;
-                    nodeEl.style.top = `${n.y}px`;
-                    nodeEl.innerHTML = `<div class="node-title" contenteditable="true" spellcheck="false">${n.text}</div>`;
-                    
-                    attachTitleEvents(nodeEl.querySelector('.node-title'), n);
+                    if (n.type === 'text') {
+                        n.text = nData.text;
+                        nodeEl = document.createElement('div');
+                        nodeEl.className = 'node-box visible' + (nData.isRoot ? ' root-node' : '');
+                        nodeEl.style.left = `${n.x}px`;
+                        nodeEl.style.top = `${n.y}px`;
+                        nodeEl.innerHTML = `<div class="node-title" contenteditable="true" spellcheck="false">${n.text}</div>`;
+                        attachTitleEvents(nodeEl.querySelector('.node-title'), n);
+                    } else if (n.type === 'image') {
+                        n.src = nData.src;
+                        n.width = nData.width || 160;
+                        n.height = nData.height || 120;
+                        n.isExpanded = false; 
+                        
+                        nodeEl = document.createElement('div');
+                        nodeEl.className = 'node-box image-node visible';
+                        nodeEl.style.left = `${n.x}px`;
+                        nodeEl.style.top = `${n.y}px`;
+                        nodeEl.style.width = `${n.width}px`;
+                        nodeEl.style.height = `${n.height}px`;
+                        nodeEl.innerHTML = `
+                            <img src="${n.src}" alt="사용자 추가 이미지">
+                            <div class="resize-handle tl" data-dir="tl"></div>
+                            <div class="resize-handle tc" data-dir="tc"></div>
+                            <div class="resize-handle tr" data-dir="tr"></div>
+                            <div class="resize-handle ml" data-dir="ml"></div>
+                            <div class="resize-handle mr" data-dir="mr"></div>
+                            <div class="resize-handle bl" data-dir="bl"></div>
+                            <div class="resize-handle bc" data-dir="bc"></div>
+                            <div class="resize-handle br" data-dir="br"></div>
+                        `;
+                        bindResizeEvents(nodeEl, n);
+                        bindImageDoubleClick(nodeEl, n); 
+                    }
+
                     nodeLayer.appendChild(nodeEl);
                     n.el = nodeEl;
 
                     if (!nData.isRoot) {
                         const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-                        line.setAttribute('x1', centerX);
-                        line.setAttribute('y1', centerY);
-                        line.setAttribute('x2', n.x);
-                        line.setAttribute('y2', n.y);
+                        line.setAttribute('x1', centerX); line.setAttribute('y1', centerY);
+                        line.setAttribute('x2', n.x); line.setAttribute('y2', n.y);
                         line.setAttribute('class', 'connection-line');
                         linkLayer.appendChild(line);
                         n.lineEl = line;
@@ -651,16 +873,12 @@
             // 모달 배경 클릭 시 닫기 공통 처리
             document.querySelectorAll('.modal-overlay').forEach(overlay => {
                 overlay.addEventListener('mousedown', function(e) {
-                    if (e.target === this) {
-                        this.style.display = 'none';
-                        keywordInput.focus();
-                    }
+                    if (e.target === this) { this.style.display = 'none'; keywordInput.focus(); }
                 });
             });
 
             // 이벤트 바인딩
             addBtn.addEventListener('click', () => addKeywordNode(keywordInput.value));
-            
             keywordInput.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' && !e.isComposing) {
                     e.preventDefault(); addKeywordNode(keywordInput.value);
