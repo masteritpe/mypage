@@ -670,6 +670,21 @@ async function renderDiagram() {
 
     const isAntigravity = theme === 'antigravity';
 
+    // antigravity 테마는 Inter/Noto Sans KR 웹폰트를 쓰는데, 폰트가 로드되기 전에
+    // Mermaid가 노드 크기를 계산하면 대체 폰트 기준 크기로 박스가 잡혀
+    // 실제 폰트 적용 시 라벨(특히 2줄 텍스트)이 잘려 보인다. 렌더 전에 로드를 보장한다.
+    if (isAntigravity && document.fonts) {
+        try {
+            await Promise.all([
+                document.fonts.load('400 13px Inter'),
+                document.fonts.load('700 13px Inter'),
+                document.fonts.load('400 13px "Noto Sans KR"'),
+                document.fonts.load('700 13px "Noto Sans KR"'),
+            ]);
+            await document.fonts.ready;
+        } catch (e) { /* 폰트 로드 실패 시에도 렌더링은 계속 진행 */ }
+    }
+
     if (isAntigravity) {
         // classDef/class 색상 구문을 코드에서 제거 후 렌더링
         code = injectAntigravityStyle(code);
@@ -730,25 +745,81 @@ async function renderDiagram() {
     }
 }
 
-function exportToPng() {
+// data:image/svg+xml 로 만든 <img>는 문서의 <link> 스타일시트(구글 폰트)를 전혀 참조하지
+// 못해 대체 폰트로 그려진다. 대체 폰트는 줄 높이가 달라 2줄 라벨이 도형 밖으로 잘려 보이므로,
+// 실제 사용중인 웹폰트를 base64로 인라인해서 SVG 자체에 심어준다. 최초 1회만 네트워크로 받고
+// 이후 내보내기부터는 캐시를 재사용한다.
+let embeddedFontCssPromise = null;
+function getEmbeddedFontCss() {
+    if (embeddedFontCssPromise) return embeddedFontCssPromise;
+
+    const cssUrl = "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap";
+
+    embeddedFontCssPromise = (async () => {
+        try {
+            const cssText = await (await fetch(cssUrl)).text();
+            const fontFaceBlocks = cssText.match(/@font-face\s*{[^}]*}/g) || [];
+            const blocks = await Promise.all(fontFaceBlocks.map(async (block) => {
+                const urlMatch = block.match(/url\(([^)]+)\)\s*format\('woff2'\)/);
+                if (!urlMatch) return '';
+                try {
+                    const buf = await (await fetch(urlMatch[1])).arrayBuffer();
+                    let binary = '';
+                    const bytes = new Uint8Array(buf);
+                    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+                    const dataUri = `data:font/woff2;base64,${btoa(binary)}`;
+                    return block.replace(urlMatch[0], `url(${dataUri}) format('woff2')`);
+                } catch (e) {
+                    return '';
+                }
+            }));
+            return blocks.join('\n');
+        } catch (e) {
+            return '';
+        }
+    })();
+
+    return embeddedFontCssPromise;
+}
+
+async function exportToPng() {
     const svgEl = document.querySelector('#mermaid-output svg');
     if(!svgEl) return toast('내보낼 다이어그램이 없습니다.');
 
-    const svgData = new XMLSerializer().serializeToString(svgEl);
+    // 서브그래프 타이틀 등이 SVG의 선언된 viewBox/width/height 밖으로 삐져나오는 경우가 있어
+    // getBoundingClientRect 대신 실제 렌더링된 콘텐츠의 bbox를 구해 viewBox를 보정하고
+    // 여유 패딩을 둔다.
+    const clone = svgEl.cloneNode(true);
+    const contentBox = svgEl.getBBox();
+    const padding = 10;
+    const width = Math.ceil(contentBox.width + padding * 2);
+    const height = Math.ceil(contentBox.height + padding * 2);
+
+    clone.setAttribute('width', width);
+    clone.setAttribute('height', height);
+    clone.setAttribute('viewBox', `${contentBox.x - padding} ${contentBox.y - padding} ${width} ${height}`);
+
+    const fontCss = await getEmbeddedFontCss();
+    if (fontCss) {
+        const styleEl = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+        styleEl.textContent = fontCss;
+        clone.insertBefore(styleEl, clone.firstChild);
+    }
+
+    const svgData = new XMLSerializer().serializeToString(clone);
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     const img = new Image();
 
-    const bbox = svgEl.getBoundingClientRect();
-    const scale = 2; 
-    canvas.width = bbox.width * scale;
-    canvas.height = bbox.height * scale;
+    const scale = 2;
+    canvas.width = width * scale;
+    canvas.height = height * scale;
 
     img.onload = () => {
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        
+
         const a = document.createElement('a');
         a.download = `${$('#inp-title').value || 'gitgraph'}.png`;
         a.href = canvas.toDataURL('image/png');
