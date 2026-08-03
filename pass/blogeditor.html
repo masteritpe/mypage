@@ -678,8 +678,9 @@ window.MathJax = {
                         // 1. 가로로 쭉 붙어버린 테이블 행(||)을 줄바꿈(|\n|)으로 분리하여 마크다운 테이블 구조 복원
                         content = content.replace(/\|\|/g, '|\n|');
                         
-                        // 2. 테이블 구분선의 em-dash(—)를 hyphen(-)으로 변환하여 marked.js 인식 오류 방지
-                        content = content.replace(/\|(?:\s*—+\s*\|)+/g, (match) => match.replace(/—/g, '-'));
+                        // 2. 테이블 구분선의 다양한 대시(—, –, ─)를 hyphen(-)으로 변환하여 marked.js 및 블로그 파서 인식 오류 방지
+                        // (콜론(:)이 포함된 정렬 기호도 정상적으로 처리하도록 정규식 개선)
+                        content = content.replace(/\|(?:\s*:?[—–─]+\s*:?\|)+/g, (match) => match.replace(/[—–─]/g, '-'));
                         
                         addArticle({ 
                             title: title, 
@@ -1612,6 +1613,10 @@ window.MathJax = {
                         }
                     } else {
                         if (isTableStart) {
+                            // [수정사항] 테이블 시작 전 빈 줄 추가 (엄격한 마크다운 파서에서 표가 텍스트로 뭉개지는 현상 방지)
+                            if (newLines.length > 0 && newLines[newLines.length - 1].trim() !== "") {
+                                newLines.push("");
+                            }
                             inTable = true;
                             currentRow = line;
                         } else {
@@ -1619,7 +1624,12 @@ window.MathJax = {
                         }
                     }
                 }
-                if (currentRow !== "") newLines.push(currentRow);
+                
+                if (currentRow !== "") {
+                    newLines.push(currentRow);
+                    // [수정사항] 테이블 종료 후에도 확실하게 빈 줄 추가
+                    if (inTable) newLines.push("");
+                }
                 processedContent = newLines.join('\n');
 
                 let lines = processedContent.split('\n');

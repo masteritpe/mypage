@@ -293,9 +293,17 @@
     <button class="btn" id="btn-memo"><i class="fas fa-sticky-note" style="color:#f59e0b;"></i> 메모</button>
     <div style="width:1px; height:20px; background:#e5e7eb; margin:0 4px;"></div>
     <button class="btn" id="btn-export"><i class="fas fa-file-excel" style="color:#10b981;"></i> 엑셀 저장</button>
+    
+    <!-- 엑셀 불러오기 -->
     <label class="btn" style="cursor:pointer">
-      <i class="fas fa-folder-open"></i> 불러오기
+      <i class="fas fa-file-excel"></i> 엑셀 불러오기
       <input type="file" id="xlsxFile" accept=".xlsx" style="display:none" />
+    </label>
+    
+    <!-- MD 불러오기 추가 -->
+    <label class="btn" style="cursor:pointer">
+      <i class="fas fa-file-alt" style="color:#6366f1;"></i> MD 불러오기
+      <input type="file" id="mdFile" accept=".md,.txt" style="display:none" />
     </label>
   </div>
 </header>
@@ -1189,6 +1197,110 @@ document.addEventListener("DOMContentLoaded", async () => {
      } catch(e) { 
          console.error("Import Error:", e); 
          App.toast("파일 읽기 실패: 올바른 형식의 엑셀 파일인지 확인해주세요."); 
+     }
+     e.target.value = "";
+  };
+
+  // MD 파싱 및 불러오기 (신규 추가 로직 - 챕터 연번 적용 및 과도한 빈줄 제거)
+  $("mdFile").onchange = async (e) => {
+     const f = e.target.files[0];
+     if(!f) return;
+     try {
+         App.toast("MD 파일을 읽는 중입니다...");
+         const text = await new Promise((resolve, reject) => {
+             const reader = new FileReader();
+             reader.onload = e => resolve(e.target.result);
+             reader.onerror = e => reject(e);
+             reader.readAsText(f);
+         });
+
+         const lines = text.split('\n');
+         
+         // 1. 기존 DB에 저장된 챕터 중 가장 큰 연번 추출
+         let maxChap = 0;
+         App.state.tests.forEach(t => {
+             let m = String(t.chapter).match(/\d+/);
+             if (m) {
+                 let num = parseInt(m[0], 10);
+                 if (num > maxChap) maxChap = num;
+             }
+         });
+         
+         // 2. 신규 챕터 번호 자동 계산 (기존 마지막 챕터 번호 + 1)
+         let currentChapter = String(maxChap + 1).padStart(2, '0');
+
+         let questions = [];
+         let currentQ = null;
+         let parseState = 'NONE'; // 'QUESTION', 'SOLUTION'
+
+         for(let i=0; i<lines.length; i++) {
+             let line = lines[i].trim();
+             
+             // 과도한 빈줄 무시 (핵심: 빈 라인을 모두 스킵하여 간격 압축 처리)
+             if(!line) continue;
+             
+             // 연번 자동 생성 처리이므로 기존 파일의 # 제목은 파싱하지 않고 무시함
+             if(line.startsWith('# ')) continue;
+             
+             // '## 문제'로 시작하면 새로운 문제 블록 진입
+             if(line.startsWith('## 문제')) {
+                 if(currentQ) questions.push(currentQ);
+                 currentQ = { question: [], solution: [] };
+                 parseState = 'QUESTION';
+                 currentQ.question.push(`<strong>${line}</strong>`);
+                 continue;
+             }
+             
+             if(currentQ) {
+                 // 해설이나 정답 키워드를 만나면 풀이 영역으로 상태 전환
+                 if(line.includes('**해설:**') || line.includes('**정답:**') || line.startsWith('해설:') || line.startsWith('정답:')) {
+                     parseState = 'SOLUTION';
+                 }
+                 
+                 // 글 굵기 서식 변환
+                 let parsedLine = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                 
+                 // 단일 줄바꿈만 허용할 수 있도록 Quill 에디터 표준 양식인 <p> 태그 적용
+                 if(parseState === 'QUESTION') {
+                     currentQ.question.push(`<p>${parsedLine}</p>`);
+                 } else if (parseState === 'SOLUTION') {
+                     currentQ.solution.push(`<p>${parsedLine}</p>`);
+                 }
+             }
+         }
+         if(currentQ) questions.push(currentQ);
+
+         let count = 0;
+         const importPromises = [];
+         
+         // 변환된 배열 요소 단순 결합 함수 (위에서 이미 <p> 태그가 적용되었으므로 바로 join 처리)
+         const mdToHtml = (arr) => arr.join('');
+
+         const startNumber = 1;
+
+         for(let i=0; i<questions.length; i++) {
+             const q = questions[i];
+             const test = {
+                 id: App.uid(), ts: App.nowISO(),
+                 chapter: currentChapter,
+                 number: String(startNumber + i).padStart(3, '0'),
+                 status: "미체크",
+                 question: mdToHtml(q.question),
+                 solution: mdToHtml(q.solution),
+                 keypoint: ""
+             };
+             importPromises.push(App.putTest(test));
+             count++;
+         }
+
+         await Promise.all(importPromises);
+         App.state.tests = await App.getAllTests();
+         renderList(); renderChapterFilter();
+         App.toast(`챕터 ${currentChapter}로 ${count}건 MD 가져오기 완료`);
+
+     } catch(err) {
+         console.error(err);
+         App.toast("MD 파일 읽기 실패");
      }
      e.target.value = "";
   };
