@@ -7,6 +7,8 @@
     
     <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- 이미지 저장을 위한 html2canvas 라이브러리 추가 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
     <style>
         :root {
@@ -212,7 +214,10 @@
         <!-- 상단 툴바 -->
         <div id="toolbar">
             <button class="btn-action" id="btn-load"><i class="ph ph-folder-open"></i> 불러오기</button>
-            <button class="btn-action" id="btn-save" title="단축키: Ctrl + S"><i class="ph ph-floppy-disk"></i> 저장</button>
+            <button class="btn-action" id="btn-save" title="단축키: Ctrl + S"><i class="ph ph-floppy-disk"></i> 브라우저 저장</button>
+            <!-- 파일 내보내기 버튼 추가 -->
+            <button class="btn-action" id="btn-export-png"><i class="ph ph-image"></i> PNG 다운로드</button>
+            <button class="btn-action" id="btn-export-md"><i class="ph ph-file-md"></i> MD 다운로드</button>
         </div>
 
         <div id="canvas-container">
@@ -887,6 +892,56 @@
 
             document.getElementById('btn-save').addEventListener('click', window.triggerSaveMap);
             document.getElementById('btn-load').addEventListener('click', window.openLoadModal);
+
+            // 🖼️ PNG 다운로드 이벤트
+            document.getElementById('btn-export-png').addEventListener('click', () => {
+                // 선택된 노드가 있다면 선택 해제하여 스타일 제거
+                document.querySelectorAll('.node-box').forEach(el => el.classList.remove('selected'));
+                selectedNodeData = null;
+                
+                const canvasEl = document.getElementById('canvas-container');
+                const fileName = (currentMapName || '키워드맵') + '.png';
+
+                showToast('PNG 이미지를 생성 중입니다...');
+
+                html2canvas(canvasEl, { backgroundColor: '#FAFAFA' }).then(canvas => {
+                    const link = document.createElement('a');
+                    link.download = fileName;
+                    link.href = canvas.toDataURL('image/png');
+                    link.click();
+                    showToast('PNG 파일로 저장되었습니다.');
+                }).catch(err => {
+                    console.error('PNG 저장 오류:', err);
+                    showToast('이미지 저장 중 오류가 발생했습니다.');
+                });
+            });
+
+            // 📝 MD 다운로드 이벤트
+            document.getElementById('btn-export-md').addEventListener('click', () => {
+                const rootNode = nodes.find(n => n.id === 'root');
+                const titleText = rootNode ? rootNode.text : '키워드맵';
+                
+                let mdContent = `# ${titleText}\n\n`;
+                
+                nodes.forEach(n => {
+                    if (n.id !== 'root') {
+                        if (n.type === 'text') {
+                            mdContent += `- ${n.text}\n`;
+                        } else if (n.type === 'image') {
+                            // 이미지를 Base64 데이터와 함께 HTML 태그로 삽입하여 MD 파일에서 바로 보이도록 처리
+                            mdContent += `- <img src="${n.src}" width="${n.width}" height="${n.height}" alt="첨부된 이미지">\n`;
+                        }
+                    }
+                });
+
+                const blob = new Blob([mdContent], { type: 'text/markdown;charset=utf-8;' });
+                const link = document.createElement('a');
+                link.download = (currentMapName || titleText) + '.md';
+                link.href = URL.createObjectURL(blob);
+                link.click();
+                
+                showToast('MD 파일로 저장되었습니다.');
+            });
 
             // 최초 화면 초기화
             initCentralNode();
