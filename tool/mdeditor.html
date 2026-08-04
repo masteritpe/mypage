@@ -221,6 +221,8 @@
                         <option value="Arial">
                     </datalist>
                     <span class="hint" id="copy-btn">클릭하여 복사 ✨</span>
+                    <!-- 다운로드 버튼 추가 -->
+                    <span class="hint" id="download-btn" title="마크다운 파일로 다운로드합니다">다운로드 ⬇️</span>
                 </div>
             </div>
             <textarea id="md-output" readonly title="클릭하면 조용히 복사됩니다."></textarea>
@@ -264,7 +266,7 @@
             initialEditType: 'wysiwyg', 
             previewStyle: 'vertical',
             hideModeSwitch: true, 
-            initialValue: '상단의 툴바를 이용해 **글을 꾸며보세요.**\n\n- `Alt + 1`을 누르면 에디터만 전체 화면으로 전환됩니다.\n- `Alt + 2`를 누르면 마크다운 코드만 전체 화면으로 전환됩니다.\n- 상단의 **저장 💾** 버튼을 누르면 문서가 저장됩니다.',
+            initialValue: '상단의 툴바를 이용해 **글을 꾸며보세요.**\n\n- `Alt + 1`을 누르면 에디터만 전체 화면으로 전환됩니다.\n- `Alt + 2`를 누르면 마크다운 코드만 전체 화면으로 전환됩니다.\n- 우측 상단의 **다운로드 ⬇️** 버튼으로 문서를 `.md` 파일로 내려받을 수 있습니다.',
             events: {
                 change: () => mdOutput.value = editor.getMarkdown()
             }
@@ -274,22 +276,21 @@
 
         // --- 2. 단축키 (Alt+1, Alt+2) 전체화면 토글 기능 ---
         document.addEventListener('keydown', (e) => {
-            // Toast UI 내부 단축키 충돌 방지 및 브라우저 기본동작 방지
             if (e.altKey && e.key === '1') {
                 e.preventDefault();
                 if (document.body.classList.contains('wysiwyg-only')) {
-                    document.body.classList.remove('wysiwyg-only'); // 토글 복귀
+                    document.body.classList.remove('wysiwyg-only'); 
                 } else {
                     document.body.classList.remove('md-only');
-                    document.body.classList.add('wysiwyg-only'); // 에디터만 보기
+                    document.body.classList.add('wysiwyg-only'); 
                 }
             } else if (e.altKey && e.key === '2') {
                 e.preventDefault();
                 if (document.body.classList.contains('md-only')) {
-                    document.body.classList.remove('md-only'); // 토글 복귀
+                    document.body.classList.remove('md-only'); 
                 } else {
                     document.body.classList.remove('wysiwyg-only');
-                    document.body.classList.add('md-only'); // 마크다운만 보기
+                    document.body.classList.add('md-only'); 
                 }
             }
         });
@@ -335,9 +336,8 @@
         const STORE_NAME = 'documents';
         let db;
         let currentDocId = null; 
-        let pendingSaveContent = ''; // 새 문서 저장 시 모달로 넘길 내용
+        let pendingSaveContent = ''; 
 
-        // DB 초기화
         const request = indexedDB.open(DB_NAME, 1);
         request.onupgradeneeded = (e) => {
             db = e.target.result;
@@ -353,7 +353,6 @@
             currentDocId = null;
         });
 
-        // --- 문서 제목 모달 요소 ---
         const titleModal = document.getElementById('title-modal');
         const titleInput = document.getElementById('doc-title-input');
         const confirmSaveBtn = document.getElementById('confirm-save-btn');
@@ -364,21 +363,18 @@
             if (!content.trim()) return alert('저장할 내용이 없습니다.');
 
             if (currentDocId) {
-                // 이미 저장된 이력이 있다면 기존 제목으로 자동 업데이트 (덮어쓰기)
                 const tx = db.transaction(STORE_NAME, 'readonly');
                 tx.objectStore(STORE_NAME).get(currentDocId).onsuccess = (e) => {
                     executeSave(e.target.result.title, content);
                 };
             } else {
-                // 새 문서라면 제목 입력 모달 띄우기
                 pendingSaveContent = content;
-                titleInput.value = ''; // 입력창 초기화
+                titleInput.value = ''; 
                 titleModal.classList.add('active');
                 setTimeout(() => titleInput.focus(), 100);
             }
         });
 
-        // 실제 저장 실행 함수
         function executeSave(title, content) {
             const tx = db.transaction(STORE_NAME, 'readwrite');
             const store = tx.objectStore(STORE_NAME);
@@ -393,18 +389,15 @@
             };
         }
 
-        // 모달 내 저장 버튼 클릭 시
         confirmSaveBtn.addEventListener('click', () => {
             const title = titleInput.value.trim() || '새 마크다운 문서';
             executeSave(title, pendingSaveContent);
         });
 
-        // 엔터키 입력 시 저장
         titleInput.addEventListener('keyup', (e) => {
             if(e.key === 'Enter') confirmSaveBtn.click();
         });
 
-        // 모달 닫기
         document.getElementById('close-title-btn').addEventListener('click', () => titleModal.classList.remove('active'));
         titleModal.addEventListener('click', (e) => { if (e.target === titleModal) titleModal.classList.remove('active'); });
 
@@ -451,7 +444,6 @@
                             <button class="del-btn" data-id="${doc.id}">삭제</button>
                         `;
 
-                        // 목록 아이템 클릭 시 에디터로 불러오기
                         li.querySelector('.doc-info').addEventListener('click', () => {
                             editor.setMarkdown(doc.content);
                             mdOutput.value = doc.content;
@@ -459,7 +451,6 @@
                             historyModal.classList.remove('active');
                         });
 
-                        // 삭제 버튼
                         li.querySelector('.del-btn').addEventListener('click', (ev) => {
                             ev.stopPropagation();
                             if (confirm(`'${doc.title}' 문서를 삭제하시겠습니까?`)) deleteDocument(doc.id);
@@ -480,6 +471,38 @@
                 loadDocumentList();
             };
         }
+
+        // --- 6. MD 다운로드 기능 추가 ---
+        document.getElementById('download-btn').addEventListener('click', () => {
+            const content = mdOutput.value;
+            if (!content.trim()) return alert('다운로드할 내용이 없습니다.');
+
+            const processDownload = (fileName) => {
+                const blob = new Blob([content], { type: 'text/markdown;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                }, 100);
+            };
+
+            // DB에서 현재 문서의 제목을 가져와 파일명으로 지정
+            if (currentDocId && db) {
+                const tx = db.transaction(STORE_NAME, 'readonly');
+                tx.objectStore(STORE_NAME).get(currentDocId).onsuccess = (e) => {
+                    const doc = e.target.result;
+                    const fileName = (doc && doc.title) ? `${doc.title}.md` : 'document.md';
+                    processDownload(fileName);
+                };
+            } else {
+                processDownload('document.md');
+            }
+        });
     </script>
 </body>
 </html>
