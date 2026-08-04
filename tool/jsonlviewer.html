@@ -287,7 +287,7 @@
   .msg-user .msg-label { color: var(--overlay); }
   .msg-assistant .msg-label { color: var(--primary-text); }
 
-  /* Footer: time + copy button */
+  /* Footer: time + copy/download button */
   .msg-footer {
     display: flex;
     align-items: center;
@@ -298,7 +298,7 @@
   
   .msg-time { font-size: 11px; font-weight: 500; color: var(--overlay); }
 
-  .btn-copy-md {
+  .btn-copy-md, .btn-download-md {
     background: transparent;
     border: 1px solid var(--border);
     color: var(--overlay);
@@ -309,7 +309,7 @@
     cursor: pointer;
     transition: all 0.15s;
   }
-  .btn-copy-md:hover { background: var(--surface-hover); color: var(--subtext); border-color: var(--border-focus); }
+  .btn-copy-md:hover, .btn-download-md:hover { background: var(--surface-hover); color: var(--subtext); border-color: var(--border-focus); }
   .btn-copy-md.copied { border-color: var(--success); color: var(--success); background: #ecfdf5; }
 
   /* Tool use */
@@ -772,6 +772,7 @@ function renderSession(session) {
       <div class="msg-footer">
         <span class="msg-time">${time}</span>
         <button class="btn-copy-md" onclick="copyMsgMd(${idx}, this)">MD 복사</button>
+        <button class="btn-download-md" onclick="downloadMsgMd(${idx})">MD 다운</button>
       </div>
     </div>`;
   });
@@ -797,6 +798,30 @@ function copyMsgMd(idx, btn) {
     btn.classList.add('copied');
     setTimeout(() => { btn.textContent = 'MD 복사'; btn.classList.remove('copied'); }, 1800);
   });
+}
+
+function downloadMsgMd(idx) {
+  if (!currentSession) return;
+  const msg = currentSession.messages[idx];
+  if (!msg) return;
+  
+  const isUser = msg.type === 'user' || msg.source === 'USER_EXPLICIT';
+  const role = isUser ? '**사용자**' : '**Assistant**';
+  const ts = msg.timestamp || msg.timestamp_ms;
+  
+  const timeLabel = ts ? new Date(ts).toLocaleString('ko-KR') : '';
+  const text = extractPlainText(msg);
+  const md = `### ${role} — ${timeLabel}\n\n${text}`;
+  
+  const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  
+  const fileRole = isUser ? 'User' : 'Assistant';
+  a.download = `${currentSession.filename.replace('.jsonl', '')}_${fileRole}_${idx}.md`;
+  
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 function renderContent(content, msg) {
