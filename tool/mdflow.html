@@ -96,18 +96,33 @@
         }
         .hint:hover { background: rgba(59, 130, 246, 0.2); }
 
-        /* 서식 유지 내용 복사 버튼 스타일 */
+        /* 기능 버튼 특별 스타일 */
+        #clean-btn {
+            background: rgba(245, 158, 11, 0.1); color: #d97706;
+            font-weight: 600;
+        }
+        #clean-btn:hover { background: rgba(245, 158, 11, 0.2); }
+
         #copy-rich-btn {
             background: rgba(16, 185, 129, 0.1); color: #059669;
             font-weight: 600;
         }
         #copy-rich-btn:hover { background: rgba(16, 185, 129, 0.2); }
 
-        /* Toast UI Editor 스타일 */
+        /* Toast UI Editor 스타일 & 표 안의 공백 방지 CSS */
         #wysiwyg-editor { flex: 1; background: transparent; }
         .toastui-editor-defaultUI { border: none !important; background: transparent !important; }
         .toastui-editor-toolbar { background: rgba(255, 255, 255, 0.6) !important; }
         .toastui-editor-contents, .toastui-editor-contents p, .ProseMirror { font-size: 16px !important; line-height: 1.7 !important; }
+        
+        /* 표 내부 강제 여백 최소화 */
+        .toastui-editor-contents td p, 
+        .toastui-editor-contents th p {
+            margin-bottom: 4px !important;
+        }
+        .toastui-editor-contents td p:empty {
+            display: none !important;
+        }
 
         /* 마크다운 출력 영역 */
         textarea#md-output {
@@ -208,11 +223,11 @@
                     <span class="hint" id="save-btn" title="작성 중인 문서를 브라우저에 저장합니다">저장 💾</span>
                     <span class="hint" id="history-btn" title="저장된 문서 목록을 엽니다">목록 🗂️</span>
                     
-                    <!-- 내용 복사 버튼 추가 -->
-                    <span class="hint" id="copy-rich-btn" title="다른 에디터에 서식이 유지되도록 리치 텍스트(HTML)로 복사합니다">내용 복사 📋</span>
-
                     <input type="file" id="md-file-input" accept=".md" style="display: none;">
                     <span class="hint" id="load-btn" title="PC의 .md 파일을 불러옵니다">불러오기 📂</span>
+
+                    <span class="hint" id="clean-btn" title="문서에 남아있는 불필요한 공백과 <br> 태그를 말끔히 청소합니다">여백 정리 🧹</span>
+                    <span class="hint" id="copy-rich-btn" title="다른 에디터에 서식이 유지되도록 리치 텍스트(HTML)로 복사합니다">내용 복사 📋</span>
                 </div>
             </div>
             <div id="wysiwyg-editor"></div>
@@ -231,7 +246,6 @@
                         <option value="Arial">
                     </datalist>
                     <span class="hint" id="copy-btn">클릭하여 복사 ✨</span>
-                    <!-- 다운로드 버튼 -->
                     <span class="hint" id="download-btn" title="마크다운 파일로 다운로드합니다">다운로드 ⬇️</span>
                 </div>
             </div>
@@ -276,14 +290,70 @@
             initialEditType: 'wysiwyg', 
             previewStyle: 'vertical',
             hideModeSwitch: true,
-            frontMatter: true, // [수정사항] 프론트매터 파싱 활성화
-            initialValue: '상단의 기본 툴바를 이용해 **글을 꾸며보세요.**\n\n- `Alt + 1`을 누르면 에디터만 전체 화면으로 전환됩니다.\n- `Alt + 2`를 누르면 마크다운 코드만 전체 화면으로 전환됩니다.\n- 작성이 끝나면 우측 상단의 `내용 복사 📋` 버튼을 눌러 노션이나 컨플루언스에 붙여넣어 보세요!',
+            frontMatter: true, 
+            initialValue: '상단의 기본 툴바를 이용해 **글을 꾸며보세요.**\n\n- `Alt + 1`을 누르면 에디터만 전체 화면으로 전환됩니다.\n- `Alt + 2`를 누르면 마크다운 코드만 전체 화면으로 전환됩니다.\n- 제미나이에서 복사한 글은 그냥 붙여넣기(`Ctrl+V`) 하시면 됩니다.\n- 여백이 넓게 생겼다면 상단의 `여백 정리 🧹` 버튼을 눌러보세요!',
             events: {
                 change: () => mdOutput.value = editor.getMarkdown()
             }
         });
 
         mdOutput.value = editor.getMarkdown();
+
+        // --- ★ 붙여넣기(Paste) 인터셉터 최종 수정 ---
+        document.getElementById('wysiwyg-editor').addEventListener('paste', function(e) {
+            if (e.isCustomPaste) return; // 무한 루프 방지
+            
+            const html = e.clipboardData.getData('text/html');
+            const text = e.clipboardData.getData('text/plain');
+            
+            if (html) {
+                e.preventDefault();
+                
+                let cleanedHtml = html;
+                // 1. 빈 단락 완벽 제거
+                cleanedHtml = cleanedHtml.replace(/<p>\s*<br\s*\/?>\s*<\/p>/gi, '');
+                cleanedHtml = cleanedHtml.replace(/<p>\s*&nbsp;\s*<\/p>/gi, '');
+                
+                // 2. [수정] <br> 태그를 '띄어쓰기(공백)'로 치환하여 단어가 달라붙는 현상 방지
+                cleanedHtml = cleanedHtml.replace(/<br\s*\/?>/gi, ' ');
+                
+                // 3. [추가] HTML 소스 안에 강제 입력된 **강조** 문구를 HTML <strong> 태그로 변환
+                // (제미나이 표 등에서 문자가 그대로 복사되었을 때 Bold가 안 먹히는 현상 방지)
+                cleanedHtml = cleanedHtml.replace(/\*\*([\s\S]*?)\*\*/g, '<strong>$1</strong>');
+                
+                // 새로운 클립보드 이벤트 생성 후 전달
+                const dataTransfer = new DataTransfer();
+                dataTransfer.setData('text/html', cleanedHtml);
+                dataTransfer.setData('text/plain', text);
+                
+                const pasteEvent = new ClipboardEvent('paste', {
+                    clipboardData: dataTransfer,
+                    bubbles: true,
+                    cancelable: true
+                });
+                pasteEvent.isCustomPaste = true;
+                e.target.dispatchEvent(pasteEvent);
+            }
+        }, true);
+
+        // --- ★ 수동 여백 정리 버튼 기능 수정 ---
+        const cleanBtn = document.getElementById('clean-btn');
+        cleanBtn.addEventListener('click', () => {
+            let md = editor.getMarkdown();
+            
+            // 1. [수정] 마크다운 내부에 남아있는 <br> 태그를 '띄어쓰기'로 치환 (글자 달라붙음 방지)
+            md = md.replace(/<br\s*\/?>/gi, ' ');
+            
+            // 2. 문서 전체에 걸쳐 3줄 이상의 빈 엔터를 2줄로 깔끔하게 압축
+            md = md.replace(/\n{3,}/g, '\n\n');
+            
+            editor.setMarkdown(md);
+            mdOutput.value = editor.getMarkdown();
+            
+            const originalText = cleanBtn.innerText;
+            cleanBtn.innerText = '정리 완료 ✨';
+            setTimeout(() => { cleanBtn.innerText = originalText; }, 1500);
+        });
 
         // --- 2. 단축키 (Alt+1, Alt+2) 전체화면 토글 기능 ---
         document.addEventListener('keydown', (e) => {
@@ -329,18 +399,20 @@
 
         const mdFileInput = document.getElementById('md-file-input');
         document.getElementById('load-btn').addEventListener('click', () => mdFileInput.click());
+        
         mdFileInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (!file) return;
             const reader = new FileReader();
             reader.onload = (event) => {
                 let mdContent = event.target.result;
-
-                // [수정사항] 1. 프론트매터(--- ... ---) 영역 클린업 처리 방지
+                mdContent = mdContent.replace(/\r\n|\r/g, '\n'); 
                 mdContent = mdContent.replace(/^---\n[\s\S]*?\n---\n/, '');
-                
-                // [수정사항] 2. Kramdown 특수 태그 (예: {: .prompt-info }, {:target="_blank"}) 제거
                 mdContent = mdContent.replace(/\{:[^\}]+\}/g, '');
+                
+                // 파일 불러올 때도 <br>을 공백으로 변환
+                mdContent = mdContent.replace(/<br\s*\/?>/gi, ' ');
+                mdContent = mdContent.replace(/\n{2,}/g, '\n');
 
                 editor.setMarkdown(mdContent);
                 mdOutput.value = editor.getMarkdown();
@@ -350,7 +422,7 @@
             e.target.value = '';
         });
 
-        // --- 서식 유지 내용 복사 기능 추가 ---
+        // --- 서식 유지 내용 복사 기능 ---
         const copyRichBtn = document.getElementById('copy-rich-btn');
         copyRichBtn.addEventListener('click', async () => {
             const htmlContent = editor.getHTML();
@@ -536,7 +608,6 @@
                 }, 100);
             };
 
-            // DB에서 현재 문서의 제목을 가져와 파일명으로 지정
             if (currentDocId && db) {
                 const tx = db.transaction(STORE_NAME, 'readonly');
                 tx.objectStore(STORE_NAME).get(currentDocId).onsuccess = (e) => {
