@@ -189,14 +189,14 @@ window.MathJax = {
                     <option value="chat">💬 Chat</option>
                     <option value="ismsp">🛡️ ISMS-P</option>
                     <option value="link">🔗 Link</option>
-                    <!-- 신규 추가된 항목 -->
                     <option value="mdSplit">📄 MD</option>
+                    <option value="pdf">📕 PDF</option>
                 </select>
-                <!-- accept 속성에 .md, .txt 추가 -->
+                <!-- accept 속성에 .pdf 추가 -->
                 <button class="btn" onclick="document.getElementById('commonImportInput').click()" title="선택한 양식의 데이터를 불러옵니다.">
                     <span>불러오기</span>
                 </button>
-                <input type="file" id="commonImportInput" accept=".json, .md, .txt" style="display: none;" onchange="handleCommonImport(event)">
+                <input type="file" id="commonImportInput" accept=".json, .md, .txt, .pdf" style="display: none;" onchange="handleCommonImport(event)">
             </div>
             
             <button class="btn" id="linkMdFolderBtn" onclick="linkMdFolder()">
@@ -305,7 +305,7 @@ window.MathJax = {
     let mdDirHandle = null; 
     let toastTimeout = null;
 
-    const defaultCategories = ["IT기술", "정보처리", "기출문제", "문제분석", "에세이", "technote"];
+    const defaultCategories = ["IT기술", "정보처리", "기출문제", "문제분석", "에세이", "technote", "참조자료"]; // 참조자료 기본 포함
 
     document.addEventListener('keydown', function(e) {
         if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'n') {
@@ -627,10 +627,88 @@ window.MathJax = {
         else if (type === 'chat') handleChatImport(event);
         else if (type === 'ismsp') handleIsmspImport(event);
         else if (type === 'link') handleLinkImport(event);
-        else if (type === 'mdSplit') handleMdSplitImport(event); // MD 분리 기능 연결
+        else if (type === 'mdSplit') handleMdSplitImport(event);
+        else if (type === 'pdf') handlePdfImport(event); 
     }
 
-    // 신규 추가된 'MD 구분' 파싱 로직
+    // 신규 추가된 'PDF' 파싱 로직 (Base64 JSON 구조 완벽 대응)
+    function handlePdfImport(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const fileNameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const text = e.target.result;
+                let parsedData;
+                let isJson = false;
+
+                // JSON 형식인지 확인
+                try {
+                    parsedData = JSON.parse(text);
+                    isJson = true;
+                } catch(err) {
+                    isJson = false;
+                }
+
+                const today = new Date().toISOString().split('T')[0];
+                document.getElementById('issueDate').value = today;
+                document.getElementById('postTitle').value = fileNameWithoutExt;
+                
+                // 카테고리, 태그를 '참조자료'로 고정
+                setCategoryAndTag('참조자료', '참조자료');
+                
+                document.getElementById('articlesContainer').innerHTML = ''; 
+                articleCount = 0;
+
+                // 1. PDF 백업 데이터(JSON)인 경우
+                if (isJson && parsedData.images && Array.isArray(parsedData.images)) {
+                    let content = '';
+                    parsedData.images.forEach((img, idx) => {
+                        if (img.dataUrl) {
+                            // 렌더링 오류 방지를 위해 공백 제거 후 마크다운 이미지 문법으로 삽입
+                            const cleanImg = img.dataUrl.replace(/\s+/g, '');
+                            const imgName = img.name || `PDF_page_${idx + 1}`;
+                            content += `![${imgName}](${cleanImg})\n\n`;
+                        }
+                    });
+                    
+                    if (content.trim().length > 0) {
+                        addArticle({ 
+                            title: fileNameWithoutExt, 
+                            content: content.trim(), 
+                            visualType: 'none' 
+                        });
+                    } else {
+                        addArticle();
+                    }
+                } 
+                // 2. 일반 텍스트 문서인 경우
+                else {
+                    let normalText = text.replace(/\r\n|\r/g, '\n');
+                    if (normalText.trim().length > 0) {
+                        addArticle({ 
+                            title: fileNameWithoutExt, 
+                            content: normalText.trim(), 
+                            visualType: 'none' 
+                        });
+                    } else {
+                        addArticle();
+                    }
+                }
+                
+                showToast("✅ PDF 항목 데이터를 성공적으로 불러왔습니다.");
+            } catch (error) {
+                console.error(error);
+                alert("파일 파싱 중 오류가 발생했습니다. 포맷을 확인해주세요.");
+            }
+            e.target.result = null; 
+            event.target.value = '';
+        };
+        reader.readAsText(file);
+    }
+
     function handleMdSplitImport(event) {
         const file = event.target.files[0];
         if (!file) return;
@@ -1490,7 +1568,7 @@ window.MathJax = {
         
         let articlesMd = [];
         
-        const jsonCategories = ["키노트", "두음마스터", "5R", "Drill", "Chat", "ISMS-P", "Link", "technote", "문제분석"];
+        const jsonCategories = ["키노트", "두음마스터", "5R", "Drill", "Chat", "ISMS-P", "Link", "technote", "문제분석", "참조자료"]; // 참조자료 기본 포함
         const isJsonImportCategory = jsonCategories.includes(data.category);
 
         data.articles.forEach((art, index) => {
@@ -1613,7 +1691,6 @@ window.MathJax = {
                         }
                     } else {
                         if (isTableStart) {
-                            // [수정사항] 테이블 시작 전 빈 줄 추가 (엄격한 마크다운 파서에서 표가 텍스트로 뭉개지는 현상 방지)
                             if (newLines.length > 0 && newLines[newLines.length - 1].trim() !== "") {
                                 newLines.push("");
                             }
@@ -1627,7 +1704,6 @@ window.MathJax = {
                 
                 if (currentRow !== "") {
                     newLines.push(currentRow);
-                    // [수정사항] 테이블 종료 후에도 확실하게 빈 줄 추가
                     if (inTable) newLines.push("");
                 }
                 processedContent = newLines.join('\n');
