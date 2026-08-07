@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MongoDB Architecture Simulator</title>
+    <style>
+        :root {
+            --bg-color: #f8f9fa;
+            --primary: #00684a; /* MongoDB Green */
+            --secondary: #e8f5e9;
+            --text-dark: #333;
+            --node-client: #6c757d;
+            --node-primary: #0056b3;
+            --node-secondary: #17a2b8;
+            --node-router: #fd7e14;
+            --node-config: #6f42c1;
+            --node-shard: #28a745;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-dark);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+            background: white;
+            padding: 15px 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+
+        select, button {
+            padding: 10px 15px;
+            font-size: 16px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+            outline: none;
+            cursor: pointer;
+        }
+
+        button {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            font-weight: bold;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: #004d36;
+        }
+
+        button:disabled {
+            background-color: #999;
+            cursor: not-allowed;
+        }
+
+        #canvas-container {
+            position: relative;
+            width: 700px;
+            height: 500px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            overflow: hidden;
+            border: 1px solid #e0e0e0;
+        }
+
+        /* Nodes */
+        .node {
+            position: absolute;
+            width: 100px;
+            height: 60px;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 13px;
+            font-weight: bold;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transform: translate(-50%, -50%);
+            transition: all 0.3s ease;
+            z-index: 2;
+        }
+
+        .node-subtitle {
+            font-size: 10px;
+            font-weight: normal;
+            opacity: 0.9;
+        }
+
+        /* Specific Nodes */
+        .client { background-color: var(--node-client); }
+        .primary { background-color: var(--node-primary); }
+        .secondary { background-color: var(--node-secondary); }
+        .router { background-color: var(--node-router); }
+        .config { background-color: var(--node-config); }
+        .shard { background-color: var(--node-shard); }
+
+        /* Data Packet */
+        .packet {
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            background-color: #ff3b30;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+            box-shadow: 0 0 10px #ff3b30;
+            transition: top 0.6s linear, left 0.6s linear, opacity 0.3s;
+        }
+
+        /* Database Storage Visual Indicator */
+        .db-storage {
+            position: absolute;
+            bottom: -20px;
+            display: flex;
+            gap: 4px;
+        }
+        .db-item {
+            width: 10px;
+            height: 10px;
+            background-color: #fff;
+            border-radius: 2px;
+            border: 1px solid rgba(0,0,0,0.2);
+        }
+
+        .desc {
+            margin-top: 20px;
+            width: 700px;
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            font-size: 15px;
+            line-height: 1.6;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h2>MongoDB Architecture Data Flow</h2>
+        <p>Replica Set과 Sharded Cluster의 데이터 쓰기(Write) 동작 방식 비교</p>
+    </div>
+
+    <div class="controls">
+        <select id="arch-select" onchange="changeArchitecture()">
+            <option value="replica">Replica Set (데이터 복제/고가용성)</option>
+            <option value="shard">Sharded Cluster (데이터 분산/확장성)</option>
+        </select>
+        <button id="write-btn" onclick="insertData()">Insert Data (쓰기 요청)</button>
+    </div>
+
+    <div id="canvas-container">
+        <!-- Nodes will be injected here by JS -->
+    </div>
+
+    <div class="desc" id="desc-box">
+        <!-- Description will be injected here -->
+    </div>
+
+    <script>
+        const container = document.getElementById('canvas-container');
+        const descBox = document.getElementById('desc-box');
+        const writeBtn = document.getElementById('write-btn');
+        let currentArch = 'replica';
+        let isAnimating = false;
+
+        // Node definitions for both architectures
+        const layouts = {
+            replica: [
+                { id: 'client', class: 'client', text: 'Client', top: 50, left: 350 },
+                { id: 'primary', class: 'primary', text: 'Primary', sub: '(Read/Write)', top: 200, left: 350 },
+                { id: 'sec1', class: 'secondary', text: 'Secondary 1', sub: '(Replication)', top: 400, left: 200 },
+                { id: 'sec2', class: 'secondary', text: 'Secondary 2', sub: '(Replication)', top: 400, left: 500 },
+            ],
+            shard: [
+                { id: 'client', class: 'client', text: 'Client', top: 50, left: 350 },
+                { id: 'router', class: 'router', text: 'Mongos', sub: '(Router)', top: 180, left: 350 },
+                { id: 'config', class: 'config', text: 'Config Server', sub: '(Metadata)', top: 180, left: 600 },
+                { id: 'shard1', class: 'shard', text: 'Shard 1', sub: '(Data A-M)', top: 380, left: 150 },
+                { id: 'shard2', class: 'shard', text: 'Shard 2', sub: '(Data N-S)', top: 380, left: 350 },
+                { id: 'shard3', class: 'shard', text: 'Shard 3', sub: '(Data T-Z)', top: 380, left: 550 },
+            ]
+        };
+
+        const descriptions = {
+            replica: `
+                <strong>[Replica Set 동작 방식]</strong><br>
+                1. 클라이언트가 <strong>Primary</strong> 노드에 데이터를 씁니다.<br>
+                2. Primary 노드는 데이터를 저장한 후, <strong>Secondary</strong> 노드들에게 동일한 데이터를 복제(Replication)합니다.<br>
+                3. 모든 노드가 동일한 전체 데이터를 가지게 되어 하나의 서버가 고장 나도 안전합니다.
+            `,
+            shard: `
+                <strong>[Sharded Cluster 동작 방식]</strong><br>
+                1. 클라이언트가 <strong>Mongos (라우터)</strong>에 데이터를 보냅니다.<br>
+                2. Mongos는 <strong>Config Server</strong>를 참조하여 이 데이터를 어느 Shard에 넣어야 할지 결정합니다.<br>
+                3. Mongos는 전체 데이터를 복제하지 않고, 조건(Shard Key)에 맞는 <strong>단 하나의 Shard</strong>로만 데이터를 전송합니다. 데이터를 분산 저장하여 용량을 무한히 늘릴 수 있습니다.
+            `
+        };
+
+        // Initialize Canvas
+        function renderNodes() {
+            container.innerHTML = '';
+            const nodes = layouts[currentArch];
+            
+            nodes.forEach(n => {
+                const el = document.createElement('div');
+                el.className = `node ${n.class}`;
+                el.id = n.id;
+                el.style.left = `${n.left}px`;
+                el.style.top = `${n.top}px`;
+                
+                let html = `${n.text}`;
+                if (n.sub) html += `<div class="node-subtitle">${n.sub}</div>`;
+                
+                // Add storage indicator for DB nodes
+                if (['primary', 'sec1', 'sec2', 'shard1', 'shard2', 'shard3'].includes(n.id)) {
+                    html += `<div class="db-storage" id="storage-${n.id}"></div>`;
+                }
+                
+                el.innerHTML = html;
+                container.appendChild(el);
+            });
+
+            descBox.innerHTML = descriptions[currentArch];
+        }
+
+        // Handle Mode Change
+        function changeArchitecture() {
+            currentArch = document.getElementById('arch-select').value;
+            renderNodes();
+        }
+
+        // Helper to get element coordinates
+        function getCoords(id) {
+            const el = document.getElementById(id);
+            return {
+                left: parseInt(el.style.left),
+                top: parseInt(el.style.top)
+            };
+        }
+
+        // Helper to animate a packet
+        function animatePacket(startId, endId, color = '#ff3b30', duration = 600) {
+            return new Promise(resolve => {
+                const start = getCoords(startId);
+                const end = getCoords(endId);
+
+                const packet = document.createElement('div');
+                packet.className = 'packet';
+                packet.style.backgroundColor = color;
+                packet.style.boxShadow = `0 0 10px ${color}`;
+                packet.style.left = `${start.left}px`;
+                packet.style.top = `${start.top}px`;
+                packet.style.transitionDuration = `${duration}ms`;
+                container.appendChild(packet);
+
+                // Reflow to ensure transition applies
+                packet.getBoundingClientRect(); 
+
+                packet.style.left = `${end.left}px`;
+                packet.style.top = `${end.top}px`;
+
+                setTimeout(() => {
+                    packet.style.opacity = '0';
+                    setTimeout(() => {
+                        if (packet.parentNode) container.removeChild(packet);
+                        resolve();
+                    }, 300);
+                }, duration);
+            });
+        }
+
+        // Add data block visual
+        function addDataBlock(nodeId, color) {
+            const storage = document.getElementById(`storage-${nodeId}`);
+            if (storage) {
+                const block = document.createElement('div');
+                block.className = 'db-item';
+                block.style.backgroundColor = color;
+                storage.appendChild(block);
+                
+                // Limit blocks to keep UI clean
+                if (storage.children.length > 8) {
+                    storage.removeChild(storage.firstChild);
+                }
+            }
+        }
+
+        // Generate random color for data visualization
+        function getRandomColor() {
+            const colors = ['#ff3b30', '#ff9500', '#4cd964', '#5ac8fa', '#007aff', '#5856d6', '#ff2d55'];
+            return colors[Math.floor(Math.random() * colors.length)];
+        }
+
+        // Main Animation Flow
+        async function insertData() {
+            if (isAnimating) return;
+            isAnimating = true;
+            writeBtn.disabled = true;
+
+            const dataColor = getRandomColor();
+
+            if (currentArch === 'replica') {
+                // 1. Client -> Primary
+                await animatePacket('client', 'primary', dataColor);
+                addDataBlock('primary', dataColor);
+                
+                // 2. Primary -> Secondaries (Simultaneous)
+                await Promise.all([
+                    animatePacket('primary', 'sec1', dataColor),
+                    animatePacket('primary', 'sec2', dataColor)
+                ]);
+                addDataBlock('sec1', dataColor);
+                addDataBlock('sec2', dataColor);
+
+            } else if (currentArch === 'shard') {
+                // 1. Client -> Mongos
+                await animatePacket('client', 'router', dataColor);
+                
+                // 2. Mongos <-> Config (Brief check)
+                await animatePacket('router', 'config', '#999', 300);
+                await animatePacket('config', 'router', '#999', 300);
+
+                // 3. Mongos -> Randomly selected Shard
+                const targetShard = `shard${Math.floor(Math.random() * 3) + 1}`;
+                await animatePacket('router', targetShard, dataColor);
+                addDataBlock(targetShard, dataColor);
+            }
+
+            isAnimating = false;
+            writeBtn.disabled = false;
+        }
+
+        // Initial render
+        window.onload = renderNodes;
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NCP MongoDB Cost Simulator</title>
+    <style>
+        :root {
+            --primary: #03c75a; 
+            --primary-dark: #02a346;
+            --bg-light: #f8f9fb;
+            --border-color: #e4e8eb;
+            --text-main: #1e2022;
+            --text-sub: #767a83;
+            --chart-server: #4a90e2;
+            --chart-storage: #f5a623;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #ebedf3;
+            color: var(--text-main);
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .calculator-card {
+            background: #ffffff;
+            width: 100%;
+            max-width: 900px;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background-color: #ffffff;
+            padding: 30px;
+            border-bottom: 1px solid var(--border-color);
+            text-align: center;
+        }
+
+        .header h2 {
+            margin: 0 0 10px 0;
+            font-size: 24px;
+        }
+
+        .header p {
+            margin: 0;
+            color: var(--text-sub);
+            font-size: 15px;
+        }
+
+        .content-wrapper {
+            display: flex;
+            flex-wrap: wrap;
+        }
+
+        .input-section {
+            flex: 1.2;
+            min-width: 350px;
+            padding: 30px;
+            border-right: 1px solid var(--border-color);
+        }
+
+        .result-section {
+            flex: 1;
+            min-width: 300px;
+            padding: 30px;
+            background-color: var(--bg-light);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        select, input[type="range"] {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 15px;
+            outline: none;
+            transition: border-color 0.2s;
+            box-sizing: border-box;
+        }
+
+        select:focus {
+            border-color: var(--primary);
+        }
+
+        .toggle-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        .toggle-btn {
+            flex: 1;
+            padding: 12px 5px;
+            text-align: center;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: #fff;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+
+        .toggle-btn.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .slider-value {
+            font-weight: bold;
+            color: var(--primary-dark);
+            font-size: 16px;
+        }
+
+        .info-box {
+            background: #eef2f5;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 13px;
+            color: var(--text-sub);
+            line-height: 1.5;
+            margin-top: 10px;
+        }
+
+        .total-price-box {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .total-price-box h3 {
+            margin: 0 0 10px 0;
+            color: var(--text-sub);
+            font-weight: normal;
+        }
+
+        .total-amount {
+            font-size: 36px;
+            font-weight: 800;
+            color: var(--primary-dark);
+        }
+
+        .total-amount span {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        .cost-breakdown {
+            margin-top: 20px;
+        }
+
+        .breakdown-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            font-size: 14px;
+        }
+
+        .breakdown-item .label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .dot.server { background-color: var(--chart-server); }
+        .dot.storage { background-color: var(--chart-storage); }
+
+        .breakdown-item .amount {
+            font-weight: 600;
+        }
+
+        .chart-container {
+            width: 100%;
+            height: 24px;
+            background: #ddd;
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            margin-top: 15px;
+        }
+
+        .chart-bar {
+            height: 100%;
+            transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .chart-bar.server { background-color: var(--chart-server); }
+        .chart-bar.storage { background-color: var(--chart-storage); }
+
+    </style>
+</head>
+<body>
+
+    <div class="calculator-card">
+        <div class="header">
+            <h2>NCP MongoDB 예상 비용 시뮬레이터</h2>
+            <p>매니지드 DB 단가를 반영한 아키텍처 스펙별 월(30일) 예상 청구 금액입니다.</p>
+        </div>
+
+        <div class="content-wrapper">
+            <!-- Inputs -->
+            <div class="input-section">
+                <div class="form-group">
+                    <label>환경 구성 (아키텍처)</label>
+                    <div class="toggle-group">
+                        <div class="toggle-btn active" onclick="setEnv('dev')" id="btn-dev">개발<br>(Standalone)</div>
+                        <div class="toggle-btn" onclick="setEnv('prod')" id="btn-prod">운영<br>(Replica Set)</div>
+                        <div class="toggle-btn" onclick="setEnv('shard')" id="btn-shard">대규모<br>(Sharded Cluster)</div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>데이터 서버 사양 (DB 노드 기준)</label>
+                    <select id="spec-select" onchange="calculate()">
+                        <option value="2v4g">Standard (2 vCPU, 4GB Memory)</option>
+                        <option value="4v8g">Standard (4 vCPU, 8GB Memory)</option>
+                        <option value="8v16g">High Memory (8 vCPU, 16GB Memory)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <div class="slider-header">
+                        <label style="margin:0;">전체 사용 스토리지 용량 (SSD)</label>
+                        <div class="slider-value" id="storage-val-text">50 GB</div>
+                    </div>
+                    <input type="range" id="storage-slider" min="50" max="5000" step="50" value="50" oninput="updateSliderText(); calculate();">
+                </div>
+
+                <div class="info-box" id="info-text">
+                    <strong>[개발 환경 - Standalone]</strong><br>
+                    단일 노드(1대) 구성입니다. 이중화가 되어있지 않아 비용이 저렴하지만 장애 발생 시 서비스가 중단될 수 있습니다.
+                </div>
+            </div>
+
+            <!-- Results -->
+            <div class="result-section">
+                <div class="total-price-box">
+                    <h3>월 예상 총 비용</h3>
+                    <div class="total-amount" id="total-cost">0 <span>원 / 월</span></div>
+                </div>
+
+                <div class="cost-breakdown">
+                    <div class="breakdown-item">
+                        <span class="label"><div class="dot server"></div>서버 인스턴스 총 비용</span>
+                        <span class="amount" id="server-cost">0 원</span>
+                    </div>
+                    <div class="breakdown-item" id="server-detail-box" style="font-size:12px; color:#767a83; margin-top:-8px; margin-bottom:12px; margin-left:18px;">
+                        (DB 노드 1대)
+                    </div>
+
+                    <div class="breakdown-item">
+                        <span class="label"><div class="dot storage"></div>데이터 스토리지 비용</span>
+                        <span class="amount" id="storage-cost">0 원</span>
+                    </div>
+                    
+                    <div class="chart-container">
+                        <div class="chart-bar server" id="bar-server" style="width: 50%;"></div>
+                        <div class="chart-bar storage" id="bar-storage" style="width: 50%;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* 
+         * [NCP Cloud DB 매니지드 서비스 기준 예상 단가]
+         */
+        const prices = {
+            specs: {
+                '2v4g': 120000,   // DB 서버 노드 (2 vCPU, 4GB)
+                '4v8g': 240000,   // DB 서버 노드 (4 vCPU, 8GB)
+                '8v16g': 480000   // DB 서버 노드 (8 vCPU, 16GB)
+            },
+            arbiter: 70000,       // Arbiter 노드
+            mongos: 120000,       // Sharded Cluster 라우터 (2vCPU, 4GB 가정)
+            configServer: 120000, // Sharded Cluster Config 서버 (2vCPU, 4GB 가정)
+            storagePerGB: 150     // SSD 1GB당 월 요금
+        };
+
+        let currentEnv = 'dev';
+
+        function formatNumber(num) {
+            return new Intl.NumberFormat('ko-KR').format(Math.round(num));
+        }
+
+        function setEnv(env) {
+            currentEnv = env;
+            
+            document.getElementById('btn-dev').classList.remove('active');
+            document.getElementById('btn-prod').classList.remove('active');
+            document.getElementById('btn-shard').classList.remove('active');
+            document.getElementById(`btn-${env}`).classList.add('active');
+
+            const infoBox = document.getElementById('info-text');
+            if (env === 'dev') {
+                infoBox.innerHTML = `<strong>[개발 환경 - Standalone]</strong><br>단일 노드(1대) 구성입니다. 이중화가 되어있지 않아 비용이 저렴하지만 장애 발생 시 서비스가 중단될 수 있습니다.`;
+            } else if (env === 'prod') {
+                infoBox.innerHTML = `<strong>[운영 환경 - Replica Set]</strong><br>데이터 노드(Primary 1, Secondary 1) + 투표용 노드(Arbiter 1) <strong>총 3대의 서버</strong>로 구성됩니다.<br>스토리지 역시 데이터 노드 수(2개)만큼 곱해져서 2배로 청구됩니다.`;
+            } else if (env === 'shard') {
+                infoBox.innerHTML = `<strong>[대규모 환경 - Sharded Cluster]</strong><br>최소 구성 기준: Mongos(2대) + Config 서버(3대) + 2개의 Shard(각 데이터 2대, Arbiter 1대)로 <strong>총 11대의 서버</strong>가 구동됩니다.<br>스토리지는 여러 Shard로 분산되지만, 각 Shard 내부에서 이중화되므로 총 스토리지 용량의 2배수가 청구됩니다.`;
+            }
+
+            calculate();
+        }
+
+        function updateSliderText() {
+            const val = document.getElementById('storage-slider').value;
+            document.getElementById('storage-val-text').innerText = `${formatNumber(val)} GB`;
+        }
+
+        function calculate() {
+            const specKey = document.getElementById('spec-select').value;
+            const storageGB = parseInt(document.getElementById('storage-slider').value);
+
+            let serverCost = 0;
+            let storageCost = 0;
+            let serverDetail = "";
+
+            const baseSpecPrice = prices.specs[specKey];
+
+            if (currentEnv === 'dev') {
+                // Standalone: 서버 1대 + 스토리지 1배수
+                serverCost = baseSpecPrice * 1;
+                storageCost = storageGB * prices.storagePerGB * 1;
+                serverDetail = "(DB 노드 1대)";
+            } else if (currentEnv === 'prod') {
+                // Replica Set: DB 서버 2대 + Arbiter 1대 + 스토리지 2배수
+                serverCost = (baseSpecPrice * 2) + prices.arbiter;
+                storageCost = storageGB * prices.storagePerGB * 2;
+                serverDetail = "(DB 노드 2대 + Arbiter 1대)";
+            } else if (currentEnv === 'shard') {
+                // Sharded Cluster (2 Shards 기준)
+                // Mongos 2대 + Config 3대 + 2 Shard * (DB 2대 + Arbiter 1대)
+                const mongosTotal = prices.mongos * 2;
+                const configTotal = prices.configServer * 3;
+                const shardsTotal = ((baseSpecPrice * 2) + prices.arbiter) * 2;
+
+                serverCost = mongosTotal + configTotal + shardsTotal;
+                // 스토리지: 샤드로 분산되지만 각각 이중화되므로 전체 용량 * 2배수
+                storageCost = storageGB * prices.storagePerGB * 2; 
+                serverDetail = "(Mongos 2대 + Config 3대 + DB 노드 4대 + Arbiter 2대)";
+            }
+
+            const totalCost = serverCost + storageCost;
+
+            document.getElementById('server-cost').innerText = `${formatNumber(serverCost)} 원`;
+            document.getElementById('server-detail-box').innerText = serverDetail;
+            document.getElementById('storage-cost').innerText = `${formatNumber(storageCost)} 원`;
+            document.getElementById('total-cost').innerHTML = `${formatNumber(totalCost)} <span>원 / 월</span>`;
+
+            // 차트 비율
+            const serverPct = totalCost > 0 ? (serverCost / totalCost) * 100 : 50;
+            const storagePct = totalCost > 0 ? (storageCost / totalCost) * 100 : 50;
+
+            document.getElementById('bar-server').style.width = `${serverPct}%`;
+            document.getElementById('bar-storage').style.width = `${storagePct}%`;
+        }
+
+        // 초기화
+        updateSliderText();
+        calculate();
+
+    </script>
+</body>
+</html>
