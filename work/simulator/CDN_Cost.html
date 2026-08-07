@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NCP Global CDN Cost Simulator</title>
+    <style>
+        :root {
+            --primary: #03c75a; 
+            --primary-dark: #02a346;
+            --bg-light: #f8f9fb;
+            --border-color: #e4e8eb;
+            --text-main: #1e2022;
+            --text-sub: #767a83;
+            --chart-transfer: #4a90e2;
+            --chart-request: #f5a623;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #ebedf3;
+            color: var(--text-main);
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .calculator-card {
+            background: #ffffff;
+            width: 100%;
+            max-width: 900px;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background-color: #ffffff;
+            padding: 30px;
+            border-bottom: 1px solid var(--border-color);
+            text-align: center;
+        }
+
+        .header h2 {
+            margin: 0 0 10px 0;
+            font-size: 24px;
+        }
+
+        .header p {
+            margin: 0;
+            color: var(--text-sub);
+            font-size: 15px;
+        }
+
+        .content-wrapper {
+            display: flex;
+            flex-wrap: wrap;
+        }
+
+        .input-section {
+            flex: 1.2;
+            min-width: 350px;
+            padding: 30px;
+            border-right: 1px solid var(--border-color);
+        }
+
+        .result-section {
+            flex: 1;
+            min-width: 300px;
+            padding: 30px;
+            background-color: var(--bg-light);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        input[type="number"], input[type="range"] {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 15px;
+            outline: none;
+            transition: border-color 0.2s;
+            box-sizing: border-box;
+        }
+
+        input[type="number"]:focus {
+            border-color: var(--primary);
+        }
+
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .info-box {
+            background: #eef2f5;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 13px;
+            color: var(--text-sub);
+            line-height: 1.6;
+            margin-top: 10px;
+        }
+
+        .total-price-box {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .total-price-box h3 {
+            margin: 0 0 10px 0;
+            color: var(--text-sub);
+            font-weight: normal;
+        }
+
+        .total-amount {
+            font-size: 36px;
+            font-weight: 800;
+            color: var(--primary-dark);
+        }
+
+        .total-amount span {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        .cost-breakdown {
+            margin-top: 20px;
+        }
+
+        .breakdown-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            font-size: 14px;
+        }
+
+        .breakdown-item .label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .dot.transfer { background-color: var(--chart-transfer); }
+        .dot.request { background-color: var(--chart-request); }
+
+        .breakdown-item .amount {
+            font-weight: 600;
+        }
+
+        .chart-container {
+            width: 100%;
+            height: 24px;
+            background: #ddd;
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            margin-top: 15px;
+        }
+
+        .chart-bar {
+            height: 100%;
+            transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .chart-bar.transfer { background-color: var(--chart-transfer); }
+        .chart-bar.request { background-color: var(--chart-request); }
+
+    </style>
+</head>
+<body>
+
+    <div class="calculator-card">
+        <div class="header">
+            <h2>NCP Global CDN 예상 비용 시뮬레이터</h2>
+            <p>월별 총 전송량 구간 요금과 누적 요청 수 요금을 합산한 예상 청구 금액입니다.</p>
+        </div>
+
+        <div class="content-wrapper">
+            <!-- Inputs -->
+            <div class="input-section">
+                <div class="form-group">
+                    <div class="slider-header">
+                        <label style="margin:0;">월 전송량 (Transfer)</label>
+                    </div>
+                    <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
+                        <input type="number" id="transfer-input" value="500" min="0" step="10" oninput="syncTransfer(); calculate();">
+                        <span style="font-weight:600; font-size:14px; white-space:nowrap;">GB</span>
+                    </div>
+                    <input type="range" id="transfer-slider" min="0" max="100000" step="50" value="500" oninput="syncTransfer(true); calculate();">
+                </div>
+
+                <div class="form-group" style="margin-top: 40px;">
+                    <div class="slider-header">
+                        <label style="margin:0;">월 요청 수 (Requests)</label>
+                    </div>
+                    <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
+                        <input type="number" id="request-input" value="1000" min="0" step="100" oninput="syncRequest(); calculate();">
+                        <span style="font-weight:600; font-size:14px; white-space:nowrap;">만 건 (10,000 건)</span>
+                    </div>
+                    <input type="range" id="request-slider" min="0" max="50000" step="100" value="1000" oninput="syncRequest(true); calculate();">
+                </div>
+
+                <div class="info-box" id="info-text">
+                    <strong>[요금 부과 기준 안내]</strong><br>
+                    • <strong>월 전송량 요금:</strong> 사용량에 따라 200GB, 10TB, 50TB, 150TB, 500TB 구간별 단가가 다르게 차등 과금됩니다.<br>
+                    • <strong>월 요청 수 요금:</strong> 10,000건당 고정 단가(약 10원 내외)가 부과됩니다.<br>
+                    <span style="font-size:11px; color:#999; margin-top:5px; display:block;">* 본 시뮬레이터의 단가는 참고용이며 실제 NCP 청구 금액과 미세한 차이가 있을 수 있습니다.</span>
+                </div>
+            </div>
+
+            <!-- Results -->
+            <div class="result-section">
+                <div class="total-price-box">
+                    <h3>월 예상 총 비용</h3>
+                    <div class="total-amount" id="total-cost">0 <span>원 / 월</span></div>
+                </div>
+
+                <div class="cost-breakdown">
+                    <div class="breakdown-item">
+                        <span class="label"><div class="dot transfer"></div>월 전송량 (Transfer) 비용</span>
+                        <span class="amount" id="transfer-cost">0 원</span>
+                    </div>
+                    
+                    <div class="breakdown-item">
+                        <span class="label"><div class="dot request"></div>월 요청 수 (Request) 비용</span>
+                        <span class="amount" id="request-cost">0 원</span>
+                    </div>
+                    
+                    <div class="chart-container">
+                        <div class="chart-bar transfer" id="bar-transfer" style="width: 50%;"></div>
+                        <div class="chart-bar request" id="bar-request" style="width: 50%;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* 
+         * [NCP Global CDN 구간별 예상 단가 기준표]
+         * (※ 예시 단가: 일반적인 CDN 구간별 요금 체계 적용)
+         */
+        const pricing = {
+            requestPer10k: 10, // 1만 건당 10원
+            transferTiers: [
+                { limit: 200, price: 75 },                   // 200GB 이하
+                { limit: 10240, price: 55 },                 // 200GB ~ 10TB (10,240GB)
+                { limit: 51200, price: 49 },                 // 10TB ~ 50TB (51,200GB)
+                { limit: 153600, price: 42 },                // 50TB ~ 150TB (153,600GB)
+                { limit: 512000, price: 35 },                // 150TB ~ 500TB
+                { limit: Infinity, price: 29 }               // 500TB 초과
+            ]
+        };
+
+        function formatNumber(num) {
+            return new Intl.NumberFormat('ko-KR').format(Math.round(num));
+        }
+
+        // 전송량 슬라이더-인풋 동기화
+        function syncTransfer(fromSlider = false) {
+            const input = document.getElementById('transfer-input');
+            const slider = document.getElementById('transfer-slider');
+            if (fromSlider) {
+                input.value = slider.value;
+            } else {
+                slider.value = input.value;
+            }
+        }
+
+        // 요청수 슬라이더-인풋 동기화
+        function syncRequest(fromSlider = false) {
+            const input = document.getElementById('request-input');
+            const slider = document.getElementById('request-slider');
+            if (fromSlider) {
+                input.value = slider.value;
+            } else {
+                slider.value = input.value;
+            }
+        }
+
+        function calculate() {
+            let totalTransferGB = parseFloat(document.getElementById('transfer-input').value) || 0;
+            let totalRequests10k = parseFloat(document.getElementById('request-input').value) || 0;
+
+            let transferCost = 0;
+            let remainingGB = totalTransferGB;
+
+            // 1. 구간별 전송량 과금 로직 처리
+            let previousLimit = 0;
+            for (let i = 0; i < pricing.transferTiers.length; i++) {
+                if (remainingGB <= 0) break;
+
+                let tier = pricing.transferTiers[i];
+                let tierMaxVolume = tier.limit - previousLimit;
+                
+                // 현재 구간에서 과금될 용량
+                let billableVolume = Math.min(remainingGB, tierMaxVolume);
+                
+                transferCost += billableVolume * tier.price;
+                remainingGB -= billableVolume;
+                previousLimit = tier.limit;
+            }
+
+            // 2. 요청수 과금 처리
+            let requestCost = totalRequests10k * pricing.requestPer10k;
+
+            // 3. 합계
+            let totalCost = transferCost + requestCost;
+
+            // UI 텍스트 업데이트
+            document.getElementById('transfer-cost').innerText = `${formatNumber(transferCost)} 원`;
+            document.getElementById('request-cost').innerText = `${formatNumber(requestCost)} 원`;
+            document.getElementById('total-cost').innerHTML = `${formatNumber(totalCost)} <span>원 / 월</span>`;
+
+            // 차트 비율 반영
+            const transferPct = totalCost > 0 ? (transferCost / totalCost) * 100 : 0;
+            const requestPct = totalCost > 0 ? (requestCost / totalCost) * 100 : 0;
+
+            document.getElementById('bar-transfer').style.width = `${transferPct}%`;
+            document.getElementById('bar-request').style.width = `${requestPct}%`;
+        }
+
+        // 페이지 진입 시 초기 계산 실행
+        calculate();
+
+    </script>
+</body>
+</html>

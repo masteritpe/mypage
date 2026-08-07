@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NCP Total Cost Simulator</title>
+    <style>
+        :root {
+            --primary: #03c75a; 
+            --primary-dark: #02a346;
+            --bg-light: #f8f9fb;
+            --border-color: #e4e8eb;
+            --text-main: #1e2022;
+            --text-sub: #767a83;
+            
+            /* Chart Colors */
+            --chart-c1: #4a90e2; 
+            --chart-c2: #f5a623; 
+            --chart-c3: #e24a4a;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #ebedf3;
+            color: var(--text-main);
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        /* 전체 레이아웃 (좌: 계산기, 우: 합산 내역) */
+        .main-container {
+            display: flex;
+            gap: 20px;
+            width: 100%;
+            max-width: 1200px;
+            align-items: flex-start;
+            flex-wrap: wrap;
+        }
+
+        /* 좌측 계산기 카드 */
+        .calculator-card {
+            flex: 2;
+            min-width: 600px;
+            background: #ffffff;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 우측 요약(장바구니) 사이드바 */
+        .summary-card {
+            flex: 1;
+            min-width: 320px;
+            background: #ffffff;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+            padding: 30px;
+            position: sticky;
+            top: 40px;
+        }
+
+        @media (max-width: 980px) {
+            .calculator-card { min-width: 100%; }
+            .summary-card { min-width: 100%; position: static; }
+        }
+
+        /* 계산기 내부 요소 공통 */
+        .header {
+            background-color: #ffffff;
+            padding: 30px 30px 0 30px;
+            border-bottom: 1px solid var(--border-color);
+            text-align: center;
+        }
+        .header h2 { margin: 0 0 10px 0; font-size: 24px; }
+        .header p { margin: 0 0 20px 0; color: var(--text-sub); font-size: 15px; }
+
+        .tab-container {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            padding-bottom: 20px;
+        }
+        .tab-btn {
+            padding: 10px 24px;
+            background: var(--bg-light);
+            border: 1px solid var(--border-color);
+            color: var(--text-sub);
+            border-radius: 30px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .tab-btn:hover { background: #eef2f5; }
+        .tab-btn.active {
+            background: var(--primary);
+            color: #fff;
+            border-color: var(--primary);
+            box-shadow: 0 4px 10px rgba(3, 199, 90, 0.2);
+        }
+
+        .calc-section { display: none; }
+        .calc-section.active { display: block; }
+
+        .content-wrapper { display: flex; flex-wrap: wrap; }
+        .input-section {
+            flex: 1.2;
+            min-width: 320px;
+            padding: 30px;
+            border-right: 1px solid var(--border-color);
+        }
+        .result-section {
+            flex: 1;
+            min-width: 280px;
+            padding: 30px;
+            background-color: var(--bg-light);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .form-group { margin-bottom: 25px; }
+        .form-group label { display: block; font-weight: 600; margin-bottom: 10px; font-size: 14px; }
+
+        select, input[type="text"], input[type="range"] {
+            width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 15px; outline: none; box-sizing: border-box; transition: border-color 0.2s;
+        }
+        select:focus, input[type="text"]:focus { border-color: var(--primary); }
+
+        .toggle-group { display: flex; gap: 10px; }
+        .toggle-btn {
+            flex: 1; padding: 12px 5px; text-align: center; border: 1px solid var(--border-color); border-radius: 8px; background: #fff; cursor: pointer; font-weight: 600; font-size: 13px; transition: all 0.2s;
+        }
+        .toggle-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+        .slider-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .slider-value { font-weight: bold; color: var(--primary-dark); font-size: 16px; }
+        .info-box { background: #eef2f5; padding: 15px; border-radius: 8px; font-size: 13px; color: var(--text-sub); line-height: 1.5; margin-top: 10px; }
+
+        .total-price-box { text-align: center; margin-bottom: 30px; }
+        .total-price-box h3 { margin: 0 0 10px 0; color: var(--text-sub); font-weight: normal; font-size: 16px; }
+        .total-amount { font-size: 32px; font-weight: 800; color: var(--primary-dark); }
+        .total-amount span { font-size: 16px; font-weight: 600; color: var(--text-main); }
+
+        .cost-breakdown { margin-top: 20px; }
+        .breakdown-item { display: flex; justify-content: space-between; margin-bottom: 12px; font-size: 14px; }
+        .breakdown-item .label { display: flex; align-items: center; gap: 8px; }
+        .dot { width: 10px; height: 10px; border-radius: 50%; }
+        .dot.c1 { background-color: var(--chart-c1); }
+        .dot.c2 { background-color: var(--chart-c2); }
+        .dot.c3 { background-color: var(--chart-c3); }
+        .breakdown-item .amount { font-weight: 600; }
+
+        .chart-container { width: 100%; height: 20px; background: #ddd; border-radius: 10px; overflow: hidden; display: flex; margin-top: 15px; }
+        .chart-bar { height: 100%; transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+        .chart-bar.c1 { background-color: var(--chart-c1); }
+        .chart-bar.c2 { background-color: var(--chart-c2); }
+        .chart-bar.c3 { background-color: var(--chart-c3); }
+
+        /* 버튼류 */
+        .add-cart-btn {
+            width: 100%; padding: 14px; background: #fff; color: var(--primary-dark); border: 2px solid var(--primary-dark); border-radius: 8px; font-size: 15px; font-weight: bold; cursor: pointer; margin-top: 30px; transition: all 0.2s;
+        }
+        .add-cart-btn:hover { background: var(--primary-dark); color: #fff; }
+
+        /* 우측 사이드바 */
+        .summary-card h3 { margin: 0 0 20px 0; font-size: 18px; border-bottom: 2px solid var(--text-main); padding-bottom: 15px; }
+        
+        .summary-list { 
+            min-height: 150px; 
+            max-height: 400px; 
+            overflow-y: auto; 
+            margin-bottom: 20px; 
+            padding-right: 15px;
+        }
+        
+        .summary-list::-webkit-scrollbar { width: 6px; }
+        .summary-list::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        .summary-list::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
+        .summary-list::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+
+        .summary-empty { text-align: center; color: #999; padding: 40px 0; font-size: 14px; }
+        
+        .summary-item { border-bottom: 1px solid var(--border-color); padding: 15px 0; }
+        .summary-item:last-child { border-bottom: none; }
+        
+        .summary-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+        .summary-title { font-weight: 700; font-size: 14px; color: var(--primary-dark); }
+        .summary-remove { color: #ff4d4f; cursor: pointer; font-size: 12px; font-weight: 600; padding: 2px 6px; border-radius: 4px; background: #fff1f0; }
+        .summary-remove:hover { background: #ffa39e; color: #fff; }
+        
+        .summary-detail { font-size: 12px; color: var(--text-sub); margin-bottom: 10px; line-height: 1.5; white-space: pre-wrap; }
+        .summary-cost { font-size: 15px; font-weight: 700; text-align: right; }
+
+        .grand-total-box {
+            background: var(--bg-light); border-radius: 12px; padding: 20px; text-align: center;
+        }
+        .grand-total-box h4 { margin: 0 0 10px 0; color: var(--text-sub); font-size: 14px; }
+        .grand-total-amount { font-size: 26px; font-weight: 800; color: var(--text-main); }
+        .grand-total-amount span { font-size: 14px; font-weight: 600; }
+
+        .export-btn {
+            width: 100%; padding: 14px; background: #217346; color: #fff; border: none; border-radius: 8px; font-size: 15px; font-weight: bold; cursor: pointer; margin-top: 15px; transition: background 0.2s;
+        }
+        .export-btn:hover { background: #1a5c38; }
+    </style>
+</head>
+<body>
+
+    <div class="main-container">
+        
+        <!-- 좌측: 계산기 영역 -->
+        <div class="calculator-card">
+            <div class="header">
+                <h2>NCP 통합 예상 비용 시뮬레이터</h2>
+                <p id="header-desc">매니지드 DB 단가를 반영한 아키텍처 스펙별 월(30일) 예상 청구 금액입니다.</p>
+                <div class="tab-container">
+                    <button class="tab-btn active" onclick="app.switchTab('mongo')">MongoDB</button>
+                    <button class="tab-btn" onclick="app.switchTab('edge')">Global Edge</button>
+                    <button class="tab-btn" onclick="app.switchTab('object')">Object Storage</button>
+                </div>
+            </div>
+
+            <!-- 1. MONGODB 시뮬레이터 섹션 -->
+            <div id="section-mongo" class="calc-section active">
+                <div class="content-wrapper">
+                    <div class="input-section">
+                        <div class="form-group">
+                            <label>환경 구성 (아키텍처)</label>
+                            <div class="toggle-group">
+                                <div class="toggle-btn active" onclick="mongoCalc.setEnv('dev')" id="mongo-btn-dev">개발<br>(Standalone)</div>
+                                <div class="toggle-btn" onclick="mongoCalc.setEnv('prod')" id="mongo-btn-prod">운영<br>(Replica Set)</div>
+                                <div class="toggle-btn" onclick="mongoCalc.setEnv('shard')" id="mongo-btn-shard">대규모<br>(Sharded Cluster)</div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>데이터 서버 사양 (DB 노드 기준)</label>
+                            <select id="mongo-spec-select" onchange="mongoCalc.calculate()">
+                                <option value="2v4g">Standard (2 vCPU, 4GB Memory)</option>
+                                <option value="4v8g">Standard (4 vCPU, 8GB Memory)</option>
+                                <option value="8v16g">High Memory (8 vCPU, 16GB Memory)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <div class="slider-header">
+                                <label style="margin:0;">전체 사용 스토리지 용량 (SSD)</label>
+                                <div class="slider-value" id="mongo-storage-val-text">50 GB</div>
+                            </div>
+                            <input type="range" id="mongo-storage-slider" min="50" max="5000" step="50" value="50" oninput="mongoCalc.updateSliderText(); mongoCalc.calculate();">
+                        </div>
+                        <div class="info-box" id="mongo-info-text">
+                            <strong>[개발 환경 - Standalone]</strong><br>
+                            단일 노드(1대) 구성입니다. 이중화가 되어있지 않아 비용이 저렴하지만 장애 발생 시 서비스가 중단될 수 있습니다.
+                        </div>
+                    </div>
+
+                    <div class="result-section">
+                        <div>
+                            <div class="total-price-box">
+                                <h3>월 예상 비용</h3>
+                                <div class="total-amount" id="mongo-total-cost">0 <span>원 / 월</span></div>
+                            </div>
+                            <div class="cost-breakdown">
+                                <div class="breakdown-item">
+                                    <span class="label"><div class="dot c1"></div>서버 인스턴스 총 비용</span>
+                                    <span class="amount" id="mongo-server-cost">0 원</span>
+                                </div>
+                                <div class="breakdown-item" id="mongo-server-detail-box" style="font-size:12px; color:#767a83; margin-top:-8px; margin-bottom:12px; margin-left:18px;">(DB 노드 1대)</div>
+                                <div class="breakdown-item">
+                                    <span class="label"><div class="dot c2"></div>데이터 스토리지 비용</span>
+                                    <span class="amount" id="mongo-storage-cost">0 원</span>
+                                </div>
+                                <div class="chart-container">
+                                    <div class="chart-bar c1" id="mongo-bar-server" style="width: 50%;"></div>
+                                    <div class="chart-bar c2" id="mongo-bar-storage" style="width: 50%;"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <button class="add-cart-btn" onclick="summaryManager.addCurrent('mongo')">＋ 예상 비용 내역에 추가</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. GLOBAL EDGE 시뮬레이터 섹션 -->
+            <div id="section-edge" class="calc-section">
+                <div class="content-wrapper">
+                    <div class="input-section">
+                        <div class="form-group">
+                            <label>서비스 리전 (Region)</label>
+                            <select id="edge-region-select" onchange="edgeCalc.calculate()">
+                                <option value="korea">한국</option>
+                                <option value="us_eu">미국 / 독일 / 프랑스</option>
+                                <option value="japan">일본</option>
+                                <option value="asia">싱가포르 / 홍콩</option>
+                                <option value="other">그 외 지역</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <div class="slider-header"><label style="margin:0;">월 전송량 (Transfer)</label></div>
+                            <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
+                                <input type="text" id="edge-transfer-input" value="500" oninput="edgeCalc.formatInput(this); edgeCalc.syncTransfer(); edgeCalc.calculate();">
+                                <span style="font-weight:600; font-size:14px; white-space:nowrap;">GB</span>
+                            </div>
+                            <input type="range" id="edge-transfer-slider" min="0" max="100000" step="50" value="500" oninput="edgeCalc.syncTransfer(true); edgeCalc.calculate();">
+                        </div>
+                        <div class="form-group" style="margin-top: 40px;">
+                            <div class="slider-header"><label style="margin:0;">월 요청 수 (Requests)</label></div>
+                            <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
+                                <input type="text" id="edge-request-input" value="1,000" oninput="edgeCalc.formatInput(this); edgeCalc.syncRequest(); edgeCalc.calculate();">
+                                <span style="font-weight:600; font-size:14px; white-space:nowrap;">만 건 (10,000 건)</span>
+                            </div>
+                            <input type="range" id="edge-request-slider" min="0" max="50000" step="100" value="1000" oninput="edgeCalc.syncRequest(true); edgeCalc.calculate();">
+                        </div>
+                    </div>
+
+                    <div class="result-section">
+                        <div>
+                            <div class="total-price-box">
+                                <h3>월 예상 비용</h3>
+                                <div class="total-amount" id="edge-total-cost">0 <span>원 / 월</span></div>
+                            </div>
+                            <div class="cost-breakdown">
+                                <div class="breakdown-item">
+                                    <span class="label"><div class="dot c1"></div>월 전송량 비용</span>
+                                    <span class="amount" id="edge-transfer-cost">0 원</span>
+                                </div>
+                                <div class="breakdown-item">
+                                    <span class="label"><div class="dot c2"></div>월 요청 수 비용</span>
+                                    <span class="amount" id="edge-request-cost">0 원</span>
+                                </div>
+                                <div class="chart-container">
+                                    <div class="chart-bar c1" id="edge-bar-transfer" style="width: 50%;"></div>
+                                    <div class="chart-bar c2" id="edge-bar-request" style="width: 50%;"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <button class="add-cart-btn" onclick="summaryManager.addCurrent('edge')">＋ 예상 비용 내역에 추가</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. OBJECT STORAGE 시뮬레이터 섹션 -->
+            <div id="section-object" class="calc-section">
+                <div class="content-wrapper">
+                    <div class="input-section">
+                        <div class="form-group">
+                            <div class="slider-header"><label style="margin:0;">월평균 데이터 저장량</label></div>
+                            <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
+                                <input type="text" id="obj-storage-input" value="1,000" oninput="objCalc.formatInput(this); objCalc.syncInput('storage'); objCalc.calculate();">
+                                <span style="font-weight:600; font-size:14px;">GB</span>
+                            </div>
+                            <input type="range" id="obj-storage-slider" min="0" max="102400" step="100" value="1000" oninput="objCalc.syncSlider('storage'); objCalc.calculate();">
+                        </div>
+
+                        <div class="form-group" style="margin-top: 30px;">
+                            <div class="slider-header"><label style="margin:0;">API 요청 수 (PUT, COPY, POST, LIST)</label></div>
+                            <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
+                                <input type="text" id="obj-api-put-input" value="20,000" oninput="objCalc.formatInput(this); objCalc.calculate();">
+                                <span style="font-weight:600; font-size:14px; white-space:nowrap;">건</span>
+                            </div>
+                        </div>
+                        <div class="form-group" style="margin-top: 15px;">
+                            <div class="slider-header"><label style="margin:0;">API 요청 수 (GET 및 기타)</label></div>
+                            <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
+                                <input type="text" id="obj-api-get-input" value="15,000" oninput="objCalc.formatInput(this); objCalc.calculate();">
+                                <span style="font-weight:600; font-size:14px; white-space:nowrap;">건</span>
+                            </div>
+                            <div style="font-size: 12px; color: var(--text-sub); margin-top: 5px;">* DELETE 요청은 과금되지 않습니다.</div>
+                        </div>
+
+                        <div class="form-group" style="margin-top: 30px;">
+                            <div class="slider-header"><label style="margin:0;">아웃바운드 트래픽 (인터넷 전송)</label></div>
+                            <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
+                                <input type="text" id="obj-transfer-input" value="500" oninput="objCalc.formatInput(this); objCalc.syncInput('transfer'); objCalc.calculate();">
+                                <span style="font-weight:600; font-size:14px;">GB</span>
+                            </div>
+                            <input type="range" id="obj-transfer-slider" min="0" max="51200" step="100" value="500" oninput="objCalc.syncSlider('transfer'); objCalc.calculate();">
+                            <div style="font-size: 12px; color: var(--text-sub); margin-top: 5px;">* 인바운드 트래픽은 무료입니다.</div>
+                        </div>
+                    </div>
+
+                    <div class="result-section">
+                        <div>
+                            <div class="total-price-box">
+                                <h3>월 예상 비용</h3>
+                                <div class="total-amount" id="obj-total-cost">0 <span>원 / 월</span></div>
+                            </div>
+                            <div class="cost-breakdown">
+                                <div class="breakdown-item">
+                                    <span class="label"><div class="dot c1"></div>데이터 저장 요금</span>
+                                    <span class="amount" id="obj-storage-cost">0 원</span>
+                                </div>
+                                <div class="breakdown-item">
+                                    <span class="label"><div class="dot c2"></div>API 요청 요금</span>
+                                    <span class="amount" id="obj-api-cost">0 원</span>
+                                </div>
+                                <div class="breakdown-item">
+                                    <span class="label"><div class="dot c3"></div>네트워크 전송 요금</span>
+                                    <span class="amount" id="obj-transfer-cost">0 원</span>
+                                </div>
+                                <div class="chart-container">
+                                    <div class="chart-bar c1" id="obj-bar-storage" style="width: 33%;"></div>
+                                    <div class="chart-bar c2" id="obj-bar-api" style="width: 33%;"></div>
+                                    <div class="chart-bar c3" id="obj-bar-transfer" style="width: 33%;"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <button class="add-cart-btn" onclick="summaryManager.addCurrent('object')">＋ 예상 비용 내역에 추가</button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- 우측: 선택 항목 누적(장바구니) 패널 -->
+        <div class="summary-card">
+            <h3>선택한 시뮬레이션 내역</h3>
+            <div id="summary-list" class="summary-list">
+                <div class="summary-empty">추가된 내역이 없습니다.<br>좌측에서 구성을 마친 후 추가해 보세요.</div>
+            </div>
+            <div class="grand-total-box">
+                <h4>총 예상 비용</h4>
+                <div class="grand-total-amount" id="grand-total-amount">0 <span>원 / 월</span></div>
+            </div>
+            
+            <button class="export-btn" onclick="summaryManager.exportToCSV()">엑셀 다운로드 (CSV)</button>
+        </div>
+
+    </div>
+
+    <script>
+        // 공통 유틸리티
+        const utils = {
+            formatNumber: function(num) {
+                if (!num && num !== 0) return '';
+                return new Intl.NumberFormat('ko-KR').format(Math.round(num));
+            },
+            parseNumber: function(str) {
+                if (typeof str !== 'string') str = String(str);
+                const unformatted = str.replace(/,/g, '');
+                return parseFloat(unformatted) || 0;
+            }
+        };
+
+        // 앱 탭 스위치
+        const app = {
+            switchTab: function(tabId) {
+                document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+                event.target.classList.add('active');
+                document.querySelectorAll('.calc-section').forEach(sec => sec.classList.remove('active'));
+                document.getElementById(`section-${tabId}`).classList.add('active');
+
+                const desc = document.getElementById('header-desc');
+                if (tabId === 'mongo') desc.innerText = '매니지드 DB 단가를 반영한 아키텍처 스펙별 월(30일) 예상 청구 금액입니다.';
+                else if (tabId === 'edge') desc.innerText = '선택하신 리전의 전송량 요금표와 월 요청 수(10,000건당 10원)를 반영한 예상 청구 금액입니다.';
+                else if (tabId === 'object') desc.innerText = '오브젝트 스토리지의 저장량, API 요청 수, 네트워크 아웃바운드 전송량을 반영한 예상 요금입니다.';
+            }
+        };
+
+        // 우측 요약 패널(장바구니) 관리자
+        const summaryManager = {
+            items: [],
+            addCurrent: function(type) {
+                let data = null;
+                if (type === 'mongo') data = mongoCalc.getCurrentState();
+                else if (type === 'edge') data = edgeCalc.getCurrentState();
+                else if (type === 'object') data = objCalc.getCurrentState();
+
+                if (data) {
+                    this.items.push({ id: Date.now(), title: data.title, detail: data.detail, cost: data.cost });
+                    this.render();
+                }
+            },
+            removeItem: function(id) {
+                this.items = this.items.filter(item => item.id !== id);
+                this.render();
+            },
+            render: function() {
+                const listEl = document.getElementById('summary-list');
+                const totalEl = document.getElementById('grand-total-amount');
+                
+                listEl.innerHTML = '';
+                let grandTotal = 0;
+
+                if (this.items.length === 0) {
+                    listEl.innerHTML = '<div class="summary-empty">추가된 내역이 없습니다.<br>좌측에서 구성을 마친 후 추가해 보세요.</div>';
+                } else {
+                    this.items.forEach(item => {
+                        grandTotal += item.cost;
+                        const div = document.createElement('div');
+                        div.className = 'summary-item';
+                        div.innerHTML = `
+                            <div class="summary-header">
+                                <span class="summary-title">${item.title}</span>
+                                <span class="summary-remove" onclick="summaryManager.removeItem(${item.id})">삭제 ✕</span>
+                            </div>
+                            <div class="summary-detail">${item.detail}</div>
+                            <div class="summary-cost">${utils.formatNumber(item.cost)} 원</div>
+                        `;
+                        listEl.appendChild(div);
+                    });
+                }
+                totalEl.innerHTML = `${utils.formatNumber(grandTotal)} <span>원 / 월</span>`;
+            },
+            exportToCSV: function() {
+                if (this.items.length === 0) {
+                    alert("출력할 내역이 없습니다.");
+                    return;
+                }
+                let csvContent = "\uFEFF서비스명,상세 구성 내역,예상 비용 (원/월)\n";
+                let grandTotal = 0;
+
+                this.items.forEach(item => {
+                    grandTotal += item.cost;
+                    let title = `"${item.title.replace(/"/g, '""')}"`;
+                    let detail = `"${item.detail.replace(/"/g, '""')}"`;
+                    csvContent += `${title},${detail},${item.cost}\n`;
+                });
+                csvContent += `\n총합계,,"${grandTotal}"\n`;
+
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement("a");
+                const url = URL.createObjectURL(blob);
+                link.setAttribute("href", url);
+                link.setAttribute("download", "NCP_Cost_Simulation.csv");
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        };
+
+        /* 1. MongoDB 시뮬레이터 로직 */
+        const mongoCalc = {
+            currentEnv: 'dev',
+            lastTotalCost: 0, 
+            prices: { specs: { '2v4g': 120000, '4v8g': 240000, '8v16g': 480000 }, arbiter: 70000, mongos: 120000, configServer: 120000, storagePerGB: 150 },
+            
+            setEnv: function(env) {
+                this.currentEnv = env;
+                document.getElementById('mongo-btn-dev').classList.remove('active');
+                document.getElementById('mongo-btn-prod').classList.remove('active');
+                document.getElementById('mongo-btn-shard').classList.remove('active');
+                document.getElementById(`mongo-btn-${env}`).classList.add('active');
+                
+                const infoBox = document.getElementById('mongo-info-text');
+                if (env === 'dev') infoBox.innerHTML = `<strong>[개발 환경 - Standalone]</strong><br>단일 노드(1대) 구성입니다. 이중화가 되어있지 않아 비용이 저렴하지만 장애 발생 시 서비스가 중단될 수 있습니다.`;
+                else if (env === 'prod') infoBox.innerHTML = `<strong>[운영 환경 - Replica Set]</strong><br>데이터 노드(Primary 1, Secondary 1) + 투표용 노드(Arbiter 1) <strong>총 3대의 서버</strong>로 구성됩니다.<br>스토리지 역시 데이터 노드 수(2개)만큼 곱해져서 2배로 청구됩니다.`;
+                else if (env === 'shard') infoBox.innerHTML = `<strong>[대규모 환경 - Sharded Cluster]</strong><br>최소 구성 기준: Mongos(2대) + Config 서버(3대) + 2개의 Shard(각 데이터 2대, Arbiter 1대)로 <strong>총 11대의 서버</strong>가 구동됩니다.`;
+                this.calculate();
+            },
+            updateSliderText: function() {
+                const val = document.getElementById('mongo-storage-slider').value;
+                document.getElementById('mongo-storage-val-text').innerText = `${utils.formatNumber(val)} GB`;
+            },
+            calculate: function() {
+                const specKey = document.getElementById('mongo-spec-select').value;
+                const storageGB = parseInt(document.getElementById('mongo-storage-slider').value);
+                let serverCost = 0, storageCost = 0, serverDetail = "";
+                const baseSpecPrice = this.prices.specs[specKey];
+
+                if (this.currentEnv === 'dev') { serverCost = baseSpecPrice * 1; storageCost = storageGB * this.prices.storagePerGB * 1; serverDetail = "(DB 노드 1대)"; } 
+                else if (this.currentEnv === 'prod') { serverCost = (baseSpecPrice * 2) + this.prices.arbiter; storageCost = storageGB * this.prices.storagePerGB * 2; serverDetail = "(DB 노드 2대 + Arbiter 1대)"; } 
+                else if (this.currentEnv === 'shard') { serverCost = (this.prices.mongos * 2) + (this.prices.configServer * 3) + (((baseSpecPrice * 2) + this.prices.arbiter) * 2); storageCost = storageGB * this.prices.storagePerGB * 2; serverDetail = "(Mongos 2대 + Config 3대 + DB 노드 4대 + Arbiter 2대)"; }
+
+                this.lastTotalCost = serverCost + storageCost;
+                document.getElementById('mongo-server-cost').innerText = `${utils.formatNumber(serverCost)} 원`;
+                document.getElementById('mongo-server-detail-box').innerText = serverDetail;
+                document.getElementById('mongo-storage-cost').innerText = `${utils.formatNumber(storageCost)} 원`;
+                document.getElementById('mongo-total-cost').innerHTML = `${utils.formatNumber(this.lastTotalCost)} <span>원 / 월</span>`;
+
+                const serverPct = this.lastTotalCost > 0 ? (serverCost / this.lastTotalCost) * 100 : 50;
+                const storagePct = this.lastTotalCost > 0 ? (storageCost / this.lastTotalCost) * 100 : 50;
+                document.getElementById('mongo-bar-server').style.width = `${serverPct}%`;
+                document.getElementById('mongo-bar-storage').style.width = `${storagePct}%`;
+            },
+            getCurrentState: function() {
+                let envText = this.currentEnv === 'dev' ? '개발 (Standalone)' : (this.currentEnv === 'prod' ? '운영 (Replica Set)' : '대규모 (Sharded Cluster)');
+                let specText = document.getElementById('mongo-spec-select').options[document.getElementById('mongo-spec-select').selectedIndex].text;
+                let storageGB = document.getElementById('mongo-storage-slider').value;
+                return { title: 'Cloud DB for MongoDB', detail: `환경: ${envText}\n사양: ${specText}\n스토리지: ${utils.formatNumber(storageGB)} GB`, cost: this.lastTotalCost };
+            },
+            init: function() { this.updateSliderText(); this.calculate(); }
+        };
+
+        /* 2. Global Edge 시뮬레이터 로직 */
+        const edgeCalc = {
+            lastTotalCost: 0,
+            pricing: {
+                requestPer10k: 10,
+                limits: [10240, 40960, 102400, 358400, 563200, 5242880, Infinity],
+                regions: {
+                    korea: [84, 75, 71, 67, 60, 52, 45],
+                    us_eu: [77, 61, 58, 44, 33, 27, 23],  
+                    japan: [103, 77, 62, 58, 56, 49, 43],
+                    asia:  [94, 75, 71, 67, 60, 52, 45],  
+                    other: [98, 78, 75, 71, 63, 55, 47]   
+                }
+            },
+
+            formatInput: function(el) {
+                let rawVal = el.value.replace(/[^0-9]/g, '');
+                el.value = rawVal ? utils.formatNumber(rawVal) : '';
+            },
+            syncTransfer: function(fromSlider = false) {
+                const input = document.getElementById('edge-transfer-input');
+                const slider = document.getElementById('edge-transfer-slider');
+                if (fromSlider) input.value = utils.formatNumber(slider.value);
+                else slider.value = utils.parseNumber(input.value); 
+            },
+            syncRequest: function(fromSlider = false) {
+                const input = document.getElementById('edge-request-input');
+                const slider = document.getElementById('edge-request-slider');
+                if (fromSlider) input.value = utils.formatNumber(slider.value);
+                else slider.value = utils.parseNumber(input.value);
+            },
+            
+            calculate: function() {
+                let totalTransferGB = utils.parseNumber(document.getElementById('edge-transfer-input').value) || 0;
+                let totalRequests10k = utils.parseNumber(document.getElementById('edge-request-input').value) || 0;
+                let regionKey = document.getElementById('edge-region-select').value;
+
+                let transferCost = 0;
+                let remainingGB = totalTransferGB;
+                let previousLimit = 0;
+                let currentPrices = this.pricing.regions[regionKey];
+
+                for (let i = 0; i < this.pricing.limits.length; i++) {
+                    if (remainingGB <= 0) break;
+                    let currentLimit = this.pricing.limits[i];
+                    let tierMaxVolume = currentLimit - previousLimit;
+                    let billableVolume = Math.min(remainingGB, tierMaxVolume);
+                    
+                    transferCost += billableVolume * currentPrices[i];
+                    remainingGB -= billableVolume;
+                    previousLimit = currentLimit;
+                }
+
+                let requestCost = totalRequests10k * this.pricing.requestPer10k;
+                this.lastTotalCost = transferCost + requestCost;
+
+                document.getElementById('edge-transfer-cost').innerText = `${utils.formatNumber(transferCost)} 원`;
+                document.getElementById('edge-request-cost').innerText = `${utils.formatNumber(requestCost)} 원`;
+                document.getElementById('edge-total-cost').innerHTML = `${utils.formatNumber(this.lastTotalCost)} <span>원 / 월</span>`;
+
+                const transferPct = this.lastTotalCost > 0 ? (transferCost / this.lastTotalCost) * 100 : 50;
+                const requestPct = this.lastTotalCost > 0 ? (requestCost / this.lastTotalCost) * 100 : 50;
+                document.getElementById('edge-bar-transfer').style.width = `${transferPct}%`;
+                document.getElementById('edge-bar-request').style.width = `${requestPct}%`;
+            },
+
+            getCurrentState: function() {
+                let selectEl = document.getElementById('edge-region-select');
+                let regionText = selectEl.options[selectEl.selectedIndex].text;
+                let transfer = document.getElementById('edge-transfer-input').value || 0;
+                let request = document.getElementById('edge-request-input').value || 0;
+                
+                return {
+                    title: 'Global Edge',
+                    detail: `리전: ${regionText}\n월 전송량: ${transfer} GB\n월 요청 수: ${request}만 건`,
+                    cost: this.lastTotalCost
+                };
+            },
+            init: function() { this.calculate(); }
+        };
+
+        /* 3. Object Storage 시뮬레이터 로직 */
+        const objCalc = {
+            lastTotalCost: 0,
+            pricing: {
+                storage_under_1pb: 28,     // 1PB 이하 GB당 28원
+                storage_over_1pb: 26,      // 1PB 초과 GB당 26원
+                api_put: 0.0045,           // PUT, COPY, POST, LIST 건당
+                api_get: 0.0004,           // GET 및 기타 건당
+                network_limits: [5120, 10240, 30720, Infinity], // 5TB, 10TB, 30TB in GB
+                network_prices: [100, 90, 80, 70]               // 각 구간별 요금
+            },
+
+            formatInput: function(el) {
+                let rawVal = el.value.replace(/[^0-9]/g, '');
+                el.value = rawVal ? utils.formatNumber(rawVal) : '';
+            },
+            syncInput: function(type) {
+                const input = document.getElementById(`obj-${type}-input`);
+                const slider = document.getElementById(`obj-${type}-slider`);
+                slider.value = utils.parseNumber(input.value);
+            },
+            syncSlider: function(type) {
+                const input = document.getElementById(`obj-${type}-input`);
+                const slider = document.getElementById(`obj-${type}-slider`);
+                input.value = utils.formatNumber(slider.value);
+            },
+            
+            calculate: function() {
+                let storageGB = utils.parseNumber(document.getElementById('obj-storage-input').value) || 0;
+                let apiPut = utils.parseNumber(document.getElementById('obj-api-put-input').value) || 0;
+                let apiGet = utils.parseNumber(document.getElementById('obj-api-get-input').value) || 0;
+                let transferGB = utils.parseNumber(document.getElementById('obj-transfer-input').value) || 0;
+
+                // 1. 저장 요금 계산 (월평균 기준)
+                let storageCost = 0;
+                if (storageGB <= 1048576) { // 1PB = 1,024TB = 1,048,576GB 기준
+                    storageCost = storageGB * this.pricing.storage_under_1pb;
+                } else {
+                    storageCost = (1048576 * this.pricing.storage_under_1pb) + ((storageGB - 1048576) * this.pricing.storage_over_1pb);
+                }
+
+                // 2. API 요청 요금 계산
+                let apiCost = (apiPut * this.pricing.api_put) + (apiGet * this.pricing.api_get);
+                apiCost = Math.floor(apiCost);
+
+                // 3. 네트워크 전송 요금 (구간제) 계산
+                let transferCost = 0;
+                let remainingGB = transferGB;
+                let previousLimit = 0;
+                
+                for (let i = 0; i < this.pricing.network_limits.length; i++) {
+                    if (remainingGB <= 0) break;
+                    let currentLimit = this.pricing.network_limits[i];
+                    let tierMaxVolume = currentLimit - previousLimit;
+                    let billableVolume = Math.min(remainingGB, tierMaxVolume);
+                    
+                    transferCost += billableVolume * this.pricing.network_prices[i];
+                    remainingGB -= billableVolume;
+                    previousLimit = currentLimit;
+                }
+
+                this.lastTotalCost = Math.round(storageCost + apiCost + transferCost);
+
+                document.getElementById('obj-storage-cost').innerText = `${utils.formatNumber(storageCost)} 원`;
+                document.getElementById('obj-api-cost').innerText = `${utils.formatNumber(apiCost)} 원`;
+                document.getElementById('obj-transfer-cost').innerText = `${utils.formatNumber(transferCost)} 원`;
+                document.getElementById('obj-total-cost').innerHTML = `${utils.formatNumber(this.lastTotalCost)} <span>원 / 월</span>`;
+
+                // 차트 업데이트 로직
+                let total = this.lastTotalCost > 0 ? this.lastTotalCost : 1; 
+                document.getElementById('obj-bar-storage').style.width = `${(storageCost / total) * 100}%`;
+                document.getElementById('obj-bar-api').style.width = `${(apiCost / total) * 100}%`;
+                document.getElementById('obj-bar-transfer').style.width = `${(transferCost / total) * 100}%`;
+            },
+
+            getCurrentState: function() {
+                let storageGB = document.getElementById('obj-storage-input').value || 0;
+                let transferGB = document.getElementById('obj-transfer-input').value || 0;
+                
+                return {
+                    title: 'Object Storage',
+                    detail: `데이터 저장량: ${storageGB} GB\n아웃바운드 전송량: ${transferGB} GB`,
+                    cost: this.lastTotalCost
+                };
+            },
+            init: function() { this.calculate(); }
+        };
+
+        // 전체 시뮬레이터 초기화
+        mongoCalc.init();
+        edgeCalc.init();
+        objCalc.init();
+
+    </script>
+</body>
+</html>
