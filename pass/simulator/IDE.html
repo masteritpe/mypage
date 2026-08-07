@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>파이썬 코드 실행기 (Web IDE)</title>
+    
+    <!-- 브라우저에서 파이썬을 실행하게 해주는 Brython 라이브러리 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/brython/3.11.3/brython.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/brython/3.11.3/brython_stdlib.js"></script>
+    
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f4f5f7;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            width: 100%;
+            max-width: 900px;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background-color: #5b5b9f;
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 1.2em;
+        }
+        .btn-run {
+            background-color: #28a745;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: bold;
+            transition: background-color 0.2s;
+        }
+        .btn-run:hover {
+            background-color: #218838;
+        }
+        .editor-area {
+            display: flex;
+            flex-direction: column;
+            border-bottom: 1px solid #e1e4e8;
+        }
+        .section-title {
+            background-color: #f8f9fa;
+            padding: 8px 20px;
+            font-size: 0.9em;
+            font-weight: bold;
+            color: #5c6ac4;
+            border-bottom: 1px solid #e1e4e8;
+            border-top: 1px solid #e1e4e8;
+        }
+        textarea {
+            width: 100%;
+            height: 250px;
+            border: none;
+            padding: 15px 20px;
+            font-family: "Consolas", "Monaco", monospace;
+            font-size: 1em;
+            line-height: 1.5;
+            resize: vertical;
+            box-sizing: border-box;
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+        }
+        textarea:focus {
+            outline: none;
+        }
+        .output-area {
+            min-height: 150px;
+            background-color: #f8f9fa;
+        }
+        pre#output {
+            margin: 0;
+            padding: 15px 20px;
+            font-family: "Consolas", "Monaco", monospace;
+            font-size: 0.95em;
+            white-space: pre-wrap;
+            color: #24292e;
+        }
+        .error-text {
+            color: #d73a49 !important;
+        }
+    </style>
+</head>
+
+<!-- 페이지가 로드되면 brython() 함수를 호출하여 파이썬 환경을 초기화합니다. -->
+<body onload="brython()">
+
+    <div class="container">
+        <div class="header">
+            <h1>Python Web Executor</h1>
+            <button class="btn-run" id="btn-run">▶ 실행 (Run)</button>
+        </div>
+        
+        <div class="editor-area">
+            <div class="section-title">코드 입력 (Python)</div>
+            <textarea id="python-code" spellcheck="false">
+# 여기에 파이썬 코드를 작성하세요.
+print("안녕하세요! 파이썬 실행기입니다.")
+
+# 간단한 계산 예시
+a = 10
+b = 20
+print(f"{a} + {b} = {a + b}")
+
+# 반복문 예시
+for i in range(1, 4):
+    print(f"{i}번째 줄입니다.")
+</textarea>
+        </div>
+
+        <div class="output-area">
+            <div class="section-title">실행 결과 (Console)</div>
+            <pre id="output">코드를 작성하고 '실행' 버튼을 눌러주세요.</pre>
+        </div>
+    </div>
+
+    <!-- 브라우저 내부에서 동작하는 파이썬 코드 (Brython) -->
+    <script type="text/python">
+        from browser import document
+        import sys
+        import io
+        import traceback
+
+        def run_code(event):
+            # 출력 영역 초기화
+            output_element = document["output"]
+            output_element.text = "실행 중..."
+            output_element.classList.remove("error-text")
+            
+            # 입력된 코드 가져오기
+            code = document["python-code"].value
+            
+            # 파이썬의 print() 출력을 가로채기 위한 가상 출력 스트림 생성
+            old_stdout = sys.stdout
+            sys.stdout = io.StringIO()
+            
+            try:
+                # 입력받은 코드를 실행
+                exec(code)
+                
+                # 가상 스트림에 쌓인 출력 내용 가져오기
+                result = sys.stdout.getvalue()
+                
+                if result:
+                    output_element.text = result
+                else:
+                    output_element.text = "(출력된 내용이 없습니다.)"
+                    
+            except Exception as e:
+                # 에러 발생 시 트레이스백(에러 메시지)을 출력 영역에 표시
+                error_msg = traceback.format_exc()
+                output_element.text = error_msg
+                output_element.classList.add("error-text")
+                
+            finally:
+                # 표준 출력을 원래대로 복구
+                sys.stdout = old_stdout
+
+        # '실행' 버튼에 클릭 이벤트 연결
+        document["btn-run"].bind("click", run_code)
+    </script>
+
+</body>
+</html>

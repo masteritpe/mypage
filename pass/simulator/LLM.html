@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM 기본 원리 시뮬레이터</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 30px;
+        }
+        .simulator-container {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        @media (max-width: 768px) {
+            .simulator-container {
+                flex-direction: column;
+            }
+        }
+        .panel {
+            flex: 1;
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border: 1px solid #e9ecef;
+        }
+        .panel h2 {
+            font-size: 1.2em;
+            margin-top: 0;
+            color: #5b5b9f;
+            border-bottom: 2px solid #f0f0f5;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #495057;
+        }
+        select, input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            font-size: 1em;
+            box-sizing: border-box;
+        }
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        input[type="range"] {
+            flex: 1;
+        }
+        #temp-value {
+            font-weight: bold;
+            color: #5b5b9f;
+            min-width: 30px;
+        }
+        .temp-desc {
+            font-size: 0.85em;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+        button {
+            width: 100%;
+            background-color: #5b5b9f;
+            color: white;
+            border: none;
+            padding: 12px;
+            font-size: 1.1em;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #484882;
+        }
+        .result-box {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        .result-title {
+            font-size: 0.9em;
+            color: #6c757d;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .final-text {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #28a745;
+        }
+        .prob-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            border-bottom: 1px dashed #dee2e6;
+        }
+        .prob-item:last-child {
+            border-bottom: none;
+        }
+        .prob-item.selected {
+            background-color: #e8f4f8;
+            font-weight: bold;
+            color: #0c5460;
+            border-radius: 4px;
+            padding: 5px;
+        }
+        
+        /* 설명 영역 CSS */
+        .explanation-box {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border: 1px solid #e9ecef;
+        }
+        .explanation-list {
+            list-style: none;
+            padding: 0;
+        }
+        .explanation-list li {
+            margin-bottom: 15px;
+            display: flex;
+            align-items: flex-start;
+        }
+        .number-icon {
+            background-color: #5b5b9f;
+            color: white;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 0.9em;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>LLM 핵심 원리 시뮬레이터</h1>
+
+    <div class="simulator-container">
+        <!-- 왼쪽 컨트롤 패널 -->
+        <div class="panel">
+            <h2>1. 입력 및 설정</h2>
+            
+            <div class="form-group">
+                <label for="input-text">입력 텍스트 (프롬프트) ❸</label>
+                <select id="input-text">
+                    <option value="오늘 날씨가">오늘 날씨가</option>
+                    <option value="파이썬은">파이썬은</option>
+                    <option value="AI는">AI는</option>
+                    <option value="사과는">사과는 (알 수 없는 패턴)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="temperature">온도 (Temperature) 조절 ❺</label>
+                <div class="slider-container">
+                    <input type="range" id="temperature" min="0.1" max="0.9" step="0.1" value="0.3">
+                    <span id="temp-value">0.3</span>
+                </div>
+                <div class="temp-desc" id="temp-desc-text">0.5 미만: 높은 확률을 더 강화 (일관성)</div>
+            </div>
+
+            <button onclick="runSimulation()">다음 단어 예측하기</button>
+        </div>
+
+        <!-- 오른쪽 결과 패널 -->
+        <div class="panel">
+            <h2>2. 예측 결과 및 내부 동작</h2>
+            
+            <div class="result-box">
+                <div class="result-title">최종 생성 결과</div>
+                <div id="final-output" class="final-text">버튼을 눌러 예측을 시작하세요.</div>
+            </div>
+
+            <div class="result-box" id="internal-process" style="display: none;">
+                <div class="result-title">내부 확률 계산 과정 (패턴 매칭 ❶ ❷)</div>
+                <div style="font-size: 0.9em; color: #666; margin-bottom: 10px;">
+                    적용된 패턴: <strong id="matched-pattern" style="color: #333;">-</strong>
+                </div>
+                <div id="prob-distribution">
+                    <!-- 확률 분포가 여기에 동적으로 생성됩니다 -->
+                </div>
+                <div style="font-size: 0.85em; color: #856404; background-color: #fff3cd; padding: 10px; border-radius: 4px; margin-top: 15px;">
+                    ❹ 확률적 선택: 무작위성을 더해 매번 다른 결과가 나올 수 있습니다. (하이라이트된 단어가 최종 선택됨)
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 하단 설명 -->
+    <div class="explanation-box">
+        <h2 style="font-size: 1.2em; color: #5b5b9f; margin-top: 0; border-bottom: 2px solid #f0f0f5; padding-bottom: 10px;">LLM 동작 원리 설명</h2>
+        <ul class="explanation-list">
+            <li>
+                <span class="number-icon">1</span>
+                <span><strong>패턴 저장:</strong> LLM은 학습 과정에서 수많은 텍스트 패턴을 기억합니다. 'A 다음에 B가 자주 나타난다'는 식의 패턴입니다.</span>
+            </li>
+            <li>
+                <span class="number-icon">2</span>
+                <span><strong>확률분포:</strong> 패턴마다 다음에 올 수 있는 여러 선택지와 그 확률을 가지고 있습니다.</span>
+            </li>
+            <li>
+                <span class="number-icon">3</span>
+                <span><strong>패턴 매칭:</strong> 입력 텍스트에서 알고 있는 패턴을 찾습니다.</span>
+            </li>
+            <li>
+                <span class="number-icon">4</span>
+                <span><strong>확률적 선택:</strong> 무작위성을 더해 매번 다른 결과를 생성할 수 있습니다.</span>
+            </li>
+            <li>
+                <span class="number-icon">5</span>
+                <span><strong>온도(Temperature) 조절:</strong> 창의성과 일관성 사이의 균형을 조절하는 중요한 파라미터입니다.</span>
+            </li>
+        </ul>
+    </div>
+
+    <script>
+        // 파이썬 코드의 SimpleLLMSimulator 클래스를 JavaScript로 구현
+        const patterns = {
+            "오늘 날씨가": ["좋네요", "맑아요", "흐려요"],
+            "파이썬은": ["프로그래밍 언어입니다", "쉽게 배울 수 있습니다"],
+            "AI는": ["미래 기술입니다", "우리 생활을 바꿉니다"]
+        };
+
+        const baseProbabilities = {
+            "오늘 날씨가": [0.5, 0.3, 0.2],
+            "파이썬은": [0.6, 0.4],
+            "AI는": [0.5, 0.5]
+        };
+
+        // 온도 조절 슬라이더 UI 업데이트 로직
+        const tempSlider = document.getElementById('temperature');
+        const tempValueDisplay = document.getElementById('temp-value');
+        const tempDescText = document.getElementById('temp-desc-text');
+
+        tempSlider.addEventListener('input', function() {
+            const val = parseFloat(this.value);
+            tempValueDisplay.textContent = val.toFixed(1);
+            if (val < 0.5) {
+                tempDescText.textContent = "0.5 미만: 가장 확률 높은 것을 선택 (일관성 위주)";
+            } else {
+                tempDescText.textContent = "0.5 이상: 확률 평준화 (다양한 선택, 창의성 위주)";
+            }
+        });
+
+        // 온도에 따른 확률 조정 로직 (파이썬 코드의 adjust_creativity 함수와 동일하게 구현)
+        function adjustCreativity(probs, temperature) {
+            if (temperature < 0.5) {
+                // 가장 높은 확률 강화
+                const maxVal = Math.max(...probs);
+                const maxIdx = probs.indexOf(maxVal);
+                
+                let adjusted = new Array(probs.length).fill(0.1);
+                adjusted[maxIdx] = 0.9;
+                return adjusted;
+            } else {
+                // 확률 평준화
+                return new Array(probs.length).fill(1 / probs.length);
+            }
+        }
+
+        // 가중치에 기반한 무작위 선택 (파이썬의 random.choices 역할)
+        function weightedRandomChoice(options, weights) {
+            // 가중치 배열의 총합 계산
+            const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+            
+            // 0 ~ totalWeight 사이의 난수 생성
+            let random = Math.random() * totalWeight;
+            
+            for (let i = 0; i < options.length; i++) {
+                random -= weights[i];
+                if (random <= 0) {
+                    return { choice: options[i], index: i };
+                }
+            }
+            return { choice: options[options.length - 1], index: options.length - 1 };
+        }
+
+        // 메인 시뮬레이션 실행 함수
+        function runSimulation() {
+            const inputText = document.getElementById('input-text').value;
+            const temperature = parseFloat(document.getElementById('temperature').value);
+            
+            const finalOutputEl = document.getElementById('final-output');
+            const internalProcessEl = document.getElementById('internal-process');
+            const matchedPatternEl = document.getElementById('matched-pattern');
+            const probDistEl = document.getElementById('prob-distribution');
+
+            // 패턴 찾기
+            let matchedPattern = null;
+            for (const key in patterns) {
+                if (inputText.includes(key)) {
+                    matchedPattern = key;
+                    break;
+                }
+            }
+
+            if (matchedPattern) {
+                const options = patterns[matchedPattern];
+                const rawProbs = baseProbabilities[matchedPattern];
+                
+                // 온도 적용하여 확률 재조정
+                const adjustedProbs = adjustCreativity(rawProbs, temperature);
+                
+                // 확률에 따라 단어 선택
+                const result = weightedRandomChoice(options, adjustedProbs);
+                
+                // 결과 UI 업데이트
+                finalOutputEl.textContent = `${inputText} ${result.choice}`;
+                internalProcessEl.style.display = 'block';
+                matchedPatternEl.textContent = `"${matchedPattern}"`;
+                
+                // 확률 분포 시각화
+                probDistEl.innerHTML = '';
+                for(let i = 0; i < options.length; i++) {
+                    const isSelected = (i === result.index);
+                    const div = document.createElement('div');
+                    div.className = `prob-item ${isSelected ? 'selected' : ''}`;
+                    
+                    // 확률값을 %로 변환
+                    const originalPercent = Math.round(rawProbs[i] * 100);
+                    const adjustedPercent = Math.round((adjustedProbs[i] / adjustedProbs.reduce((a,b)=>a+b,0)) * 100);
+                    
+                    div.innerHTML = `
+                        <span>"${options[i]}"</span>
+                        <span>
+                            <span style="color:#999; font-size:0.8em; text-decoration:line-through; margin-right:8px;">기본 ${originalPercent}%</span>
+                            <span style="font-weight:bold;">조정됨 ${adjustedPercent}%</span>
+                            ${isSelected ? ' <span style="color:#28a745; margin-left:5px;">✓ 선택됨</span>' : ''}
+                        </span>
+                    `;
+                    probDistEl.appendChild(div);
+                }
+
+            } else {
+                // 패턴을 찾지 못한 경우
+                finalOutputEl.textContent = `${inputText} ... (패턴을 찾지 못했습니다)`;
+                internalProcessEl.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>
