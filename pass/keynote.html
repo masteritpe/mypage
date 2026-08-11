@@ -447,6 +447,7 @@
       <div class="actions">
         <button class="btn btn-outline" onclick="openTopicListModal()" title="현재 문서의 전체 문항 리스트 보기"><i class="ph ph-list-dashes"></i></button>
         <button class="btn btn-outline" onclick="openSettings()" title="환경설정"><i class="ph ph-gear"></i></button>
+        <button class="btn btn-outline" onclick="openR5Modal()" title="5R (중요도) 관리"><i class="ph ph-tag"></i></button>
         <div class="divider"></div>
         <input type="file" id="importInput" accept=".json" style="display: none;" onchange="importJSON(event)">
         <button class="btn btn-outline" onclick="document.getElementById('importInput').click()"><i class="ph ph-upload-simple"></i> 복원</button>
@@ -483,6 +484,31 @@
           <input type="text" id="modalSearchInput" class="search-box" style="background: var(--bg-surface);" placeholder="검색어를 입력하세요..." oninput="filterTopicList()">
         </div>
         <div id="topicListContainer" style="flex: 1; overflow-y: auto; padding: 0;">
+        </div>
+      </div>
+    </div>
+
+    <!-- 5R(중요도) 관리 모달 -->
+    <div id="r5Modal" class="modal-overlay" onclick="if(event.target===this) closeR5Modal()">
+      <div class="modal-content" style="width: 700px; max-width: 90%; max-height: 80vh; display: flex; flex-direction: column; padding: 0;">
+        <div class="modal-header" style="padding: 20px 24px; margin-bottom: 0;">
+          <div class="modal-title"><i class="ph ph-tag" style="font-size: 20px;"></i> 5R(중요도) 관리</div>
+          <button class="btn" style="padding: 4px; border: none; background: transparent;" onclick="closeR5Modal()"><i class="ph ph-x" style="font-size: 18px;"></i></button>
+        </div>
+        <div style="padding: 16px 24px; border-bottom: 1px solid var(--border-base); display: flex; gap: 8px; justify-content: space-between; align-items: center; background: var(--bg-body);">
+          <div style="display: flex; gap: 8px; align-items: center; flex: 1;">
+              <select id="r5ModalNoteSelect" class="search-box" style="max-width: 300px; background: var(--bg-surface);" onchange="renderR5ModalList()">
+                  <option value="all">전체 키노트</option>
+              </select>
+          </div>
+          <div style="display: flex; gap: 8px;">
+              <button class="btn btn-outline" style="background: var(--bg-surface);" onclick="exportR5JSON()"><i class="ph ph-download-simple"></i> 5R 백업</button>
+              <input type="file" id="r5ImportInput" accept=".json" style="display: none;" onchange="importR5JSON(event)">
+              <button class="btn btn-outline" style="background: var(--bg-surface);" onclick="document.getElementById('r5ImportInput').click()"><i class="ph ph-upload-simple"></i> 5R 복원</button>
+          </div>
+        </div>
+        <div id="r5ModalListContainer" style="flex: 1; overflow-y: auto; padding: 16px 24px; background: var(--bg-body);">
+          <!-- List goes here -->
         </div>
       </div>
     </div>
@@ -1344,6 +1370,7 @@
         closeSettings(); 
         closeImageViewer(); 
         closeTopicListModal();
+        closeR5Modal(); // 5R 모달 닫기 추가
         let isImageEditing = false;
         document.querySelectorAll('.ql-container').forEach(container => {
           const overlays = Array.from(container.children).filter(el => !el.classList.length);
@@ -1689,6 +1716,290 @@
       };
     }
 
+    // 5R(중요도) 모달 및 백업 복원 로직
+    function openR5Modal() {
+        document.getElementById('r5Modal').style.display = 'flex';
+        populateR5NoteSelect().then(() => {
+            renderR5ModalList();
+        });
+    }
+    
+    function closeR5Modal() {
+        document.getElementById('r5Modal').style.display = 'none';
+    }
+
+    // 5R 모달용 키노트 셀렉트 박스 채우기 (메모리 절약을 위해 제목과 ID만 추출)
+    function populateR5NoteSelect() {
+        return new Promise((resolve) => {
+            const select = document.getElementById('r5ModalNoteSelect');
+            const currentValue = select.value;
+            select.innerHTML = '<option value="all">전체 키노트</option>';
+            
+            const transaction = db.transaction(['notes'], 'readonly');
+            const request = transaction.objectStore('notes').openCursor();
+            const notes = [];
+            
+            request.onsuccess = (e) => {
+                const cursor = e.target.result;
+                if (cursor) {
+                    notes.push({ id: cursor.value.id, title: cursor.value.title });
+                    cursor.continue();
+                } else {
+                    notes.sort((a, b) => a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' }));
+                    notes.forEach(n => {
+                        const opt = document.createElement('option');
+                        opt.value = n.id;
+                        opt.textContent = n.title;
+                        select.appendChild(opt);
+                    });
+                    if (Array.from(select.options).some(o => o.value === currentValue)) {
+                        select.value = currentValue;
+                    }
+                    resolve();
+                }
+            };
+        });
+    }
+
+    function toggleModal5R(noteId, itemIndex, type, element) {
+        element.classList.toggle('active');
+        const isActive = element.classList.contains('active');
+
+        const transaction = db.transaction(['notes'], 'readwrite');
+        const store = transaction.objectStore('notes');
+        const req = store.get(noteId);
+        
+        req.onsuccess = () => {
+            const note = req.result;
+            if (note && note.items && note.items[itemIndex]) {
+                let typeArray = note.items[itemIndex].type5r || [];
+                if (isActive) {
+                    if (!typeArray.includes(type)) typeArray.push(type);
+                } else {
+                    const idx = typeArray.indexOf(type);
+                    if (idx > -1) typeArray.splice(idx, 1);
+                }
+                note.items[itemIndex].type5r = typeArray;
+                store.put(note);
+
+                // 현재 열린 노트와 동기화
+                if (noteId === currentNoteId) {
+                    currentNoteData.items[itemIndex].type5r = typeArray;
+                    const cardR5Container = document.querySelector(`.r5-container[data-index="${itemIndex}"]`);
+                    if (cardR5Container) {
+                        const pills = cardR5Container.querySelectorAll('.r5-pill');
+                        pills.forEach(pill => {
+                            if (pill.innerText.trim() === type) {
+                                if (isActive) pill.classList.add('active');
+                                else pill.classList.remove('active');
+                            }
+                        });
+                    }
+                }
+            }
+        };
+    }
+
+    // 메모리 절약을 위해 openCursor를 사용하여 리스트 렌더링
+    function renderR5ModalList() {
+        const container = document.getElementById('r5ModalListContainer');
+        const selectedNoteId = document.getElementById('r5ModalNoteSelect').value;
+        container.innerHTML = '<div style="text-align:center; padding: 20px;">로딩 중...</div>';
+
+        const transaction = db.transaction(['notes'], 'readonly');
+        const request = transaction.objectStore('notes').openCursor();
+        const notesToRender = [];
+
+        request.onsuccess = (e) => {
+            const cursor = e.target.result;
+            if (cursor) {
+                const note = cursor.value;
+                if (selectedNoteId === 'all' || note.id === selectedNoteId) {
+                    notesToRender.push(note);
+                }
+                cursor.continue();
+            } else {
+                container.innerHTML = '';
+                notesToRender.sort((a, b) => a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' }));
+
+                let hasAnyProblems = false;
+
+                notesToRender.forEach(note => {
+                    if (note.items && note.items.length > 0) {
+                        let noteSection = document.createElement('div');
+                        noteSection.style.marginBottom = '24px';
+                        
+                        let noteHeader = document.createElement('h3');
+                        noteHeader.style.cssText = 'font-size: 15px; color: var(--primary); margin-bottom: 12px; border-bottom: 1px solid var(--border-light); padding-bottom: 6px; display: flex; align-items: center; gap: 6px;';
+                        noteHeader.innerHTML = `<i class="ph-fill ph-folder-open" style="color: #3B82F6;"></i> ${note.title}`;
+                        noteSection.appendChild(noteHeader);
+
+                        let hasProblemsInNote = false;
+
+                        note.items.forEach((item, index) => {
+                            const problemText = (item.problem || '').replace(/<[^>]+>/g, '').trim();
+                            if (problemText) { 
+                                hasProblemsInNote = true;
+                                hasAnyProblems = true;
+                                const itemDiv = document.createElement('div');
+                                itemDiv.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border: 1px solid var(--border-base); border-radius: var(--radius-md); margin-bottom: 8px; background: var(--bg-surface);';
+                                
+                                const textDiv = document.createElement('div');
+                                textDiv.style.cssText = 'flex: 1; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 16px;';
+                                textDiv.textContent = `Q${index + 1}. ${problemText}`;
+
+                                const r5Div = document.createElement('div');
+                                r5Div.className = 'r5-container';
+                                r5Div.style.margin = '0';
+                                r5Div.style.flexShrink = '0';
+                                
+                                FIVE_R_TYPES.forEach(type => {
+                                    const isActive = (item.type5r || []).includes(type);
+                                    const pill = document.createElement('div');
+                                    pill.className = `r5-pill ${isActive ? 'active' : ''}`;
+                                    pill.style.cssText = 'padding: 4px 8px; font-size: 11px;';
+                                    pill.textContent = type;
+                                    pill.onclick = (e) => toggleModal5R(note.id, index, type, pill);
+                                    r5Div.appendChild(pill);
+                                });
+
+                                itemDiv.appendChild(textDiv);
+                                itemDiv.appendChild(r5Div);
+                                noteSection.appendChild(itemDiv);
+                            }
+                        });
+
+                        if (hasProblemsInNote) {
+                            container.appendChild(noteSection);
+                        }
+                    }
+                });
+
+                if (!hasAnyProblems) {
+                    container.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--text-muted); font-size: 14px;">조건에 맞는(문제가 입력된) 항목이 없습니다.</div>';
+                }
+            }
+        };
+    }
+
+    // 메모리 절약을 위해 openCursor 및 Blob 방식을 적용한 백업 로직
+    function exportR5JSON() {
+        const selectedNoteId = document.getElementById('r5ModalNoteSelect').value;
+        const transaction = db.transaction(['notes'], 'readonly');
+        const request = transaction.objectStore('notes').openCursor();
+        const exportData = [];
+        
+        request.onsuccess = (e) => {
+            const cursor = e.target.result;
+            if (cursor) {
+                const note = cursor.value;
+                if (selectedNoteId === 'all' || note.id === selectedNoteId) {
+                    if (note.items) {
+                        note.items.forEach((item, index) => {
+                            const problemText = (item.problem || '').replace(/<[^>]+>/g, '').trim();
+                            if (problemText) { // 문제가 있는 항목만 최소한의 데이터로 5R 추출 대상
+                                exportData.push({
+                                    noteId: note.id,
+                                    noteTitle: note.title,
+                                    itemIndex: index,
+                                    problem: problemText,
+                                    type5r: item.type5r || []
+                                });
+                            }
+                        });
+                    }
+                }
+                cursor.continue();
+            } else {
+                if (exportData.length === 0) return alert('백업할 5R 데이터가 없습니다.');
+                
+                // 대용량 문자열 처리 시 OOM 방지를 위한 Blob 기반 파일 생성
+                const jsonString = JSON.stringify(exportData, null, 2);
+                const blob = new Blob([jsonString], { type: "application/json;charset=utf-8" });
+                const url = URL.createObjectURL(blob);
+                
+                const a = document.createElement('a');
+                a.href = url;
+                const fileNamePrefix = selectedNoteId === 'all' ? 'All' : 'Selected';
+                a.download = `Keynote_5R_Backup_${fileNamePrefix}_${new Date().getTime()}.json`;
+                document.body.appendChild(a); 
+                a.click(); 
+                
+                // 메모리 누수 방지
+                setTimeout(() => {
+                    a.remove();
+                    URL.revokeObjectURL(url);
+                }, 100);
+            }
+        };
+    }
+
+    function importR5JSON(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        
+        reader.onload = function(e) {
+            try {
+                const importedData = JSON.parse(e.target.result);
+                if (!Array.isArray(importedData)) return alert("유효한 5R 백업 파일이 아닙니다.");
+
+                // noteId 기준으로 묶어서 DB 업데이트 최소화
+                const updatesByNote = {};
+                importedData.forEach(data => {
+                    if (!updatesByNote[data.noteId]) updatesByNote[data.noteId] = {};
+                    updatesByNote[data.noteId][data.itemIndex] = data.type5r;
+                });
+
+                const transaction = db.transaction(['notes'], 'readwrite');
+                const store = transaction.objectStore('notes');
+                const request = store.openCursor();
+
+                request.onsuccess = (ev) => {
+                    const cursor = ev.target.result;
+                    if (cursor) {
+                        const note = cursor.value;
+                        if (updatesByNote[note.id] && note.items) {
+                            let changed = false;
+                            note.items.forEach((item, idx) => {
+                                // 문제가 있는 항목이며 백업에 5R 데이터가 있는 경우만 업데이트
+                                if (item.problem && updatesByNote[note.id][idx] !== undefined) {
+                                    item.type5r = updatesByNote[note.id][idx];
+                                    changed = true;
+                                }
+                            });
+                            if (changed) {
+                                cursor.update(note);
+                                if (note.id === currentNoteId) {
+                                    currentNoteData = note; // 현재 열린 문서 데이터 동기화
+                                }
+                            }
+                        }
+                        cursor.continue();
+                    }
+                };
+
+                transaction.oncomplete = () => {
+                    alert("5R 데이터 복원이 완료되었습니다.");
+                    
+                    // 현재 열려있는 폼 리렌더링 (5R 상태 업데이트 반영)
+                    if (currentNoteId) {
+                        const tempCount = parseInt(document.getElementById('itemCount').value);
+                        generateForms(currentNoteData.items.length || tempCount);
+                    }
+                    
+                    if (document.getElementById('r5Modal').style.display === 'flex') {
+                        renderR5ModalList();
+                    }
+                };
+            } catch (err) {
+                alert("파일 읽기 오류: " + err.message);
+            }
+            event.target.value = '';
+        };
+        reader.readAsText(file);
+    }
+
     function openSettings() { document.getElementById('settingsModal').style.display = 'flex'; }
     function closeSettings() { document.getElementById('settingsModal').style.display = 'none'; }
     function confirmRegenerate() {
@@ -1732,6 +2043,7 @@
           const database = e.target.result; 
           if (!database.objectStoreNames.contains('notes')) database.createObjectStore('notes', { keyPath: 'id' }); 
         };
+        // [수정사항] request.onsSuccess 오타를 request.onsuccess로 수정
         request.onsuccess = (e) => { db = e.target.result; resolve(); };
         request.onerror = (e) => reject('DB Error');
       });

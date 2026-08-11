@@ -191,8 +191,8 @@ window.MathJax = {
                     <option value="link">🔗 Link</option>
                     <option value="mdSplit">📄 MD</option>
                     <option value="pdf">📕 PDF</option>
+                    <option value="pathreading">🧭 패스리딩</option>
                 </select>
-                <!-- accept 속성에 .pdf 추가 -->
                 <button class="btn" onclick="document.getElementById('commonImportInput').click()" title="선택한 양식의 데이터를 불러옵니다.">
                     <span>불러오기</span>
                 </button>
@@ -305,7 +305,7 @@ window.MathJax = {
     let mdDirHandle = null; 
     let toastTimeout = null;
 
-    const defaultCategories = ["IT기술", "정보처리", "기출문제", "문제분석", "에세이", "technote", "참조자료"]; // 참조자료 기본 포함
+    const defaultCategories = ["IT기술", "정보처리", "기출문제", "문제분석", "에세이", "technote", "참조자료", "패스리딩"]; 
 
     document.addEventListener('keydown', function(e) {
         if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'n') {
@@ -422,8 +422,10 @@ window.MathJax = {
 
     function stripHtmlTags(str) {
         if (!str) return '';
+        let decoded = str.replace(/&lt;(\/?(?:b|strong))&gt;/gi, '<$1>');
+        
         const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = str;
+        tempDiv.innerHTML = decoded;
         tempDiv.querySelectorAll('script, style, source-footnote, sources-carousel-inline, button, mat-icon').forEach(el => el.remove());
         return tempDiv.textContent || tempDiv.innerText || '';
     }
@@ -431,8 +433,13 @@ window.MathJax = {
     function convertHtmlToMd(html) {
         if (!html) return '';
         
-        let cleanHtml = html.replace(/<!--[\s\S]*?-->/g, '');
+        let cleanHtml = html.replace(/&lt;(\/?(?:b|strong))&gt;/gi, '<$1>');
+        cleanHtml = cleanHtml.replace(/<!--[\s\S]*?-->/g, '');
         
+        cleanHtml = cleanHtml.replace(/&lt;br\s*\/?&gt;/gi, '<br>');
+        
+        cleanHtml = cleanHtml.replace(/\n/g, '<br>');
+
         const parser = new DOMParser();
         const doc = parser.parseFromString(cleanHtml, 'text/html');
         const body = doc.body;
@@ -444,7 +451,7 @@ window.MathJax = {
 
         function processNode(node, listDepth = 0, isCode = false) {
             if (node.nodeType === Node.TEXT_NODE) {
-                let text = node.textContent.replace(/\n/g, ' ');
+                let text = node.textContent;
                 text = text.replace(/[\u200B-\u200D\uFEFF]/g, '');
                 text = text.replace(/\u00A0/g, ' ');
                 return text; 
@@ -497,19 +504,16 @@ window.MathJax = {
                     return `\`${trimmedInner}\``;
                 case 'pre': 
                     return `\n\n\`\`\`\n${trimmedInner}\n\`\`\`\n\n`;
+                case 'br': 
+                    return `\n`; 
                 case 'p': 
                 case 'div': {
-                    if (trimmedInner === '<br>' || trimmedInner === '<br/>' || trimmedInner === '<br />') {
-                        return `\n\n`; 
-                    }
                     let parentTag = node.parentNode ? node.parentNode.tagName.toLowerCase() : '';
                     if (parentTag === 'li') {
-                        return `${trimmedInner}<br>`;
+                        return `${trimmedInner}\n`;
                     }
                     return `\n\n${trimmedInner}\n\n`;
                 }
-                case 'br': 
-                    return `<br>`; 
                 case 'hr':
                     return `\n\n---\n\n`;
                 case 'ul': 
@@ -629,9 +633,66 @@ window.MathJax = {
         else if (type === 'link') handleLinkImport(event);
         else if (type === 'mdSplit') handleMdSplitImport(event);
         else if (type === 'pdf') handlePdfImport(event); 
+        else if (type === 'pathreading') handlePathreadingImport(event);
     }
 
-    // 신규 추가된 'PDF' 파싱 로직 (Base64 JSON 구조 완벽 대응)
+    function handlePathreadingImport(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const fileNameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                let jsonArr = JSON.parse(e.target.result);
+                if (!Array.isArray(jsonArr)) throw new Error("배열 형태의 데이터가 아닙니다.");
+
+                const today = new Date().toISOString().split('T')[0];
+                document.getElementById('issueDate').value = today;
+                document.getElementById('postTitle').value = fileNameWithoutExt;
+                
+                setCategoryAndTag('패스리딩', '패스리딩');
+                
+                document.getElementById('articlesContainer').innerHTML = ''; 
+                articleCount = 0;
+                
+                if (jsonArr.length > 0) {
+                    for (let index = 0; index < jsonArr.length; index++) {
+                        const item = jsonArr[index];
+                        const rawTitle = item.topic || item.title || `패스리딩 주제 ${index + 1}`;
+                        const title = stripHtmlTags(rawTitle);
+                        
+                        let content = '';
+                        let rawContent = await processEmbeddedImages(item.content || item.body || item.desc || '', `PR_${index+1}_C`);
+                        
+                        let contentMd = convertHtmlToMd(rawContent).trim();
+                        if (contentMd) content += `${contentMd}\n\n`;
+                        
+                        const imgData = item._img1Data || item.image || item.imgData || item.img || item.imageUrl;
+                        if (imgData) {
+                            let cleanImg = imgData.replace(/\s+/g, '');
+                            if (cleanImg.startsWith('data:image')) {
+                                content += `![PathReading_image_${index + 1}](${cleanImg})\n\n`;
+                            } else { 
+                                content += `![참고 이미지](${imgData.trim()})\n\n`; 
+                            }
+                        }
+                        addArticle({ title: title, content: content.trim(), visualType: 'none' });
+                    }
+                } else { 
+                    addArticle(); 
+                }
+                showToast("✅ 패스리딩 데이터를 성공적으로 불러왔습니다.");
+                jsonArr = null;
+            } catch (error) { 
+                alert("파일 파싱 중 오류가 발생했습니다. 포맷을 확인해주세요."); 
+            }
+            e.target.result = null;
+            event.target.value = '';
+        };
+        reader.readAsText(file);
+    }
+
     function handlePdfImport(event) {
         const file = event.target.files[0];
         if (!file) return;
@@ -644,7 +705,6 @@ window.MathJax = {
                 let parsedData;
                 let isJson = false;
 
-                // JSON 형식인지 확인
                 try {
                     parsedData = JSON.parse(text);
                     isJson = true;
@@ -656,18 +716,15 @@ window.MathJax = {
                 document.getElementById('issueDate').value = today;
                 document.getElementById('postTitle').value = fileNameWithoutExt;
                 
-                // 카테고리, 태그를 '참조자료'로 고정
                 setCategoryAndTag('참조자료', '참조자료');
                 
                 document.getElementById('articlesContainer').innerHTML = ''; 
                 articleCount = 0;
 
-                // 1. PDF 백업 데이터(JSON)인 경우
                 if (isJson && parsedData.images && Array.isArray(parsedData.images)) {
                     let content = '';
                     parsedData.images.forEach((img, idx) => {
                         if (img.dataUrl) {
-                            // 렌더링 오류 방지를 위해 공백 제거 후 마크다운 이미지 문법으로 삽입
                             const cleanImg = img.dataUrl.replace(/\s+/g, '');
                             const imgName = img.name || `PDF_page_${idx + 1}`;
                             content += `![${imgName}](${cleanImg})\n\n`;
@@ -683,9 +740,7 @@ window.MathJax = {
                     } else {
                         addArticle();
                     }
-                } 
-                // 2. 일반 텍스트 문서인 경우
-                else {
+                } else {
                     let normalText = text.replace(/\r\n|\r/g, '\n');
                     if (normalText.trim().length > 0) {
                         addArticle({ 
@@ -697,10 +752,8 @@ window.MathJax = {
                         addArticle();
                     }
                 }
-                
                 showToast("✅ PDF 항목 데이터를 성공적으로 불러왔습니다.");
             } catch (error) {
-                console.error(error);
                 alert("파일 파싱 중 오류가 발생했습니다. 포맷을 확인해주세요.");
             }
             e.target.result = null; 
@@ -723,25 +776,19 @@ window.MathJax = {
                 document.getElementById('issueDate').value = today;
                 document.getElementById('postTitle').value = fileNameWithoutExt;
                 
-                // 카테고리, 태그는 문제분석으로 고정
                 setCategoryAndTag('문제분석', '문제분석');
                 
                 document.getElementById('articlesContainer').innerHTML = ''; 
                 articleCount = 0;
 
-                // 정규화: OS별 다양한 줄바꿈(CRLF 등)을 \n으로 통일
                 text = text.replace(/\r\n|\r/g, '\n');
-
-                // '## '를 기준으로 마크다운 텍스트 분리
                 const sections = text.split(/(?:^|\n)##\s+/);
                 
-                // 첫 번째 파트는 파일 상단 설명(서론/인사말)으로 적용
                 const introText = sections[0].trim();
                 if(introText) {
                     document.getElementById('introText').value = introText;
                 }
 
-                // 두 번째 파트부터 실제 블록 본문으로 취급
                 const topics = sections.slice(1);
                 
                 if (topics.length > 0) {
@@ -749,15 +796,9 @@ window.MathJax = {
                         const topicText = topics[index];
                         const lines = topicText.split('\n');
                         const title = lines[0].trim();
-                        // 첫 번째 줄은 소제목, 나머지는 본문 내용으로 합침
                         let content = lines.slice(1).join('\n').trim();
                         
-                        // [수정사항] 테이블 태그 깨짐 복원 로직
-                        // 1. 가로로 쭉 붙어버린 테이블 행(||)을 줄바꿈(|\n|)으로 분리하여 마크다운 테이블 구조 복원
                         content = content.replace(/\|\|/g, '|\n|');
-                        
-                        // 2. 테이블 구분선의 다양한 대시(—, –, ─)를 hyphen(-)으로 변환하여 marked.js 및 블로그 파서 인식 오류 방지
-                        // (콜론(:)이 포함된 정렬 기호도 정상적으로 처리하도록 정규식 개선)
                         content = content.replace(/\|(?:\s*:?[—–─]+\s*:?\|)+/g, (match) => match.replace(/[—–─]/g, '-'));
                         
                         addArticle({ 
@@ -767,7 +808,6 @@ window.MathJax = {
                         });
                     }
                 } else {
-                    // 데이터가 하나도 없을 경우 빈 블록 생성
                     addArticle();
                 }
                 showToast("✅ MD 구분 데이터를 성공적으로 불러왔습니다.");
@@ -1528,7 +1568,11 @@ window.MathJax = {
         };
 
         const escapeHtml = (str) => {
-            if (!str) return ''; let formatted = convertArrows(str); return formatted.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            if (!str) return ''; 
+            let formatted = convertArrows(str); 
+            let escaped = formatted.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            escaped = escaped.replace(/&lt;(\/?(?:b|strong))&gt;/gi, '<$1>');
+            return escaped;
         };
         
         const protectMath = (str) => {
@@ -1568,13 +1612,16 @@ window.MathJax = {
         
         let articlesMd = [];
         
-        const jsonCategories = ["키노트", "두음마스터", "5R", "Drill", "Chat", "ISMS-P", "Link", "technote", "문제분석", "참조자료"]; // 참조자료 기본 포함
+        const jsonCategories = ["키노트", "두음마스터", "5R", "Drill", "Chat", "ISMS-P", "Link", "technote", "문제분석", "참조자료", "패스리딩"]; 
         const isJsonImportCategory = jsonCategories.includes(data.category);
 
         data.articles.forEach((art, index) => {
             let artMd = "";
             
-            if (art.title) artMd += `### ${escapeHtml(art.title)}\n\n`;
+            if (art.title) {
+                let fixedTitle = art.title.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/\*\*/g, '');
+                artMd += `### ${escapeHtml(fixedTitle)}\n\n`;
+            }
             
             if (art.content) {
                 let processedContent = art.content;
@@ -1621,16 +1668,11 @@ window.MathJax = {
                 let plines = processedContent.split('\n');
                 for (let j = 0; j < plines.length; j++) {
                     let line = plines[j];
-                    
                     line = line.replace(/\*\*(.*?)\*\*/g, (match, inner) => {
                         if (inner.trim() === '') return '';
-                        return '@@B_START@@' + inner.trim() + '@@B_END@@';
+                        return '<b>' + inner.trim() + '</b>';
                     });
-                    
                     line = line.replace(/\*\*/g, '');
-                    
-                    line = line.replace(/@@B_START@@/g, '**').replace(/@@B_END@@/g, '**');
-                    
                     plines[j] = line;
                 }
                 processedContent = plines.join('\n');
@@ -1641,17 +1683,9 @@ window.MathJax = {
                 
                 const tagsStr = "리드|개념|상세설명 및 해결방안|상세설명|정의\\/개념|정의|핵심\\/키워드|두음\\/키워드|분류|인증기준|주요 확인사항|결함사례|참조\\/Notes";
                 
-                const tagRegexA = new RegExp(`\\*\\*[ \\t]*\\[(${tagsStr})\\][ \\t]*\\*\\*`, 'g');
-                processedContent = processedContent.replace(tagRegexA, '[$1]');
-                
-                const tagRegexB1 = new RegExp(`\\*\\*[ \\t]*\\[(${tagsStr})\\]`, 'g');
-                processedContent = processedContent.replace(tagRegexB1, '[$1]');
-                
-                const tagRegexB2 = new RegExp(`\\[(${tagsStr})\\][ \\t]*\\*\\*`, 'g');
-                processedContent = processedContent.replace(tagRegexB2, '[$1]');
-                
-                const tagRegexC = new RegExp(`\\[(${tagsStr})\\]`, 'g');
-                processedContent = processedContent.replace(tagRegexC, '\n\n**[$1]**\n\n');
+                // 기존 4단계 정규식을 하나로 통합 및 <b>, <strong> 태그 호환 처리 (사이드 이펙트 수정)
+                const tagRegex = new RegExp(`(?:<\\/?(?:b|strong)>|\\*\\*|[ \\t])*\\[(${tagsStr})\\](?:<\\/?(?:b|strong)>|\\*\\*|[ \\t])*`, 'gi');
+                processedContent = processedContent.replace(tagRegex, '\n\n**[$1]**\n\n');
                 
                 processedContent = processedContent.replace(/\n{3,}/g, '\n\n');
 

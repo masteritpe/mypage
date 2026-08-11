@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>정규화 시뮬레이션 (1NF ~ 3NF)</title>
+    <!-- Pretendard 웹 폰트 추가 -->
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+    <style>
+        body {
+            font-family: 'Pretendard', sans-serif;
+            background-color: #ffffff;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+        }
+        .header-section {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .header-box {
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            padding: 20px;
+            border: 1px solid #ddd;
+        }
+        h2, h3 {
+            margin-top: 0;
+            font-size: 1.2em;
+            color: #111;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+        .concept-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9em;
+            margin-top: 10px;
+        }
+        .concept-table th, .concept-table td {
+            border: 1px solid #aaa;
+            padding: 8px;
+            text-align: left;
+        }
+        .concept-table th {
+            background-color: #f4f4f0;
+            text-align: center;
+        }
+
+        /* 시뮬레이터 섹션 */
+        .sim-container {
+            background-color: #eaf1f6;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .sim-title {
+            text-align: center;
+            font-size: 1.5em;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #222;
+        }
+        .sim-grid {
+            display: flex;
+            gap: 20px;
+        }
+        .sim-col-left {
+            flex: 2;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .sim-col-right {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .card {
+            background: #fff;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            border: 1px solid #d1d5db;
+        }
+        .card-title {
+            font-weight: bold;
+            font-size: 1.1em;
+            margin-bottom: 10px;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 5px;
+        }
+        
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        button {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            color: #fff;
+            font-family: 'Pretendard', sans-serif;
+            flex: 1;
+        }
+        .btn-init { background-color: #4b7b8d; }
+        .btn-next { background-color: #447a9c; }
+        button:disabled { background-color: #999; cursor: not-allowed; }
+        
+        .trace-box {
+            border: 1px solid #aaa;
+            border-radius: 4px;
+            padding: 10px;
+            background: #fff;
+            font-size: 0.95em;
+            line-height: 1.6;
+        }
+        .trace-line {
+            padding: 6px 8px;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+            margin-bottom: 4px;
+        }
+        
+        .summary-box {
+            background-color: #fff3cd;
+            padding: 15px;
+            border-radius: 4px;
+            border: 1px solid #ffeeba;
+            font-size: 0.95em;
+            min-height: 80px;
+            line-height: 1.5;
+        }
+
+        /* 테이블 UI */
+        .db-tables-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-top: 10px;
+            justify-content: center;
+        }
+        .db-table-wrapper {
+            background: #fff;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .db-table-title {
+            background: #447a9c;
+            color: white;
+            text-align: center;
+            padding: 8px;
+            font-weight: bold;
+            font-size: 0.85em;
+        }
+        .db-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.75em;
+        }
+        .db-table th, .db-table td {
+            border: 1px solid #eee;
+            padding: 5px 8px;
+            text-align: center;
+        }
+        .db-table th {
+            background-color: #f4f4f0;
+            color: #333;
+        }
+        .pk-col {
+            background-color: #ffe8a1 !important;
+            font-weight: bold;
+        }
+        .fk-col {
+            background-color: #e2f0d9 !important;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header Section (개념 설명) -->
+    <div class="header-section">
+        <div class="header-box">
+            <h3>이상현상(Anomaly) 3가지와 발생 이유</h3>
+            <table class="concept-table">
+                <thead>
+                    <tr>
+                        <th width="15%">이상현상</th>
+                        <th width="20%">핵심</th>
+                        <th>개념</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td align="center"><strong>갱신 이상</strong></td>
+                        <td align="center">중복 저장</td>
+                        <td>릴레이션에서 특정 속성값 갱신 시 <strong>중복 저장되어 있는 속성값 중 하나만 갱신</strong>하고, 나머지는 갱신하지 않아서 발생하는 데이터 불일치 현상</td>
+                    </tr>
+                    <tr>
+                        <td align="center"><strong>삭제 이상</strong></td>
+                        <td align="center">종속성에 의한 삭제</td>
+                        <td>릴레이션에서 특정 튜플을 삭제할 경우 <strong>원하지 않는 정보까지도 함께 삭제</strong>되는 현상</td>
+                    </tr>
+                    <tr>
+                        <td align="center"><strong>삽입 이상</strong></td>
+                        <td align="center">정규화 미흡</td>
+                        <td>릴레이션에 특정 튜플을 삽입할 경우 <strong>원하지 않는 불필요한 정보까지도 강제로 삽입</strong>해야 하는 현상</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Simulator Section -->
+    <div class="sim-container">
+        <div class="sim-title">정규화 분해 시뮬레이터 (1NF ~ 3NF)</div>
+        
+        <div class="sim-grid">
+            <!-- Left Column: 테이블 시각화 -->
+            <div class="sim-col-left">
+                <div class="card" style="min-height: 400px;">
+                    <div class="card-title" id="stage_title">초기 상태 (비정규형)</div>
+                    
+                    <!-- Stage 0 -->
+                    <div id="stage_0" class="db-tables-container">
+                        <div class="db-table-wrapper" style="width: 100%;">
+                            <div class="db-table-title">주문목록 (초기 테이블)</div>
+                            <table class="db-table">
+                                <thead>
+                                    <tr>
+                                        <th>제품번호</th><th>제품명</th><th>재고수량</th><th>주문번호</th>
+                                        <th>수출여부</th><th>고객번호</th><th>사업자번호</th><th>우선순위</th><th>주문수량</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td>1001</td><td>모니터</td><td>1990</td><td>AB345</td><td>X</td><td>4520</td><td>398201</td><td>1</td><td>150</td></tr>
+                                    <tr><td>1001</td><td>모니터</td><td>1990</td><td>AB347</td><td>Y</td><td>2341</td><td>--</td><td>3</td><td>600</td></tr>
+                                    <tr><td>1007</td><td>마우스</td><td>9702</td><td>CA210</td><td>X</td><td>3280</td><td>200212</td><td>8</td><td>1200</td></tr>
+                                    <tr><td>1007</td><td>마우스</td><td>9702</td><td>AB345</td><td>X</td><td>4520</td><td>398201</td><td>1</td><td>300</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Stage 1 -->
+                    <div id="stage_1" class="db-tables-container" style="display: none;">
+                        <div class="db-table-wrapper">
+                            <div class="db-table-title">제품 테이블</div>
+                            <table class="db-table">
+                                <thead><tr><th class="pk-col">제품번호 (PK)</th><th>제품명</th><th>재고수량</th></tr></thead>
+                                <tbody>
+                                    <tr><td class="pk-col">1001</td><td>모니터</td><td>1990</td></tr>
+                                    <tr><td class="pk-col">1007</td><td>마우스</td><td>9702</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="db-table-wrapper">
+                            <div class="db-table-title">주문목록 테이블</div>
+                            <table class="db-table">
+                                <thead>
+                                    <tr>
+                                        <th class="pk-col">제품번호 (PK,FK)</th><th class="pk-col">주문번호 (PK)</th>
+                                        <th>수출여부</th><th>고객번호</th><th>사업자번호</th><th>우선순위</th><th>주문수량</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td class="pk-col">1001</td><td class="pk-col">AB345</td><td>X</td><td>4520</td><td>398201</td><td>1</td><td>150</td></tr>
+                                    <tr><td class="pk-col">1001</td><td class="pk-col">AB347</td><td>Y</td><td>2341</td><td>--</td><td>3</td><td>600</td></tr>
+                                    <tr><td class="pk-col">1007</td><td class="pk-col">CA210</td><td>X</td><td>3280</td><td>200212</td><td>8</td><td>1200</td></tr>
+                                    <tr><td class="pk-col">1007</td><td class="pk-col">AB345</td><td>X</td><td>4520</td><td>398201</td><td>1</td><td>300</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Stage 2 -->
+                    <div id="stage_2" class="db-tables-container" style="display: none;">
+                        <div class="db-table-wrapper">
+                            <div class="db-table-title">제품</div>
+                            <table class="db-table">
+                                <thead><tr><th class="pk-col">제품번호</th><th>제품명</th><th>재고수량</th></tr></thead>
+                                <tbody>
+                                    <tr><td class="pk-col">1001</td><td>모니터</td><td>1990</td></tr>
+                                    <tr><td class="pk-col">1007</td><td>마우스</td><td>9702</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="db-table-wrapper">
+                            <div class="db-table-title">제품주문 (주문목록)</div>
+                            <table class="db-table">
+                                <thead><tr><th class="pk-col">제품번호</th><th class="pk-col">주문번호</th><th>주문수량</th></tr></thead>
+                                <tbody>
+                                    <tr><td class="pk-col">1001</td><td class="pk-col">AB345</td><td>150</td></tr>
+                                    <tr><td class="pk-col">1001</td><td class="pk-col">AB347</td><td>600</td></tr>
+                                    <tr><td class="pk-col">1007</td><td class="pk-col">CA210</td><td>1200</td></tr>
+                                    <tr><td class="pk-col">1007</td><td class="pk-col">AB345</td><td>300</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="db-table-wrapper">
+                            <div class="db-table-title">주문</div>
+                            <table class="db-table">
+                                <thead><tr><th class="pk-col">주문번호</th><th>수출여부</th><th>고객번호</th><th>사업자번호</th><th>우선순위</th></tr></thead>
+                                <tbody>
+                                    <tr><td class="pk-col">AB345</td><td>X</td><td>4520</td><td>398201</td><td>1</td></tr>
+                                    <tr><td class="pk-col">AB347</td><td>Y</td><td>2341</td><td>--</td><td>3</td></tr>
+                                    <tr><td class="pk-col">CA210</td><td>X</td><td>3280</td><td>200212</td><td>8</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Stage 3 -->
+                    <div id="stage_3" class="db-tables-container" style="display: none;">
+                        <div class="db-table-wrapper">
+                            <div class="db-table-title">제품</div>
+                            <table class="db-table">
+                                <thead><tr><th class="pk-col">제품번호</th><th>제품명</th><th>재고수량</th></tr></thead>
+                                <tbody>
+                                    <tr><td class="pk-col">1001</td><td>모니터</td><td>1990</td></tr>
+                                    <tr><td class="pk-col">1007</td><td>마우스</td><td>9702</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="db-table-wrapper">
+                            <div class="db-table-title">제품주문</div>
+                            <table class="db-table">
+                                <thead><tr><th class="pk-col">제품번호</th><th class="pk-col">주문번호</th><th>주문수량</th></tr></thead>
+                                <tbody>
+                                    <tr><td class="pk-col">1001</td><td class="pk-col">AB345</td><td>150</td></tr>
+                                    <tr><td class="pk-col">1001</td><td class="pk-col">AB347</td><td>600</td></tr>
+                                    <tr><td class="pk-col">1007</td><td class="pk-col">CA210</td><td>1200</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="db-table-wrapper">
+                            <div class="db-table-title">주문</div>
+                            <table class="db-table">
+                                <thead><tr><th class="pk-col">주문번호</th><th class="fk-col">고객번호 (FK)</th></tr></thead>
+                                <tbody>
+                                    <tr><td class="pk-col">AB345</td><td class="fk-col">4520</td></tr>
+                                    <tr><td class="pk-col">AB347</td><td class="fk-col">2341</td></tr>
+                                    <tr><td class="pk-col">CA210</td><td class="fk-col">3280</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="db-table-wrapper">
+                            <div class="db-table-title">고객</div>
+                            <table class="db-table">
+                                <thead><tr><th class="pk-col">고객번호</th><th>수출여부</th><th>사업자번호</th><th>우선순위</th></tr></thead>
+                                <tbody>
+                                    <tr><td class="pk-col">4520</td><td>X</td><td>398201</td><td>1</td></tr>
+                                    <tr><td class="pk-col">2341</td><td>Y</td><td>--</td><td>3</td></tr>
+                                    <tr><td class="pk-col">3280</td><td>X</td><td>200212</td><td>8</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+            
+            <!-- Right Column: 알고리즘 추적 -->
+            <div class="sim-col-right">
+                <div class="card">
+                    <div class="card-title">진행 단계</div>
+                    <div class="trace-box">
+                        <div class="trace-line" id="step0">0. 비정규형 (초기 상태)</div>
+                        <div class="trace-line" id="step1">1. 제1정규화 (반복/중복 속성 분리)</div>
+                        <div class="trace-line" id="step2">2. 제2정규화 (부분 함수 종속성 제거)</div>
+                        <div class="trace-line" id="step3">3. 제3정규화 (이행적 종속성 제거)</div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn-init" onclick="initSim()">초기화</button>
+                        <button class="btn-next" id="next_btn" onclick="nextStep()">다음 단계</button>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-title">상세 설명</div>
+                    <div class="summary-box" id="step_summary"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentState = 0;
+
+        function highlightStep(stepNum) {
+            for(let i=0; i<=3; i++) {
+                document.getElementById('step'+i).style.backgroundColor = 'transparent';
+                document.getElementById('step'+i).style.fontWeight = 'normal';
+            }
+            document.getElementById('step'+stepNum).style.backgroundColor = '#a0f0a0';
+            document.getElementById('step'+stepNum).style.fontWeight = 'bold';
+        }
+
+        function showStage(stageNum) {
+            document.getElementById('stage_0').style.display = 'none';
+            document.getElementById('stage_1').style.display = 'none';
+            document.getElementById('stage_2').style.display = 'none';
+            document.getElementById('stage_3').style.display = 'none';
+            
+            document.getElementById('stage_' + stageNum).style.display = 'flex';
+            
+            let titles = ["초기 상태 (비정규형)", "1차 정규화 완료", "2차 정규화 완료", "3차 정규화 완료"];
+            document.getElementById('stage_title').innerText = titles[stageNum];
+        }
+
+        function initSim() {
+            currentState = 0;
+            highlightStep(0);
+            showStage(0);
+            
+            document.getElementById('step_summary').innerHTML = 
+                "<strong>[비정규형 초기 테이블]</strong><br>모든 데이터가 하나의 테이블에 혼재되어 있습니다.<br>제품정보(제품명, 재고수량)가 주문 건수만큼 <strong>중복으로 존재</strong>하여 원지성을 위배합니다.";
+            
+            document.getElementById('next_btn').disabled = false;
+            document.getElementById('next_btn').innerText = "다음 단계";
+        }
+
+        function nextStep() {
+            if (currentState === 0) {
+                currentState = 1;
+                highlightStep(1);
+                showStage(1);
+                document.getElementById('step_summary').innerHTML = 
+                    "<strong>[1차 정규화]</strong><br>중복 발생 속성인 <strong>제품</strong> 정보를 분리하여 별도 테이블로 구성했습니다.<br><br>하지만 여전히 (제품번호, 주문번호) 복합키에 대해, 주문번호에만 종속되는 속성들(고객번호, 수출여부 등)이 존재하여 <strong>부분 함수 종속</strong> 문제가 남아있습니다.";
+            } else if (currentState === 1) {
+                currentState = 2;
+                highlightStep(2);
+                showStage(2);
+                document.getElementById('step_summary').innerHTML = 
+                    "<strong>[2차 정규화]</strong><br>주식별자(복합키)에 종속적인 속성을 분리했습니다. '주문번호'에 종속적인 속성들을 분리하여 <strong>주문</strong> 테이블을 생성했습니다.<br><br>그러나 한 고객이 여러 번 주문할 경우 <strong>고객 정보가 반복적으로 발생</strong>합니다. (주문번호 &rarr; 고객번호 &rarr; 수출여부/사업자번호)";
+            } else if (currentState === 2) {
+                currentState = 3;
+                highlightStep(3);
+                showStage(3);
+                document.getElementById('step_summary').innerHTML = 
+                    "<strong>[3차 정규화]</strong><br>일반 속성 간의 종속 관계(이행적 함수 종속)를 제거했습니다.<br>결정자인 <strong>고객번호</strong>를 기준으로 종속적인 관계(수출여부, 사업자번호, 우선순위)를 분리해 <strong>고객</strong> 테이블을 신설했습니다.<br><br>이로써 3차 정규화가 완료되었습니다.";
+                
+                document.getElementById('next_btn').disabled = true;
+                document.getElementById('next_btn').innerText = "완료";
+            }
+        }
+
+        window.onload = function() {
+            initSim();
+        };
+    </script>
+</body>
+</html>

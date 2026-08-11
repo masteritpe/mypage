@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PassReading</title>
+    
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <style>
+        /* === 웹 폰트 적용 (전자책 전용/본문 가독성 최적화 폰트) === */
+        @font-face {
+            font-family: 'KoPubWorldDotum';
+            font-weight: 400;
+            font-style: normal;
+            src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_2201-2@1.0/KoPubWorldDotumMedium.woff') format('woff');
+        }
+        @font-face {
+            font-family: 'KoPubWorldDotum';
+            font-weight: 800;
+            font-style: normal;
+            src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_2201-2@1.0/KoPubWorldDotumBold.woff') format('woff');
+        }
+
+        /* === 1. Design System Variables === */
+        :root {
+            --bg-body: #F9FAFB;
+            --bg-surface: #FFFFFF;
+            --bg-reading: #FDFBF7;
+            --border-light: #F3F4F6;
+            --border-base: #E5E7EB;
+            
+            --text-main: #111827;
+            --text-reading-muted: #374151;
+            --text-muted: #6B7280;
+            --text-muted-hover: #4B5563;
+            
+            --primary: #111827;       
+            --primary-hover: #374151;
+            --accent: #2563EB;
+            --accent-hover: #1D4ED8;
+            --secondary: #FFFFFF;
+            --secondary-hover: #F9FAFB;
+            --success: #10b981;
+            
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+            --radius-sm: 6px;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+            
+            --font-ui: 'Pretendard', system-ui, -apple-system, sans-serif;
+            --font-reading: 'KoPubWorldDotum', 'Pretendard', sans-serif;
+        }
+
+        * { box-sizing: border-box; outline: none; margin: 0; padding: 0; transition: border-color 0.2s, background-color 0.2s, color 0.2s, box-shadow 0.2s; }
+        
+        body {
+            background: var(--bg-body); color: var(--text-main);
+            font-family: var(--font-ui); font-size: 14px;
+            height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* === 2. Header === */
+        header { 
+            background: var(--bg-surface); border-bottom: 1px solid var(--border-base); 
+            padding: 0 32px; z-index: 50; 
+            display: flex; justify-content: space-between; align-items: center; 
+            height: 72px; flex-shrink: 0; box-shadow: var(--shadow-sm);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .logo { 
+            font-weight: 800; font-size: 20px; color: var(--primary); 
+            display: flex; align-items: center; gap: 10px; letter-spacing: -0.02em; 
+        }
+        .logo i { color: var(--accent); font-size: 28px; }
+        
+        .header-actions { display: flex; gap: 8px; align-items: center; }
+        .divider { width: 1px; height: 24px; background: var(--border-base); margin: 0 12px; }
+
+        /* === 3. Buttons === */
+        .btn { 
+            padding: 10px 16px; border-radius: var(--radius-md); font-weight: 600; cursor: pointer; border: none; 
+            display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 14px; font-family: inherit;
+        }
+        .btn i { font-size: 18px; }
+        
+        .btn-primary { background: var(--primary); color: white; box-shadow: var(--shadow-sm); }
+        .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
+        
+        .btn-secondary { background: var(--secondary); border: 1px solid var(--border-base); color: var(--text-main); box-shadow: var(--shadow-sm); }
+        .btn-secondary:hover { background: var(--secondary-hover); border-color: #D1D5DB; }
+
+        .btn-muted { background: var(--text-muted); color: white; box-shadow: var(--shadow-sm); }
+        .btn-muted:hover { background: var(--text-muted-hover); transform: translateY(-1px); }
+
+        /* === 4. Main Layout & Sidebar === */
+        .layout-container { display: flex; flex: 1; overflow: hidden; }
+        
+        aside {
+            width: 400px; background: var(--bg-surface); border-right: 1px solid var(--border-base);
+            display: flex; flex-direction: column; flex-shrink: 0;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .sidebar-section { padding: 24px; border-bottom: 1px solid var(--border-base); display: flex; flex-direction: column; gap: 16px; }
+        .sidebar-section.grow { flex: 1; border-bottom: none; overflow: hidden; }
+        
+        .sidebar-title { font-size: 16px; font-weight: 800; color: var(--text-main); display: flex; align-items: center; gap: 6px; }
+        .sidebar-title i { color: var(--accent); font-size: 20px; }
+
+        /* DB Tabs & List */
+        .db-tabs { display: flex; gap: 8px; }
+        .db-tab { 
+            flex: 1; padding: 8px 0; text-align: center; border: 1px solid var(--border-base); 
+            border-radius: var(--radius-md); background: var(--bg-surface); cursor: pointer; 
+            font-size: 15px; font-weight: 600; color: var(--text-muted); transition: all 0.2s; 
+        }
+        .db-tab:hover { border-color: var(--primary); color: var(--primary); }
+        .db-tab.active { background: var(--primary); color: white; border-color: var(--primary); }
+        
+        .search-box {
+            width: 100%; padding: 10px 12px; border-radius: var(--radius-md); border: 1px solid var(--border-base);
+            font-size: 15px; outline: none; background: var(--bg-body);
+        }
+        .search-box:focus { border-color: var(--primary); }
+
+        .topic-list { 
+            flex: 1; overflow-y: auto; display: flex; flex-direction: column; 
+            border: 1px solid var(--border-base); border-radius: var(--radius-md); background: var(--bg-surface); 
+            scroll-behavior: smooth;
+        }
+        .topic-item { padding: 12px 16px; border-bottom: 1px solid var(--border-light); cursor: pointer; transition: background 0.2s; }
+        .topic-item:last-child { border-bottom: none; }
+        .topic-item:hover, .topic-item.active { background: #EFF6FF; }
+        .topic-title { font-weight: 700; font-size: 16px; margin-bottom: 4px; color: var(--primary); }
+        .topic-preview { font-size: 14px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        /* === 5. Workspace (Reading Area) === */
+        main { 
+            flex: 1; background: var(--bg-body); padding: 32px; overflow-y: auto; 
+            display: flex; justify-content: center; align-items: flex-start; 
+            transition: padding 0.3s ease; 
+        }
+        
+        .reading-card {
+            width: 100%; max-width: 900px; background: var(--bg-reading); border-radius: var(--radius-lg); 
+            border: 1px solid #E5E0D8; 
+            box-shadow: var(--shadow-md); padding: 48px; min-height: calc(100vh - 140px);
+            transition: min-height 0.3s ease;
+        }
+
+        #output {
+            font-family: var(--font-reading);
+            color: var(--text-reading-muted);
+            word-break: keep-all; 
+            white-space: pre-wrap; 
+            transition: font-size 0.2s, line-height 0.2s;
+            letter-spacing: 0.02em; 
+            word-spacing: 0.08em; 
+        }
+
+        #output h2 { font-size: 1.4em; color: var(--primary); margin-bottom: 1em; border-bottom: 2px solid #E5E0D8; padding-bottom: 8px; }
+
+        #output b {
+            font-family: var(--font-reading);
+            font-weight: 800;
+            color: #000000; 
+        }
+
+        .empty-state {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            height: 100%; min-height: 400px; color: var(--text-muted); gap: 16px; opacity: 0.6;
+            font-family: var(--font-ui);
+        }
+        .empty-state i { font-size: 64px; }
+        .empty-state p { font-size: 16px; font-weight: 600; }
+        .shortcut-hint { font-size: 13px; color: var(--text-muted); margin-top: 8px; background: var(--bg-body); padding: 4px 12px; border-radius: 999px; display: flex; flex-direction: column; align-items: center; gap: 4px;}
+
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
+
+        /* === 6. Immersive Mode === */
+        body.immersive-mode header { margin-top: -72px; opacity: 0; pointer-events: none; }
+        body.immersive-mode aside { margin-left: -400px; opacity: 0; pointer-events: none; }
+        body.immersive-mode main { padding: 40px; }
+        body.immersive-mode .reading-card { min-height: calc(100vh - 80px); }
+
+        /* === Settings Modal === */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(17, 24, 39, 0.4); backdrop-filter: blur(4px);
+            display: flex; justify-content: center; align-items: center;
+            z-index: 1000; opacity: 0; pointer-events: none; transition: opacity 0.2s;
+        }
+        .modal-overlay.active { opacity: 1; pointer-events: auto; }
+        .modal-content {
+            background: var(--bg-surface); width: 400px; max-width: 90%;
+            border-radius: var(--radius-lg); box-shadow: var(--shadow-md);
+            padding: 24px; transform: translateY(20px); transition: transform 0.2s;
+        }
+        .modal-overlay.active .modal-content { transform: translateY(0); }
+        
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+        .close-btn { 
+            background: none; border: none; font-size: 20px; color: var(--text-muted); 
+            cursor: pointer; padding: 4px; border-radius: 4px; transition: background 0.2s, color 0.2s; 
+        }
+        .close-btn:hover { background: var(--bg-body); color: var(--text-main); }
+
+        /* Sliders (Inside Modal) */
+        .range-group { display: flex; flex-direction: column; gap: 10px; }
+        .range-header { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 600; color: var(--text-muted); }
+        .range-val { color: var(--accent); font-weight: 700; background: #EFF6FF; padding: 2px 8px; border-radius: 999px; font-size: 12px; }
+        
+        input[type="range"] {
+            -webkit-appearance: none; width: 100%; height: 6px; background: var(--border-base); border-radius: 999px; outline: none; cursor: pointer;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; width: 18px; height: 18px; border-radius: 50%;
+            background: var(--accent); cursor: pointer; border: 2px solid white; box-shadow: var(--shadow-sm); transition: transform 0.1s;
+        }
+        input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.15); }
+
+        /* === Toast === */
+        #toast-container { position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%); z-index: 6000; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+        .toast {
+            background: #1F2937; color: white; padding: 12px 24px; border-radius: 999px; font-size: 14px; font-weight: 600;
+            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3); animation: slideUp 0.3s ease; display: flex; align-items: center; gap: 10px;
+            font-family: var(--font-ui);
+        }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="logo"><i class="ph ph-book-open-text"></i> PassReading</div>
+    <div class="header-actions">
+        <button class="btn btn-secondary" onclick="openSettings()"><i class="ph ph-gear"></i> 설정</button>
+        <button class="btn btn-secondary" onclick="clearText()"><i class="ph ph-eraser"></i> 초기화</button>
+        <div class="divider"></div>
+        <button class="btn btn-primary" id="autoNextToggleBtn" onclick="toggleAutoNext()"><i class="ph ph-play"></i> 자동 넘김 켜기</button>
+    </div>
+</header>
+
+<div class="layout-container">
+    <aside>
+        <div class="sidebar-section grow">
+            <!-- 변경된 부분: 토픽 선택 타이틀과 JSON 백업 버튼 가로 배치 -->
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div class="sidebar-title"><i class="ph ph-database"></i> 토픽 선택</div>
+                <button class="btn btn-secondary" style="padding: 6px 10px; font-size: 12px;" onclick="exportJSON()">
+                    <i class="ph ph-download-simple"></i> JSON 백업
+                </button>
+            </div>
+            
+            <div class="db-tabs">
+                <div class="db-tab active" data-db="5R" onclick="setDB('5R')">5R</div>
+                <div class="db-tab" data-db="Keynote" onclick="setDB('Keynote')">Keynote</div>
+                <div class="db-tab" data-db="Drill" onclick="setDB('Drill')">Drill</div>
+            </div>
+            <input type="text" id="searchInput" class="search-box" placeholder="토픽명 또는 내용 검색..." onkeyup="filterTopics()">
+            <div id="topicList" class="topic-list">
+                <div style="padding: 20px; text-align: center; color: var(--text-muted); font-size: 14px;">데이터를 불러오는 중...</div>
+            </div>
+        </div>
+    </aside>
+
+    <main>
+        <div class="reading-card">
+            <div id="output">
+                <div class="empty-state">
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- Settings Modal -->
+<div id="settingsModal" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-header">
+            <div class="sidebar-title"><i class="ph ph-sliders-horizontal"></i> 뷰어 설정</div>
+            <button class="close-btn" onclick="closeSettings()"><i class="ph ph-x"></i></button>
+        </div>
+        <div class="modal-body">
+            <div class="range-group">
+                <div class="range-header">
+                    <label>글자 크기 (Font Size)</label>
+                    <span class="range-val" id="fontSizeVal">18px</span>
+                </div>
+                <input type="range" id="fontSize" min="14" max="40" value="18">
+            </div>
+            <div class="range-group" style="margin-top: 24px;">
+                <div class="range-header">
+                    <label>줄 간격 (Line Height)</label>
+                    <span class="range-val" id="lineHeightVal">1.8</span>
+                </div>
+                <input type="range" id="lineHeight" min="1.2" max="3.0" step="0.1" value="1.8">
+            </div>
+            <div class="range-group" style="margin-top: 24px;">
+                <div class="range-header">
+                    <label>자동 넘김 (초)</label>
+                    <span class="range-val" id="timerVal">10초</span>
+                </div>
+                <input type="range" id="autoTimer" min="3" max="60" value="10">
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script>
+    // === UI Elements ===
+    const outputDiv = document.getElementById('output');
+    const fontSizeSlider = document.getElementById('fontSize');
+    const lineHeightSlider = document.getElementById('lineHeight');
+    const autoTimerSlider = document.getElementById('autoTimer');
+    const fontSizeVal = document.getElementById('fontSizeVal');
+    const lineHeightVal = document.getElementById('lineHeightVal');
+    const timerVal = document.getElementById('timerVal');
+    const autoNextToggleBtn = document.getElementById('autoNextToggleBtn');
+    
+    // UI State Initialization
+    outputDiv.style.fontSize = fontSizeSlider.value + 'px';
+    outputDiv.style.lineHeight = lineHeightSlider.value;
+
+    fontSizeSlider.addEventListener('input', function() {
+        outputDiv.style.fontSize = this.value + 'px';
+        fontSizeVal.textContent = this.value + 'px';
+    });
+
+    lineHeightSlider.addEventListener('input', function() {
+        outputDiv.style.lineHeight = this.value;
+        lineHeightVal.textContent = this.value;
+    });
+
+    autoTimerSlider.addEventListener('input', function() {
+        timerVal.textContent = this.value + '초';
+        if (isAutoNextOn) {
+            startAutoNextTimer(); // 재생 중일 경우 타이머 재시작
+        }
+    });
+
+    // === Modal Logic ===
+    function openSettings() {
+        document.getElementById('settingsModal').classList.add('active');
+    }
+
+    function closeSettings() {
+        document.getElementById('settingsModal').classList.remove('active');
+    }
+
+    // 모달 배경 클릭 시 닫기
+    document.getElementById('settingsModal').addEventListener('click', function(e) {
+        if (e.target === this) closeSettings();
+    });
+
+    // === Database Variables ===
+    let globalTopics = [];
+    let currentDB = '5R';
+    
+    // === Auto Next Variables ===
+    let currentFilteredTopics = [];
+    let currentTopicIndex = -1;
+    let autoNextInterval = null;
+    let isAutoNextOn = false;
+
+    // === DB Fetch Utilities ===
+    // DOM을 이용한 HTML 엔티티 디코더용 싱글톤 텍스트 에어리어
+    const entityDecoder = document.createElement('textarea');
+
+    function stripHTML(htmlStr) {
+        if (!htmlStr) return '';
+        let s = String(htmlStr);
+        
+        // 1. 블록 태그 및 줄바꿈 태그를 개행 문자로 치환 (줄바꿈 보존)
+        s = s.replace(/<(br|p|div|li|tr|h[1-6])[^>]*>/gi, '\n');
+        
+        // 2. 나머지 모든 HTML 태그 제거
+        s = s.replace(/<[^>]+>/g, ' ');
+        
+        // 3. HTML 엔티티 디코딩 (예: &gt; -> >, &lt; -> <)
+        entityDecoder.innerHTML = s;
+        s = entityDecoder.value;
+        
+        // 4. 공백 정리 (줄바꿈 유실 방지를 위해 \s 대신 [ \t] 활용)
+        s = s.replace(/&nbsp;/gi, ' ');
+        s = s.replace(/[ \t]+/g, ' '); // 탭/연속 공백을 단일 공백으로
+        s = s.replace(/\n[ \t]+/g, '\n'); // 줄바꿈 직후 불필요한 띄어쓰기 제거
+        s = s.replace(/\n{3,}/g, '\n\n'); // 3개 이상의 줄바꿈을 최대 2개로 압축
+        
+        return s.trim();
+    }
+
+    // 렌더링 시 태그가 깨지는 것을 방지하기 위한 이스케이프 함수
+    function escapeHTML(str) {
+        return str.replace(/&/g, '&amp;')
+                  .replace(/</g, '&lt;')
+                  .replace(/>/g, '&gt;')
+                  .replace(/"/g, '&quot;')
+                  .replace(/'/g, '&#039;');
+    }
+
+    function fetchFromIndexedDB(dbName, storeName) {
+        return new Promise((resolve) => {
+            const request = indexedDB.open(dbName, 1);
+            request.onsuccess = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains(storeName)) {
+                    resolve([]);
+                    return;
+                }
+                const transaction = db.transaction([storeName], 'readonly');
+                const store = transaction.objectStore(storeName);
+                const getAllRequest = store.getAll();
+                getAllRequest.onsuccess = () => resolve(getAllRequest.result || []);
+                getAllRequest.onerror = () => resolve([]);
+            };
+            request.onerror = () => resolve([]);
+        });
+    }
+
+    // === Load Data from IndexedDB ===
+    async function loadDatabases() {
+        globalTopics = [];
+
+        try {
+            // 1. Load 5R
+            const items5R = await fetchFromIndexedDB('5RChecklistDB', 'items');
+            items5R.forEach(item => {
+                if(item.topic || item.definition) {
+                    globalTopics.push({
+                        db: '5R',
+                        topic: stripHTML(item.topic) || '(제목 없음)',
+                        content: stripHTML(item.definition)
+                    });
+                }
+            });
+
+            // 2. Load Keynote
+            const notes = await fetchFromIndexedDB('StudyNoteDB', 'notes');
+            notes.forEach(note => {
+                // 키노트 타이틀(최상위 항목) 제외
+                if (note.items && Array.isArray(note.items)) {
+                    note.items.forEach(it => {
+                        if (it.problem || it.concept) {
+                            let lead = stripHTML(it.lead);
+                            let concept = stripHTML(it.concept);
+                            let combinedContent = lead ? `${lead}\n\n${concept}` : concept;
+
+                            globalTopics.push({
+                                db: 'Keynote',
+                                topic: stripHTML(it.problem) || '(제목 없음)',
+                                content: combinedContent.trim()
+                            });
+                        }
+                    });
+                }
+            });
+
+            // 3. Load Drill
+            const questions = await fetchFromIndexedDB('WritingDrillReviewDB', 'questions');
+            questions.forEach(q => {
+                if (q.topic || q.def) {
+                    globalTopics.push({
+                        db: 'Drill',
+                        topic: stripHTML(q.topic) || '(제목 없음)',
+                        content: stripHTML(q.def)
+                    });
+                }
+            });
+
+            renderTopics();
+        } catch (err) {
+            console.error("DB Load Error:", err);
+            document.getElementById('topicList').innerHTML = `<div style="padding: 20px; color: var(--danger); text-align: center; font-size: 14px;">데이터를 불러오는 데 실패했습니다.</div>`;
+        }
+    }
+
+    // === UI Interactions ===
+    function setDB(dbName) {
+        currentDB = dbName;
+        document.querySelectorAll('.db-tab').forEach(tab => {
+            tab.classList.toggle('active', tab.dataset.db === dbName);
+        });
+        document.getElementById('searchInput').value = '';
+        renderTopics();
+        
+        if (isAutoNextOn && currentFilteredTopics.length > 0) {
+            activateTopic(0);
+        }
+    }
+
+    function filterTopics() {
+        renderTopics(document.getElementById('searchInput').value);
+    }
+
+    function renderTopics(keyword = '') {
+        const list = document.getElementById('topicList');
+        list.innerHTML = '';
+        currentTopicIndex = -1;
+        
+        const kw = keyword.toLowerCase().trim();
+        currentFilteredTopics = globalTopics.filter(t => 
+            t.db === currentDB && 
+            (t.topic.toLowerCase().includes(kw) || t.content.toLowerCase().includes(kw))
+        );
+
+        if (currentFilteredTopics.length === 0) {
+            list.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-muted); font-size: 14px;">조건에 맞는 항목이 없습니다.</div>';
+            return;
+        }
+
+        const fragment = document.createDocumentFragment();
+        currentFilteredTopics.forEach((t, index) => {
+            const item = document.createElement('div');
+            item.className = 'topic-item';
+            item.id = `topic-item-${index}`;
+            
+            // 리스트에 보여줄 텍스트 또한 HTML 태그가 적용되지 않도록 안전하게 이스케이프 처리
+            const safeTitle = escapeHTML(t.topic);
+            const safePreview = escapeHTML(t.content.replace(/\n/g, ' ') || '내용 없음');
+
+            item.innerHTML = `
+                <div class="topic-title">${safeTitle}</div>
+                <div class="topic-preview">${safePreview}</div>
+            `;
+            item.onclick = () => {
+                activateTopic(index);
+            };
+            fragment.appendChild(item);
+        });
+        list.appendChild(fragment);
+    }
+
+    function activateTopic(index) {
+        currentTopicIndex = index;
+        
+        document.querySelectorAll('.topic-item').forEach(el => el.classList.remove('active'));
+        const activeItem = document.getElementById(`topic-item-${index}`);
+        if (activeItem) {
+            activeItem.classList.add('active');
+            activeItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        
+        selectTopic(currentFilteredTopics[index]);
+
+        if (isAutoNextOn) {
+            startAutoNextTimer();
+        }
+    }
+
+    // === Bionic Reading Logic ===
+    function selectTopic(topicObj) {
+        const titleText = topicObj.topic;
+        const bodyText = topicObj.content;
+        
+        const processedTitle = applyBionic(titleText);
+        const processedBody = applyBionic(bodyText);
+
+        outputDiv.innerHTML = `<h2>${processedTitle}</h2>${processedBody}`;
+    }
+
+    function applyBionic(text) {
+        if (!text) return '';
+        const lines = text.split('\n');
+        
+        const processedLines = lines.map(line => {
+            const words = line.split(' ');
+            const processedWords = words.map(word => {
+                if (word.length === 0) return '';
+                const highlightLen = word.length === 1 ? 1 : Math.ceil(word.length / 2);
+                
+                // 단어를 먼저 분리한 뒤, 각각 이스케이프 처리를 하여 <특징> 과 같은 문자가 깨지지 않도록 방어
+                let boldPart = word.substring(0, highlightLen);
+                let normalPart = word.substring(highlightLen);
+                
+                boldPart = escapeHTML(boldPart);
+                normalPart = escapeHTML(normalPart);
+                
+                return `<b>${boldPart}</b>${normalPart}`;
+            });
+            return processedWords.join(' ');
+        });
+
+        return processedLines.join('\n');
+    }
+
+    function clearText() {
+        document.querySelectorAll('.topic-item').forEach(el => el.classList.remove('active'));
+        currentTopicIndex = -1;
+        outputDiv.innerHTML = `
+            <div class="empty-state">
+                <i class="ph ph-book-open"></i>
+                <p>좌측에서 읽을 토픽을 선택하면 이곳에 렌더링됩니다.</p>
+                <span class="shortcut-hint">
+                    <span><i class="ph ph-keyboard"></i> 몰입 모드: <b>Ctrl + H</b></span>
+                    <span><i class="ph ph-arrows-left-right"></i> 이전/다음: <b>←</b> / <b>→</b></span>
+                </span>
+            </div>
+        `;
+    }
+
+    // === JSON Export Logic (추가된 기능) ===
+    function exportJSON() {
+        if (!currentFilteredTopics || currentFilteredTopics.length === 0) {
+            showToast("<i class='ph ph-warning'></i> 백업할 데이터가 없습니다.");
+            return;
+        }
+        
+        // [수정사항] 백업 시 바이오닉 리딩(Bionic Reading) 적용하여 변환
+        const bionicExportData = currentFilteredTopics.map(item => {
+            return {
+                db: item.db,
+                topic: applyBionic(item.topic),
+                content: applyBionic(item.content)
+            };
+        });
+        
+        const dataStr = JSON.stringify(bionicExportData, null, 2);
+        const blob = new Blob([dataStr], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = url;
+        
+        // 파일명에 타임스탬프와 현재 DB 이름을 추가
+        const date = new Date();
+        const dateString = date.getFullYear() +
+                           String(date.getMonth() + 1).padStart(2, '0') +
+                           String(date.getDate()).padStart(2, '0') + "_" +
+                           String(date.getHours()).padStart(2, '0') +
+                           String(date.getMinutes()).padStart(2, '0');
+                           
+        a.download = `PassReading_Backup_${currentDB}_${dateString}.json`;
+        
+        document.body.appendChild(a);
+        a.click();
+        
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        showToast("<i class='ph ph-check-circle' style='color:var(--success)'></i> JSON 백업이 완료되었습니다.");
+    }
+
+    // === Auto Next Logic ===
+    function toggleAutoNext() {
+        isAutoNextOn = !isAutoNextOn;
+        if (isAutoNextOn) {
+            autoNextToggleBtn.innerHTML = '<i class="ph ph-pause"></i> 자동 넘김 끄기';
+            autoNextToggleBtn.classList.replace('btn-primary', 'btn-muted');
+            
+            if (currentTopicIndex === -1 && currentFilteredTopics.length > 0) {
+                activateTopic(0);
+            } else {
+                startAutoNextTimer();
+            }
+            showToast("<i class='ph ph-play-circle' style='color:var(--success)'></i> 자동 넘김이 시작되었습니다.");
+        } else {
+            autoNextToggleBtn.innerHTML = '<i class="ph ph-play"></i> 자동 넘김 켜기';
+            autoNextToggleBtn.classList.replace('btn-muted', 'btn-primary');
+            stopAutoNextTimer();
+            showToast("<i class='ph ph-stop-circle'></i> 자동 넘김이 중지되었습니다.");
+        }
+    }
+
+    function startAutoNextTimer() {
+        stopAutoNextTimer();
+        const seconds = parseInt(autoTimerSlider.value, 10);
+        autoNextInterval = setInterval(() => {
+            if (currentFilteredTopics.length === 0) return;
+            let nextIndex = (currentTopicIndex + 1) % currentFilteredTopics.length;
+            activateTopic(nextIndex);
+        }, seconds * 1000);
+    }
+
+    function stopAutoNextTimer() {
+        if (autoNextInterval) {
+            clearInterval(autoNextInterval);
+            autoNextInterval = null;
+        }
+    }
+
+    function showToast(msg) {
+        const box = document.getElementById('toast-container');
+        const el = document.createElement('div');
+        el.className = 'toast'; el.innerHTML = msg;
+        box.appendChild(el);
+        setTimeout(() => {
+            el.style.opacity = '0';
+            el.style.transform = 'translateY(20px)';
+            el.style.transition = 'all 0.3s ease';
+            setTimeout(()=>el.remove(), 300);
+        }, 1000);
+    }
+
+    // === Shortcuts ===
+    document.addEventListener('keydown', function(e) {
+        // 몰입 모드 단축키
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'h') {
+            e.preventDefault(); 
+            document.body.classList.toggle('immersive-mode');
+            
+            if (document.body.classList.contains('immersive-mode')) {
+                showToast("<i class='ph ph-corners-out'></i> 몰입 모드가 켜졌습니다. (종료: Ctrl + H)");
+            } else {
+                showToast("<i class='ph ph-corners-in'></i> 몰입 모드가 꺼졌습니다.");
+            }
+            return;
+        }
+
+        // 입력 요소(검색창, 슬라이더 등)에 포커스가 맞춰져 있을 때는 단축키 무시
+        if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') {
+            return;
+        }
+
+        // 좌/우 방향키 단축키: 이전/다음 토픽 이동
+        if (currentFilteredTopics.length > 0) {
+            if (e.key === 'ArrowRight') {
+                e.preventDefault(); // 스크롤 방지
+                let nextIndex = currentTopicIndex + 1;
+                if (nextIndex < currentFilteredTopics.length) {
+                    activateTopic(nextIndex);
+                } else if (currentTopicIndex === -1) {
+                    activateTopic(0); 
+                }
+            } else if (e.key === 'ArrowLeft') {
+                e.preventDefault(); // 스크롤 방지
+                let prevIndex = currentTopicIndex - 1;
+                if (prevIndex >= 0) {
+                    activateTopic(prevIndex);
+                }
+            }
+        }
+    });
+
+    // 앱 초기 로드
+    window.onload = loadDatabases;
+</script>
+
+</body>
+</html>
