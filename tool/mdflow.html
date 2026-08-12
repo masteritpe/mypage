@@ -120,7 +120,6 @@
         .toastui-editor-contents th p {
             margin-bottom: 4px !important;
         }
-        /* 삭제 또는 주석 처리됨 - .toastui-editor-contents td p:empty { display: none !important; } */
 
         /* 마크다운 출력 영역 */
         textarea#md-output {
@@ -239,7 +238,7 @@
                     <span class="hint" id="download-btn" title="마크다운 파일로 다운로드합니다">다운로드 ⬇️</span>
                 </div>
             </div>
-            <!-- readonly 속성 제거 -->
+            <!-- readonly 속성 제거됨 -->
             <textarea id="md-output" title="마크다운 소스를 직접 수정할 수 있습니다."></textarea>
         </div>
     </main>
@@ -277,6 +276,13 @@
         
         let isUpdating = false; // 양방향 동기화 무한루프 방지용 플래그
 
+        // ★ ToastUI 특유의 불필요한 마크다운 이스케이프(\|, \- 등)를 제거하는 헬퍼 함수
+        function getCleanedMarkdown() {
+            let md = editor.getMarkdown();
+            // 표(Table)나 강조 기호 등이 일반 텍스트로 취급되어 백슬래시가 붙는 현상 복원
+            return md.replace(/\\([|*_\-])/g, '$1');
+        }
+
         const editor = new toastui.Editor({
             el: document.querySelector('#wysiwyg-editor'),
             height: '100%',
@@ -289,25 +295,44 @@
                 change: () => {
                     if (isUpdating) return;
                     isUpdating = true;
-                    mdOutput.value = editor.getMarkdown();
+                    mdOutput.value = getCleanedMarkdown();
                     isUpdating = false;
                 }
             }
         });
 
-        mdOutput.value = editor.getMarkdown();
+        mdOutput.value = getCleanedMarkdown();
 
-        // 마크다운 소스에서 수정 시 WYSIWYG 에디터로 반영 (양방향 동기화)
+        // ★ 마크다운과 WYSIWYG 스크롤 동기화 함수
+        function syncWysiwygScroll() {
+            const proseMirror = document.querySelector('.ProseMirror');
+            if (!proseMirror) return;
+            
+            const maxScrollMd = mdOutput.scrollHeight - mdOutput.clientHeight;
+            if (maxScrollMd <= 0) return;
+            
+            const scrollRatio = mdOutput.scrollTop / maxScrollMd;
+            const maxScrollWw = proseMirror.scrollHeight - proseMirror.clientHeight;
+            
+            proseMirror.scrollTop = maxScrollWw * scrollRatio;
+        }
+
+        // ★ 마크다운 소스 수정 시 WYSIWYG 에디터 반영 및 스크롤 추적
         mdOutput.addEventListener('input', (e) => {
             if (isUpdating) return;
             isUpdating = true;
-            editor.setMarkdown(e.target.value);
+            
+            editor.setMarkdown(e.target.value, false);
+            setTimeout(syncWysiwygScroll, 10);
+            
             isUpdating = false;
         });
 
-        // --- ★ 붙여넣기(Paste) 인터셉터 최종 수정 ---
+        mdOutput.addEventListener('scroll', syncWysiwygScroll);
+
+        // --- ★ 붙여넣기(Paste) 인터셉터 ---
         document.getElementById('wysiwyg-editor').addEventListener('paste', function(e) {
-            if (e.isCustomPaste) return; // 무한 루프 방지
+            if (e.isCustomPaste) return;
             
             const html = e.clipboardData.getData('text/html');
             const text = e.clipboardData.getData('text/plain');
@@ -316,17 +341,11 @@
                 e.preventDefault();
                 
                 let cleanedHtml = html;
-                // 1. 빈 단락 완벽 제거
                 cleanedHtml = cleanedHtml.replace(/<p>\s*<br\s*\/?>\s*<\/p>/gi, '');
                 cleanedHtml = cleanedHtml.replace(/<p>\s*&nbsp;\s*<\/p>/gi, '');
-                
-                // 2. <br> 태그를 '띄어쓰기(공백)'로 치환하여 단어가 달라붙는 현상 방지
                 cleanedHtml = cleanedHtml.replace(/<br\s*\/?>/gi, ' ');
-                
-                // 3. HTML 소스 안에 강제 입력된 **강조** 문구를 HTML <strong> 태그로 변환
                 cleanedHtml = cleanedHtml.replace(/\*\*([\s\S]*?)\*\*/g, '<strong>$1</strong>');
                 
-                // 새로운 클립보드 이벤트 생성 후 전달
                 const dataTransfer = new DataTransfer();
                 dataTransfer.setData('text/html', cleanedHtml);
                 dataTransfer.setData('text/plain', text);
@@ -341,44 +360,50 @@
             }
         }, true);
 
-        // --- ★ 수동 여백 정리 버튼 기능 수정 ---
+        // --- ★ 수동 여백 정리 버튼 ---
         const cleanBtn = document.getElementById('clean-btn');
         cleanBtn.addEventListener('click', () => {
-            let md = editor.getMarkdown();
-            
-            // 1. 마크다운 내부에 남아있는 <br> 태그를 '띄어쓰기'로 치환
+            // 1. 현재 스크롤 위치 저장
+            const proseMirror = document.querySelector('.ProseMirror');
+            const wwScrollTop = proseMirror ? proseMirror.scrollTop : 0;
+            const mdScrollTop = mdOutput.scrollTop;
+
+            let md = getCleanedMarkdown();
             md = md.replace(/<br\s*\/?>/gi, ' ');
-            
-            // 2. 문서 전체에 걸쳐 3줄 이상의 빈 엔터를 2줄로 깔끔하게 압축
             md = md.replace(/\n{3,}/g, '\n\n');
             
-            editor.setMarkdown(md);
-            mdOutput.value = editor.getMarkdown();
+            // 2. 두 번째 인자로 false를 전달하여 커서가 맨 밑으로 강제 이동하는 것을 방지
+            editor.setMarkdown(md, false);
+            mdOutput.value = getCleanedMarkdown();
+            
+            // 3. 스크롤 위치 복원
+            if (proseMirror) {
+                setTimeout(() => {
+                    proseMirror.scrollTop = wwScrollTop;
+                    mdOutput.scrollTop = mdScrollTop;
+                }, 10);
+            }
             
             const originalText = cleanBtn.innerText;
             cleanBtn.innerText = '정리 완료 ✨';
             setTimeout(() => { cleanBtn.innerText = originalText; }, 1500);
         });
 
-        // --- 2. 단축키 (Alt+1, Alt+2, Alt+3, Ctrl+S) 화면 전환 및 저장 기능 ---
+        // --- 2. 단축키 화면 전환 및 저장 기능 ---
         document.addEventListener('keydown', (e) => {
-            // CTRL+S (또는 CMD+S) 저장 단축키 추가
             if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
-                e.preventDefault(); // 기본 브라우저 저장 방지
-                document.getElementById('save-btn').click(); // 저장 버튼 클릭 이벤트 트리거
+                e.preventDefault(); 
+                document.getElementById('save-btn').click(); 
             } else if (e.altKey && e.key === '1') {
                 e.preventDefault();
-                // 이지윅 모드로 변경
                 document.body.classList.remove('md-only');
                 document.body.classList.add('wysiwyg-only'); 
             } else if (e.altKey && e.key === '2') {
                 e.preventDefault();
-                // 마크다운 모드로 변경
                 document.body.classList.remove('wysiwyg-only');
                 document.body.classList.add('md-only'); 
             } else if (e.altKey && e.key === '3') {
                 e.preventDefault();
-                // 두 패널 모두 표시 (클래스 제거)
                 document.body.classList.remove('wysiwyg-only');
                 document.body.classList.remove('md-only');
             }
@@ -394,7 +419,6 @@
             if (fontName) mdOutput.style.fontFamily = `"${fontName}", monospace`;
         });
 
-        // textarea가 입력 모드로 변경됨에 따라 복사 기능을 전용 버튼으로 이관
         const copyBtn = document.getElementById('copy-btn');
         copyBtn.addEventListener('click', async () => {
             if (!mdOutput.value) return;
@@ -423,7 +447,7 @@
                 mdContent = mdContent.replace(/\n{2,}/g, '\n');
 
                 editor.setMarkdown(mdContent);
-                mdOutput.value = editor.getMarkdown();
+                mdOutput.value = getCleanedMarkdown();
                 currentDocId = null;
             };
             reader.readAsText(file);
@@ -434,7 +458,7 @@
         const copyRichBtn = document.getElementById('copy-rich-btn');
         copyRichBtn.addEventListener('click', async () => {
             const htmlContent = editor.getHTML();
-            const textContent = editor.getMarkdown();
+            const textContent = getCleanedMarkdown();
             
             if (!textContent.trim()) return alert('복사할 내용이 없습니다.');
 
@@ -484,7 +508,7 @@
         const saveBtn = document.getElementById('save-btn');
 
         saveBtn.addEventListener('click', () => {
-            const content = editor.getMarkdown();
+            const content = getCleanedMarkdown();
             if (!content.trim()) return alert('저장할 내용이 없습니다.');
 
             if (currentDocId) {
@@ -597,7 +621,7 @@
             };
         }
 
-        // --- 6. MD 다운로드 기능 추가 ---
+        // --- 6. MD 다운로드 기능 ---
         document.getElementById('download-btn').addEventListener('click', () => {
             const content = mdOutput.value;
             if (!content.trim()) return alert('다운로드할 내용이 없습니다.');
