@@ -202,7 +202,8 @@ header .header-tools { display: flex; gap: 10px; }
     .print-page { page-break-after: always; margin-bottom: 40px; }
     .print-title { font-size: 28px; font-weight: bold; border-bottom: 2px solid #000; padding-bottom: 12px; margin-bottom: 24px; color: #1e293b; }
     .print-code { background: #f8fafc; border: 1px solid #cbd5e1; padding: 15px; font-family: var(--font-code); white-space: pre-wrap; font-size: 13px; margin: 20px 0; border-radius: 8px; line-height: 1.6; }
-    .print-img { max-width: 100%; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; }
+    .print-img { max-width: 100%; height: auto; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; }
+    .doc-body img { max-width: 100%; height: auto; }
 }
 </style>
 </head>
@@ -514,7 +515,7 @@ const MANUAL_CORE = {
 
 let quillEditor;
 let currentFiles = [];
-let currentLinks = []; // 링크 관리를 위한 배열
+let currentLinks = []; 
 window.exportSelection = new Set();
 let isFirstLoad = true;
 
@@ -798,7 +799,6 @@ function showNewForm() {
     document.getElementById('empty-state').classList.add('hidden');
     document.getElementById('btn-delete').style.display = 'none';
     
-    // 에디터 제목 및 버튼 상태 초기화 / 아코디언 오픈
     document.getElementById('editor-title').innerText = '새 문서 작성';
     document.getElementById('btn-add-reset').innerHTML = '<i class="fas fa-redo"></i> 초기화';
     toggleTitleAccordion('expand');
@@ -807,7 +807,6 @@ function showNewForm() {
     quillEditor.setText('');
     document.getElementById('inp-code').value = '';
     
-    // 상태 초기화
     currentFiles = [];
     currentLinks = [];
     
@@ -826,7 +825,6 @@ function loadPage(page) {
     document.getElementById('empty-state').classList.add('hidden');
     document.getElementById('btn-delete').style.display = 'inline-block';
     
-    // 저장된 제목으로 갱신, 버튼 상태 변경 및 아코디언 닫기
     document.getElementById('editor-title').innerText = page.title;
     document.getElementById('btn-add-reset').innerHTML = '<i class="fas fa-plus"></i> 매뉴얼 추가';
     toggleTitleAccordion('collapse');
@@ -839,7 +837,6 @@ function loadPage(page) {
     
     document.getElementById('inp-code').value = page.code || '';
     
-    // 상태 불러오기
     currentFiles = page.files || [];
     currentLinks = page.links || [];
     
@@ -869,7 +866,7 @@ async function savePage() {
         description: quillEditor.root.innerHTML,
         code: document.getElementById('inp-code').value,
         files: currentFiles,
-        links: currentLinks.filter(l => l.url && l.url.trim() !== ''), // 빈 링크 제외하고 저장
+        links: currentLinks.filter(l => l.url && l.url.trim() !== ''),
         timestamp: existingItem ? existingItem.timestamp : Date.now(),
         orderIndex: existingItem ? existingItem.orderIndex : MANUAL_CORE.items.length
     };
@@ -879,7 +876,6 @@ async function savePage() {
     await MANUAL_CORE.save(pageData);
     MANUAL_CORE.selectedId = pageData.id;
     
-    // 저장 성공 시 상단 제목 갱신, 버튼 변경 및 아코디언 닫기
     document.getElementById('editor-title').innerText = title;
     document.getElementById('btn-add-reset').innerHTML = '<i class="fas fa-plus"></i> 매뉴얼 추가';
     toggleTitleAccordion('collapse');
@@ -978,10 +974,81 @@ function getItemsToExport() {
         .sort((a,b) => (a.orderIndex ?? a.timestamp) - (b.orderIndex ?? b.timestamp));
 }
 
-function generateFullHTMLForExport(itemsToExport, forWord = false) {
+// [추가] 이미지의 실제(Natural) 픽셀 해상도를 구하는 함수
+function getImageDimensions(src) {
+    return new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+        img.onerror = () => resolve({ w: 0, h: 0 });
+        img.src = src;
+    });
+}
+
+// [수정] 비동기로 HTML을 분석하여 크기를 비율에 맞게 꼼꼼히 추출
+async function processExportHTML(htmlStr, forWord) {
+    if (!htmlStr) return '';
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = htmlStr;
+    const imgs = tempDiv.querySelectorAll('img');
+    
+    // MS Word에서 안전한 가로 최대 픽셀 (A4 기준 약 600px 내외면 화면을 넘지 않음)
+    const MAX_WORD_WIDTH = 600;
+
+    for (let img of imgs) {
+        let styleW = img.style.width;
+        let attrW = img.getAttribute('width');
+        let finalW = styleW || attrW;
+        
+        if (forWord) {
+            // 원본 이미지의 비율을 가져오기 위해 먼저 사이즈를 구함
+            const dims = await getImageDimensions(img.src);
+            let natW = dims.w || MAX_WORD_WIDTH;
+            let natH = dims.h || (MAX_WORD_WIDTH * 0.75); // 비상시 기본 4:3 비율 적용
+            
+            let numW = natW;
+
+            // 1. 에디터에서 사용자가 크기를 명시적으로 줄인 경우
+            if (finalW && !finalW.includes('%')) {
+                numW = parseInt(finalW.toString().replace(/px/gi, '').trim());
+            } 
+            // 2. 100% 비율 등 CSS로만 되어있는 경우 (최대치 설정)
+            else if (finalW && finalW.includes('%')) {
+                numW = MAX_WORD_WIDTH;
+            }
+
+            // 구한 너비(numW)가 600(페이지너비)을 초과하면 강제로 600으로 축소
+            if (isNaN(numW) || numW === 0) numW = MAX_WORD_WIDTH;
+            if (numW > MAX_WORD_WIDTH) numW = MAX_WORD_WIDTH;
+
+            // [핵심 해결 방법] 가로 크기에 맞춰 세로 크기 비율 계산
+            let ratio = numW / natW;
+            let numH = Math.round(natH * ratio);
+
+            // 워드가 정확히 인식하도록 가로(width)와 더불어 세로(height) 속성도 필수 부여
+            img.setAttribute('width', numW.toString());
+            img.setAttribute('height', numH.toString());
+
+            // MS Word 에러를 유발하는 style 태그 내용 싹 삭제
+            img.style.width = '';
+            img.style.height = '';
+            img.style.maxWidth = '';
+        } else {
+            // 브라우저 및 PDF는 CSS 방식을 정상 지원함
+            if (finalW) img.style.width = finalW.includes('%') ? finalW : finalW.replace(/px/gi, '') + 'px';
+            img.style.maxWidth = '100%'; 
+            img.style.height = 'auto'; 
+        }
+    }
+    return tempDiv.innerHTML;
+}
+
+// [수정] 비동기 구동으로 변경 및 비율 계산 반영
+async function generateFullHTMLForExport(itemsToExport, forWord = false) {
     let html = '';
     
-    itemsToExport.forEach((page, index) => {
+    for (let index = 0; index < itemsToExport.length; index++) {
+        const page = itemsToExport[index];
+
         if (forWord && index > 0) {
             html += `<br clear="all" style="page-break-before:always; mso-break-type:page-break" />`;
         }
@@ -991,8 +1058,11 @@ function generateFullHTMLForExport(itemsToExport, forWord = false) {
                         ${page.title}
                     </h1>`;
 
+        // 비동기 파싱 호출
+        const processedDesc = await processExportHTML(page.description || '', forWord);
+        
         html += `<div class="doc-body" style="font-family: 'Malgun Gothic', '맑은 고딕', sans-serif; font-size: 14px; line-height: 1.6; color: #000; margin-bottom: 32px;">
-                    ${page.description || ''}
+                    ${processedDesc}
                  </div>`;
         
         if (page.code && page.code.trim() !== '') {
@@ -1002,7 +1072,6 @@ function generateFullHTMLForExport(itemsToExport, forWord = false) {
                      <div style="background-color: #f8fafc; border: 1px solid #cbd5e1; padding: 15px; font-family: 'Courier New', Courier, monospace; font-size: 12px; white-space: pre-wrap; word-wrap: break-word; line-height: 1.5; color: #0f172a;">${page.code.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>`;
         }
         
-        // 외부 참조 링크 출력
         if (page.links && page.links.length > 0) {
             html += `<h3 style="font-family: 'Malgun Gothic', '맑은 고딕', sans-serif; font-size: 15px; font-weight: bold; margin-bottom: 12px; margin-top: 32px; color: #333;">
                         [ 외부 참조 링크 ]
@@ -1019,31 +1088,49 @@ function generateFullHTMLForExport(itemsToExport, forWord = false) {
             html += `<h3 style="font-family: 'Malgun Gothic', '맑은 고딕', sans-serif; font-size: 15px; font-weight: bold; margin-bottom: 12px; margin-top: 32px; color: #333;">
                         [ 추가 첨부 이미지 ]
                      </h3>`;
-            images.forEach(img => { 
-                html += `<div style="text-align: center; margin-bottom: 20px;">
-                            <img src="${img.data}" class="print-img" style="max-width: 100%; border: 1px solid #e2e8f0;">
-                         </div>`; 
-            });
+            
+            for (let img of images) {
+                if (forWord) {
+                    // 첨부파일 영역 이미지도 동일하게 비율 계산 적용
+                    const dims = await getImageDimensions(img.data);
+                    let natW = dims.w || 600;
+                    let natH = dims.h || 450;
+                    
+                    let w = natW > 600 ? 600 : natW; 
+                    let ratio = w / natW;
+                    let h = Math.round(natH * ratio);
+                    
+                    html += `<div style="text-align: center; margin-bottom: 20px;">
+                                <img src="${img.data}" width="${w}" height="${h}" style="border: 1px solid #e2e8f0;">
+                             </div>`; 
+                } else {
+                    html += `<div style="text-align: center; margin-bottom: 20px;">
+                                <img src="${img.data}" class="print-img" style="max-width: 100%; height: auto; border: 1px solid #e2e8f0;">
+                             </div>`; 
+                }
+            }
         }
         html += `</div>`;
-    });
+    }
     return html;
 }
 
-function exportToPDF() {
+async function exportToPDF() {
     const items = getItemsToExport();
     if(items.length === 0) return showToast('출력할 매뉴얼을 선택해주세요.', 'error');
     
+    showToast('PDF 문서 생성 중...', 'info');
     const container = document.getElementById('print-container');
-    container.innerHTML = generateFullHTMLForExport(items);
+    container.innerHTML = await generateFullHTMLForExport(items, false);
     window.print();
 }
 
-function exportToWord() {
+async function exportToWord() {
     const items = getItemsToExport();
     if(items.length === 0) return showToast('내보낼 데이터가 없습니다.', 'error');
     
-    const contentHtml = generateFullHTMLForExport(items, true);
+    showToast('워드 문서 생성 중...', 'info');
+    const contentHtml = await generateFullHTMLForExport(items, true);
     
     const html = `
         <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
@@ -1061,6 +1148,8 @@ function exportToWord() {
                 .ql-align-center { text-align: center; }
                 .ql-align-right { text-align: right; }
                 .ql-align-justify { text-align: justify; }
+                /* 만약 워드에서 최신 엔진을 쓴다면 동작하도록 대비용 추가 */
+                img { max-width: 100%; } 
             </style>
         </head>
         <body>
