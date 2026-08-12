@@ -115,26 +115,21 @@
         .toastui-editor-toolbar { background: rgba(255, 255, 255, 0.6) !important; }
         .toastui-editor-contents, .toastui-editor-contents p, .ProseMirror { font-size: 16px !important; line-height: 1.7 !important; }
         
-        /* 표 내부 강제 여백 최소화 */
+        /* 표 내부 강제 여백 최소화 수정: 행 삭제 버그 유발하는 display:none 제거 */
         .toastui-editor-contents td p, 
         .toastui-editor-contents th p {
             margin-bottom: 4px !important;
         }
-        .toastui-editor-contents td p:empty {
-            display: none !important;
-        }
+        /* 삭제 또는 주석 처리됨 - .toastui-editor-contents td p:empty { display: none !important; } */
 
         /* 마크다운 출력 영역 */
         textarea#md-output {
             flex: 1; width: 100%; background: transparent; border: none; color: #4338ca;
             font-family: 'D2Coding', 'Consolas', monospace; font-size: 16px; line-height: 1.7;
-            padding: 1.5rem; resize: none; outline: none; cursor: pointer;
+            padding: 1.5rem; resize: none; outline: none;
             transition: background 0.4s ease, font-family 0.3s;
         }
         textarea#md-output:hover { background: rgba(67, 56, 202, 0.02); }
-        textarea#md-output.copied {
-            background: rgba(16, 185, 129, 0.15) !important; transition: background 0.05s ease;
-        }
 
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -215,7 +210,7 @@
                 <div>WYSIWYG Editor</div>
                 <div class="hint-wrap">
                     <span class="hint" id="new-btn" title="새로운 문서를 작성합니다">새 문서 📄</span>
-                    <span class="hint" id="save-btn" title="작성 중인 문서를 브라우저에 저장합니다">저장 💾</span>
+                    <span class="hint" id="save-btn" title="작성 중인 문서를 브라우저에 저장합니다 (Ctrl+S)">저장 💾</span>
                     <span class="hint" id="history-btn" title="저장된 문서 목록을 엽니다">목록 🗂️</span>
                     
                     <input type="file" id="md-file-input" accept=".md" style="display: none;">
@@ -244,7 +239,8 @@
                     <span class="hint" id="download-btn" title="마크다운 파일로 다운로드합니다">다운로드 ⬇️</span>
                 </div>
             </div>
-            <textarea id="md-output" readonly title="클릭하면 조용히 복사됩니다."></textarea>
+            <!-- readonly 속성 제거 -->
+            <textarea id="md-output" title="마크다운 소스를 직접 수정할 수 있습니다."></textarea>
         </div>
     </main>
 
@@ -279,6 +275,8 @@
         const mdOutput = document.getElementById('md-output');
         const fontSelector = document.getElementById('font-selector');
         
+        let isUpdating = false; // 양방향 동기화 무한루프 방지용 플래그
+
         const editor = new toastui.Editor({
             el: document.querySelector('#wysiwyg-editor'),
             height: '100%',
@@ -288,11 +286,24 @@
             frontMatter: true, 
             initialValue: '',
             events: {
-                change: () => mdOutput.value = editor.getMarkdown()
+                change: () => {
+                    if (isUpdating) return;
+                    isUpdating = true;
+                    mdOutput.value = editor.getMarkdown();
+                    isUpdating = false;
+                }
             }
         });
 
         mdOutput.value = editor.getMarkdown();
+
+        // 마크다운 소스에서 수정 시 WYSIWYG 에디터로 반영 (양방향 동기화)
+        mdOutput.addEventListener('input', (e) => {
+            if (isUpdating) return;
+            isUpdating = true;
+            editor.setMarkdown(e.target.value);
+            isUpdating = false;
+        });
 
         // --- ★ 붙여넣기(Paste) 인터셉터 최종 수정 ---
         document.getElementById('wysiwyg-editor').addEventListener('paste', function(e) {
@@ -349,9 +360,13 @@
             setTimeout(() => { cleanBtn.innerText = originalText; }, 1500);
         });
 
-        // --- 2. 단축키 (Alt+1, Alt+2, Alt+3) 화면 전환 기능 ---
+        // --- 2. 단축키 (Alt+1, Alt+2, Alt+3, Ctrl+S) 화면 전환 및 저장 기능 ---
         document.addEventListener('keydown', (e) => {
-            if (e.altKey && e.key === '1') {
+            // CTRL+S (또는 CMD+S) 저장 단축키 추가
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+                e.preventDefault(); // 기본 브라우저 저장 방지
+                document.getElementById('save-btn').click(); // 저장 버튼 클릭 이벤트 트리거
+            } else if (e.altKey && e.key === '1') {
                 e.preventDefault();
                 // 이지윅 모드로 변경
                 document.body.classList.remove('md-only');
@@ -379,14 +394,15 @@
             if (fontName) mdOutput.style.fontFamily = `"${fontName}", monospace`;
         });
 
-        let copyTimeout;
-        mdOutput.addEventListener('click', async () => {
+        // textarea가 입력 모드로 변경됨에 따라 복사 기능을 전용 버튼으로 이관
+        const copyBtn = document.getElementById('copy-btn');
+        copyBtn.addEventListener('click', async () => {
             if (!mdOutput.value) return;
             try {
                 await navigator.clipboard.writeText(mdOutput.value);
-                mdOutput.classList.add('copied');
-                if (copyTimeout) clearTimeout(copyTimeout);
-                copyTimeout = setTimeout(() => mdOutput.classList.remove('copied'), 200);
+                const originalText = copyBtn.innerText;
+                copyBtn.innerText = '복사 완료 ✔️';
+                setTimeout(() => { copyBtn.innerText = originalText; }, 1500);
             } catch (err) { console.error('복사 실패:', err); }
         });
 
