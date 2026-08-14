@@ -150,7 +150,8 @@ window.MathJax = {
     #previewText ul { list-style-type: disc; }
     #previewText strong { color: #0f172a; font-weight: 700; }
     #previewText em { font-style: normal; color: #0f172a; font-weight: 600; }
-    #previewText img { max-width: 100%; border-radius: 8px; border: 1px solid #e2e8f0; margin: 16px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+    /* 이미지 마진 대폭 축소 (위 4px, 아래 12px) */
+    #previewText img { max-width: 100%; border-radius: 8px; border: 1px solid #e2e8f0; margin: 4px 0 12px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
     #previewText blockquote { border-left: 4px solid #cbd5e1; padding-left: 16px; margin: 16px 0; color: #64748b; background: #f8fafc; padding: 12px 16px; border-radius: 4px 8px 8px 4px; }
     #previewText pre { background: #f8fafc; padding: 16px; border-radius: 8px; overflow-x: auto; border: 1px solid #e2e8f0; margin-bottom: 16px;}
     #previewText code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; font-family: monospace; color: #ef4444; }
@@ -1010,6 +1011,7 @@ window.MathJax = {
         reader.readAsText(file);
     }
 
+    // ====== [핵심 수정 구간] 키노트 가져오기 관련 로직 완벽 보완 ======
     function handleKeynoteImport(event) {
         const file = event.target.files[0];
         if (!file) return;
@@ -1040,6 +1042,34 @@ window.MathJax = {
                         let lead = convertHtmlToMd(rawLead).trim();
                         let concept = convertHtmlToMd(rawConcept).trim();
                         let solution = convertHtmlToMd(rawSolution).trim();
+
+                        // 단락/줄간격 좁히기 및 인라인 엉킴/대시/숫자 리스트 분리 처리
+                        const formatAndCompressSpacing = (text) => {
+                            if (!text) return '';
+                            let res = text;
+                            
+                            // 1. 역슬래시로 잘못 이스케이프된 숫자 리스트 원복 (예: "3\. " -> "3. ")
+                            res = res.replace(/(\d+)\\\.\s*/g, '$1. ');
+                            
+                            // 2. 이미지 마크다운 뒤에 바로 대시나 숫자가 붙어버리는 경우 블록 분리
+                            res = res.replace(/(\))([ \t]*)([-*][ \t]+|\d+\.[ \t]+)/g, '$1\n\n$3');
+                            
+                            // 3. 문장 중간에 껴있는 대시(-)나 숫자 리스트 분리
+                            // (문자나 마침표 등 단어 바로 뒤에 띄어쓰기 후 - 나 숫자가 오는 경우)
+                            res = res.replace(/([^\s\n])\s+(-\s+)/g, '$1\n\n$2');
+                            res = res.replace(/([^\s\n])\s+(\d+\.\s+)/g, '$1\n\n$2');
+                            
+                            // 4. 과도한 간격은 좁히되 리스트 간격 유지
+                            return res
+                                .replace(/\n{3,}/g, '\n\n') // 과도한 3줄 이상 공백 방지
+                                .replace(/\n{2,}(?=[ \t]*[-*] )/g, '\n') // 글머리 기호(-, *) 앞 공백 좁히기
+                                .replace(/\n{2,}(?=[ \t]*\d+\. )/g, '\n') // 숫자 리스트(1., 2.) 앞 공백 좁히기
+                                .replace(/\n{2,}(?=[ \t]*[→⇒►>])/g, '\n'); // 화살표(→) 기호 앞 공백 좁히기
+                        };
+                        
+                        lead = formatAndCompressSpacing(lead);
+                        concept = formatAndCompressSpacing(concept);
+                        solution = formatAndCompressSpacing(solution);
                         
                         if (lead) content += `**[리드]**\n\n${lead}\n\n`;
                         if (concept) content += `**[개념]**\n\n${concept}\n\n`;
@@ -1070,6 +1100,7 @@ window.MathJax = {
         };
         reader.readAsText(file);
     }
+    // =========================================================
 
     function handleIsmspImport(event) {
         const file = event.target.files[0];
@@ -1591,7 +1622,8 @@ window.MathJax = {
         const extractBase64Images = (mdText) => {
             if (!mdText) return mdText;
             return mdText.replace(/!\[([^\]]*)\]\(\s*(data:image\/[^;]+;base64,[^\)]+)\)/gi, (match, alt, dataUrl) => {
-                return `<img src="${dataUrl.replace(/\s+/g, '')}" alt="${alt}" style="max-width: 100%; height: auto; margin: 16px 0;" />`;
+                // 이미지 위아래 여백을 대폭 줄임 (상단 4px, 하단 12px)
+                return `<img src="${dataUrl.replace(/\s+/g, '')}" alt="${alt}" style="max-width: 100%; height: auto; margin: 4px 0 12px 0;" />`;
             });
         };
 
@@ -1688,8 +1720,6 @@ window.MathJax = {
                 processedContent = processedContent.replace(tagRegex, '\n\n**[$1]**\n\n');
                 
                 processedContent = processedContent.replace(/\n{3,}/g, '\n\n');
-
-                processedContent = processedContent.replace(/^(\s*\d+)\.(\s+)/gm, '$1\\.$2');
                 
                 processedContent = processedContent.replace(/(?:\*\*\[두음\/키워드\]\*\*)\n+([\s\S]*?)(?=\n\n|\n\*\*\[|$)/g, (match, kwContent) => {
                     let formattedKw = kwContent.trim().replace(/\n/g, '<br>').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
