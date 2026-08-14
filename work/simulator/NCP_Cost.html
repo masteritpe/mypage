@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NCP Total Cost Simulator</title>
+    <title>NCP Cost Simulator</title>
     <style>
         :root {
             --primary: #03c75a; 
@@ -83,6 +83,7 @@
             justify-content: center;
             gap: 10px;
             padding-bottom: 20px;
+            flex-wrap: wrap;
         }
         .tab-btn {
             padding: 10px 24px;
@@ -216,12 +217,13 @@
         <!-- 좌측: 계산기 영역 -->
         <div class="calculator-card">
             <div class="header">
-                <h2>NCP 통합 예상 비용 시뮬레이터</h2>
+                <h2>NCP 예상 비용 시뮬레이터</h2>
                 <p id="header-desc">매니지드 DB 단가를 반영한 아키텍처 스펙별 월(30일) 예상 청구 금액입니다.</p>
                 <div class="tab-container">
                     <button class="tab-btn active" onclick="app.switchTab('mongo')">MongoDB</button>
                     <button class="tab-btn" onclick="app.switchTab('edge')">Global Edge</button>
                     <button class="tab-btn" onclick="app.switchTab('object')">Object Storage</button>
+                    <button class="tab-btn" onclick="app.switchTab('ses')">Search Engine</button>
                 </div>
             </div>
 
@@ -415,6 +417,66 @@
                 </div>
             </div>
 
+            <!-- 4. SEARCH ENGINE SERVICE 시뮬레이터 섹션 -->
+            <div id="section-ses" class="calc-section">
+                <div class="content-wrapper">
+                    <div class="input-section">
+                        <div class="form-group">
+                            <label>클러스터 구성 (VPC 전용)</label>
+                            <div class="toggle-group">
+                                <div class="toggle-btn active" onclick="sesCalc.setEnv('min')" id="ses-btn-min">최소 구성<br>(총 4대)</div>
+                                <div class="toggle-btn" onclick="sesCalc.setEnv('std')" id="ses-btn-std">권장 구성<br>(총 8대)</div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>서버 인스턴스 사양 (모든 노드 공통)</label>
+                            <select id="ses-spec-select" onchange="sesCalc.calculate()">
+                                <option value="2v8g">Standard (2 vCPU, 8GB Memory)</option>
+                                <option value="4v16g">High (4 vCPU, 16GB Memory)</option>
+                                <option value="8v32g">Pro (8 vCPU, 32GB Memory)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <div class="slider-header">
+                                <label style="margin:0;">데이터 노드당 스토리지 용량 (SSD)</label>
+                                <div class="slider-value" id="ses-storage-val-text">100 GB</div>
+                            </div>
+                            <input type="range" id="ses-storage-slider" min="50" max="2000" step="50" value="100" oninput="sesCalc.updateSliderText(); sesCalc.calculate();">
+                        </div>
+                        <div class="info-box" id="ses-info-text">
+                            <strong>[최소 구성 - VPC 전용]</strong><br>
+                            매니저 노드 1대, 데이터 노드 3대 (총 4대) 구성입니다. 개발 및 테스트 용도 등 소규모 환경에 적합합니다.
+                        </div>
+                    </div>
+
+                    <div class="result-section">
+                        <div>
+                            <div class="total-price-box">
+                                <h3>월 예상 비용</h3>
+                                <div class="total-amount" id="ses-total-cost">0 <span>원 / 월</span></div>
+                            </div>
+                            <div class="cost-breakdown">
+                                <div class="breakdown-item">
+                                    <span class="label"><div class="dot c1"></div>서버 인스턴스 총 비용</span>
+                                    <span class="amount" id="ses-server-cost">0 원</span>
+                                </div>
+                                <div class="breakdown-item" id="ses-server-detail-box" style="font-size:12px; color:#767a83; margin-top:-8px; margin-bottom:12px; margin-left:18px;">(매니저 1대, 데이터 3대)</div>
+                                <div class="breakdown-item">
+                                    <span class="label"><div class="dot c2"></div>데이터 스토리지 비용</span>
+                                    <span class="amount" id="ses-storage-cost">0 원</span>
+                                </div>
+                                <div class="breakdown-item" id="ses-storage-detail-box" style="font-size:12px; color:#767a83; margin-top:-8px; margin-bottom:12px; margin-left:18px;">(노드당 100GB × 3대)</div>
+                                <div class="chart-container">
+                                    <div class="chart-bar c1" id="ses-bar-server" style="width: 50%;"></div>
+                                    <div class="chart-bar c2" id="ses-bar-storage" style="width: 50%;"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <button class="add-cart-btn" onclick="summaryManager.addCurrent('ses')">＋ 예상 비용 내역에 추가</button>
+                    </div>
+                </div>
+            </div>
+
         </div>
 
         <!-- 우측: 선택 항목 누적(장바구니) 패널 -->
@@ -459,6 +521,7 @@
                 if (tabId === 'mongo') desc.innerText = '매니지드 DB 단가를 반영한 아키텍처 스펙별 월(30일) 예상 청구 금액입니다.';
                 else if (tabId === 'edge') desc.innerText = '선택하신 리전의 전송량 요금표와 월 요청 수(10,000건당 10원)를 반영한 예상 청구 금액입니다.';
                 else if (tabId === 'object') desc.innerText = '오브젝트 스토리지의 저장량, API 요청 수, 네트워크 아웃바운드 전송량을 반영한 예상 요금입니다.';
+                else if (tabId === 'ses') desc.innerText = 'VPC 환경 전용 Search Engine Service (Elasticsearch/OpenSearch) 월(30일) 예상 청구 금액입니다.';
             }
         };
 
@@ -470,6 +533,7 @@
                 if (type === 'mongo') data = mongoCalc.getCurrentState();
                 else if (type === 'edge') data = edgeCalc.getCurrentState();
                 else if (type === 'object') data = objCalc.getCurrentState();
+                else if (type === 'ses') data = sesCalc.getCurrentState();
 
                 if (data) {
                     this.items.push({ id: Date.now(), title: data.title, detail: data.detail, cost: data.cost });
@@ -672,12 +736,12 @@
         const objCalc = {
             lastTotalCost: 0,
             pricing: {
-                storage_under_1pb: 28,     // 1PB 이하 GB당 28원
-                storage_over_1pb: 26,      // 1PB 초과 GB당 26원
-                api_put: 0.0045,           // PUT, COPY, POST, LIST 건당
-                api_get: 0.0004,           // GET 및 기타 건당
-                network_limits: [5120, 10240, 30720, Infinity], // 5TB, 10TB, 30TB in GB
-                network_prices: [100, 90, 80, 70]               // 각 구간별 요금
+                storage_under_1pb: 28,     
+                storage_over_1pb: 26,      
+                api_put: 0.0045,           
+                api_get: 0.0004,           
+                network_limits: [5120, 10240, 30720, Infinity], 
+                network_prices: [100, 90, 80, 70]               
             },
 
             formatInput: function(el) {
@@ -701,19 +765,16 @@
                 let apiGet = utils.parseNumber(document.getElementById('obj-api-get-input').value) || 0;
                 let transferGB = utils.parseNumber(document.getElementById('obj-transfer-input').value) || 0;
 
-                // 1. 저장 요금 계산 (월평균 기준)
                 let storageCost = 0;
-                if (storageGB <= 1048576) { // 1PB = 1,024TB = 1,048,576GB 기준
+                if (storageGB <= 1048576) { 
                     storageCost = storageGB * this.pricing.storage_under_1pb;
                 } else {
                     storageCost = (1048576 * this.pricing.storage_under_1pb) + ((storageGB - 1048576) * this.pricing.storage_over_1pb);
                 }
 
-                // 2. API 요청 요금 계산
                 let apiCost = (apiPut * this.pricing.api_put) + (apiGet * this.pricing.api_get);
                 apiCost = Math.floor(apiCost);
 
-                // 3. 네트워크 전송 요금 (구간제) 계산
                 let transferCost = 0;
                 let remainingGB = transferGB;
                 let previousLimit = 0;
@@ -736,7 +797,6 @@
                 document.getElementById('obj-transfer-cost').innerText = `${utils.formatNumber(transferCost)} 원`;
                 document.getElementById('obj-total-cost').innerHTML = `${utils.formatNumber(this.lastTotalCost)} <span>원 / 월</span>`;
 
-                // 차트 업데이트 로직
                 let total = this.lastTotalCost > 0 ? this.lastTotalCost : 1; 
                 document.getElementById('obj-bar-storage').style.width = `${(storageCost / total) * 100}%`;
                 document.getElementById('obj-bar-api').style.width = `${(apiCost / total) * 100}%`;
@@ -756,10 +816,85 @@
             init: function() { this.calculate(); }
         };
 
+        /* 4. Search Engine Service 시뮬레이터 로직 */
+        const sesCalc = {
+            currentEnv: 'min',
+            lastTotalCost: 0,
+            prices: {
+                specs: { '2v8g': 88000, '4v16g': 176000, '8v32g': 352000 },
+                storagePerGB: 130 
+            },
+            
+            setEnv: function(env) {
+                this.currentEnv = env;
+                document.getElementById('ses-btn-min').classList.remove('active');
+                document.getElementById('ses-btn-std').classList.remove('active');
+                document.getElementById(`ses-btn-${env}`).classList.add('active');
+                
+                const infoBox = document.getElementById('ses-info-text');
+                if (env === 'min') {
+                    infoBox.innerHTML = `<strong>[최소 구성 - VPC 전용]</strong><br>매니저 노드 1대, 데이터 노드 3대 (총 4대) 구성입니다. 개발 및 테스트 용도 등 소규모 환경에 적합합니다.`;
+                } else {
+                    infoBox.innerHTML = `<strong>[권장 구성 - VPC 전용]</strong><br>매니저 노드 2대, 마스터 노드 3대, 데이터 노드 3대 (총 8대) 구성입니다. 고가용성이 필요한 운영 환경에 적합합니다.`;
+                }
+                this.calculate();
+            },
+            updateSliderText: function() {
+                const val = document.getElementById('ses-storage-slider').value;
+                document.getElementById('ses-storage-val-text').innerText = `${utils.formatNumber(val)} GB`;
+            },
+            calculate: function() {
+                const specKey = document.getElementById('ses-spec-select').value;
+                const storageGBPerNode = parseInt(document.getElementById('ses-storage-slider').value);
+                let serverCost = 0, storageCost = 0, serverDetail = "";
+                const baseSpecPrice = this.prices.specs[specKey];
+
+                let managerCount = 0, masterCount = 0, dataCount = 0;
+
+                if (this.currentEnv === 'min') {
+                    managerCount = 1; masterCount = 0; dataCount = 3;
+                    serverDetail = "(매니저 1대, 데이터 3대)";
+                } else {
+                    managerCount = 2; masterCount = 3; dataCount = 3; 
+                    serverDetail = "(매니저 2대, 마스터 3대, 데이터 3대)";
+                }
+
+                const totalNodes = managerCount + masterCount + dataCount;
+                serverCost = baseSpecPrice * totalNodes;
+                
+                storageCost = storageGBPerNode * this.prices.storagePerGB * dataCount;
+
+                this.lastTotalCost = serverCost + storageCost;
+                
+                document.getElementById('ses-server-cost').innerText = `${utils.formatNumber(serverCost)} 원`;
+                document.getElementById('ses-server-detail-box').innerText = serverDetail;
+                document.getElementById('ses-storage-cost').innerText = `${utils.formatNumber(storageCost)} 원`;
+                document.getElementById('ses-storage-detail-box').innerText = `(노드당 ${storageGBPerNode}GB × ${dataCount}대)`;
+                document.getElementById('ses-total-cost').innerHTML = `${utils.formatNumber(this.lastTotalCost)} <span>원 / 월</span>`;
+
+                const serverPct = this.lastTotalCost > 0 ? (serverCost / this.lastTotalCost) * 100 : 50;
+                const storagePct = this.lastTotalCost > 0 ? (storageCost / this.lastTotalCost) * 100 : 50;
+                document.getElementById('ses-bar-server').style.width = `${serverPct}%`;
+                document.getElementById('ses-bar-storage').style.width = `${storagePct}%`;
+            },
+            getCurrentState: function() {
+                let envText = this.currentEnv === 'min' ? '최소 구성 (Manager 1, Data 3)' : '권장 구성 (Manager 2, Master 3, Data 3)';
+                let specText = document.getElementById('ses-spec-select').options[document.getElementById('ses-spec-select').selectedIndex].text;
+                let storageGB = document.getElementById('ses-storage-slider').value;
+                return { 
+                    title: 'Search Engine Service (VPC)', 
+                    detail: `구성: ${envText}\n사양: ${specText}\n데이터 노드당 스토리지: ${utils.formatNumber(storageGB)} GB`, 
+                    cost: this.lastTotalCost 
+                };
+            },
+            init: function() { this.updateSliderText(); this.calculate(); }
+        };
+
         // 전체 시뮬레이터 초기화
         mongoCalc.init();
         edgeCalc.init();
         objCalc.init();
+        sesCalc.init();
 
     </script>
 </body>
