@@ -238,7 +238,6 @@
                     <span class="hint" id="download-btn" title="마크다운 파일로 다운로드합니다">다운로드 ⬇️</span>
                 </div>
             </div>
-            <!-- readonly 속성 제거됨 -->
             <textarea id="md-output" title="마크다운 소스를 직접 수정할 수 있습니다."></textarea>
         </div>
     </main>
@@ -274,13 +273,24 @@
         const mdOutput = document.getElementById('md-output');
         const fontSelector = document.getElementById('font-selector');
         
-        let isUpdating = false; // 양방향 동기화 무한루프 방지용 플래그
+        let isUpdating = false;
 
-        // ★ ToastUI 특유의 불필요한 마크다운 이스케이프(\|, \- 등)를 제거하는 헬퍼 함수
         function getCleanedMarkdown() {
             let md = editor.getMarkdown();
-            // 표(Table)나 강조 기호 등이 일반 텍스트로 취급되어 백슬래시가 붙는 현상 복원
-            return md.replace(/\\([|*_\-])/g, '$1');
+            md = md.replace(/\\([|*_\-])/g, '$1');
+            
+            // 1. 인용문(>) 안의 표 독립 추출
+            md = md.replace(/(?:^[ \t]*>[ \t]*\|.*(?:\r?\n|$))+/gm, function(match) {
+                return '\n\n' + match.replace(/^[ \t]*>[ \t]*/gm, '') + '\n\n';
+            });
+            
+            // 2. [추가] 목록 기호(*, -, 1. 등) 하위에 들여쓰기 된 표 독립 추출
+            md = md.replace(/(?:^[ \t]+\|.*(?:\r?\n|$))+/gm, function(match) {
+                return '\n\n' + match.replace(/^[ \t]+/gm, '') + '\n\n';
+            });
+            
+            md = md.replace(/\n{3,}/g, '\n\n');
+            return md;
         }
 
         const editor = new toastui.Editor({
@@ -303,43 +313,41 @@
 
         mdOutput.value = getCleanedMarkdown();
 
-        // ★ 마크다운과 WYSIWYG 스크롤 동기화 함수
         function syncWysiwygScroll() {
             const proseMirror = document.querySelector('.ProseMirror');
             if (!proseMirror) return;
-            
             const maxScrollMd = mdOutput.scrollHeight - mdOutput.clientHeight;
             if (maxScrollMd <= 0) return;
-            
             const scrollRatio = mdOutput.scrollTop / maxScrollMd;
             const maxScrollWw = proseMirror.scrollHeight - proseMirror.clientHeight;
-            
             proseMirror.scrollTop = maxScrollWw * scrollRatio;
         }
 
-        // ★ 마크다운 소스 수정 시 WYSIWYG 에디터 반영 및 스크롤 추적
         mdOutput.addEventListener('input', (e) => {
             if (isUpdating) return;
             isUpdating = true;
+            let md = e.target.value;
             
-            editor.setMarkdown(e.target.value, false);
+            md = md.replace(/(?:^[ \t]*>[ \t]*\|.*(?:\r?\n|$))+/gm, function(match) {
+                return '\n\n' + match.replace(/^[ \t]*>[ \t]*/gm, '') + '\n\n';
+            });
+            md = md.replace(/(?:^[ \t]+\|.*(?:\r?\n|$))+/gm, function(match) {
+                return '\n\n' + match.replace(/^[ \t]+/gm, '') + '\n\n';
+            });
+            
+            editor.setMarkdown(md, false);
             setTimeout(syncWysiwygScroll, 10);
-            
             isUpdating = false;
         });
 
         mdOutput.addEventListener('scroll', syncWysiwygScroll);
 
-        // --- ★ 붙여넣기(Paste) 인터셉터 ---
         document.getElementById('wysiwyg-editor').addEventListener('paste', function(e) {
             if (e.isCustomPaste) return;
-            
             const html = e.clipboardData.getData('text/html');
             const text = e.clipboardData.getData('text/plain');
-            
             if (html) {
                 e.preventDefault();
-                
                 let cleanedHtml = html;
                 cleanedHtml = cleanedHtml.replace(/<p>\s*<br\s*\/?>\s*<\/p>/gi, '');
                 cleanedHtml = cleanedHtml.replace(/<p>\s*&nbsp;\s*<\/p>/gi, '');
@@ -351,32 +359,34 @@
                 dataTransfer.setData('text/plain', text);
                 
                 const pasteEvent = new ClipboardEvent('paste', {
-                    clipboardData: dataTransfer,
-                    bubbles: true,
-                    cancelable: true
+                    clipboardData: dataTransfer, bubbles: true, cancelable: true
                 });
                 pasteEvent.isCustomPaste = true;
                 e.target.dispatchEvent(pasteEvent);
             }
         }, true);
 
-        // --- ★ 수동 여백 정리 버튼 ---
         const cleanBtn = document.getElementById('clean-btn');
         cleanBtn.addEventListener('click', () => {
-            // 1. 현재 스크롤 위치 저장
             const proseMirror = document.querySelector('.ProseMirror');
             const wwScrollTop = proseMirror ? proseMirror.scrollTop : 0;
             const mdScrollTop = mdOutput.scrollTop;
 
             let md = getCleanedMarkdown();
             md = md.replace(/<br\s*\/?>/gi, ' ');
+            
+            md = md.replace(/(?:^[ \t]*>[ \t]*\|.*(?:\r?\n|$))+/gm, function(match) {
+                return '\n\n' + match.replace(/^[ \t]*>[ \t]*/gm, '') + '\n\n';
+            });
+            md = md.replace(/(?:^[ \t]+\|.*(?:\r?\n|$))+/gm, function(match) {
+                return '\n\n' + match.replace(/^[ \t]+/gm, '') + '\n\n';
+            });
+            
             md = md.replace(/\n{3,}/g, '\n\n');
             
-            // 2. 두 번째 인자로 false를 전달하여 커서가 맨 밑으로 강제 이동하는 것을 방지
             editor.setMarkdown(md, false);
             mdOutput.value = getCleanedMarkdown();
             
-            // 3. 스크롤 위치 복원
             if (proseMirror) {
                 setTimeout(() => {
                     proseMirror.scrollTop = wwScrollTop;
@@ -389,27 +399,19 @@
             setTimeout(() => { cleanBtn.innerText = originalText; }, 1500);
         });
 
-        // --- 2. 단축키 화면 전환 및 저장 기능 ---
         document.addEventListener('keydown', (e) => {
             if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
                 e.preventDefault(); 
                 document.getElementById('save-btn').click(); 
             } else if (e.altKey && e.key === '1') {
-                e.preventDefault();
-                document.body.classList.remove('md-only');
-                document.body.classList.add('wysiwyg-only'); 
+                e.preventDefault(); document.body.classList.remove('md-only'); document.body.classList.add('wysiwyg-only'); 
             } else if (e.altKey && e.key === '2') {
-                e.preventDefault();
-                document.body.classList.remove('wysiwyg-only');
-                document.body.classList.add('md-only'); 
+                e.preventDefault(); document.body.classList.remove('wysiwyg-only'); document.body.classList.add('md-only'); 
             } else if (e.altKey && e.key === '3') {
-                e.preventDefault();
-                document.body.classList.remove('wysiwyg-only');
-                document.body.classList.remove('md-only');
+                e.preventDefault(); document.body.classList.remove('wysiwyg-only'); document.body.classList.remove('md-only');
             }
         });
 
-        // --- 3. 폰트, 복사, 불러오기 기능 ---
         fontSelector.addEventListener('focus', function() { this.dataset.oldValue = this.value; this.value = ''; });
         fontSelector.addEventListener('blur', function() {
             if (this.value.trim() === '') { this.value = this.dataset.oldValue || ''; mdOutput.style.fontFamily = `"${this.value}", monospace`; }
@@ -442,9 +444,16 @@
                 mdContent = mdContent.replace(/\r\n|\r/g, '\n'); 
                 mdContent = mdContent.replace(/^---\n[\s\S]*?\n---\n/, '');
                 mdContent = mdContent.replace(/\{:[^\}]+\}/g, '');
-                
                 mdContent = mdContent.replace(/<br\s*\/?>/gi, ' ');
-                mdContent = mdContent.replace(/\n{2,}/g, '\n');
+                
+                mdContent = mdContent.replace(/(?:^[ \t]*>[ \t]*\|.*(?:\r?\n|$))+/gm, function(match) {
+                    return '\n\n' + match.replace(/^[ \t]*>[ \t]*/gm, '') + '\n\n';
+                });
+                mdContent = mdContent.replace(/(?:^[ \t]+\|.*(?:\r?\n|$))+/gm, function(match) {
+                    return '\n\n' + match.replace(/^[ \t]+/gm, '') + '\n\n';
+                });
+                
+                mdContent = mdContent.replace(/\n{3,}/g, '\n\n');
 
                 editor.setMarkdown(mdContent);
                 mdOutput.value = getCleanedMarkdown();
@@ -454,17 +463,67 @@
             e.target.value = '';
         });
 
-        // --- 서식 유지 내용 복사 기능 ---
+        // --- ★ Confluence 대응 강력한 내용 복사 패치 ---
         const copyRichBtn = document.getElementById('copy-rich-btn');
         copyRichBtn.addEventListener('click', async () => {
-            const htmlContent = editor.getHTML();
+            const rawHtmlContent = editor.getHTML();
             const textContent = getCleanedMarkdown();
             
             if (!textContent.trim()) return alert('복사할 내용이 없습니다.');
 
             try {
+                // 1. HTML을 DOM으로 파싱
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(rawHtmlContent, 'text/html');
+                
+                // 2-1. Confluence 버그 우회: blockquote 안에 갇혀있는 표들을 무조건 부모 밖으로 강제 추출
+                doc.querySelectorAll('blockquote').forEach(bq => {
+                    const tables = bq.querySelectorAll('table');
+                    let insertAfterNode = bq;
+                    tables.forEach(table => {
+                        insertAfterNode.parentNode.insertBefore(table, insertAfterNode.nextSibling);
+                        insertAfterNode = table; 
+                    });
+                    if (bq.textContent.trim() === '' && bq.children.length === 0) {
+                        bq.remove();
+                    }
+                });
+
+                // 2-2. [추가] Confluence 버그 우회: ul, ol 등 리스트 내부에 갇혀있는 표도 부모 밖으로 추출
+                doc.querySelectorAll('ul, ol').forEach(list => {
+                    const tables = list.querySelectorAll('table');
+                    let insertAfterNode = list;
+                    tables.forEach(table => {
+                        insertAfterNode.parentNode.insertBefore(table, insertAfterNode.nextSibling);
+                        insertAfterNode = table;
+                    });
+                });
+
+                // 3. 인라인 스타일 강제 주입: Confluence, Word 등 외부에서 자체 CSS를 잃어도 표 형태를 무조건 유지하도록 처리
+                doc.querySelectorAll('table').forEach(table => {
+                    table.setAttribute('border', '1');
+                    table.style.borderCollapse = 'collapse';
+                    table.style.width = '100%';
+                    table.style.marginTop = '15px';
+                    table.style.marginBottom = '15px';
+                    
+                    table.querySelectorAll('th, td').forEach(cell => {
+                        cell.style.border = '1px solid #dfe1e6'; // Confluence 특유의 연회색 보더
+                        cell.style.padding = '8px 12px';
+                        cell.style.textAlign = 'left';
+                    });
+                    
+                    table.querySelectorAll('th').forEach(th => {
+                        th.style.backgroundColor = '#f4f5f7'; // Confluence 헤더 배경색
+                        th.style.fontWeight = 'bold';
+                    });
+                });
+
+                // 처리된 최종 HTML 추출
+                const finalHtmlContent = doc.body.innerHTML;
+
                 const clipboardItem = new ClipboardItem({
-                    'text/html': new Blob([htmlContent], { type: 'text/html' }),
+                    'text/html': new Blob([finalHtmlContent], { type: 'text/html' }),
                     'text/plain': new Blob([textContent], { type: 'text/plain' })
                 });
                 
@@ -562,7 +621,6 @@
             }, 1500);
         }
 
-        // --- 5. 문서 목록(History) 모달 로직 ---
         const historyModal = document.getElementById('history-modal');
         const docList = document.getElementById('document-list');
 
@@ -621,7 +679,6 @@
             };
         }
 
-        // --- 6. MD 다운로드 기능 ---
         document.getElementById('download-btn').addEventListener('click', () => {
             const content = mdOutput.value;
             if (!content.trim()) return alert('다운로드할 내용이 없습니다.');

@@ -1011,7 +1011,6 @@ window.MathJax = {
         reader.readAsText(file);
     }
 
-    // ====== [핵심 수정 구간] 키노트 가져오기 관련 로직 완벽 보완 ======
     function handleKeynoteImport(event) {
         const file = event.target.files[0];
         if (!file) return;
@@ -1043,28 +1042,19 @@ window.MathJax = {
                         let concept = convertHtmlToMd(rawConcept).trim();
                         let solution = convertHtmlToMd(rawSolution).trim();
 
-                        // 단락/줄간격 좁히기 및 인라인 엉킴/대시/숫자 리스트 분리 처리
                         const formatAndCompressSpacing = (text) => {
                             if (!text) return '';
                             let res = text;
-                            
-                            // 1. 역슬래시로 잘못 이스케이프된 숫자 리스트 원복 (예: "3\. " -> "3. ")
                             res = res.replace(/(\d+)\\\.\s*/g, '$1. ');
-                            
-                            // 2. 이미지 마크다운 뒤에 바로 대시나 숫자가 붙어버리는 경우 블록 분리
                             res = res.replace(/(\))([ \t]*)([-*][ \t]+|\d+\.[ \t]+)/g, '$1\n\n$3');
-                            
-                            // 3. 문장 중간에 껴있는 대시(-)나 숫자 리스트 분리
-                            // (문자나 마침표 등 단어 바로 뒤에 띄어쓰기 후 - 나 숫자가 오는 경우)
                             res = res.replace(/([^\s\n])\s+(-\s+)/g, '$1\n\n$2');
                             res = res.replace(/([^\s\n])\s+(\d+\.\s+)/g, '$1\n\n$2');
                             
-                            // 4. 과도한 간격은 좁히되 리스트 간격 유지
                             return res
-                                .replace(/\n{3,}/g, '\n\n') // 과도한 3줄 이상 공백 방지
-                                .replace(/\n{2,}(?=[ \t]*[-*] )/g, '\n') // 글머리 기호(-, *) 앞 공백 좁히기
-                                .replace(/\n{2,}(?=[ \t]*\d+\. )/g, '\n') // 숫자 리스트(1., 2.) 앞 공백 좁히기
-                                .replace(/\n{2,}(?=[ \t]*[→⇒►>])/g, '\n'); // 화살표(→) 기호 앞 공백 좁히기
+                                .replace(/\n{3,}/g, '\n\n')
+                                .replace(/\n{2,}(?=[ \t]*[-*] )/g, '\n')
+                                .replace(/\n{2,}(?=[ \t]*\d+\. )/g, '\n')
+                                .replace(/\n{2,}(?=[ \t]*[→⇒►>])/g, '\n');
                         };
                         
                         lead = formatAndCompressSpacing(lead);
@@ -1100,7 +1090,6 @@ window.MathJax = {
         };
         reader.readAsText(file);
     }
-    // =========================================================
 
     function handleIsmspImport(event) {
         const file = event.target.files[0];
@@ -1526,7 +1515,8 @@ window.MathJax = {
             <div class="article-block card" id="${id}">
                 <button class="remove-btn" onclick="document.getElementById('${id}').remove()">삭제</button>
                 <div class="section-tag">본문 블록 ${articleCount}</div>
-                <div class="form-group"><label>소제목 (### 헤더로 변환됨)</label><input type="text" class="a-title" placeholder="예: 6G 핵심 기술 요소"></div>
+                <!-- 소제목 H2 격상 안내 문구 변경 -->
+                <div class="form-group"><label>소제목 (## 헤더로 변환됨)</label><input type="text" class="a-title" placeholder="예: 6G 핵심 기술 요소"></div>
                 <div class="form-group">
                     <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 8px;">
                         <label style="margin-bottom: 0;">본문 내용 (마크다운 지원) <span style="font-weight:400; color:#ef4444; font-size:12px; margin-left:8px;">💡 AI 답변은 '복사(Copy)' 버튼으로 가져와야 굵게 등 양식이 유지됩니다.</span></label>
@@ -1622,7 +1612,6 @@ window.MathJax = {
         const extractBase64Images = (mdText) => {
             if (!mdText) return mdText;
             return mdText.replace(/!\[([^\]]*)\]\(\s*(data:image\/[^;]+;base64,[^\)]+)\)/gi, (match, alt, dataUrl) => {
-                // 이미지 위아래 여백을 대폭 줄임 (상단 4px, 하단 12px)
                 return `<img src="${dataUrl.replace(/\s+/g, '')}" alt="${alt}" style="max-width: 100%; height: auto; margin: 4px 0 12px 0;" />`;
             });
         };
@@ -1644,15 +1633,14 @@ window.MathJax = {
         
         let articlesMd = [];
         
-        const jsonCategories = ["키노트", "두음마스터", "5R", "Drill", "Chat", "ISMS-P", "Link", "technote", "문제분석", "참조자료", "패스리딩"]; 
-        const isJsonImportCategory = jsonCategories.includes(data.category);
-
         data.articles.forEach((art, index) => {
             let artMd = "";
             
             if (art.title) {
                 let fixedTitle = art.title.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/\*\*/g, '');
-                artMd += `### ${escapeHtml(fixedTitle)}\n\n`;
+                // 핵심 수정부: 블록 단위 소제목을 ###(H3)에서 ##(H2)로 상향시켜 
+                // 본문 내부에 H2, H3를 쓰더라도 종속(들여쓰기)되는 위계 역전을 방지합니다.
+                artMd += `## ${escapeHtml(fixedTitle)}\n\n`;
             }
             
             if (art.content) {
@@ -1709,13 +1697,11 @@ window.MathJax = {
                 }
                 processedContent = plines.join('\n');
                 
-                if (isJsonImportCategory) {
-                    processedContent = processedContent.replace(/^(\s*)#{1,6}\s+(.*)$/gm, '$1**$2**');
-                }
+                // 삭제된 부분: 기존에는 JSON 데이터를 불러왔을 때 
+                // 본문 안의 헤더(#)를 무조건 볼드(**)로 바꿔버려 목차 인식을 날려버리던 코드가 있었습니다.
+                // 사용자의 의도대로 본문 안의 헤더들도 목차에서 제대로 보이도록 완전히 삭제했습니다.
                 
                 const tagsStr = "리드|개념|상세설명 및 해결방안|상세설명|정의\\/개념|정의|핵심\\/키워드|두음\\/키워드|분류|인증기준|주요 확인사항|결함사례|참조\\/Notes";
-                
-                // 기존 4단계 정규식을 하나로 통합 및 <b>, <strong> 태그 호환 처리 (사이드 이펙트 수정)
                 const tagRegex = new RegExp(`(?:<\\/?(?:b|strong)>|\\*\\*|[ \\t])*\\[(${tagsStr})\\](?:<\\/?(?:b|strong)>|\\*\\*|[ \\t])*`, 'gi');
                 processedContent = processedContent.replace(tagRegex, '\n\n**[$1]**\n\n');
                 
