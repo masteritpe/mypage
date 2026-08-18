@@ -109,6 +109,13 @@
         }
         #copy-rich-btn:hover { background: rgba(16, 185, 129, 0.2); }
 
+        /* HTML 다운로드 버튼 스타일 추가 */
+        #html-download-btn {
+            background: rgba(139, 92, 246, 0.1); color: #7c3aed;
+            font-weight: 600;
+        }
+        #html-download-btn:hover { background: rgba(139, 92, 246, 0.2); }
+
         /* Toast UI Editor 스타일 & 표 안의 공백 방지 CSS */
         #wysiwyg-editor { flex: 1; background: transparent; }
         .toastui-editor-defaultUI { border: none !important; background: transparent !important; }
@@ -203,7 +210,6 @@
     </header>
 
     <main>
-        <!-- WYSIWYG 패널 -->
         <div class="panel" id="wysiwyg-panel">
             <div class="panel-header">
                 <div>WYSIWYG Editor</div>
@@ -217,12 +223,12 @@
 
                     <span class="hint" id="clean-btn" title="문서에 남아있는 불필요한 공백과 <br> 태그를 말끔히 청소합니다">여백 정리 🧹</span>
                     <span class="hint" id="copy-rich-btn" title="다른 에디터에 서식이 유지되도록 리치 텍스트(HTML)로 복사합니다">내용 복사 📋</span>
+                    <span class="hint" id="html-download-btn" title="현재 문서를 HTML 파일로 다운로드합니다">HTML 다운 🌐</span>
                 </div>
             </div>
             <div id="wysiwyg-editor"></div>
         </div>
 
-        <!-- 마크다운 패널 -->
         <div class="panel" id="md-panel">
             <div class="panel-header">
                 <div>Markdown Source</div>
@@ -242,7 +248,6 @@
         </div>
     </main>
 
-    <!-- 1. 문서 제목 입력 모달 -->
     <div class="modal-overlay" id="title-modal">
         <div class="modal-content" style="width: 380px;">
             <div class="modal-header">
@@ -256,7 +261,6 @@
         </div>
     </div>
 
-    <!-- 2. 문서 목록 모달 -->
     <div class="modal-overlay" id="history-modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -268,6 +272,7 @@
     </div>
 
     <script src="https://uicdn.toast.com/editor/latest/toastui-editor-all.min.js"></script>
+
     <script>
         // --- 1. DOM 요소 및 에디터 초기화 ---
         const mdOutput = document.getElementById('md-output');
@@ -536,6 +541,94 @@
             } catch (err) {
                 console.error('복사 실패:', err);
                 alert('클립보드 복사에 실패했습니다. 브라우저 권한을 확인해주세요.');
+            }
+        });
+
+        // --- ★ HTML 다운로드 기능 추가 ---
+        const htmlDownloadBtn = document.getElementById('html-download-btn');
+        htmlDownloadBtn.addEventListener('click', () => {
+            const textContent = getCleanedMarkdown();
+            if (!textContent.trim()) return alert('다운로드할 내용이 없습니다.');
+
+            // 에디터에서 작성된 내용을 가져와 완성된 HTML 구조 생성 (가독성을 위한 기본 스타일 포함)
+            const rawHtmlContent = editor.getHTML();
+            const fullHtml = `<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Document</title>
+<style>
+    body { 
+        font-family: 'Inter', 'Pretendard', sans-serif; 
+        line-height: 1.7; 
+        color: #1e293b; 
+        max-width: 900px; 
+        margin: 0 auto; 
+        padding: 2rem; 
+        word-break: keep-all; 
+        overflow-wrap: break-word;
+    }
+    table { 
+        border-collapse: collapse; 
+        width: 100%; 
+        margin: 1.5rem 0; 
+    }
+    th, td { 
+        border: 1px solid #dfe1e6; 
+        padding: 12px; 
+        text-align: left; 
+        vertical-align: middle; 
+    }
+    th { 
+        background-color: #f4f5f7; 
+        font-weight: bold; 
+    }
+    table p { margin: 0 0 6px 0; }
+    table td > p:last-child, table th > p:last-child { margin-bottom: 0; }
+    blockquote { 
+        border-left: 4px solid #dfe1e6; 
+        padding-left: 1rem; 
+        margin-left: 0; 
+        color: #64748b; 
+    }
+    img { max-width: 100%; height: auto; }
+</style>
+</head>
+<body>
+${rawHtmlContent}
+</body>
+</html>`;
+
+            // HTML 파일 생성 및 저장 로직
+            const processHtmlDownload = (fileName) => {
+                const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                }, 100);
+
+                const originalText = htmlDownloadBtn.innerText;
+                htmlDownloadBtn.innerText = '다운로드 완료 ✔️';
+                setTimeout(() => { htmlDownloadBtn.innerText = originalText; }, 2000);
+            };
+
+            // DB에서 현재 문서 제목을 가져와 파일명으로 지정
+            if (currentDocId && db) {
+                const tx = db.transaction(STORE_NAME, 'readonly');
+                tx.objectStore(STORE_NAME).get(currentDocId).onsuccess = (e) => {
+                    const docData = e.target.result;
+                    const fileName = (docData && docData.title) ? `${docData.title}.html` : 'document.html';
+                    processHtmlDownload(fileName);
+                };
+            } else {
+                processHtmlDownload('document.html');
             }
         });
 
