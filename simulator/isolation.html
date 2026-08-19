@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>트랜잭션 격리 수준 시뮬레이터</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .simulator-container {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        @media (max-width: 768px) {
+            .simulator-container {
+                flex-direction: column;
+            }
+        }
+        .panel {
+            flex: 1;
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border: 1px solid #e9ecef;
+        }
+        .panel h2 {
+            font-size: 1.2em;
+            margin-top: 0;
+            color: #0056b3;
+            border-bottom: 2px solid #f0f0f5;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #495057;
+        }
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-top: 15px;
+        }
+        input[type="range"] {
+            flex: 1;
+            accent-color: #0056b3;
+        }
+        #level-name {
+            font-weight: bold;
+            color: #0056b3;
+            font-size: 1.1em;
+            text-align: center;
+            margin-top: 10px;
+            padding: 10px;
+            background: #e9ecef;
+            border-radius: 6px;
+        }
+        .level-desc {
+            font-size: 0.9em;
+            color: #495057;
+            margin-top: 10px;
+            line-height: 1.4;
+        }
+        button {
+            width: 100%;
+            background-color: #0056b3;
+            color: white;
+            border: none;
+            padding: 12px;
+            font-size: 1.1em;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            margin-top: 15px;
+        }
+        button:hover {
+            background-color: #004494;
+        }
+        
+        /* 트랜잭션 타임라인 UI */
+        .result-box {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        .timeline-header {
+            display: flex;
+            font-weight: bold;
+            border-bottom: 2px solid #ced4da;
+            padding-bottom: 10px;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        .t-col {
+            flex: 1;
+        }
+        .timeline-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            text-align: center;
+            font-size: 0.95em;
+        }
+        .t1-action, .t2-action {
+            flex: 1;
+            padding: 8px;
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            min-height: 24px;
+        }
+        .t-empty {
+            background: transparent;
+            border: none;
+        }
+        .time-arrow {
+            width: 40px;
+            color: #adb5bd;
+            font-size: 1.2em;
+        }
+        .alert-text {
+            color: #dc3545;
+            font-weight: bold;
+            font-size: 0.9em;
+            margin-top: 5px;
+            display: block;
+        }
+        .success-text {
+            color: #28a745;
+            font-weight: bold;
+            font-size: 0.9em;
+            margin-top: 5px;
+            display: block;
+        }
+        .wait-text {
+            color: #fd7e14;
+            font-weight: bold;
+            font-style: italic;
+        }
+        
+        /* 하단 설명 영역 */
+        .explanation-box {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border: 1px solid #e9ecef;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            font-size: 0.9em;
+        }
+        th, td {
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            text-align: center;
+        }
+        th {
+            background-color: #f1f3f5;
+            color: #495057;
+        }
+        .tradeoff-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #e9ecef;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>트랜잭션 격리 수준 시뮬레이터</h1>
+    <div class="subtitle">여러 작업(트랜잭션)이 동시에 진행될 때, 데이터 차단 단계를 시뮬레이션 합니다.</div>
+
+    <div class="simulator-container">
+        <!-- 왼쪽 컨트롤 패널 -->
+        <div class="panel">
+            <h2>1. 격리 수준(Isolation Level) 설정</h2>
+            
+            <div class="form-group">
+                <label for="iso-level">데이터 차단 단계 조절 (1~4단계)</label>
+                <div class="slider-container">
+                    <span>동시성↑</span>
+                    <input type="range" id="iso-level" min="1" max="4" step="1" value="1">
+                    <span>일관성↑</span>
+                </div>
+                <div id="level-name">Level 1: Read Uncommitted</div>
+                <div class="level-desc" id="level-desc">
+                    <strong>개념:</strong> 트랜잭션이 완료되지 않은 데이터를 다른 트랜잭션이 참조하는 것을 허용<br>
+                    <strong>특징:</strong> 성능은 가장 좋지만, 데이터 일관성이 가장 낮은 수준
+                </div>
+            </div>
+
+            <button onclick="runSimulation()">트랜잭션 실행 시뮬레이션</button>
+        </div>
+
+        <!-- 오른쪽 결과 패널 -->
+        <div class="panel">
+            <h2>2. 동시성 제어 결과 (T1 vs T2)</h2>
+            
+            <div class="result-box" id="simulation-output" style="display: none;">
+                <div style="font-size: 0.9em; color: #666; margin-bottom: 15px; text-align: center;">
+                    초기 데이터: <strong style="color: #333;">A = 10</strong>
+                </div>
+                
+                <div class="timeline-header">
+                    <div class="t-col" style="color: #0056b3;">트랜잭션 1 (T1)</div>
+                    <div style="width: 40px;">시간</div>
+                    <div class="t-col" style="color: #20c997;">트랜잭션 2 (T2)</div>
+                </div>
+
+                <div id="timeline-container">
+                    <!-- 자바스크립트를 통해 동적으로 주입됩니다 -->
+                </div>
+                
+                <div style="margin-top: 20px; padding: 10px; background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: 4px; font-size: 0.9em;" id="result-summary">
+                    <!-- 요약 설명 -->
+                </div>
+            </div>
+            
+            <div id="empty-state" style="text-align: center; padding: 40px 20px; color: #868e96;">
+                버튼을 눌러 시뮬레이션을 시작하세요.
+            </div>
+        </div>
+    </div>
+
+    <!-- 하단 설명 -->
+    <div class="explanation-box">
+        <h2 style="font-size: 1.2em; color: #0056b3; margin-top: 0; border-bottom: 2px solid #f0f0f5; padding-bottom: 10px;">격리 수준에 따른 이상현상 및 일관성-동시성 관계</h2>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>격리 수준 (Isolation Level)</th>
+                    <th>Dirty Read</th>
+                    <th>Non-repeatable Read</th>
+                    <th>Phantom Read</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Read Uncommitted</strong></td>
+                    <td style="color: red;">발생</td>
+                    <td style="color: red;">발생</td>
+                    <td style="color: red;">발생</td>
+                </tr>
+                <tr>
+                    <td><strong>Read Committed</strong></td>
+                    <td style="color: green;">발생 안함</td>
+                    <td style="color: red;">발생</td>
+                    <td style="color: red;">발생</td>
+                </tr>
+                <tr>
+                    <td><strong>Repeatable Read</strong></td>
+                    <td style="color: green;">발생 안함</td>
+                    <td style="color: green;">발생 안함</td>
+                    <td style="color: red;">발생</td>
+                </tr>
+                <tr>
+                    <td><strong>Serializable</strong></td>
+                    <td style="color: green;">발생 안함</td>
+                    <td style="color: green;">발생 안함</td>
+                    <td style="color: green;">발생 안함</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="tradeoff-container">
+            <span style="color: #d9534f;">← 동시성 증가 (성능 우수, 무결성 위험)</span>
+            <span>일관성과 동시성의 Trade-off 관계</span>
+            <span style="color: #5cb85c;">일관성 증가 (무결성 유지, 성능/비용 저하) →</span>
+        </div>
+        <p style="font-size: 0.85em; color: #666; margin-top: 10px; text-align: center;">
+            격리 수준이 높아질수록 Lock 범위가 넓어져 동시성이 저하되므로 적정한 레벨 선정이 중요합니다.
+        </p>
+    </div>
+
+    <script>
+        const scenarios = {
+            1: {
+                name: "Level 1: Read Uncommitted",
+                desc: "<strong>개념:</strong> 트랜잭션이 완료되지 않은 데이터를 다른 트랜잭션이 참조하는 것을 허용하는 격리 수준<br><strong>특징:</strong> 성능은 가장 좋지만, 데이터 일관성이 가장 낮은 수준",
+                timeline: [
+                    { t1: "Begin", t2: "Begin" },
+                    { t1: "UPDATE A = A + 10<br><small>(A = 20)</small>", t2: null },
+                    { t1: null, t2: "Read A<br><span class='alert-text'>A = 20 (Dirty Read 발생)</span>" },
+                    { t1: "Commit", t2: null }
+                ],
+                summary: "<strong>문제점 (Dirty Read 발생):</strong> T1이 Commit되지 않은 상태임에도 T2가 변경된 데이터(20)를 읽어버리는 현상이 발생합니다."
+            },
+            2: {
+                name: "Level 2: Read Committed",
+                desc: "<strong>개념:</strong> 트랜잭션이 완료(Commit)된 데이터만 읽을 수 있는 격리 수준<br><strong>문제점:</strong> Non Repeatable Read 발생 가능",
+                timeline: [
+                    { t1: "Begin", t2: "Begin" },
+                    { t1: null, t2: "Read A<br><strong>(A = 10)</strong>" },
+                    { t1: "UPDATE A = A + 10<br><small>(A = 20)</small>", t2: null },
+                    { t1: "Commit", t2: null },
+                    { t1: null, t2: "Read A<br><span class='alert-text'>A = 20 (Non-Repeatable Read 발생)</span>" }
+                ],
+                summary: "<strong>문제점 (Non-Repeatable Read 발생):</strong> T2 트랜잭션 내에서 동일한 데이터를 두 번 조회했는데, 그 사이 T1이 데이터를 수정하고 Commit하여 <strong>서로 상이한 값(10과 20)이 조회</strong>되는 현상이 발생합니다."
+            },
+            3: {
+                name: "Level 3: Repeatable Read",
+                desc: "<strong>개념:</strong> 동일한 행을 여러 번 읽을 때 항상 동일한 값을 반환하도록 보장하는 격리 수준 (MVCC 다중버전관리 활용)<br><strong>특징:</strong> MySQL의 기본 격리 수준",
+                timeline: [
+                    { t1: "Begin", t2: "Begin" },
+                    { t1: null, t2: "Read A<br><strong>(A = 10)</strong>" },
+                    { t1: "UPDATE A = 20<br>Commit", t2: null },
+                    { t1: null, t2: "Read A<br><span class='success-text'>A = 10 (트랜잭션 시작 시점의 값 리턴)</span>" }
+                ],
+                summary: "<strong>해결 및 잔존 문제:</strong> MVCC를 통해 Non-Repeatable Read는 방지하여 일관된 10을 읽습니다. 하지만, 다른 트랜잭션에서 '추가한 행(Insert)'이 조회되는 <strong>Phantom Read</strong> 문제는 여전히 발생할 수 있습니다."
+            },
+            4: {
+                name: "Level 4: Serializable",
+                desc: "<strong>개념:</strong> 여러 트랜잭션이 순차적으로 하나씩 실행되도록 보장하는 가장 엄격한 격리 수준<br><strong>특징:</strong> 과도한 Lock 사용으로 데드락 발생 가능성 증가",
+                timeline: [
+                    { t1: "Begin<br>Read A (A = 10)", t2: "Begin" },
+                    { t1: "UPDATE A = A + 10", t2: "Read A 요청<br><span class='wait-text'>Wait (대기 상태)</span>" },
+                    { t1: "Commit (A = 20)", t2: "<span class='wait-text'>Wait (대기 상태)</span>" },
+                    { t1: "트랜잭션 종료", t2: "Read A<br><span class='success-text'>A = 20 (순차적 실행 완료)</span>" }
+                ],
+                summary: "<strong>결과:</strong> T1이 데이터를 조회/조작하는 동안 T2는 접근을 대기(Wait)합니다. 데이터의 완벽한 일관성은 보장되지만 <strong>동시성 저하 및 오버헤드가 급증</strong>합니다."
+            }
+        };
+
+        const slider = document.getElementById('iso-level');
+        const levelNameEl = document.getElementById('level-name');
+        const levelDescEl = document.getElementById('level-desc');
+
+        slider.addEventListener('input', function() {
+            const val = this.value;
+            levelNameEl.innerHTML = scenarios[val].name;
+            levelDescEl.innerHTML = scenarios[val].desc;
+            
+            // 슬라이더 이동 시 결과창 초기화
+            document.getElementById('simulation-output').style.display = 'none';
+            document.getElementById('empty-state').style.display = 'block';
+        });
+
+        function runSimulation() {
+            const val = document.getElementById('iso-level').value;
+            const scenario = scenarios[val];
+            
+            document.getElementById('empty-state').style.display = 'none';
+            const outputEl = document.getElementById('simulation-output');
+            outputEl.style.display = 'block';
+            
+            const timelineContainer = document.getElementById('timeline-container');
+            timelineContainer.innerHTML = ''; // 초기화
+            
+            scenario.timeline.forEach(step => {
+                const row = document.createElement('div');
+                row.className = 'timeline-row';
+                
+                // T1 Action
+                const t1Div = document.createElement('div');
+                t1Div.className = step.t1 ? 't1-action' : 't1-action t-empty';
+                t1Div.innerHTML = step.t1 || '';
+                
+                // Arrow
+                const arrowDiv = document.createElement('div');
+                arrowDiv.className = 'time-arrow';
+                arrowDiv.innerHTML = '↓';
+                
+                // T2 Action
+                const t2Div = document.createElement('div');
+                t2Div.className = step.t2 ? 't2-action' : 't2-action t-empty';
+                t2Div.innerHTML = step.t2 || '';
+                
+                row.appendChild(t1Div);
+                row.appendChild(arrowDiv);
+                row.appendChild(t2Div);
+                
+                timelineContainer.appendChild(row);
+            });
+            
+            document.getElementById('result-summary').innerHTML = scenario.summary;
+        }
+    </script>
+</body>
+</html>
