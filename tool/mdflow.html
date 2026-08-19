@@ -46,7 +46,7 @@
             background: linear-gradient(to right, #2563eb, #6366f1);
             -webkit-background-clip: text; -webkit-text-fill-color: transparent;
         }
-        header p { font-size: 0.875rem; color: var(--text-secondary); }
+        header p { font-size: 0.875rem; color: var(--text-secondary); font-weight: 500; }
 
         /* Main Layout */
         main {
@@ -182,7 +182,7 @@
 
     <header>
         <h1>MD Flow</h1>
-        <p>Editor & Storage</p>
+        <p id="header-file-name">Editor & Storage</p>
     </header>
 
     <main>
@@ -273,6 +273,7 @@
             mdOutput: document.getElementById('md-output'),
             fontSelector: document.getElementById('font-selector'),
             mdFileInput: document.getElementById('md-file-input'),
+            headerFileName: document.getElementById('header-file-name'), // 추가된 돔
             modals: {
                 title: document.getElementById('title-modal'),
                 history: document.getElementById('history-modal')
@@ -294,19 +295,16 @@
          */
         const MarkdownUtils = {
             clean(rawMarkdown) {
-                let md = rawMarkdown.replace(/\\([|*_\-])/g, '$1'); // Unescape chars
+                let md = rawMarkdown.replace(/\\([|*_\-])/g, '$1'); 
                 
-                // Extract tables from blockquotes
                 md = md.replace(/(?:^[ \t]*>[ \t]*\|.*(?:\r?\n|$))+/gm, match => 
                     '\n\n' + match.replace(/^[ \t]*>[ \t]*/gm, '') + '\n\n'
                 );
                 
-                // Extract tables from lists
                 md = md.replace(/(?:^[ \t]+\|.*(?:\r?\n|$))+/gm, match => 
                     '\n\n' + match.replace(/^[ \t]+/gm, '') + '\n\n'
                 );
                 
-                // Reduce multiple newlines
                 return md.replace(/\n{3,}/g, '\n\n');
             },
             
@@ -340,7 +338,6 @@
             }
         });
         
-        // Initial setup
         DOM.mdOutput.value = MarkdownUtils.clean(editor.getMarkdown());
 
         /** 
@@ -392,6 +389,7 @@
                 req.onsuccess = (e) => {
                     APP_STATE.currentDocId = e.target.result; 
                     UI.showSaveSuccess();
+                    UI.updateHeader(title, 'history'); // 저장 완료 시 헤더 파일명 갱신
                     DOM.modals.title.classList.remove('active');
                 };
             },
@@ -406,7 +404,10 @@
                 const tx = dbInstance.transaction(DB_CONFIG.storeName, 'readwrite');
                 tx.objectStore(DB_CONFIG.storeName).delete(id);
                 tx.oncomplete = () => {
-                    if (APP_STATE.currentDocId === id) APP_STATE.currentDocId = null;
+                    if (APP_STATE.currentDocId === id) {
+                        APP_STATE.currentDocId = null;
+                        UI.updateHeader(null); // 활성 문서가 삭제되면 헤더 텍스트 초기화
+                    }
                     if (callback) callback();
                 };
             }
@@ -416,6 +417,17 @@
          * 6. UI Helpers 
          */
         const UI = {
+            // 헤더 영역 텍스트 갱신 함수 (불러오기 항목 구분 처리 반영)
+            updateHeader(title, source) {
+                if (!title) {
+                    DOM.headerFileName.innerText = 'Editor & Storage';
+                } else if (source === 'load') {
+                    DOM.headerFileName.innerText = `📂 [PC] ${title}`;
+                } else if (source === 'history') {
+                    DOM.headerFileName.innerText = `🗂️ [저장됨] ${title}`;
+                }
+            },
+            
             showSaveSuccess() {
                 const btn = DOM.buttons.save;
                 const originalText = btn.innerText;
@@ -455,6 +467,7 @@
                 editor.setMarkdown('');
                 DOM.mdOutput.value = '';
                 APP_STATE.currentDocId = null;
+                UI.updateHeader(null); // 새 문서 시 헤더 텍스트 초기화
             });
 
             DOM.buttons.save.addEventListener('click', () => {
@@ -499,6 +512,7 @@
                                 editor.setMarkdown(doc.content);
                                 DOM.mdOutput.value = doc.content;
                                 APP_STATE.currentDocId = doc.id;
+                                UI.updateHeader(doc.title, 'history'); // 목록에서 불러온 파일 헤더 반영
                                 DOM.modals.history.classList.remove('active');
                             });
                             li.querySelector('.del-btn').addEventListener('click', (ev) => {
@@ -530,47 +544,38 @@
                     editor.setMarkdown(mdContent);
                     DOM.mdOutput.value = mdContent;
                     APP_STATE.currentDocId = null;
+                    UI.updateHeader(file.name, 'load'); // PC에서 불러온 파일 헤더 반영
                 };
                 reader.readAsText(file);
                 e.target.value = '';
             });
 
-            // ✨ 전체 코드 블록 해제 / 보호 토글 기능 (정규식 강화버전)
+            // 기타 기존 리스너 유지
             document.getElementById('toggle-code-btn').addEventListener('click', function() {
-                // 1. WYSIWYG 에디터가 임의로 추가한 이스케이프(\) 문자를 1차 정리
                 let md = MarkdownUtils.clean(editor.getMarkdown());
-                
-                // 2. 백슬래시가 남아있을 경우까지 대비하여 유연하게 마커 감지
                 const hasUnlockedCodes = /📢\\?CODE\\?_START:/.test(md);
                 
                 if (!hasUnlockedCodes) {
-                    // 코드 해제: 일반 텍스트로 전환
                     md = md.replace(/```(.*?)\n([\s\S]*?)```/g, (match, lang, content) => {
                         const safeLang = lang.trim() || 'text';
                         return `\n\n📢CODE_START:${safeLang}\n${content.trim()}\n📢CODE_END\n\n`;
                     });
-                    
                     this.innerHTML = '코드 보호 🔒';
                     this.classList.add('active');
                 } else {
-                    // 코드 보호: 어떠한 변형(백슬래시, 공백 등)이 있더라도 마커를 정확히 찾아 코드 블록으로 복구
                     const regex = /📢\\?CODE\\?_START:(.*?)\s*\n([\s\S]*?)\s*📢\\?CODE\\?_END/g;
                     md = md.replace(regex, (match, lang, content) => {
-                        // 내부 텍스트에 남아있는 불필요한 백슬래시 찌꺼기 제거
                         let cleanContent = content.trim().replace(/\\([*_\-`[\]])/g, '$1'); 
                         return `\n\n\`\`\`${lang.trim()}\n${cleanContent}\n\`\`\`\n\n`;
                     });
-                    
                     this.innerHTML = '코드 해제 🔓';
                     this.classList.remove('active');
                 }
                 
-                // 에디터 및 마크다운 출력창 동기화
                 editor.setMarkdown(md, false);
                 DOM.mdOutput.value = MarkdownUtils.clean(editor.getMarkdown());
             });
 
-            // Cleanup & Format
             document.getElementById('clean-btn').addEventListener('click', function() {
                 const proseMirror = document.querySelector('.ProseMirror');
                 const wwScrollTop = proseMirror ? proseMirror.scrollTop : 0;
@@ -584,7 +589,6 @@
                 UI.tempChangeText(this, '정리 완료 ✨');
             });
 
-            // Editor Custom Paste Behavior
             document.getElementById('wysiwyg-editor').addEventListener('paste', function(e) {
                 if (e.isCustomPaste) return;
                 const html = e.clipboardData.getData('text/html');
@@ -615,7 +619,6 @@
                 }
             }, true);
 
-            // Copy Features
             document.getElementById('copy-btn').addEventListener('click', async function() {
                 if (!DOM.mdOutput.value) return;
                 try {
@@ -633,7 +636,6 @@
                     const parser = new DOMParser();
                     const doc = parser.parseFromString(rawHtmlContent, 'text/html');
                     
-                    // Table Extractor for Confluence bypass
                     ['blockquote', 'ul', 'ol'].forEach(selector => {
                         doc.querySelectorAll(selector).forEach(el => {
                             let insertAfterNode = el;
@@ -645,7 +647,6 @@
                         });
                     });
 
-                    // Inline Styles for Tables
                     doc.querySelectorAll('table').forEach(table => {
                         table.setAttribute('border', '1');
                         Object.assign(table.style, { borderCollapse: 'collapse', width: '100%', margin: '15px 0' });
@@ -667,7 +668,6 @@
                 } catch (err) { alert('복사 실패. 브라우저 권한을 확인해주세요.'); }
             });
 
-            // Downloads
             document.getElementById('html-download-btn').addEventListener('click', function() {
                 const textContent = MarkdownUtils.clean(editor.getMarkdown());
                 if (!textContent.trim()) return alert('다운로드할 내용이 없습니다.');
@@ -714,7 +714,6 @@
                 }
             });
 
-            // UI & Keyboard Bindings
             DOM.fontSelector.addEventListener('input', (e) => {
                 if (e.target.value.trim()) DOM.mdOutput.style.fontFamily = `"${e.target.value}", monospace`;
             });
@@ -727,7 +726,6 @@
             });
             DOM.inputs.docTitle.addEventListener('keyup', (e) => { if(e.key === 'Enter') DOM.buttons.confirmSave.click(); });
             
-            // Modal Closers
             document.getElementById('close-title-btn').addEventListener('click', () => DOM.modals.title.classList.remove('active'));
             document.getElementById('close-history-btn').addEventListener('click', () => DOM.modals.history.classList.remove('active'));
             window.addEventListener('click', (e) => {
@@ -736,7 +734,6 @@
             });
         }
 
-        // Initialize Everything
         DB.init();
         setupEventListeners();
 
