@@ -80,6 +80,10 @@
         }
         .hint:hover { background: rgba(59, 130, 246, 0.2); }
         
+        #toggle-code-btn { background: rgba(236, 72, 153, 0.1); color: #db2777; font-weight: 600; }
+        #toggle-code-btn:hover { background: rgba(236, 72, 153, 0.2); }
+        #toggle-code-btn.active { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
+        
         #clean-btn { background: rgba(245, 158, 11, 0.1); color: #d97706; font-weight: 600; }
         #clean-btn:hover { background: rgba(245, 158, 11, 0.2); }
         #copy-rich-btn { background: rgba(16, 185, 129, 0.1); color: #059669; font-weight: 600; }
@@ -193,6 +197,7 @@
                     <input type="file" id="md-file-input" accept=".md" style="display: none;">
                     <span class="hint" id="load-btn" title="PC의 .md 파일을 불러옵니다">불러오기 📂</span>
 
+                    <span class="hint" id="toggle-code-btn" title="코드 블록을 일반 텍스트로 풀어 툴바를 사용할 수 있게 합니다">코드 해제 🔓</span>
                     <span class="hint" id="clean-btn" title="문서에 남아있는 불필요한 공백과 <br> 태그를 말끔히 청소합니다">여백 정리 🧹</span>
                     <span class="hint" id="copy-rich-btn" title="다른 에디터에 서식이 유지되도록 리치 텍스트(HTML)로 복사합니다">내용 복사 📋</span>
                     <span class="hint" id="html-download-btn" title="현재 문서를 HTML 파일로 다운로드합니다">HTML 다운 🌐</span>
@@ -528,6 +533,41 @@
                 };
                 reader.readAsText(file);
                 e.target.value = '';
+            });
+
+            // ✨ 전체 코드 블록 해제 / 보호 토글 기능 (정규식 강화버전)
+            document.getElementById('toggle-code-btn').addEventListener('click', function() {
+                // 1. WYSIWYG 에디터가 임의로 추가한 이스케이프(\) 문자를 1차 정리
+                let md = MarkdownUtils.clean(editor.getMarkdown());
+                
+                // 2. 백슬래시가 남아있을 경우까지 대비하여 유연하게 마커 감지
+                const hasUnlockedCodes = /📢\\?CODE\\?_START:/.test(md);
+                
+                if (!hasUnlockedCodes) {
+                    // 코드 해제: 일반 텍스트로 전환
+                    md = md.replace(/```(.*?)\n([\s\S]*?)```/g, (match, lang, content) => {
+                        const safeLang = lang.trim() || 'text';
+                        return `\n\n📢CODE_START:${safeLang}\n${content.trim()}\n📢CODE_END\n\n`;
+                    });
+                    
+                    this.innerHTML = '코드 보호 🔒';
+                    this.classList.add('active');
+                } else {
+                    // 코드 보호: 어떠한 변형(백슬래시, 공백 등)이 있더라도 마커를 정확히 찾아 코드 블록으로 복구
+                    const regex = /📢\\?CODE\\?_START:(.*?)\s*\n([\s\S]*?)\s*📢\\?CODE\\?_END/g;
+                    md = md.replace(regex, (match, lang, content) => {
+                        // 내부 텍스트에 남아있는 불필요한 백슬래시 찌꺼기 제거
+                        let cleanContent = content.trim().replace(/\\([*_\-`[\]])/g, '$1'); 
+                        return `\n\n\`\`\`${lang.trim()}\n${cleanContent}\n\`\`\`\n\n`;
+                    });
+                    
+                    this.innerHTML = '코드 해제 🔓';
+                    this.classList.remove('active');
+                }
+                
+                // 에디터 및 마크다운 출력창 동기화
+                editor.setMarkdown(md, false);
+                DOM.mdOutput.value = MarkdownUtils.clean(editor.getMarkdown());
             });
 
             // Cleanup & Format
