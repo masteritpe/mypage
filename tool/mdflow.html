@@ -163,12 +163,30 @@
             display: flex; justify-content: space-between; align-items: center;
             padding: 0.8rem 1rem; border-radius: 8px;
             background: rgba(255, 255, 255, 0.6); border: 1px solid var(--glass-border);
-            transition: 0.2s; cursor: pointer;
+            transition: 0.2s; cursor: pointer; gap: 1rem;
         }
         .doc-item:hover { background: rgba(255, 255, 255, 0.9); }
-        .doc-info { display: flex; flex-direction: column; gap: 0.2rem; flex: 1; }
-        .doc-title { font-size: 0.95rem; font-weight: 600; color: var(--text-primary); }
+        .doc-info { display: flex; flex-direction: column; gap: 0.3rem; flex: 1; min-width: 0; }
+        .doc-title { font-size: 0.95rem; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .doc-date { font-size: 0.75rem; color: var(--text-secondary); }
+        
+        /* Edit Title Input */
+        .edit-title-input {
+            font-size: 0.95rem; font-weight: 600; font-family: inherit;
+            border: 1px solid var(--accent-color); border-radius: 4px; padding: 0.2rem 0.4rem;
+            width: 100%; outline: none; background: rgba(255,255,255,0.9);
+        }
+        
+        /* Action Buttons */
+        .action-btns { display: flex; gap: 0.4rem; }
+        .edit-btn {
+            background: rgba(59, 130, 246, 0.1); color: #3b82f6; border: none; 
+            border-radius: 6px; padding: 0.4rem 0.6rem; font-size: 0.75rem; cursor: pointer; transition: 0.2s;
+        }
+        .edit-btn:hover { background: rgba(59, 130, 246, 0.2); }
+        .edit-btn.save-mode { background: rgba(16, 185, 129, 0.1); color: #059669; }
+        .edit-btn.save-mode:hover { background: rgba(16, 185, 129, 0.2); }
+        
         .del-btn { 
             background: rgba(239, 68, 68, 0.1); color: #ef4444; border: none; 
             border-radius: 6px; padding: 0.4rem 0.6rem; font-size: 0.75rem; cursor: pointer; transition: 0.2s; 
@@ -477,6 +495,20 @@
                 };
             },
 
+            rename(id, newTitle, callback) {
+                const tx = dbInstance.transaction(DB_CONFIG.storeName, 'readwrite');
+                const store = tx.objectStore(DB_CONFIG.storeName);
+                store.get(id).onsuccess = (e) => {
+                    const doc = e.target.result;
+                    if (doc) {
+                        doc.title = newTitle;
+                        store.put(doc).onsuccess = () => {
+                            if (callback) callback();
+                        };
+                    }
+                };
+            },
+
             loadAll(callback) {
                 const tx = dbInstance.transaction(DB_CONFIG.storeName, 'readonly');
                 const req = tx.objectStore(DB_CONFIG.storeName).getAll();
@@ -641,15 +673,67 @@
                                     <span class="doc-title">${doc.title}</span>
                                     <span class="doc-date">${new Date(doc.updatedAt).toLocaleString()}</span>
                                 </div>
-                                <button class="del-btn" data-id="${doc.id}">삭제</button>
+                                <div class="action-btns">
+                                    <button class="edit-btn" data-id="${doc.id}">수정</button>
+                                    <button class="del-btn" data-id="${doc.id}">삭제</button>
+                                </div>
                             `;
-                            li.querySelector('.doc-info').addEventListener('click', () => {
+                            
+                            // 문서 불러오기 로직 (클릭 시)
+                            li.querySelector('.doc-info').addEventListener('click', (e) => {
+                                // 만약 클릭한 곳이 input(이름 수정 중)이라면 문서 불러오기를 실행하지 않음
+                                if(e.target.tagName === 'INPUT') return;
+                                
                                 editor.setMarkdown(doc.content);
                                 DOM.mdOutput.value = doc.content;
                                 APP_STATE.currentDocId = doc.id;
                                 UI.updateHeader(doc.title, 'history'); 
                                 DOM.modals.history.classList.remove('active');
                             });
+
+                            // 이름 수정 버튼 로직
+                            const editBtn = li.querySelector('.edit-btn');
+                            editBtn.addEventListener('click', (ev) => {
+                                ev.stopPropagation();
+                                const docInfoDiv = li.querySelector('.doc-info');
+                                const titleSpan = docInfoDiv.querySelector('.doc-title');
+                                
+                                if (editBtn.innerText === '수정') {
+                                    // 수정 모드로 전환 (Span -> Input)
+                                    const currentTitle = titleSpan.innerText;
+                                    const inputHtml = `<input type="text" class="edit-title-input" value="${currentTitle}">`;
+                                    titleSpan.outerHTML = inputHtml;
+                                    
+                                    const inputEl = docInfoDiv.querySelector('.edit-title-input');
+                                    inputEl.focus();
+                                    // 엔터키 입력 시 저장 트리거
+                                    inputEl.addEventListener('keyup', (e) => {
+                                        if(e.key === 'Enter') editBtn.click();
+                                    });
+
+                                    editBtn.innerText = '저장';
+                                    editBtn.classList.add('save-mode');
+                                } else {
+                                    // 저장 모드 (Input -> Span)
+                                    const inputEl = docInfoDiv.querySelector('.edit-title-input');
+                                    const newTitle = inputEl.value.trim() || '제목 없음';
+                                    
+                                    DB.rename(doc.id, newTitle, () => {
+                                        // UI 원복
+                                        inputEl.outerHTML = `<span class="doc-title">${newTitle}</span>`;
+                                        editBtn.innerText = '수정';
+                                        editBtn.classList.remove('save-mode');
+                                        
+                                        // 현재 열려있는 문서라면 상단 헤더 이름도 즉시 변경
+                                        if (APP_STATE.currentDocId === doc.id) {
+                                            UI.updateHeader(newTitle, 'history');
+                                        }
+                                        doc.title = newTitle; // 현재 클로저 객체 업데이트
+                                    });
+                                }
+                            });
+
+                            // 문서 삭제 로직
                             li.querySelector('.del-btn').addEventListener('click', (ev) => {
                                 ev.stopPropagation();
                                 if (confirm(`'${doc.title}' 문서를 삭제하시겠습니까?`)) {
@@ -802,6 +886,7 @@
                 } catch (err) { alert('복사 실패. 브라우저 권한을 확인해주세요.'); }
             });
 
+            // HTML 다운로드 비동기(Promise) 에러 픽스
             document.getElementById('html-download-btn').addEventListener('click', function() {
                 const textContent = MarkdownUtils.clean(editor.getMarkdown());
                 if (!textContent.trim()) return alert('다운로드할 내용이 없습니다.');
@@ -818,7 +903,7 @@
     pre, code { font-size: 17px; }
 </style></head><body>${editor.getHTML()}</body></html>`;
 
-                const getFileName = (ext) => {
+                const getFileName = async (ext) => {
                     if (!APP_STATE.currentDocId) return `document.${ext}`;
                     return new Promise(resolve => {
                         const tx = dbInstance.transaction(DB_CONFIG.storeName, 'readonly');
@@ -831,6 +916,8 @@
                 getFileName('html').then(fileName => {
                     UI.downloadFile(fullHtml, fileName, 'text/html;charset=utf-8;');
                     UI.tempChangeText(this, '다운로드 완료 ✔️', 2000);
+                }).catch(err => {
+                    console.error('다운로드 중 오류 발생:', err);
                 });
             });
 
