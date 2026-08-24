@@ -9,6 +9,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://uicdn.toast.com/editor/latest/toastui-editor.min.css" />
     
+    <!-- jsdiff Library for text comparison -->
+    <script src="https://cdn.jsdelivr.net/npm/diff@5.1.0/dist/diff.min.js"></script>
+
     <style>
         :root {
             --bg-color: #f8fafc;
@@ -89,7 +92,6 @@
         #copy-rich-btn { background: rgba(16, 185, 129, 0.1); color: #059669; font-weight: 600; }
         #copy-rich-btn:hover { background: rgba(16, 185, 129, 0.2); }
         
-        /* HTML 다운로드 버튼 강조 스타일 */
         #html-download-btn { 
             background: #7c3aed; 
             color: #ffffff; 
@@ -102,6 +104,9 @@
             color: #ffffff;
             transform: translateY(-1px);
         }
+
+        #compare-btn { background: rgba(99, 102, 241, 0.1); color: #4f46e5; font-weight: 600; }
+        #compare-btn:hover { background: rgba(99, 102, 241, 0.2); }
 
         input.font-selector {
             background: rgba(255, 255, 255, 0.8); border: 1px solid var(--glass-border);
@@ -116,14 +121,7 @@
         .toastui-editor-toolbar { background: rgba(255, 255, 255, 0.6) !important; }
         .toastui-editor-contents, .toastui-editor-contents p, .ProseMirror { font-size: 16px !important; line-height: 1.7 !important; }
         .toastui-editor-contents td p, .toastui-editor-contents th p { margin-bottom: 4px !important; }
-        
-        /* 코드블록 폰트 사이즈 상향 적용 (17px) */
-        .toastui-editor-contents pre, 
-        .toastui-editor-contents code, 
-        .ProseMirror pre, 
-        .ProseMirror code { 
-            font-size: 17px !important; 
-        }
+        .toastui-editor-contents pre, .toastui-editor-contents code, .ProseMirror pre, .ProseMirror code { font-size: 17px !important; }
 
         /* Markdown Output Area */
         textarea#md-output {
@@ -193,6 +191,47 @@
         }
         #confirm-save-btn:hover { background: #2563eb; }
 
+        /* Modal - Compare Diff Side-by-Side */
+        .compare-header {
+            display: flex;
+            background: #f8fafc;
+            border: 1px solid var(--glass-border);
+            border-bottom: none;
+            font-weight: 600;
+            text-align: center;
+            border-radius: 8px 8px 0 0;
+            overflow: hidden;
+        }
+        .compare-header-col { flex: 1; padding: 0.75rem; font-size: 0.9rem; }
+        .compare-header-left { border-right: 1px solid var(--glass-border); color: #991b1b; }
+        .compare-header-right { color: #166534; }
+        
+        #diff-output {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            overflow-y: auto;
+            border: 1px solid var(--glass-border);
+            border-radius: 0 0 8px 8px;
+            background: #fff;
+            font-family: 'D2Coding', 'Consolas', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        
+        .diff-row { display: flex; width: 100%; border-bottom: 1px solid #f1f5f9; }
+        .diff-cell { 
+            flex: 1; 
+            padding: 0.5rem 1rem; 
+            white-space: pre-wrap; 
+            word-break: break-all;
+            min-height: 1.5em; /* 빈 줄 레이아웃 유지 */
+        }
+        .diff-cell.left { border-right: 1px solid var(--glass-border); }
+        .diff-added { background-color: #dcfce7; color: #166534; }
+        .diff-removed { background-color: #fee2e2; color: #991b1b; }
+        .diff-empty { background-color: #f8fafc; } /* 반대편 영역을 회색 처리 */
+
         /* Layout Toggles */
         body.wysiwyg-only #md-panel { display: none; }
         body.md-only #wysiwyg-panel { display: none; }
@@ -210,6 +249,8 @@
             <div class="panel-header">
                 <div>WYSIWYG Editor</div>
                 <div class="hint-wrap">
+                    <input type="file" id="compare-file-input" accept=".md" style="display: none;">
+                    <span class="hint" id="compare-btn" title="비교할 MD 파일을 불러와 현재 문서와 나란히 비교합니다">비교 ⚖️</span>
                     <span class="hint" id="new-btn" title="새로운 문서를 작성합니다">새 문서 📄</span>
                     <span class="hint" id="save-btn" title="작성 중인 문서를 브라우저에 저장합니다 (Ctrl+S)">저장 💾</span>
                     <span class="hint" id="history-btn" title="저장된 문서 목록을 엽니다">목록 🗂️</span>
@@ -269,6 +310,23 @@
         </div>
     </div>
 
+    <!-- Side-by-Side Compare Modal -->
+    <div class="modal-overlay" id="compare-modal">
+        <div class="modal-content" style="width: 95%; max-width: 1400px; height: 85vh;">
+            <div class="modal-header">
+                <h2>문서 비교</h2>
+                <button class="close-btn" id="close-compare-btn">✖</button>
+            </div>
+            
+            <div class="compare-header">
+                <div class="compare-header-col compare-header-left">비교 대상 문서 (불러온 파일)</div>
+                <div class="compare-header-col compare-header-right">현재 문서 (작성 중인 내용)</div>
+            </div>
+            
+            <div id="diff-output"></div>
+        </div>
+    </div>
+
     <!-- Scripts -->
     <script src="https://uicdn.toast.com/editor/latest/toastui-editor-all.min.js"></script>
 
@@ -293,10 +351,12 @@
             mdOutput: document.getElementById('md-output'),
             fontSelector: document.getElementById('font-selector'),
             mdFileInput: document.getElementById('md-file-input'),
+            compareFileInput: document.getElementById('compare-file-input'),
             headerFileName: document.getElementById('header-file-name'),
             modals: {
                 title: document.getElementById('title-modal'),
-                history: document.getElementById('history-modal')
+                history: document.getElementById('history-modal'),
+                compare: document.getElementById('compare-modal')
             },
             inputs: {
                 docTitle: document.getElementById('doc-title-input')
@@ -307,6 +367,9 @@
             buttons: {
                 save: document.getElementById('save-btn'),
                 confirmSave: document.getElementById('confirm-save-btn')
+            },
+            outputs: {
+                diff: document.getElementById('diff-output')
             }
         };
 
@@ -481,6 +544,59 @@
          * 7. Event Listeners 
          */
         function setupEventListeners() {
+            // Document Comparison (Side-by-Side)
+            document.getElementById('compare-btn').addEventListener('click', () => {
+                DOM.compareFileInput.click();
+            });
+
+            DOM.compareFileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    let compareContent = event.target.result.replace(/\r\n|\r/g, '\n');
+                    const currentContent = MarkdownUtils.clean(editor.getMarkdown());
+                    
+                    const diffResult = Diff.diffLines(compareContent, currentContent);
+                    
+                    DOM.outputs.diff.innerHTML = '';
+                    const fragment = document.createDocumentFragment();
+                    
+                    diffResult.forEach((part) => {
+                        const row = document.createElement('div');
+                        row.className = 'diff-row';
+                        
+                        const leftCell = document.createElement('div');
+                        leftCell.className = 'diff-cell left';
+                        
+                        const rightCell = document.createElement('div');
+                        rightCell.className = 'diff-cell right';
+                        
+                        if (part.added) {
+                            rightCell.textContent = part.value;
+                            rightCell.classList.add('diff-added');
+                            leftCell.classList.add('diff-empty'); // 반대편은 빈 공간(회색) 처리
+                        } else if (part.removed) {
+                            leftCell.textContent = part.value;
+                            leftCell.classList.add('diff-removed');
+                            rightCell.classList.add('diff-empty'); // 반대편은 빈 공간(회색) 처리
+                        } else {
+                            leftCell.textContent = part.value;
+                            rightCell.textContent = part.value;
+                        }
+                        
+                        row.appendChild(leftCell);
+                        row.appendChild(rightCell);
+                        fragment.appendChild(row);
+                    });
+                    
+                    DOM.outputs.diff.appendChild(fragment);
+                    DOM.modals.compare.classList.add('active');
+                };
+                reader.readAsText(file);
+                e.target.value = ''; 
+            });
+
             // Document Management
             document.getElementById('new-btn').addEventListener('click', () => {
                 editor.setMarkdown('');
@@ -690,7 +806,6 @@
                 const textContent = MarkdownUtils.clean(editor.getMarkdown());
                 if (!textContent.trim()) return alert('다운로드할 내용이 없습니다.');
 
-                // 다운로드 되는 HTML 파일에도 코드블록 폰트 17px이 적용되도록 CSS 추가
                 const fullHtml = `<!DOCTYPE html>
 <html lang="ko"><head><meta charset="UTF-8"><title>Document</title>
 <style>
@@ -748,9 +863,12 @@
             
             document.getElementById('close-title-btn').addEventListener('click', () => DOM.modals.title.classList.remove('active'));
             document.getElementById('close-history-btn').addEventListener('click', () => DOM.modals.history.classList.remove('active'));
+            document.getElementById('close-compare-btn').addEventListener('click', () => DOM.modals.compare.classList.remove('active'));
+            
             window.addEventListener('click', (e) => {
                 if (e.target === DOM.modals.title) DOM.modals.title.classList.remove('active');
                 if (e.target === DOM.modals.history) DOM.modals.history.classList.remove('active');
+                if (e.target === DOM.modals.compare) DOM.modals.compare.classList.remove('active');
             });
         }
 
