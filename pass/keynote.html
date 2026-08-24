@@ -5,15 +5,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Keynote</title>
   
-  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
-  <link rel="stylesheet" href="https://webfontworld.github.io/kopub/KoPubWorldDotum.css">
-  <script src="https://unpkg.com/@phosphor-icons/web"></script>
-  <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
-  <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
-  <script src="https://unpkg.com/quill-image-resize@3.0.9/image-resize.min.js"></script>
+  <script>
+    // JS 외부 리소스 로드 실패 시 로컬 파일 주입을 위한 안전한 DOM 방식 함수
+    function loadLocalScript(src) {
+      var script = document.createElement('script');
+      script.src = src;
+      document.head.appendChild(script);
+    }
+    function handleIconFail() {
+      document.documentElement.classList.add('icons-failed');
+      loadLocalScript('../nexus/web.js');
+    }
+  </script>
 
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <link rel="stylesheet" as="style" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" onerror="this.onerror=null; this.href='../nexus/pretendard.min.css';" />
+  <link rel="stylesheet" href="https://github.com/adrinerDP/font-kopubworld/blob/master/css/dotum.css" onerror="this.onerror=null; this.href='../nexus/KoPubWorldDotum.css';">
+  <script src="https://unpkg.com/@phosphor-icons/web" onerror="handleIconFail()"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/quill/1.3.6/quill.snow.min.css" rel="stylesheet" onerror="this.onerror=null; this.href='../nexus/quill.snow.css';">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/quill/1.3.6/quill.min.js" onerror="this.onerror=null; loadLocalScript('../nexus/quill.min.js');"></script>
+  <script src="https://unpkg.com/quill-image-resize@3.0.9/image-resize.min.js" onerror="this.onerror=null; loadLocalScript('../nexus/image-resize.min.js');"></script>
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" onerror="this.onerror=null; this.href='../nexus/katex.min.css';">
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" onerror="this.onerror=null; loadLocalScript('../nexus/katex.min.js');"></script>
 
   <style>
     :root {
@@ -50,9 +63,24 @@
       -webkit-font-smoothing: antialiased; 
     }
     
+    /* 오프라인 배너 스타일 */
+    #offline-banner { 
+      display: none; 
+      background: #4B5563; 
+      color: white; 
+      text-align: center; 
+      padding: 8px; 
+      font-size: 14px; 
+      font-weight: 600; 
+      z-index: 1000; 
+      flex-shrink: 0; 
+      width: 100%;
+    }
+
     /* 화면(스크린)에서만 동작하도록 격리시켜 인쇄 오류 원천 차단 */
     @media screen {
-      body { height: 100vh; display: flex; overflow: hidden; }
+      body { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+      .app-wrapper { display: flex; flex: 1; overflow: hidden; }
       .top-bar { backdrop-filter: blur(8px); }
     }
 
@@ -193,16 +221,16 @@
       cursor: text;
       min-height: 80px;
       font-family: inherit;
-      overflow-x: auto; /* 테이블 등의 가로 스크롤 허용 */
-      overflow-y: hidden; /* 세로 스크롤 제거, 자연스럽게 확장됨 */
-      word-break: break-word; /* 텍스트 박스 뚫림 방지 */
+      overflow-x: auto; 
+      overflow-y: hidden; 
+      word-break: break-word; 
       overflow-wrap: anywhere;
     }
     .field-viewer:hover { border-color: #D1D5DB !important; background: var(--bg-surface); }
-    .field-viewer.solution-viewer { min-height: 80px; } /* 불필요한 공백 제거 */
+    .field-viewer.solution-viewer { min-height: 80px; } 
     .field-viewer.ql-editor { font-size: var(--editor-font-size) !important; line-height: 1.6; padding: 14px !important; }
 
-    /* 플랫(Flat)한 실제 에디터 래퍼 스타일 (과도한 그림자 제거) */
+    /* 에디터 래퍼 스타일 */
     .editor-wrapper.simple-editor .ql-container.ql-snow { 
       border: 1px solid var(--border-base) !important; 
       border-radius: var(--radius-md) !important; 
@@ -230,65 +258,35 @@
     .editor-wrapper.solution-editor:focus-within .ql-container.ql-snow {
       border-color: #9CA3AF !important;
     }
-    .editor-wrapper.solution-editor .ql-editor { font-size: var(--editor-font-size) !important; line-height: 1.6; overflow-anchor: none !important; min-height: 80px; } /* 불필요한 공백 제거 */
+    .editor-wrapper.solution-editor .ql-editor { font-size: var(--editor-font-size) !important; line-height: 1.6; overflow-anchor: none !important; min-height: 80px; }
     
-    /* 강력해진 이미지 커서 및 스크롤 방지용 사이즈 제한 */
+    /* 이미지 및 테이블 스타일 */
     .ql-editor img, .field-viewer img { 
       cursor: pointer; 
       transition: opacity 0.2s, outline 0.1s; 
-      max-width: 100%; /* 에디터 가로폭을 넘지 않게 조절하여 스크롤 생성 방지 */
+      max-width: 100%; 
     } 
     .ql-editor img:hover, .field-viewer img:hover { opacity: 0.85; outline: 2px solid var(--primary); outline-offset: 2px; }
     .ql-editor img.img-highlight, .field-viewer img.img-highlight { outline: 4px solid #FDBA74 !important; outline-offset: 2px !important; border-radius: 4px !important; }
 
-    /* 붙여넣기 한 표(Table) 원본 유지용 래퍼 스타일 */
-    .quill-raw-table {
-        margin: 1rem 0;
-        width: 100%;
-        overflow-x: auto;
-        border-radius: var(--radius-md);
-        box-shadow: 0 0 0 1px var(--border-base);
-        background: var(--bg-surface);
-    }
-    .quill-raw-table table {
-        border-collapse: collapse !important;
-        width: 100%;
-        margin: 0;
-        font-size: 14px;
-        color: var(--text-main);
-        text-align: left;
-    }
-    .quill-raw-table th, .quill-raw-table td {
-        border: 1px solid var(--border-base);
-        padding: 8px 12px;
-    }
-    .quill-raw-table thead th, .quill-raw-table th {
-        background-color: var(--bg-sidebar);
-        font-weight: 600;
-    }
+    .quill-raw-table { margin: 1rem 0; width: 100%; overflow-x: auto; border-radius: var(--radius-md); box-shadow: 0 0 0 1px var(--border-base); background: var(--bg-surface); }
+    .quill-raw-table table { border-collapse: collapse !important; width: 100%; margin: 0; font-size: 14px; color: var(--text-main); text-align: left; }
+    .quill-raw-table th, .quill-raw-table td { border: 1px solid var(--border-base); padding: 8px 12px; }
+    .quill-raw-table thead th, .quill-raw-table th { background-color: var(--bg-sidebar); font-weight: 600; }
 
-    /* 환경설정 및 모달 공통 */
+    /* 모달 스타일 */
     .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(17, 24, 39, 0.4); backdrop-filter: blur(2px); display: none; justify-content: center; align-items: center; z-index: 50; }
     .modal-content { background: var(--bg-surface); width: 400px; padding: 24px; border-radius: var(--radius-lg); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1); border: 1px solid var(--border-base); }
     .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
     .modal-title { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
     
-    /* 토픽 리스트 모달 전용 스타일 */
-    .topic-modal-item {
-      padding: 16px 20px; border-bottom: 1px solid var(--border-light); cursor: pointer; display: flex; align-items: flex-start; gap: 12px; transition: background 0.2s;
-    }
+    .topic-modal-item { padding: 16px 20px; border-bottom: 1px solid var(--border-light); cursor: pointer; display: flex; align-items: flex-start; gap: 12px; transition: background 0.2s; }
     .topic-modal-item:hover { background: var(--bg-sidebar); }
-    .topic-modal-num {
-      background: var(--primary); color: white; border-radius: 4px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; flex-shrink: 0;
-    }
+    .topic-modal-num { background: var(--primary); color: white; border-radius: 4px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; flex-shrink: 0; }
     .topic-modal-num.clickable { cursor: pointer; transition: background 0.2s, transform 0.1s; }
     .topic-modal-num.clickable:hover { background: var(--primary-hover); transform: scale(1.05); }
+    .topic-modal-text { font-size: 14px; color: var(--text-main); line-height: 1.4; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; margin-top: 2px; }
 
-    .topic-modal-text {
-      font-size: 14px; color: var(--text-main); line-height: 1.4; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; margin-top: 2px;
-    }
-
-    /* 이미지 뷰어 모달 */
     .image-viewer-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(4px); display: none; justify-content: center; align-items: center; z-index: 100; opacity: 0; transition: opacity 0.2s ease-in-out; }
     .image-viewer-overlay.show { display: flex; opacity: 1; }
     .image-viewer-content { position: relative; max-width: 90%; max-height: 90%; display: flex; flex-direction: column; align-items: center; gap: 16px; }
@@ -299,12 +297,10 @@
 
     .print-ui { display: none; }
 
-    /* 몰입 모드 (Immersion Mode) */
     body.immersion-mode .sidebar { display: none !important; }
     body.immersion-mode .top-bar { display: none !important; }
     body.immersion-mode .form-wrapper { padding-top: 50px; } 
 
-    /* 카드 모드 (Card Mode) */
     body.card-mode .sidebar { display: none !important; }
     body.card-mode .top-bar { display: none !important; }
     body.card-mode .form-wrapper { padding-top: 50px; } 
@@ -316,7 +312,6 @@
       to { opacity: 1; transform: translateY(0); }
     }
 
-    /* 토스트 알림 */
     .toast {
       visibility: hidden;
       background-color: #111827; 
@@ -343,6 +338,47 @@
       bottom: 40px;
     }
 
+    /* 폰트 깨짐 방지용 이모지 폴백(Fallback) CSS */
+    .icons-failed i[class^="ph-"]::before,
+    .icons-failed i[class*=" ph-"]::before { 
+        font-style: normal !important; 
+        font-family: sans-serif !important; 
+        display: inline-block; 
+        text-align: center; 
+        line-height: 1; 
+    }
+    
+    .icons-failed i.ph-funnel::before { content: "🔽"; }
+    .icons-failed i.ph-notebook::before { content: "📓"; }
+    .icons-failed i.ph-magnifying-glass::before { content: "🔍"; }
+    .icons-failed i.ph-plus::before { content: "➕"; }
+    .icons-failed i.ph-list-dashes::before { content: "📋"; }
+    .icons-failed i.ph-gear::before { content: "⚙️"; }
+    .icons-failed i.ph-tag::before { content: "🏷️"; }
+    .icons-failed i.ph-upload-simple::before { content: "📤"; }
+    .icons-failed i.ph-download-simple::before { content: "📥"; }
+    .icons-failed i.ph-floppy-disk::before { content: "💾"; }
+    .icons-failed i.ph-files::before { content: "📁"; }
+    .icons-failed i.ph-printer::before { content: "🖨️"; }
+    .icons-failed i.ph-cards::before { content: "📇"; }
+    .icons-failed i.ph-file-csv::before { content: "📊"; }
+    .icons-failed i.ph-trash::before { content: "🗑️"; }
+    .icons-failed i.ph-x::before { content: "❌"; }
+    .icons-failed i.ph-question::before { content: "❓"; }
+    .icons-failed i.ph-text-align-left::before { content: "📝"; }
+    .icons-failed i.ph-lightbulb::before { content: "💡"; }
+    .icons-failed i.ph-check-circle::before { content: "🟢"; }
+    .icons-failed i.ph-keyboard::before { content: "⌨️"; }
+    .icons-failed i.ph-arrows-out::before { content: "🔀"; }
+    .icons-failed i.ph-copy::before { content: "📋"; }
+    .icons-failed i.ph-check::before { content: "✔️"; }
+    .icons-failed i.ph-warning-circle::before { content: "⚠️"; }
+    .icons-failed i.ph-highlighter::before { content: "🖍️"; }
+    .icons-failed i.ph-eraser::before { content: "🧽"; }
+    .icons-failed i.ph-folder-open::before { content: "📂"; }
+    .icons-failed i.ph-eye::before { content: "👁️"; }
+    .icons-failed i.ph-browsers::before { content: "🌐"; }
+
     /* PDF 출력용 스타일 */
     @media print {
       * { 
@@ -361,7 +397,6 @@
       ::-webkit-scrollbar { display: none !important; }
       * { scrollbar-width: none !important; -ms-overflow-style: none !important; }
       
-      /* 🌟 배경 완벽 초기화 (본문 전체를 흰색으로 강제) */
       html, body { 
         background: #FFFFFF !important; 
         background-color: #FFFFFF !important; 
@@ -369,8 +404,7 @@
         margin: 0; 
       }
       
-      /* 에디터 뷰(회색블록 영역) 완벽 은닉 */
-      .edit-ui, .sidebar, .top-bar, .modal-overlay, .image-viewer-overlay, .toast { 
+      #offline-banner, .edit-ui, .sidebar, .top-bar, .modal-overlay, .image-viewer-overlay, .toast { 
         display: none !important; height: 0 !important; opacity: 0 !important; visibility: hidden !important; overflow: hidden !important; 
       }
       
@@ -398,11 +432,10 @@
         page-break-inside: avoid; 
         display: block !important; 
         overflow: visible !important; 
-        background: #FFFFFF !important; /* 카드 배경도 흰색 강제 */
+        background: #FFFFFF !important;
         background-color: #FFFFFF !important;
       }
 
-      /* 🌟 [수정1] 복붙으로 딸려온 회색 배경(div, p, pre 등) 완벽 제거. (형광펜 span은 유지) */
       .print-ui .ql-editor div,
       .print-ui .ql-editor p,
       .print-ui .ql-editor pre,
@@ -412,7 +445,6 @@
           background: transparent !important;
       }
 
-      /* 🌟 [수정2] 복붙으로 딸려온 좁은 폭(width) 제한 무력화 및 줄바꿈 강제 정상화 */
       .print-ui .ql-editor p,
       .print-ui .ql-editor div,
       .print-ui .ql-editor span,
@@ -423,8 +455,8 @@
           width: auto !important;
           max-width: 100% !important;
           min-width: 0 !important;
-          white-space: pre-wrap !important; /* 원본 공백은 유지하되 가로폭에 맞춰 텍스트 줄바꿈 */
-          word-break: break-word !important; /* 좁은 컬럼 제한 무시 */
+          white-space: pre-wrap !important; 
+          word-break: break-word !important; 
           overflow-wrap: break-word !important; 
           font-family: 'KoPubWorldDotum', sans-serif !important; 
       }
@@ -434,15 +466,10 @@
           box-sizing: border-box !important;
       }
 
-      /* 인쇄 시 리드문 바탕을 흰색으로 지정 */
       .print-lead { font-size: 11.5pt; color: #4B5563 !important; background-color: #FFFFFF !important; border-left: 3px solid #9CA3AF; padding: 10px 14px; margin-bottom: 14px; line-height: 1.4; border-radius: 0 4px 4px 0; }
-      
       .print-prob { font-size: 16pt; font-weight: 700; color: #111827 !important; margin-bottom: 12px; line-height: 1.3; letter-spacing: -0.03em; display: flex; align-items: flex-start; gap: 8px; }
-      
       .print-conc { font-size: 12pt; color: #374151 !important; margin-bottom: 16px; line-height: 1.5; padding-left: 4px; }
-      
       .print-divider { border: 0; border-top: 2px solid #111827; margin-bottom: 16px; margin-top: 8px; }
-      
       .print-ui img { max-width: 100% !important; page-break-inside: avoid; display: block; }
       
       .print-ui p { margin-top: 0; margin-bottom: 0.3em; }
@@ -450,16 +477,16 @@
       .print-sol ul, .print-sol ol { padding-left: 20px; margin-bottom: 0.8em; margin-top: 0.4em; }
       .print-sol li { margin-bottom: 0.2em; }
       
-      /* 풀이 영역 최소 높이 및 불필요한 패딩 제거 */
       .ql-editor.print-sol { padding: 0 !important; min-height: 0 !important; overflow: visible !important; }
       .ql-editor img.img-highlight { outline: 3px solid #FDBA74 !important; outline-offset: 1px !important; }
 
-      /* JS에서 동적으로 비어있는 영역을 숨길 때 사용할 클래스 (공간 완전 제거) */
       .no-print { display: none !important; height: 0 !important; opacity: 0 !important; margin: 0 !important; padding: 0 !important; overflow: hidden !important; border: none !important; }
     }
   </style>
 </head>
 <body>
+  <!-- 오프라인 상태 감지 배너 -->
+  <div id="offline-banner">현재 기기가 오프라인 상태입니다. 모든 데이터는 안전하게 저장되며 로컬 오프라인 모드가 적용됩니다.</div>
 
   <div id="initLoadModal" class="modal-overlay" style="z-index: 9999; background: var(--bg-body);">
     <div class="modal-content" style="text-align: center;">
@@ -476,197 +503,212 @@
     </div>
   </div>
 
-  <aside class="sidebar">
-    <div class="sidebar-header">
-      <div class="app-title">
-        <i class="ph-fill ph-notebook"></i> Keynote
-        <span id="seasonBadge" style="font-size: 11px; background: #E5E7EB; color: #374151; padding: 3px 8px; border-radius: 12px; cursor: pointer; margin-left: 6px; font-weight: 600;" onclick="showInitModal()" title="시즌 영역 변경">전체</span>
-        <div id="completionStats" class="completion-stats" onclick="toggleCompletedFilter()" title="완료된 문항만 보기"></div>
-      </div>
-    </div>
-    
-    <div class="sidebar-tabs">
-      <div class="sidebar-tab active" onclick="switchSidebarTab('notes')" id="tab-notes">키노트 조회</div>
-      <div class="sidebar-tab" onclick="switchSidebarTab('items')" id="tab-items">항목 조회</div>
-      <div class="sidebar-tab" onclick="switchSidebarTab('mnemonics')" id="tab-mnemonics">두음 조회</div>
-    </div>
-
-    <div id="view-notes" class="view-container">
-      <div class="sidebar-search">
-        <div style="display: flex; gap: 8px;">
-          <input type="text" id="searchInput" class="search-box" placeholder="제목 또는 내용 검색..." spellcheck="false" onkeyup="handleSearchInput(event)">
-          <button class="btn btn-outline" style="padding: 0 12px; flex-shrink: 0;" onclick="searchInContent()" onmousedown="event.preventDefault()" title="현재 본문 내 검색">
-            <i class="ph-bold ph-magnifying-glass"></i>
-          </button>
+  <div class="app-wrapper">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="app-title">
+          <i class="ph-fill ph-notebook"></i> Keynote
+          <span id="seasonBadge" style="font-size: 11px; background: #E5E7EB; color: #374151; padding: 3px 8px; border-radius: 12px; cursor: pointer; margin-left: 6px; font-weight: 600;" onclick="showInitModal()" title="시즌 영역 변경">전체</span>
+          <div id="completionStats" class="completion-stats" onclick="toggleCompletedFilter()" title="완료된 문항만 보기"></div>
         </div>
       </div>
-      <ul class="note-list" id="noteList"></ul>
-    </div>
-
-    <div id="view-items" class="view-container hidden">
-      <div class="sidebar-search" style="border-bottom: 1px solid var(--border-base); display: flex; flex-direction: column; gap: 12px; padding: 16px 20px;">
-        <div style="display: flex; gap: 8px; align-items: flex-start;">
-          <div class="r5-container" id="sidebar5RContainer" style="margin: 0; gap: 6px;">
-            <div class="r5-pill" style="padding: 4px 7.5px; font-size: 11px;" onclick="selectSidebar5R(this, 'Refuge')">Refuge</div>
-            <div class="r5-pill" style="padding: 4px 7.5px; font-size: 11px;" onclick="selectSidebar5R(this, 'Root')">Root</div>
-            <div class="r5-pill" style="padding: 4px 7.5px; font-size: 11px;" onclick="selectSidebar5R(this, 'Regular')">Regular</div>
-            <div class="r5-pill" style="padding: 4px 7.5px; font-size: 11px;" onclick="selectSidebar5R(this, 'Rule')">Rule</div>
-            <div class="r5-pill" style="padding: 4px 7.5px; font-size: 11px;" onclick="selectSidebar5R(this, 'Rush')">Rush</div>
-          </div>
-        </div>
+      
+      <div class="sidebar-tabs">
+        <div class="sidebar-tab active" onclick="switchSidebarTab('notes')" id="tab-notes">키노트 조회</div>
+        <div class="sidebar-tab" onclick="switchSidebarTab('items')" id="tab-items">항목 조회</div>
+        <div class="sidebar-tab" onclick="switchSidebarTab('mnemonics')" id="tab-mnemonics">두음 조회</div>
       </div>
-      <ul id="itemList" class="note-list"></ul>
-    </div>
 
-    <div id="view-mnemonics" class="view-container hidden">
-      <div class="sidebar-search" style="border-bottom: 1px solid var(--border-base); display: flex; flex-direction: column; gap: 8px; padding: 16px 20px;">
-        <select id="sidebarMnemonicSelect" class="search-box" style="width: 100%;" onchange="renderSidebarMnemonicList()">
-          <option value="all">전체 완료 키노트</option>
-        </select>
-        <input type="text" id="sidebarMnemonicSearch" class="search-box" style="width: 100%;" placeholder="두음 텍스트 또는 문제 검색..." oninput="renderSidebarMnemonicList()">
-      </div>
-      <ul id="sidebarMnemonicList" class="note-list"></ul>
-    </div>
-
-    <div style="padding: 20px; border-top: 1px solid var(--border-base);">
-      <button class="btn btn-outline" style="width: 100%; justify-content: center;" onclick="createNewNote()">
-        <i class="ph ph-plus"></i> 새 키노트 작성
-      </button>
-    </div>
-  </aside>
-
-  <main class="main-content" id="mainContent">
-    <div class="top-bar">
-      <input type="text" id="docTitle" class="title-input" placeholder="제목을 입력하세요" spellcheck="false">
-      <div class="actions">
-        <button class="btn btn-outline" onclick="openTopicListModal()" title="현재 문서의 전체 문항 리스트 보기"><i class="ph ph-list-dashes"></i></button>
-        <button class="btn btn-outline" onclick="openSettings()" title="환경설정"><i class="ph ph-gear"></i></button>
-        <button class="btn btn-outline" onclick="openR5Modal()" title="5R (중요도) 관리"><i class="ph ph-tag"></i></button>
-        <div class="divider"></div>
-        <input type="file" id="importInput" accept=".json" style="display: none;" onchange="importJSON(event)">
-        <button class="btn btn-outline" onclick="document.getElementById('importInput').click()"><i class="ph ph-upload-simple"></i> 복원</button>
-        <button class="btn btn-outline" onclick="exportJSON()"><i class="ph ph-download-simple"></i> 백업</button>
-        <div class="divider"></div>
-        <button class="btn btn-primary" onclick="saveCurrentNote()"><i class="ph ph-floppy-disk"></i> 저장</button>
-        <input type="file" id="bulkInput" accept=".json" style="display: none;" onchange="importBulkJSON(event)">
-        <button class="btn btn-outline" onclick="document.getElementById('bulkInput').click()"><i class="ph ph-files"></i> Bulk</button>
-        <button class="btn btn-outline" onclick="prepareAndPrint()"><i class="ph ph-printer"></i> PDF</button>
-        
-        <button class="btn btn-outline" onclick="executeExport('anki')" title="Anki txt 추출 (시즌 기준)"><i class="ph ph-cards"></i> Anki</button>
-        <button class="btn btn-outline" onclick="executeExport('brainscape')" title="Brainscape csv 추출 (시즌 기준)"><i class="ph ph-file-csv"></i> Brainscape</button>
-        
-        <button class="btn btn-outline" onclick="deleteCurrentNote()" style="color: #DC2626; border-color: #FCA5A5;"><i class="ph ph-trash"></i></button>
-      </div>
-    </div>
-
-    <div class="form-wrapper">
-      <div id="formContainer"></div>
-    </div>
-
-    <div id="topicListModal" class="modal-overlay" onclick="if(event.target===this) closeTopicListModal()">
-      <div class="modal-content" style="width: 600px; max-width: 90%; max-height: 80vh; display: flex; flex-direction: column; padding: 0;">
-        <div class="modal-header" style="padding: 20px 24px; margin-bottom: 0;">
-          <div class="modal-title"><i class="ph ph-list-dashes" style="font-size: 20px;"></i> 전체 문항 리스트</div>
-          <button class="btn" style="padding: 4px; border: none; background: transparent;" onclick="closeTopicListModal()"><i class="ph ph-x" style="font-size: 18px;"></i></button>
-        </div>
-        <div style="padding: 16px 24px; border-bottom: 1px solid var(--border-base); background: var(--bg-body); display: flex; gap: 8px;">
-          <select id="modalSearchType" class="search-box" style="width: auto; background: var(--bg-surface);" onchange="filterTopicList()">
-            <option value="all">전체 검색</option>
-            <option value="title">제목(문제)</option>
-            <option value="content">내용(풀이/개념)</option>
-          </select>
-          <input type="text" id="modalSearchInput" class="search-box" style="background: var(--bg-surface);" placeholder="검색어를 입력하세요..." oninput="filterTopicList()">
-        </div>
-        <div id="topicListContainer" style="flex: 1; overflow-y: auto; padding: 0;">
-        </div>
-      </div>
-    </div>
-
-    <!-- 5R(중요도) 관리 모달 -->
-    <div id="r5Modal" class="modal-overlay" onclick="if(event.target===this) closeR5Modal()">
-      <div class="modal-content" style="width: 700px; max-width: 90%; max-height: 80vh; display: flex; flex-direction: column; padding: 0;">
-        <div class="modal-header" style="padding: 20px 24px; margin-bottom: 0;">
-          <div class="modal-title"><i class="ph ph-tag" style="font-size: 20px;"></i> 5R(중요도) 관리</div>
-          <button class="btn" style="padding: 4px; border: none; background: transparent;" onclick="closeR5Modal()"><i class="ph ph-x" style="font-size: 18px;"></i></button>
-        </div>
-        <div style="padding: 16px 24px; border-bottom: 1px solid var(--border-base); display: flex; gap: 8px; justify-content: space-between; align-items: center; background: var(--bg-body);">
-          <div style="display: flex; gap: 8px; align-items: center; flex: 1;">
-              <select id="r5ModalNoteSelect" class="search-box" style="max-width: 300px; background: var(--bg-surface);" onchange="renderR5ModalList()">
-                  <option value="all">전체 키노트</option>
-              </select>
-          </div>
+      <div id="view-notes" class="view-container">
+        <div class="sidebar-search">
           <div style="display: flex; gap: 8px;">
-              <button class="btn btn-outline" style="background: var(--bg-surface);" onclick="exportR5JSON()"><i class="ph ph-download-simple"></i> 5R 백업</button>
-              <input type="file" id="r5ImportInput" accept=".json" style="display: none;" onchange="importR5JSON(event)">
-              <button class="btn btn-outline" style="background: var(--bg-surface);" onclick="document.getElementById('r5ImportInput').click()"><i class="ph ph-upload-simple"></i> 5R 복원</button>
+            <input type="text" id="searchInput" class="search-box" placeholder="제목 또는 내용 검색..." spellcheck="false" onkeyup="handleSearchInput(event)">
+            <button class="btn btn-outline" style="padding: 0 12px; flex-shrink: 0;" onclick="searchInContent()" onmousedown="event.preventDefault()" title="현재 본문 내 검색">
+              <i class="ph-bold ph-magnifying-glass"></i>
+            </button>
           </div>
         </div>
-        <div id="r5ModalListContainer" style="flex: 1; overflow-y: auto; padding: 16px 24px; background: var(--bg-body);">
-          <!-- List goes here -->
-        </div>
+        <ul class="note-list" id="noteList"></ul>
       </div>
-    </div>
 
-    <div id="settingsModal" class="modal-overlay">
-      <div class="modal-content">
-        <div class="modal-header">
-          <div class="modal-title"><i class="ph ph-gear"></i> 환경설정 및 단축키 안내</div>
-          <button class="btn" style="padding: 4px; border: none; background: transparent;" onclick="closeSettings()"><i class="ph ph-x" style="font-size: 18px;"></i></button>
-        </div>
-        <div style="margin-bottom: 24px;">
-          <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 8px;">생성할 문항 수(1~100)</label>
-          <input type="number" id="itemCount" value="19" min="1" max="100" class="search-box" style="font-size: 15px; font-weight: bold; text-align: center;">
-          <div style="margin-top: 12px; padding: 10px; background: #FEF2F2; border: 1px solid #FECACA; border-radius: 6px; color: #DC2626; font-size: 12px; line-height: 1.5;">
-            <i class="ph-fill ph-warning-circle"></i> <b>초기화 주의</b><br>
-            폼을 재생성하면 현재 화면에서 입력 중이던 내용이 모두 사라지고 빈 폼으로 변경됩니다.
+      <div id="view-items" class="view-container hidden">
+        <div class="sidebar-search" style="border-bottom: 1px solid var(--border-base); display: flex; flex-direction: column; gap: 12px; padding: 16px 20px;">
+          <div style="display: flex; gap: 8px; align-items: flex-start;">
+            <div class="r5-container" id="sidebar5RContainer" style="margin: 0; gap: 6px;">
+              <div class="r5-pill" style="padding: 4px 7.5px; font-size: 11px;" onclick="selectSidebar5R(this, 'Refuge')">Refuge</div>
+              <div class="r5-pill" style="padding: 4px 7.5px; font-size: 11px;" onclick="selectSidebar5R(this, 'Root')">Root</div>
+              <div class="r5-pill" style="padding: 4px 7.5px; font-size: 11px;" onclick="selectSidebar5R(this, 'Regular')">Regular</div>
+              <div class="r5-pill" style="padding: 4px 7.5px; font-size: 11px;" onclick="selectSidebar5R(this, 'Rule')">Rule</div>
+              <div class="r5-pill" style="padding: 4px 7.5px; font-size: 11px;" onclick="selectSidebar5R(this, 'Rush')">Rush</div>
+            </div>
           </div>
         </div>
-        <div style="margin-bottom: 24px; padding-top: 16px; border-top: 1px solid var(--border-light);">
-          <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 8px;"><i class="ph-fill ph-keyboard"></i> 유용한 단축키 & 팁</label>
-          <ul style="font-size: 12px; color: var(--text-muted); padding-left: 20px; line-height: 1.7; margin: 0;">
-            <li><b>새 문서:</b> Ctrl + Alt + N</li>
-            <li><b>저장하기:</b> Ctrl + S</li>
-            <li><b>문서 검색:</b> Ctrl + E</li>
-            <li><b>몰입 모드(UI 숨기기):</b> Ctrl + H</li>
-            <li><b style="color:var(--primary);">카드 모드(1문항씩 보기):</b> Ctrl + M (좌/우 방향키로 이동)</li>
-            <li><b>페이지 닫기:</b> ` (백틱, 입력 중이 아닐 때)</li>
-            <li><b>화면 스크롤:</b> 화살표 위/아래 (입력 중이 아닐 때)</li>
-            <li><b>글자 확대/축소:</b> Ctrl + ➕ / ➖</li>
-            <li><b>두음 강조(남색+흰글씨):</b> Alt + N (에디터 포커스 시)</li>
-            <li><b>두음 강조(초록+흰글씨):</b> Alt + L (에디터 포커스 시)</li>
-            <li><b style="color:#0d3a9e;">두음 조회(사이드바 탭):</b> Alt + I</li>
-            <li><b>이미지 크게 보기(확대):</b> 에디터에서 이미지 클릭 후 나타나는 툴바의 <i class="ph-bold ph-arrows-out"></i> 버튼 클릭</li>
-            <li><b>에디터 서식:</b> 취소선(Ctrl+0) | 빨강(Ctrl+Alt+R) | 파랑(Ctrl+Alt+B)</li>
-            <li><b>서식 지우기:</b> Ctrl + Shift + X</li>
-          </ul>
-        </div>
-        <div style="display: flex; justify-content: flex-end; gap: 8px;">
-          <button class="btn btn-outline" onclick="closeSettings()">닫기</button>
-          <button class="btn btn-primary" onclick="confirmRegenerate()">적용 및 재생성</button>
-        </div>
+        <ul id="itemList" class="note-list"></ul>
       </div>
-    </div>
 
-    <div id="imageViewerModal" class="image-viewer-overlay" onclick="closeImageViewer()">
-      <div class="image-viewer-content" onclick="event.stopPropagation()">
-        <button class="image-viewer-close" onclick="closeImageViewer()"><i class="ph ph-x"></i></button>
-        <img id="imageViewerImg" src="" alt="확대된 이미지">
-        
-        <div class="image-viewer-actions">
-          <button class="btn btn-outline" style="background: rgba(255,255,255,0.9);" onclick="copyImageToClipboard()">
-            <i class="ph ph-copy"></i> 복사
-          </button>
-          <button class="btn btn-outline" style="background: rgba(255,255,255,0.9);" onclick="downloadImageView()">
-            <i class="ph ph-download-simple"></i> 저장
-          </button>
+      <div id="view-mnemonics" class="view-container hidden">
+        <div class="sidebar-search" style="border-bottom: 1px solid var(--border-base); display: flex; flex-direction: column; gap: 8px; padding: 16px 20px;">
+          <select id="sidebarMnemonicSelect" class="search-box" style="width: 100%;" onchange="renderSidebarMnemonicList()">
+            <option value="all">전체 완료 키노트</option>
+          </select>
+          <input type="text" id="sidebarMnemonicSearch" class="search-box" style="width: 100%;" placeholder="두음 텍스트 또는 문제 검색..." oninput="renderSidebarMnemonicList()">
+        </div>
+        <ul id="sidebarMnemonicList" class="note-list"></ul>
+      </div>
+
+      <div style="padding: 20px; border-top: 1px solid var(--border-base);">
+        <button class="btn btn-outline" style="width: 100%; justify-content: center;" onclick="createNewNote()">
+          <i class="ph ph-plus"></i> 새 키노트 작성
+        </button>
+      </div>
+    </aside>
+
+    <main class="main-content" id="mainContent">
+      <div class="top-bar">
+        <input type="text" id="docTitle" class="title-input" placeholder="제목을 입력하세요" spellcheck="false">
+        <div class="actions">
+          <button class="btn btn-outline" onclick="openTopicListModal()" title="현재 문서의 전체 문항 리스트 보기"><i class="ph ph-list-dashes"></i></button>
+          <button class="btn btn-outline" onclick="openSettings()" title="환경설정"><i class="ph ph-gear"></i></button>
+          <button class="btn btn-outline" onclick="openR5Modal()" title="5R (중요도) 관리"><i class="ph ph-tag"></i></button>
+          <div class="divider"></div>
+          <input type="file" id="importInput" accept=".json" style="display: none;" onchange="importJSON(event)">
+          <button class="btn btn-outline" onclick="document.getElementById('importInput').click()"><i class="ph ph-upload-simple"></i> 복원</button>
+          <button class="btn btn-outline" onclick="exportJSON()"><i class="ph ph-download-simple"></i> 백업</button>
+          <div class="divider"></div>
+          <button class="btn btn-primary" onclick="saveCurrentNote()"><i class="ph ph-floppy-disk"></i> 저장</button>
+          <input type="file" id="bulkInput" accept=".json" style="display: none;" onchange="importBulkJSON(event)">
+          <button class="btn btn-outline" onclick="document.getElementById('bulkInput').click()"><i class="ph ph-files"></i> Bulk</button>
+          <button class="btn btn-outline" onclick="prepareAndPrint()"><i class="ph ph-printer"></i> PDF</button>
+          
+          <button class="btn btn-outline" onclick="executeExport('anki')" title="Anki txt 추출 (시즌 기준)"><i class="ph ph-cards"></i> Anki</button>
+          <button class="btn btn-outline" onclick="executeExport('brainscape')" title="Brainscape csv 추출 (시즌 기준)"><i class="ph ph-file-csv"></i> Brainscape</button>
+          
+          <button class="btn btn-outline" onclick="deleteCurrentNote()" style="color: #DC2626; border-color: #FCA5A5;"><i class="ph ph-trash"></i></button>
         </div>
       </div>
-    </div>
-  </main>
+
+      <div class="form-wrapper">
+        <div id="formContainer"></div>
+      </div>
+
+      <div id="topicListModal" class="modal-overlay" onclick="if(event.target===this) closeTopicListModal()">
+        <div class="modal-content" style="width: 600px; max-width: 90%; max-height: 80vh; display: flex; flex-direction: column; padding: 0;">
+          <div class="modal-header" style="padding: 20px 24px; margin-bottom: 0;">
+            <div class="modal-title"><i class="ph ph-list-dashes" style="font-size: 20px;"></i> 전체 문항 리스트</div>
+            <button class="btn" style="padding: 4px; border: none; background: transparent;" onclick="closeTopicListModal()"><i class="ph ph-x" style="font-size: 18px;"></i></button>
+          </div>
+          <div style="padding: 16px 24px; border-bottom: 1px solid var(--border-base); background: var(--bg-body); display: flex; gap: 8px;">
+            <select id="modalSearchType" class="search-box" style="width: auto; background: var(--bg-surface);" onchange="filterTopicList()">
+              <option value="all">전체 검색</option>
+              <option value="title">제목(문제)</option>
+              <option value="content">내용(풀이/개념)</option>
+            </select>
+            <input type="text" id="modalSearchInput" class="search-box" style="background: var(--bg-surface);" placeholder="검색어를 입력하세요..." oninput="filterTopicList()">
+          </div>
+          <div id="topicListContainer" style="flex: 1; overflow-y: auto; padding: 0;">
+          </div>
+        </div>
+      </div>
+
+      <!-- 5R(중요도) 관리 모달 -->
+      <div id="r5Modal" class="modal-overlay" onclick="if(event.target===this) closeR5Modal()">
+        <div class="modal-content" style="width: 700px; max-width: 90%; max-height: 80vh; display: flex; flex-direction: column; padding: 0;">
+          <div class="modal-header" style="padding: 20px 24px; margin-bottom: 0;">
+            <div class="modal-title"><i class="ph ph-tag" style="font-size: 20px;"></i> 5R(중요도) 관리</div>
+            <button class="btn" style="padding: 4px; border: none; background: transparent;" onclick="closeR5Modal()"><i class="ph ph-x" style="font-size: 18px;"></i></button>
+          </div>
+          <div style="padding: 16px 24px; border-bottom: 1px solid var(--border-base); display: flex; gap: 8px; justify-content: space-between; align-items: center; background: var(--bg-body);">
+            <div style="display: flex; gap: 8px; align-items: center; flex: 1;">
+                <select id="r5ModalNoteSelect" class="search-box" style="max-width: 300px; background: var(--bg-surface);" onchange="renderR5ModalList()">
+                    <option value="all">전체 키노트</option>
+                </select>
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <button class="btn btn-outline" style="background: var(--bg-surface);" onclick="exportR5JSON()"><i class="ph ph-download-simple"></i> 5R 백업</button>
+                <input type="file" id="r5ImportInput" accept=".json" style="display: none;" onchange="importR5JSON(event)">
+                <button class="btn btn-outline" style="background: var(--bg-surface);" onclick="document.getElementById('r5ImportInput').click()"><i class="ph ph-upload-simple"></i> 5R 복원</button>
+            </div>
+          </div>
+          <div id="r5ModalListContainer" style="flex: 1; overflow-y: auto; padding: 16px 24px; background: var(--bg-body);">
+          </div>
+        </div>
+      </div>
+
+      <div id="settingsModal" class="modal-overlay">
+        <div class="modal-content">
+          <div class="modal-header">
+            <div class="modal-title"><i class="ph ph-gear"></i> 환경설정 및 단축키 안내</div>
+            <button class="btn" style="padding: 4px; border: none; background: transparent;" onclick="closeSettings()"><i class="ph ph-x" style="font-size: 18px;"></i></button>
+          </div>
+          <div style="margin-bottom: 24px;">
+            <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 8px;">생성할 문항 수(1~100)</label>
+            <input type="number" id="itemCount" value="19" min="1" max="100" class="search-box" style="font-size: 15px; font-weight: bold; text-align: center;">
+            <div style="margin-top: 12px; padding: 10px; background: #FEF2F2; border: 1px solid #FECACA; border-radius: 6px; color: #DC2626; font-size: 12px; line-height: 1.5;">
+              <i class="ph-fill ph-warning-circle"></i> <b>초기화 주의</b><br>
+              폼을 재생성하면 현재 화면에서 입력 중이던 내용이 모두 사라지고 빈 폼으로 변경됩니다.
+            </div>
+          </div>
+          <div style="margin-bottom: 24px; padding-top: 16px; border-top: 1px solid var(--border-light);">
+            <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 8px;"><i class="ph-fill ph-keyboard"></i> 유용한 단축키 & 팁</label>
+            <ul style="font-size: 12px; color: var(--text-muted); padding-left: 20px; line-height: 1.7; margin: 0;">
+              <li><b>새 문서:</b> Ctrl + Alt + N</li>
+              <li><b>저장하기:</b> Ctrl + S</li>
+              <li><b>문서 검색:</b> Ctrl + E</li>
+              <li><b>몰입 모드(UI 숨기기):</b> Ctrl + H</li>
+              <li><b style="color:var(--primary);">카드 모드(1문항씩 보기):</b> Ctrl + M (좌/우 방향키로 이동)</li>
+              <li><b>페이지 닫기:</b> ` (백틱, 입력 중이 아닐 때)</li>
+              <li><b>화면 스크롤:</b> 화살표 위/아래 (입력 중이 아닐 때)</li>
+              <li><b>글자 확대/축소:</b> Ctrl + ➕ / ➖</li>
+              <li><b>두음 강조(남색+흰글씨):</b> Alt + N (에디터 포커스 시)</li>
+              <li><b>두음 강조(초록+흰글씨):</b> Alt + L (에디터 포커스 시)</li>
+              <li><b style="color:#0d3a9e;">두음 조회(사이드바 탭):</b> Alt + I</li>
+              <li><b>이미지 크게 보기(확대):</b> 에디터에서 이미지 클릭 후 나타나는 툴바의 <i class="ph-bold ph-arrows-out"></i> 버튼 클릭</li>
+              <li><b>에디터 서식:</b> 취소선(Ctrl+0) | 빨강(Ctrl+Alt+R) | 파랑(Ctrl+Alt+B)</li>
+              <li><b>서식 지우기:</b> Ctrl + Shift + X</li>
+            </ul>
+          </div>
+          <div style="display: flex; justify-content: flex-end; gap: 8px;">
+            <button class="btn btn-outline" onclick="closeSettings()">닫기</button>
+            <button class="btn btn-primary" onclick="confirmRegenerate()">적용 및 재생성</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="imageViewerModal" class="image-viewer-overlay" onclick="closeImageViewer()">
+        <div class="image-viewer-content" onclick="event.stopPropagation()">
+          <button class="image-viewer-close" onclick="closeImageViewer()"><i class="ph ph-x"></i></button>
+          <img id="imageViewerImg" src="" alt="확대된 이미지">
+          
+          <div class="image-viewer-actions">
+            <button class="btn btn-outline" style="background: rgba(255,255,255,0.9);" onclick="copyImageToClipboard()">
+              <i class="ph ph-copy"></i> 복사
+            </button>
+            <button class="btn btn-outline" style="background: rgba(255,255,255,0.9);" onclick="downloadImageView()">
+              <i class="ph ph-download-simple"></i> 저장
+            </button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
 
   <div id="saveToast" class="toast"><i class="ph-bold ph-check"></i> 저장되었습니다</div>
 
   <script>
+    // 네트워크 상태 감지 로직
+    function updateOnlineStatus() {
+      const banner = document.getElementById('offline-banner');
+      if (navigator.onLine) {
+        banner.style.display = 'none';
+        document.documentElement.classList.remove('icons-failed');
+      } else {
+        banner.style.display = 'block';
+        document.documentElement.classList.add('icons-failed');
+      }
+    }
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+
     // 전역 데이터 객체 및 현재 에디터 상태
     let db;
     let currentNoteId = null;
@@ -844,7 +886,7 @@
                 scrollingContainer: '#mainContent',
                 modules: {
                     formula: true,
-                    keyboard: { bindings: getCustomBindings() }, // 매번 새 객체 생성으로 누수 방지
+                    keyboard: { bindings: getCustomBindings() }, 
                     imageResize: { displaySize: true, modules: ['Resize', 'DisplaySize', 'Toolbar'] }
                 }
             };
@@ -865,26 +907,21 @@
             const html = currentNoteData.items[index][field] || '';
             if (html) q.clipboard.dangerouslyPasteHTML(html);
 
-            quillInstances[containerId] = q; // 캐시에 저장
+            quillInstances[containerId] = q; 
         } else {
-            // 이미 생성된 에디터가 있다면, 단순히 보이게만 함
             editorWrapper.style.display = 'block';
             q = quillInstances[containerId];
         }
 
-        // 1. 강제 스크롤 튐 방지를 위해 스크롤 고정
         if (mainContent) mainContent.scrollTop = prevScroll;
 
-        // 2. Quill 기본 focus() 대신 DOM 직접 포커스 (자동 스크롤 방지)
         q.root.focus({ preventScroll: true });
 
-        // 3. 다시 한번 스크롤 강제 복구
         if (mainContent) {
             mainContent.scrollTop = prevScroll;
             requestAnimationFrame(() => { mainContent.scrollTop = prevScroll; });
         }
 
-        // 4. 클릭한 마우스 좌표에 정확히 커서 찍기
         if (e && e.clientX !== undefined && e.clientY !== undefined) {
             setTimeout(() => {
                 try {
@@ -903,16 +940,13 @@
                         let sel = window.getSelection();
                         sel.removeAllRanges();
                         sel.addRange(range);
-                        
-                        // [핵심] Quill이 Native 선택 영역을 자신의 Index로 인식하도록 강제 동기화
                         q.update(); 
                     }
                 } catch(err) {
                     console.log(err);
                 }
-                // 위치 지정 후 다시한번 스크롤 틀어짐 방지
                 if (mainContent) mainContent.scrollTop = prevScroll;
-            }, 10); // 시간을 짧게 주어 눈에 튀는 현상 최소화
+            }, 10); 
         }
 
         activeEditor = { quill: q, index, field, containerId };
@@ -923,7 +957,6 @@
     function deactivateCurrentEditor() {
         if (!activeEditor) return;
         
-        // 떨어진 DOM(이미지, 인터벌 등)에 의한 메모 누수 강제 비우기
         activeTargetImage = null;
         if (highlightIntervalId) {
             clearInterval(highlightIntervalId);
@@ -939,13 +972,11 @@
             const viewer = container.querySelector('.field-viewer');
             const editorWrapper = container.querySelector('.editor-wrapper');
             
-            // 뷰어를 업데이트 후 다시 표시
             if (viewer) {
                 let displayHtml = cleanHtml || '<span style="color:#9CA3AF;">클릭하여 입력...</span>';
                 viewer.innerHTML = displayHtml;
                 viewer.style.display = 'block';
             }
-            // 에디터는 숨김 처리
             if (editorWrapper) {
                 editorWrapper.style.display = 'none';
             }
@@ -954,7 +985,6 @@
         activeEditor = null;
     }
 
-    // 영역 바깥 클릭 시 편집 모드 해제
     document.addEventListener('mousedown', (e) => {
         if (activeEditor) {
             const container = document.getElementById(activeEditor.containerId);
@@ -969,7 +999,6 @@
     }, true);
 
 
-    // 시즌 모달 및 기능 로직
     function showInitModal() {
       document.getElementById('initLoadModal').style.display = 'flex';
       document.getElementById('seasonSelect').value = currentSeasonFilter;
@@ -1193,7 +1222,6 @@
                 toolbar.appendChild(group);
 
                 if (activeTargetImage && !overlay.querySelector('.custom-bottom-handle')) {
-                    // 상하 조절 핸들
                     const bottomHandle = document.createElement('div');
                     bottomHandle.className = 'custom-bottom-handle';
                     bottomHandle.title = '상하 크기 조절';
@@ -1229,7 +1257,6 @@
                         document.addEventListener('mouseup', onMouseUp);
                     });
 
-                    // 좌우 조절 핸들
                     const rightHandle = document.createElement('div');
                     rightHandle.className = 'custom-right-handle';
                     rightHandle.title = '좌우 크기 조절';
@@ -1265,7 +1292,6 @@
                         document.addEventListener('mouseup', onMouseUp);
                     });
 
-                    // 비율 유지 대각선(우측하단) 조절 핸들 추가
                     const brHandle = document.createElement('div');
                     brHandle.className = 'custom-br-handle';
                     brHandle.title = '대각선 크기 조절 (비율 유지)';
@@ -1277,12 +1303,12 @@
                         let startX = e.clientX;
                         let startWidth = activeTargetImage.offsetWidth;
                         let startHeight = activeTargetImage.offsetHeight;
-                        let ratio = startWidth / startHeight; // 현재 비율 저장
+                        let ratio = startWidth / startHeight; 
                         
                         const onMouseMove = (ev) => {
                             const deltaX = ev.clientX - startX;
                             let newWidth = Math.max(20, startWidth + deltaX);
-                            let newHeight = newWidth / ratio; // 가로 길이에 맞춰 세로 비율 계산
+                            let newHeight = newWidth / ratio; 
                             
                             activeTargetImage.style.width = newWidth + 'px';
                             activeTargetImage.setAttribute('width', newWidth);
@@ -1317,7 +1343,6 @@
       }, 50);
     }
 
-    // 더블클릭 이벤트 제거, 이미지 클릭 시 툴바만 띄우도록 단순화
     document.addEventListener('mousedown', function(e) {
       if (e.target.tagName === 'IMG' && (e.target.closest('.ql-editor') || e.target.closest('.field-viewer'))) { 
         activeTargetImage = e.target; 
@@ -1417,7 +1442,6 @@
         return;
       }
 
-      // 두음 강조 (남색)
       if (!isCtrl && isAlt && e.key.toLowerCase() === 'n') {
         e.preventDefault(); 
         if(activeEditor && activeEditor.quill.hasFocus()) {
@@ -1433,7 +1457,6 @@
         return;
       }
 
-      // 두음 강조 (초록색)
       if (!isCtrl && isAlt && e.key.toLowerCase() === 'l') {
         e.preventDefault(); 
         if(activeEditor && activeEditor.quill.hasFocus()) {
@@ -1625,7 +1648,6 @@
       const currentSelection = select.value;
       select.innerHTML = '<option value="all">전체 내역 (현재 문서 포함)</option>';
 
-      // 1. 현재 열려있는 문서 분석
       deactivateCurrentEditor();
       const currentTitle = document.getElementById('docTitle').value.trim() || '제목 없는 키노트';
       let currentHasMnemonic = false;
@@ -1650,7 +1672,7 @@
             itemIndex: index,
             displayTitle: displayTitle,
             mnemonics: cardMnemonics,
-            itemData: item // 프린트용 원본 데이터 저장
+            itemData: item 
           });
         }
       });
@@ -1660,7 +1682,6 @@
         option.value = 'current'; option.textContent = '[현재] ' + currentTitle; select.appendChild(option);
       }
 
-      // 2. DB 데이터 분석
       const transaction = db.transaction(['notes'], 'readonly');
       const request = transaction.objectStore('notes').openCursor();
       
@@ -1726,7 +1747,6 @@
         return true;
       });
 
-      // 프린트용 글로벌 변수에 할당
       globalMnemonicFilteredData = filteredData; 
 
       if (filteredData.length === 0) return container.innerHTML = '<div style="padding: 30px 10px; text-align: center; color: var(--text-muted); font-size: 13px;">조건에 맞는 내역이 없습니다.</div>';
@@ -1772,7 +1792,6 @@
       const target5R = currentSidebar5R;
       const container = document.getElementById('itemList');
       
-      // 비동기 렌더링 중복 방지 (Race Condition 해결)
       const myToken = ++currentItemFilterToken;
       container.innerHTML = '<div style="padding: 30px 10px; text-align: center; color: var(--text-muted); font-size: 13px;">데이터를 불러오는 중...</div>';
       
@@ -1801,13 +1820,11 @@
           }
           cursor.continue();
         } else {
-          // 현재 실행된 요청이 최신이 아니면 무시 (이전 요청이 덮어쓰는 현상 방지)
           if (myToken !== currentItemFilterToken) return;
 
           container.innerHTML = '';
           gatheredItems.sort((a, b) => a.noteTitle.localeCompare(b.noteTitle, undefined, { numeric: true, sensitivity: 'base' }));
           
-          // 프린트용 글로벌 변수에 할당
           globalItemsFilteredData = gatheredItems; 
 
           if (gatheredItems.length === 0) {
@@ -1834,7 +1851,6 @@
       };
     }
 
-    // 5R(중요도) 모달 및 백업 복원 로직
     function openR5Modal() {
         document.getElementById('r5Modal').style.display = 'flex';
         populateR5NoteSelect().then(() => {
@@ -1846,7 +1862,6 @@
         document.getElementById('r5Modal').style.display = 'none';
     }
 
-    // 5R 모달용 키노트 셀렉트 박스 채우기 (메모리 절약을 위해 제목과 ID만 추출)
     function populateR5NoteSelect() {
         return new Promise((resolve) => {
             const select = document.getElementById('r5ModalNoteSelect');
@@ -1900,7 +1915,6 @@
                 note.items[itemIndex].type5r = typeArray;
                 store.put(note);
 
-                // 현재 열린 노트와 동기화
                 if (noteId === currentNoteId) {
                     currentNoteData.items[itemIndex].type5r = typeArray;
                     const cardR5Container = document.querySelector(`.r5-container[data-index="${itemIndex}"]`);
@@ -1918,7 +1932,6 @@
         };
     }
 
-    // 메모리 절약을 위해 openCursor를 사용하여 리스트 렌더링
     function renderR5ModalList() {
         const container = document.getElementById('r5ModalListContainer');
         const selectedNoteId = document.getElementById('r5ModalNoteSelect').value;
@@ -2000,7 +2013,6 @@
         };
     }
 
-    // 메모리 절약을 위해 openCursor 및 Blob 방식을 적용한 백업 로직
     function exportR5JSON() {
         const selectedNoteId = document.getElementById('r5ModalNoteSelect').value;
         const transaction = db.transaction(['notes'], 'readonly');
@@ -2015,7 +2027,7 @@
                     if (note.items) {
                         note.items.forEach((item, index) => {
                             const problemText = (item.problem || '').replace(/<[^>]+>/g, '').trim();
-                            if (problemText) { // 문제가 있는 항목만 최소한의 데이터로 5R 추출 대상
+                            if (problemText) { 
                                 exportData.push({
                                     noteId: note.id,
                                     noteTitle: note.title,
@@ -2031,7 +2043,6 @@
             } else {
                 if (exportData.length === 0) return alert('백업할 5R 데이터가 없습니다.');
                 
-                // 대용량 문자열 처리 시 OOM 방지를 위한 Blob 기반 파일 생성
                 const jsonString = JSON.stringify(exportData, null, 2);
                 const blob = new Blob([jsonString], { type: "application/json;charset=utf-8" });
                 const url = URL.createObjectURL(blob);
@@ -2043,7 +2054,6 @@
                 document.body.appendChild(a); 
                 a.click(); 
                 
-                // 메모리 누수 방지
                 setTimeout(() => {
                     a.remove();
                     URL.revokeObjectURL(url);
@@ -2062,7 +2072,6 @@
                 const importedData = JSON.parse(e.target.result);
                 if (!Array.isArray(importedData)) return alert("유효한 5R 백업 파일이 아닙니다.");
 
-                // noteId 기준으로 묶어서 DB 업데이트 최소화
                 const updatesByNote = {};
                 importedData.forEach(data => {
                     if (!updatesByNote[data.noteId]) updatesByNote[data.noteId] = {};
@@ -2080,7 +2089,6 @@
                         if (updatesByNote[note.id] && note.items) {
                             let changed = false;
                             note.items.forEach((item, idx) => {
-                                // 문제가 있는 항목이며 백업에 5R 데이터가 있는 경우만 업데이트
                                 if (item.problem && updatesByNote[note.id][idx] !== undefined) {
                                     item.type5r = updatesByNote[note.id][idx];
                                     changed = true;
@@ -2089,7 +2097,7 @@
                             if (changed) {
                                 cursor.update(note);
                                 if (note.id === currentNoteId) {
-                                    currentNoteData = note; // 현재 열린 문서 데이터 동기화
+                                    currentNoteData = note; 
                                 }
                             }
                         }
@@ -2100,7 +2108,6 @@
                 transaction.oncomplete = () => {
                     alert("5R 데이터 복원이 완료되었습니다.");
                     
-                    // 현재 열려있는 폼 리렌더링 (5R 상태 업데이트 반영)
                     if (currentNoteId) {
                         const tempCount = parseInt(document.getElementById('itemCount').value);
                         generateForms(currentNoteData.items.length || tempCount);
@@ -2122,7 +2129,7 @@
     function closeSettings() { document.getElementById('settingsModal').style.display = 'none'; }
     function confirmRegenerate() {
       if(confirm('정말 폼을 재생성하시겠습니까? 작성 중인 내용은 지워집니다.')) { 
-        currentNoteData.items = []; // 초기화
+        currentNoteData.items = []; 
         generateForms(); closeSettings(); 
       }
     }
@@ -2166,16 +2173,16 @@
       });
     };
 
-    // 페이지 진입 시 URL 파라미터(?uid=...) 감지 및 딥링크 로드 처리
     window.onload = async () => { 
       await initDB(); 
+      updateOnlineStatus(); // 로드 시 온라인 상태 업데이트
       
       const urlParams = new URLSearchParams(window.location.search);
       const uid = urlParams.get('uid');
 
       if (uid) {
         document.getElementById('initLoadModal').style.display = 'none';
-        currentSeasonFilter = 'all'; // 딥링크로 직접 접속 시 모든 데이터 조회
+        currentSeasonFilter = 'all'; 
         document.getElementById('seasonBadge').textContent = '전체';
         isFirstLoad = false;
         
@@ -2214,7 +2221,7 @@
       }
 
       container.innerHTML = '';
-      quillInstances = {}; // 생성 시 인스턴스 저장소 깔끔하게 초기화
+      quillInstances = {}; 
 
       for (let i = 1; i <= num; i++) {
         const itemData = currentNoteData.items[i-1];
@@ -2230,11 +2237,9 @@
         const getViewerHtml = (field, content) => {
             const displayHtml = content || '<span style="color:#9CA3AF;">클릭하여 입력...</span>';
             const viewerClass = field === 'solution' ? 'solution-viewer' : 'simple-viewer';
-            // 클릭한 마우스 좌표(event)를 넘겨주어 정확한 위치에 포커싱되도록 onmousedown 활용
             return `<div class="field-viewer ql-editor ${viewerClass}" onmousedown="activateEditor(event, ${i-1}, '${field}')">${displayHtml}</div>`;
         };
 
-        // 🌟 수정: 인쇄 시 구분선(hr)의 표시 여부를 동적으로 끄고 켜기 위해 id 부여
         card.innerHTML = `
           <div class="edit-ui">
             <div class="card-header">
@@ -2276,7 +2281,7 @@
 
     function getCurrentNoteData() {
       deactivateCurrentEditor();
-      currentNoteData.title = document.getElementById('docTitle').value.trim(); // 제목 없는 경우의 기본값('제목 없는 키노트') 제거
+      currentNoteData.title = document.getElementById('docTitle').value.trim(); 
       return {
           id: currentNoteId || generateId(),
           title: currentNoteData.title,
@@ -2286,7 +2291,6 @@
     }
 
     function saveCurrentNote() {
-      // 추가: 제목이 없으면 저장 불가 로직 반영
       const titleInput = document.getElementById('docTitle');
       if (!titleInput.value.trim()) {
         alert('제목을 입력해야 저장할 수 있습니다.');
@@ -2298,7 +2302,6 @@
       const currentScroll = mainContent.scrollTop;
 
       const isNewNote = !currentNoteId; 
-      // 이전 상태 백업용 (완료 상태 변경으로 인해 통계 뱃지 업데이트가 필요한지 확인)
       const wasCompleted = currentNoteId && currentNoteData.title ? currentNoteData.title.endsWith('_COM') : false;
 
       const note = getCurrentNoteData();
@@ -2311,11 +2314,9 @@
       transaction.oncomplete = () => {
         currentNoteId = note.id; 
         
-        // 저장 완료 시 URL 파라미터를 현재 아이디로 업데이트 (새로고침 없이 딥링크 복사 가능)
         const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?uid=' + currentNoteId;
         window.history.replaceState({path: newUrl}, '', newUrl);
 
-        // 새 노트이거나 완료 상태 변경 시에만 전체를 다시 그리고 그 외에는 해당 항목만 업데이트 처리
         if (isNewNote || titleChangedComState) {
           renderNoteList(); 
         } else {
@@ -2329,10 +2330,9 @@
             list.querySelectorAll('.note-item').forEach(el => el.classList.remove('active'));
             existingLi.classList.add('active');
           } else {
-            renderNoteList(); // 검색 등에 의해 뷰에서 찾지 못하면 롤백으로 전체 렌더링 진행
+            renderNoteList(); 
           }
 
-          // 다른 사이드바 탭에 위치한 경우 최신 데이터 반영을 위해 리프레시
           if (currentSidebarTab === 'items') {
             executeItemFilter();
           } else if (currentSidebarTab === 'mnemonics') {
@@ -2346,7 +2346,6 @@
     }
 
     function exportJSON() {
-      // 추가: 제목이 없으면 백업 불가 로직 반영
       const titleInput = document.getElementById('docTitle');
       if (!titleInput.value.trim()) {
         alert('제목을 입력해야 백업할 수 있습니다.');
@@ -2386,10 +2385,9 @@
           request.onsuccess = (ev) => {
             const cursor = ev.target.result;
             
-            // 1. DB를 순회하며 동일한 타이틀이 있는지 검사
             if (cursor && !isUpdated) {
               if (cursor.value.title === importedNote.title) {
-                importedNote.id = cursor.value.id; // 기존 문서의 ID를 사용하여 업데이트 처리
+                importedNote.id = cursor.value.id; 
                 isUpdated = true;
               } else {
                 cursor.continue();
@@ -2397,14 +2395,12 @@
               }
             }
 
-            // 2. 동일한 타이틀이 없으면 백업 파일의 ID를 쓰거나 새로 생성
             if (!isUpdated) {
               importedNote.id = importedNote.id || generateId();
             }
             
             importedNote.date = new Date().toISOString();
             
-            // 3. 덮어쓰기 또는 새로 추가
             store.put(importedNote);
           };
 
@@ -2591,7 +2587,6 @@
     function prepareAndPrint() {
       deactivateCurrentEditor();
 
-      // 🌟 수정: 완전한 공백 및 불필요한 태그 판별 함수 강화 (정밀도 상향)
       const isEmptyHtml = (html) => {
           if (!html) return true;
           let clean = html.replace(/<p><br><\/p>/gi, '')
@@ -2607,7 +2602,6 @@
           return temp.textContent.trim() === '' && temp.querySelectorAll('img, table, iframe').length === 0;
       };
 
-      // 요소의 no-print 클래스 부착을 토글해주는 유틸 함수 (CSS 덮어쓰기 방지)
       const togglePrintClass = (el, isEmpty) => {
           if (!el) return;
           if (isEmpty) { el.classList.add('no-print'); } 
@@ -2707,13 +2701,10 @@
         });
       }
 
-      // DOM 업데이트 후 브라우저가 텍스트 레이어를 온전히 그릴 수 있도록 0.3초 대기 후 인쇄
       setTimeout(() => {
           window.print();
       }, 300);
     }
-
-    // === Add Export Functions for Anki and Brainscape === //
 
     function fetchItemsForExport() {
       return new Promise((resolve) => {
@@ -2726,7 +2717,6 @@
           const cursor = e.target.result;
           if (cursor) {
             const note = cursor.value;
-            // 현재 선택된 시즌 필터와 일치하는 키노트만 추출
             if (matchesSeasonFilter(note.title)) {
               if (note.items && note.items.length > 0) {
                 note.items.forEach(item => {
