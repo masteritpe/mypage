@@ -7,6 +7,7 @@
   
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
   <style>
     /* === Design System === */
@@ -16,7 +17,7 @@
       --primary: #0f172a; --primary-hover: #334155; --accent: #3b82f6;
       --danger: #ef4444; --success: #10b981;
       --font-ui: "Pretendard", sans-serif;
-      /* Modal Colors (from reference image) */
+      /* Modal Colors */
       --modal-primary: #8b3d50; 
       --modal-secondary: #fce4e8;
     }
@@ -79,7 +80,18 @@
     .paper-title { 
         font-size: 16px; font-weight: 800; color: var(--primary); 
         padding-bottom: 12px; border-bottom: 2px solid #f1f5f9; margin-bottom: 16px; 
+        display: flex; justify-content: space-between; align-items: center;
     }
+    
+    /* === Note Button === */
+    .btn-note {
+        background: #f8fafc; border: 1px solid var(--border); border-radius: 6px;
+        padding: 5px 10px; font-size: 12px; color: var(--text-sub); cursor: pointer;
+        display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-ui);
+        font-weight: 600; transition: 0.2s;
+    }
+    .btn-note:hover { background: #e2e8f0; color: var(--primary); }
+    .btn-note.has-note { background: #eff6ff; color: var(--accent); border-color: #bfdbfe; }
 
     /* === Data Table === */
     .table-responsive { width: 100%; overflow-x: auto; padding-bottom: 10px; }
@@ -105,7 +117,7 @@
     .btn-add-row { width: 100%; padding: 10px; margin-top: 10px; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; color: #64748b; font-weight: 600; cursor: pointer; transition: 0.2s; }
     .btn-add-row:hover { background: #f1f5f9; border-color: #94a3b8; color: var(--primary); }
 
-    /* === Custom Modal (Reference Image Style) === */
+    /* === Custom Modal === */
     .modal-overlay {
         position: fixed; inset: 0; background: rgba(0, 0, 0, 0.4); backdrop-filter: blur(2px);
         display: flex; justify-content: center; align-items: center; z-index: 9999;
@@ -127,6 +139,14 @@
     }
     .modal-input-field:focus { box-shadow: 0 0 0 3px var(--modal-secondary); }
     .modal-input-field::selection { background: var(--modal-secondary); }
+
+    /* Note Textarea */
+    .modal-textarea-field {
+        width: 100%; padding: 12px 14px; border: 2px solid var(--modal-primary); border-radius: 8px;
+        font-family: var(--font-ui); font-size: 14px; margin-bottom: 15px; display: none;
+        resize: vertical; min-height: 120px; line-height: 1.5;
+    }
+    .modal-textarea-field:focus { box-shadow: 0 0 0 3px var(--modal-secondary); outline: none; }
 
     .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px; }
     .modal-btn {
@@ -185,8 +205,9 @@
                 <h1 id="lbl-page-title" class="page-main-title">페이지 이름</h1>
                 <div id="lbl-page-date" class="page-meta">마지막 수정: -</div>
             </div>
-            <div>
+            <div style="display: flex; gap: 10px;">
                 <button class="btn" onclick="editPageName()"><i class="fas fa-pen"></i> 이름 변경</button>
+                <button class="btn" onclick="exportPageToExcel()" style="color:#10b981; border-color:#a7f3d0;"><i class="fas fa-file-excel"></i> 엑셀 다운로드</button>
                 <button class="btn" style="color:var(--danger); border-color:#fecaca;" onclick="deleteCurrentPage()"><i class="fas fa-trash-alt"></i> 페이지 삭제</button>
             </div>
         </div>
@@ -201,13 +222,13 @@
         <div class="modal-title" id="modal-title">이 페이지 내용:</div>
         <div class="modal-message" id="modal-message"></div>
         
-        <!-- Select for page creation -->
         <select class="modal-input-field" id="modal-select">
             <option value="connection">접속정보 작성</option>
             <option value="infra">인프라 구성정보 작성</option>
         </select>
         
         <input type="text" class="modal-input-field" id="modal-input" autocomplete="off" />
+        <textarea class="modal-textarea-field" id="modal-textarea" placeholder="참조할 내용을 입력하세요..."></textarea>
         
         <div class="modal-actions">
             <button class="modal-btn modal-btn-confirm" id="modal-btn-confirm">확인</button>
@@ -228,6 +249,7 @@
         message: document.getElementById('modal-message'),
         input: document.getElementById('modal-input'),
         select: document.getElementById('modal-select'),
+        textarea: document.getElementById('modal-textarea'),
         btnConfirm: document.getElementById('modal-btn-confirm'),
         btnCancel: document.getElementById('modal-btn-cancel'),
         
@@ -236,9 +258,15 @@
                 this.title.textContent = options.title || "알림";
                 this.message.textContent = options.message || "";
                 
+                // Hide all fields initially
+                this.input.style.display = "none";
+                this.select.style.display = "none";
+                this.textarea.style.display = "none";
+                this.input.value = "";
+                this.textarea.value = "";
+
                 if (options.type === "prompt") {
                     this.input.style.display = "block";
-                    this.select.style.display = "none";
                     this.input.value = options.defaultValue || "";
                     setTimeout(() => { this.input.focus(); this.input.select(); }, 100);
                 } else if (options.type === "create") {
@@ -247,10 +275,10 @@
                     this.input.value = options.defaultValue || "";
                     this.select.value = "connection";
                     setTimeout(() => { this.input.focus(); this.input.select(); }, 100);
-                } else {
-                    this.input.style.display = "none";
-                    this.select.style.display = "none";
-                    this.input.value = "";
+                } else if (options.type === "note") {
+                    this.textarea.style.display = "block";
+                    this.textarea.value = options.defaultValue || "";
+                    setTimeout(() => { this.textarea.focus(); }, 100);
                 }
 
                 this.overlay.classList.add('active');
@@ -266,13 +294,17 @@
                 this.btnConfirm.onclick = () => {
                     if (options.type === "create") {
                         closeModal({ name: this.input.value.trim(), type: this.select.value });
+                    } else if (options.type === "prompt") {
+                        closeModal(this.input.value.trim());
+                    } else if (options.type === "note") {
+                        closeModal(this.textarea.value.trim());
                     } else {
-                        closeModal(options.type === "prompt" ? this.input.value.trim() : true);
+                        closeModal(true);
                     }
                 };
                 
                 this.btnCancel.onclick = () => {
-                    closeModal(options.type === "create" || options.type === "prompt" ? null : false);
+                    closeModal(options.type === "create" || options.type === "prompt" || options.type === "note" ? null : false);
                 };
 
                 this.input.onkeydown = (e) => {
@@ -327,7 +359,6 @@
     /* =========================================================
        2. Data Schemas & State Management
        ========================================================= */
-    // 기존 접속정보 스키마
     const schemasConnection = {
         infra: { title: "Cloud_Dev_Infra", icon: "fa-network-wired", cols: ['service', 'hostname', 'publicIp', 'privateIp', 'id', 'pw'], headers: ['서비스', 'HOSTNAME', 'Public IP', 'Private IP', 'ID', 'PW'] },
         db: { title: "Cloud_Dev_DB", icon: "fa-database", cols: ['service', 'hostname', 'publicDomain', 'privateDomain', 'id', 'pw'], headers: ['서비스', 'HOSTNAME', 'Public Domain', 'Private Domain', 'ID', 'PW'] },
@@ -337,7 +368,6 @@
         solution: { title: "Solution Info", icon: "fa-cubes", cols: ['solName', 'url', 'id', 'pw'], headers: ['솔루션명', '접속주소', 'ID', 'PW'] }
     };
 
-    // 신규 인프라 구성정보 스키마 (이미지 참조)
     const schemasInfraConfig = {
         server: { 
             title: "Server (NAVER Cloud Infra)", icon: "fa-server", 
@@ -396,14 +426,17 @@
                 name: "기본 인프라 페이지",
                 type: "connection",
                 data: JSON.parse(JSON.stringify(defaultInitData)),
+                notes: {}, // 추가된 노트 객체
                 updatedAt: new Date().toISOString()
             };
             await AppDB.savePage(initialPage);
             pages.push(initialPage);
         }
 
-        // 호환성: 기존 데이터 중 type이 없는 것은 connection으로 처리
-        pages.forEach(p => { if (!p.type) p.type = 'connection'; });
+        pages.forEach(p => { 
+            if (!p.type) p.type = 'connection'; 
+            if (!p.notes) p.notes = {}; 
+        });
 
         renderSidebar();
         
@@ -471,6 +504,7 @@
             name: result.name,
             type: result.type,
             data: createEmptyData(schemasToUse),
+            notes: {},
             updatedAt: new Date().toISOString()
         };
         await AppDB.savePage(newPage);
@@ -513,7 +547,7 @@
             page.updatedAt = new Date().toISOString();
             await AppDB.savePage(page);
             showToast("페이지 이름이 변경되었습니다.");
-            selectPage(page.id); // Re-render title
+            selectPage(page.id);
         }
     }
 
@@ -525,22 +559,29 @@
     }
 
     /* =========================================================
-       4. Dashboard CRUD Rendering
+       4. Dashboard CRUD & Notes Rendering
        ========================================================= */
     function buildDashboardDOM(type) {
         const container = document.getElementById("tables-container");
         container.innerHTML = "";
         
         const activeSchemas = getCurrentSchemas(type);
+        const page = pages.find(p => p.id === currentPageId);
 
         Object.keys(activeSchemas).forEach(cat => {
             const schema = activeSchemas[cat];
             let thHtml = "";
             schema.headers.forEach(h => { thHtml += `<th>${h}</th>`; });
             
+            // 노트 유무에 따른 버튼 클래스 추가
+            const hasNote = page.notes && page.notes[cat] ? 'has-note' : '';
+            
             const html = `
             <div class="paper">
-                <div class="paper-title"><i class="fas ${schema.icon}"></i> ${schema.title}</div>
+                <div class="paper-title">
+                    <div><i class="fas ${schema.icon}"></i> ${schema.title}</div>
+                    <button class="btn-note ${hasNote}" onclick="editNote('${cat}')"><i class="far fa-sticky-note"></i> 노트</button>
+                </div>
                 <div class="table-responsive">
                     <table>
                         <thead><tr>${thHtml}<th style="width:90px; position:sticky; right:0; background:#f8fafc; z-index:10; border-left:2px solid var(--border);">관리</th></tr></thead>
@@ -551,6 +592,35 @@
             </div>`;
             container.insertAdjacentHTML('beforeend', html);
         });
+    }
+
+    // 카테고리별 노트 작성 모달 호출 함수
+    async function editNote(cat) {
+        const page = pages.find(p => p.id === currentPageId);
+        if (!page) return;
+        if (!page.notes) page.notes = {};
+        
+        const activeSchemas = getCurrentSchemas(page.type);
+        const schemaTitle = activeSchemas[cat].title;
+
+        const newNote = await CustomModal.show({ 
+            title: `${schemaTitle} 참조 노트`, 
+            message: "이 구성에 대한 참조 메모를 작성하세요:",
+            type: "note", 
+            defaultValue: page.notes[cat] || "" 
+        });
+
+        if (newNote !== null) { // 취소가 아닌 경우 (빈칸 가능)
+            if (newNote === "") {
+                delete page.notes[cat]; // 빈칸이면 노트 객체에서 제거
+            } else {
+                page.notes[cat] = newNote;
+            }
+            await saveCurrentPageData();
+            buildDashboardDOM(page.type); // 버튼 색상 변경을 위한 DOM 재생성
+            renderDashboardData(); // 데이터 재렌더링
+            showToast("노트가 저장되었습니다.");
+        }
     }
 
     function renderDashboardData() {
@@ -576,7 +646,6 @@
                     if (isEditing) {
                         td.innerHTML = `<input type="text" class="edit-input" id="edit-${cat}-${key}" value="${val}">`;
                     } else {
-                        // Empty values get simple handling without copy button to reduce clutter
                         if (val) {
                             td.innerHTML = `<div class="copy-group"><span class="copy-text" title="${val}">${val}</span><button class="btn-icon" onclick="copyText(this)" title="복사"><i class="far fa-copy"></i></button></div>`;
                         } else {
@@ -690,7 +759,7 @@
     }
 
     /* =========================================================
-       5. JSON Export & Import
+       5. JSON Export, Import & Excel Export
        ========================================================= */
     function exportJSON() {
         if (pages.length === 0) return showToast("백업할 데이터가 없습니다.");
@@ -728,8 +797,8 @@
                     for (const importedPage of importedData) {
                         if (!importedPage.id || !importedPage.data) continue;
                         
-                        // 타입 설정 보정
                         if (!importedPage.type) importedPage.type = 'connection';
+                        if (!importedPage.notes) importedPage.notes = {};
                         
                         const existingPageIndex = pages.findIndex(p => p.id === importedPage.id);
 
@@ -737,6 +806,7 @@
                             const localPage = pages[existingPageIndex];
                             localPage.name = importedPage.name || localPage.name;
                             localPage.type = importedPage.type;
+                            localPage.notes = importedPage.notes; // 노트 정보 반영
                             
                             const targetSchemas = getCurrentSchemas(localPage.type);
                             Object.keys(targetSchemas).forEach(cat => {
@@ -763,6 +833,46 @@
         reader.readAsText(file);
     });
 
+    function exportPageToExcel() {
+        if (!currentPageId) return;
+        const page = pages.find(p => p.id === currentPageId);
+        if (!page) return;
+
+        if (typeof XLSX === 'undefined') {
+            return showToast("엑셀 라이브러리를 불러오는 중입니다. 잠시 후 다시 시도해주세요.");
+        }
+
+        const activeSchemas = getCurrentSchemas(page.type);
+        const wb = XLSX.utils.book_new();
+
+        Object.keys(activeSchemas).forEach(cat => {
+            const schema = activeSchemas[cat];
+            const dataArr = page.data[cat] || [];
+            
+            const wsData = [schema.headers];
+            
+            dataArr.forEach(item => {
+                const rowData = schema.cols.map(key => item[key] || "");
+                wsData.push(rowData);
+            });
+
+            // 노트가 존재할 경우 테이블 하단에 병합된 셀로 노트 내용 추가
+            if (page.notes && page.notes[cat]) {
+                wsData.push([]); // 빈 줄 추가
+                wsData.push(["[참조 노트]"]);
+                wsData.push([page.notes[cat]]);
+            }
+
+            const ws = XLSX.utils.aoa_to_sheet(wsData);
+            
+            let sheetName = schema.title.replace(/[\\\/\?\*\[\]]/g, '').substring(0, 31);
+            XLSX.utils.book_append_sheet(wb, ws, sheetName);
+        });
+
+        XLSX.writeFile(wb, `${page.name}.xlsx`);
+        showToast(`'${page.name}' 엑셀 파일이 다운로드되었습니다.`);
+    }
+
     /* =========================================================
        6. Utils (Toast)
        ========================================================= */
@@ -780,7 +890,6 @@
         el.textContent = msg;
         area.appendChild(el); 
         
-        // 1초 후 제거
         setTimeout(() => el.remove(), 1000);
     }
 </script>
