@@ -512,7 +512,7 @@
         Quill.register(RawTableBlot, true);
 
         const SizeStyle = Quill.import('attributors/style/size');
-        SizeStyle.whitelist = null; // 글자 크기 화이트리스트 제한 해제 (모든 px 허용)
+        SizeStyle.whitelist = null; 
         Quill.register(SizeStyle, true);
 
         document.addEventListener("DOMContentLoaded", () => {
@@ -521,6 +521,7 @@
                 modules: { toolbar: false, imageResize: { displaySize: true, modules: [ 'Resize', 'DisplaySize', 'Toolbar' ] } }
             });
             quill.root.setAttribute('spellcheck', false);
+            
             const Delta = Quill.import('delta');
             quill.clipboard.addMatcher('TABLE', (node, delta) => new Delta().insert({ rawTable: node.outerHTML }));
 
@@ -552,7 +553,6 @@
             initialPanelWidth = editorPanel.getBoundingClientRect().width;
             resizer.classList.add('dragging');
             
-            // 드래그 중 텍스트 선택 방지 및 커서 유지
             document.body.style.userSelect = 'none';
             document.body.style.cursor = 'col-resize';
             e.preventDefault(); 
@@ -563,8 +563,8 @@
             const deltaX = initialMouseX - e.clientX;
             let newWidth = initialPanelWidth + deltaX;
             
-            if (newWidth < 400) newWidth = 400; // 최소 너비 안전값
-            if (newWidth > window.innerWidth * 0.8) newWidth = window.innerWidth * 0.8; // 화면의 80%까지만 확장 가능
+            if (newWidth < 400) newWidth = 400;
+            if (newWidth > window.innerWidth * 0.8) newWidth = window.innerWidth * 0.8; 
             
             editorPanel.style.width = newWidth + 'px';
         });
@@ -573,13 +573,10 @@
             if (isResizingPanel) {
                 isResizingPanel = false;
                 resizer.classList.remove('dragging');
-                
-                // 원상복구
                 document.body.style.userSelect = '';
                 document.body.style.cursor = '';
             }
         });
-        // -------------------------------
 
         // --- 2. 통합 전역 변수 및 데이터 구조 (Hybrid DB) ---
         const dbName = "ZettelLinkDB"; 
@@ -1845,7 +1842,7 @@
             }
         });
 
-        // --- [수정사항] 클립보드 붙여넣기 이벤트 개선: MD 텍스트(표, 코드블록 등) 감지 시 HTML 렌더링 지원 ---
+        // --- [수정사항] 클립보드 붙여넣기 시 제미나이/GPT의 빈 목록 완벽 방어 처리 (HTML 태그 간 개행 원천 차단) ---
         document.addEventListener('paste', function(e) {
             const isQuill = e.target.closest('.ql-editor');
             if (!isQuill && e.target.isContentEditable) {
@@ -1853,13 +1850,14 @@
             }
             
             if (isQuill && document.getElementById('node-editor-panel').classList.contains('open')) {
-                const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+                const clipboardData = e.clipboardData || e.originalEvent.clipboardData;
+                const items = clipboardData.items;
                 let hasImage = false;
                 
-                // 1. 이미지가 포함된 경우 우선 처리
                 for (let i = 0; i < items.length; i++) {
                     if (items[i].type.indexOf("image") !== -1 && items[i].kind === 'file') {
-                        e.preventDefault(); e.stopImmediatePropagation(); const blob = items[i].getAsFile(); const reader = new FileReader();
+                        e.preventDefault(); e.stopImmediatePropagation(); 
+                        const blob = items[i].getAsFile(); const reader = new FileReader();
                         reader.onload = (event) => {
                             let range = quill.getSelection() || { index: quill.getLength() };
                             quill.insertEmbed(range.index, 'image', event.target.result, Quill.sources.USER); quill.setSelection(range.index + 1, Quill.sources.SILENT); saveNodeEditor(false);
@@ -1871,25 +1869,93 @@
                 }
                 if (hasImage) return;
 
-                // 2. 텍스트/HTML 복사 시 마크다운 변환 처리
-                const html = (e.clipboardData || e.originalEvent.clipboardData).getData('text/html');
-                const text = (e.clipboardData || e.originalEvent.clipboardData).getData('text/plain');
+                function processHTMLPaste(htmlString) {
+                    // 핵심 필터: Quill이 리스트 사이의 공백이나 개행(\n)을 빈 Bullet으로 인식하는 것을 막기 위해,
+                    // 리스트 관련 태그(ul, ol, li) 바깥/사이에 있는 쓰레기 공백 문자 및 개행을 완전히 압착(제거)합니다.
+                    let safeHtml = htmlString
+                        .replace(/(<\/?(?:ul|ol|li)[^>]*>)\s+(?=<)/gi, '$1') // 태그와 태그 사이 공백/개행 제거
+                        .replace(/>\s+(<\/?(?:ul|ol|li)[^>]*>)/gi, '>$1');
+                        
+                    // 내용이 완전히 비어있거나, 무의미한 br, 빈 p만 있는 li 태그 자체를 삭제
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = safeHtml;
+                    tempDiv.querySelectorAll('li').forEach(li => {
+                        const content = li.textContent.replace(/[\u200B-\u200D\uFEFF\xA0\s]/g, '');
+                        if (content === '' && !li.querySelector('img')) {
+                            li.remove();
+                        }
+                    });
 
-                // 클립보드에 HTML(이미 렌더링된 구조)이 없거나 비어있는 상태에서 텍스트가 있을 때
+                    // Quill의 Delta 엔진을 거쳐 안전하게 에디터에 삽입
+                    const Delta = Quill.import('delta');
+                    let delta = quill.clipboard.convert(tempDiv.innerHTML);
+                    let cleanDelta = new Delta();
+                    let lineBuffer = []; 
+                    let isLineWhitespaceOnly = true;
+
+                    // 2차 필터: Delta 내부에서도 빈 목록이 감지되면 속성을 해제하여 빈 줄로 만듦
+                    delta.ops.forEach(op => {
+                        if (typeof op.insert === 'string') {
+                            let textOp = op.insert;
+                            for(let i = 0; i < textOp.length; i++) {
+                                let char = textOp[i];
+                                if (char === '\n') {
+                                    if (op.attributes && op.attributes.list) {
+                                        if (isLineWhitespaceOnly) {
+                                            lineBuffer.forEach(bOp => cleanDelta.insert(bOp.insert)); 
+                                            cleanDelta.insert('\n');
+                                        } else {
+                                            lineBuffer.forEach(bOp => cleanDelta.insert(bOp.insert, bOp.attributes));
+                                            cleanDelta.insert('\n', op.attributes);
+                                        }
+                                    } else {
+                                        lineBuffer.forEach(bOp => cleanDelta.insert(bOp.insert, bOp.attributes));
+                                        cleanDelta.insert('\n', op.attributes);
+                                    }
+                                    lineBuffer = [];
+                                    isLineWhitespaceOnly = true;
+                                } else {
+                                    lineBuffer.push({insert: char, attributes: op.attributes});
+                                    if (!/^[\s\u200B-\u200D\uFEFF\xA0]$/.test(char)) {
+                                        isLineWhitespaceOnly = false;
+                                    }
+                                }
+                            }
+                        } else {
+                            lineBuffer.push({insert: op.insert, attributes: op.attributes});
+                            isLineWhitespaceOnly = false;
+                        }
+                    });
+
+                    if (lineBuffer.length > 0) {
+                        lineBuffer.forEach(bOp => cleanDelta.insert(bOp.insert, bOp.attributes));
+                    }
+
+                    let range = quill.getSelection() || { index: quill.getLength(), length: 0 };
+                    let pasteDelta = new Delta().retain(range.index).delete(range.length).concat(cleanDelta);
+                    quill.updateContents(pasteDelta, 'user');
+                    quill.setSelection(range.index + cleanDelta.length(), 'silent');
+                    saveNodeEditor(false);
+                }
+
+                let html = clipboardData.getData('text/html');
+                const text = clipboardData.getData('text/plain');
+
+                if (html && html.trim() !== '') {
+                    e.preventDefault(); 
+                    e.stopImmediatePropagation();
+                    processHTMLPaste(html);
+                    return;
+                }
+
                 if (text && (!html || html.trim() === '')) {
-                    // 마크다운 문법(표, 헤딩, 리스트, 코드블록 등)이 포함되어 있는지 검사
                     const isMarkdown = /\|.*\|/.test(text) || /^#+\s/m.test(text) || /^\s*[-*]\s/m.test(text) || /^```/m.test(text);
-                    
                     if (isMarkdown) {
                         e.preventDefault(); 
                         e.stopImmediatePropagation();
                         try {
-                            // marked.js를 활용하여 MD 텍스트를 HTML(표 등)로 변환
                             const parsedHtml = marked.parse(text); 
-                            let range = quill.getSelection() || { index: quill.getLength() };
-                            // 변환된 HTML을 Quill 에디터에 삽입(내부 Matcher를 통해 rawTable 등으로 안전하게 처리됨)
-                            quill.clipboard.dangerouslyPasteHTML(range.index, parsedHtml);
-                            saveNodeEditor(false);
+                            processHTMLPaste(parsedHtml);
                             return;
                         } catch (err) {
                             console.error("Markdown parse error:", err);
