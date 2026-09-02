@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Book 에디터</title>
+<!-- 외부 CSS 및 JS 라이브러리 -->
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css" />
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+<style>
+    :root {
+        --primary: #2563eb; --primary-hover: #1d4ed8; --bg: #f8fafc;
+        --surface: #ffffff; --border: #e2e8f0; --border-focus: #93c5fd;
+        --text-main: #1e293b; --text-muted: #64748b; --danger: #ef4444;
+        --danger-bg: #fee2e2; --radius-lg: 12px; --radius-md: 8px; --sidebar-w: 300px;
+        --shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.04);
+    }
+    
+    body { font-family: 'Pretendard', sans-serif; background: var(--bg); color: var(--text-main); margin: 0; display: flex; height: 100vh; overflow: hidden; }
+
+    /* 사이드바 (TOC + 타임라인) */
+    .sidebar { width: var(--sidebar-w); background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; z-index: 10; }
+    .sidebar-header { padding: 20px 24px; border-bottom: 1px solid var(--border); background: var(--surface); }
+    .sidebar-header h2 { margin: 0; font-size: 15px; font-weight: 700; color: var(--primary); display: flex; align-items: center; gap: 8px; }
+    
+    .toc-list { height: 40%; overflow-y: auto; padding: 16px 24px; border-bottom: 4px solid var(--bg); }
+    .toc-item { display: block; margin-bottom: 8px; font-size: 13.5px; color: var(--text-muted); text-decoration: none; cursor: pointer; transition: 0.2s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .toc-item:hover { color: var(--primary); font-weight: 600; }
+    .toc-level-1 { font-weight: 700; color: var(--text-main); margin-top: 12px; font-size: 14.5px; }
+    .toc-level-2 { margin-left: 12px; }
+    .toc-level-3 { margin-left: 24px; font-size: 13px; }
+
+    .timeline-list { flex: 1; overflow-y: auto; padding: 16px; background: var(--bg); }
+    .timeline-item { padding: 12px; border-radius: var(--radius-md); cursor: pointer; transition: 0.2s; border: 1px solid var(--border); margin-bottom: 8px; background: var(--surface); display: flex; justify-content: space-between; align-items: flex-start; }
+    .timeline-item:hover { border-color: var(--primary); }
+    .timeline-item.active { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
+    .tl-info { flex: 1; overflow: hidden; }
+    .tl-title { font-weight: 600; font-size: 13.5px; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tl-date { font-size: 11.5px; color: var(--text-muted); }
+    .tl-delete-btn { background: transparent; border: none; cursor: pointer; opacity: 0; transition: 0.2s; padding: 4px; font-size: 12px; color: var(--danger); display: flex; align-items: center; justify-content: center; }
+    .timeline-item:hover .tl-delete-btn { opacity: 1; }
+
+    /* 메인 콘텐츠 */
+    .main-content { flex: 1; overflow-y: auto; padding: 0 40px 40px; position: relative; }
+    .top-bar { position: sticky; top: 0; background: rgba(248, 250, 252, 0.9); backdrop-filter: blur(8px); padding: 16px 0; display: flex; justify-content: space-between; align-items: center; z-index: 50; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
+    
+    .top-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: #fff; color: var(--text-main); border: 1px solid var(--border); padding: 8px 14px; font-size: 13.5px; font-weight: 600; border-radius: var(--radius-md); cursor: pointer; transition: all 0.2s; height: 36px; box-sizing: border-box; box-shadow: var(--shadow-sm); }
+    .btn:hover { background: #f1f5f9; }
+    .btn-primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .btn-primary:hover { background: var(--primary-hover); }
+
+    .editor-container { max-width: 860px; margin: 0 auto; }
+    .card { background: var(--surface); padding: 24px; border-radius: var(--radius-lg); margin-bottom: 24px; border: 1px solid var(--border); box-shadow: var(--shadow-sm); }
+    
+    .form-group { margin-bottom: 20px; }
+    label { display: block; font-weight: 600; margin-bottom: 8px; font-size: 13.5px; color: #334155; }
+    input[type="text"], input[type="date"], textarea, select { width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius-md); font-family: inherit; font-size: 14px; transition: 0.2s; box-sizing: border-box; }
+    input:focus, textarea:focus, select:focus { outline: none; border-color: var(--border-focus); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+    textarea { min-height: 120px; resize: vertical; line-height: 1.6; }
+
+    .flex-row { display: flex; gap: 12px; margin-bottom: 16px; }
+    .flex-row > div { flex: 1; }
+
+    /* 블록 UI 및 드래그 앤 드롭 요소 */
+    .article-block { background: #fff; border: 1px solid var(--border); padding: 24px; border-radius: var(--radius-md); margin-bottom: 20px; border-left: 4px solid var(--border); transition: border-color 0.2s, box-shadow 0.2s, opacity 0.2s; }
+    .article-block:focus-within { border-left-color: var(--primary); }
+    .article-block.dragging { opacity: 0.4; border: 2px dashed var(--primary); background: #f8fafc; }
+    
+    .block-header { display: flex; gap: 10px; margin-bottom: 16px; align-items: center; }
+    .block-header select { width: 150px; }
+    
+    .drag-handle { cursor: grab; padding: 4px; display: flex; align-items: center; justify-content: center; color: #94a3b8; border-radius: 4px; transition: 0.2s; user-select: none; }
+    .drag-handle:hover { background: #f1f5f9; color: var(--text-main); }
+    .drag-handle:active { cursor: grabbing; }
+
+    .remove-btn { background: transparent; color: var(--danger); border: 1px solid transparent; font-size: 13.5px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 8px 14px; border-radius: var(--radius-md); transition: 0.2s; white-space: nowrap; height: 100%; box-sizing: border-box; }
+    .remove-btn:hover { background: var(--danger-bg); border-color: #fca5a5; }
+
+    .btn-outline { width: 100%; padding: 16px; border: 2px dashed var(--border); background: transparent; margin-top: 8px; color: var(--text-muted); box-shadow: none; font-weight: 600; cursor: pointer; transition: 0.2s; border-radius: var(--radius-md); }
+    .btn-outline:hover { border-color: var(--primary); color: var(--primary); background: #fff; }
+
+    /* 시각자료 UI */
+    .visual-selector { margin-top: 24px; padding: 20px; border: 1px dashed var(--border); border-radius: var(--radius-md); background: #fbfbfc; }
+    .visual-common-fields { background: #f1f5f9; padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border); margin-bottom: 16px; }
+
+    /* 모달 UI */
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.4); z-index: 1000; justify-content: center; align-items: center; backdrop-filter: blur(4px); }
+    .modal-content { background: #ffffff; width: 900px; max-width: 95%; height: 85vh; border-radius: var(--radius-lg); display: flex; flex-direction: column; box-shadow: 0 20px 40px rgba(0,0,0,0.15); overflow: hidden; }
+    .modal-header { padding: 20px 32px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+    .modal-header h2 { margin: 0; font-size: 16px; }
+    .close-btn { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-muted); display: flex; align-items: center; justify-content: center; }
+    
+    .modal-body { padding: 40px; flex: 1; overflow-y: auto; background: #f8fafc; }
+    #previewText { background: #fff; padding: 40px; border-radius: 8px; border: 1px solid var(--border); box-shadow: var(--shadow-sm); line-height: 1.7; word-break: keep-all; }
+    #previewText h1 { border-bottom: 2px solid var(--border); padding-bottom: 10px; margin-bottom: 20px; }
+    #previewText h2 { margin-top: 30px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    #previewText img { max-width: 100%; border-radius: 8px; margin: 10px 0; }
+    #previewText pre { background: #f1f5f9; padding: 16px; border-radius: 8px; overflow-x: auto; }
+    
+    .modal-footer { padding: 16px 32px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 12px; }
+
+    /* 수정된 토스트 UI (검정 배경) */
+    #toast { visibility: hidden; min-width: 250px; background-color: #000000; color: #fff; text-align: center; border-radius: 8px; padding: 14px; position: fixed; z-index: 1000; left: 50%; bottom: 30px; transform: translateX(-50%); opacity: 0; transition: 0.3s; font-weight: 500; }
+    #toast.show { visibility: visible; opacity: 1; bottom: 50px; }
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+    <!-- 실시간 목차 -->
+    <div class="sidebar-header"><h2>📚 문서 목차</h2></div>
+    <div class="toc-list" id="tocList"></div>
+    
+    <!-- 저장된 문서 목록 -->
+    <div class="sidebar-header"><h2>💾 저장된 문서</h2></div>
+    <div class="timeline-list" id="timelineList"></div>
+</div>
+
+<div class="main-content" id="mainContent">
+    <div class="top-bar">
+        <h1 style="margin:0; font-size:18px;">Book 에디터</h1>
+        <div class="top-actions">
+            <button class="btn" id="linkMdFolderBtn" onclick="linkMdFolder()">🔗 MD폴더연동</button>
+            <button class="btn" onclick="createNew()" title="Ctrl+Alt+N">✨ 신규 작성</button>
+            <button class="btn" onclick="handleSave()" title="Ctrl+S">💾 저장</button>
+            <button class="btn btn-danger" onclick="handleDelete()">🗑️ 삭제</button>
+            <button class="btn" onclick="openSettings()">⚙️ 환경설정</button>
+            <button class="btn" onclick="handlePreviewMD()">👁️ 미리보기</button>
+            <button class="btn btn-primary" onclick="handleDownloadMD()">📥 다운로드</button>
+        </div>
+    </div>
+
+    <div class="editor-container">
+        <!-- 메타 정보 (Frontmatter 영역) -->
+        <div class="card">
+            <h2 style="margin-top:0; font-size:16px; margin-bottom:20px;">📖 1. 문서 기본 정보</h2>
+            <div class="flex-row">
+                <div class="form-group" style="flex: 2;">
+                    <label>문서 제목 (Title)</label>
+                    <input type="text" id="docTitle" placeholder="예: Next.js 완벽 가이드" oninput="updateSidebarTOC()">
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label>작성 일자 (Date)</label>
+                    <input type="date" id="docDate">
+                </div>
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+                <label>간단한 설명 (Description)</label>
+                <input type="text" id="docDesc" placeholder="이 문서에 대한 짧은 요약을 입력하세요. (SEO 및 Frontmatter 적용)">
+            </div>
+        </div>
+
+        <!-- 본문 계층형 블록 -->
+        <div style="margin-bottom: 40px;">
+            <h2 style="font-size: 16px; margin-bottom: 16px;">📝 2. 본문 작성</h2>
+            <div id="articlesContainer"></div>
+            <button class="btn btn-outline" onclick="addArticle()">+ 새로운 하위 구조 추가하기</button>
+        </div>
+    </div>
+</div>
+
+<!-- 환경설정 모달 -->
+<div id="settingsModal" class="modal-overlay">
+    <div class="modal-content" style="width: 500px; height: auto;">
+        <div class="modal-header">
+            <h2>⚙️ 환경설정</h2>
+            <button class="close-btn" onclick="closeSettings()">&times;</button>
+        </div>
+        <div class="modal-body" style="padding: 24px;">
+            <div class="form-group">
+                <label>기본 작성자명 (Author)</label>
+                <input type="text" id="settingAuthor" placeholder="마크다운 Frontmatter에 들어갈 작성자명">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn" onclick="closeSettings()">취소</button>
+            <button class="btn btn-primary" onclick="saveSettings()">💾 저장</button>
+        </div>
+    </div>
+</div>
+
+<!-- 미리보기 모달 -->
+<div id="previewModal" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>👁️ 문서 미리보기</h2>
+            <button class="close-btn" onclick="closePreview()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div id="previewText"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn" onclick="closePreview()">닫기</button>
+            <button class="btn btn-primary" onclick="closePreview(); handleDownloadMD();">📥 다운로드</button>
+        </div>
+    </div>
+</div>
+
+<div id="toast">메시지</div>
+
+<script>
+    // 상태 변수
+    const dbName = "VercelGuideDB";
+    let db;
+    let articleCount = 0;
+    let currentEditId = null;
+    let mdDirHandle = null; 
+    let toastTimeout = null;
+
+    // 초기화 및 이벤트 리스너 등록
+    window.onload = () => {
+        document.getElementById('docDate').value = new Date().toISOString().split('T')[0];
+        initDB(); 
+        createNew(false); // 페이지 최초 로드 시에는 신규 작성 메시지 숨김
+        setupDragAndDrop(); // 드래그 앤 드롭 기능 초기화
+        setupKeyboardShortcuts(); // 단축키 초기화
+    };
+
+    /* ==========================================
+       키보드 단축키 로직
+       ========================================== */
+    function setupKeyboardShortcuts() {
+        document.addEventListener('keydown', (e) => {
+            // Ctrl + S (저장)
+            if (e.ctrlKey && !e.altKey && !e.shiftKey && (e.key === 's' || e.key === 'S')) {
+                e.preventDefault(); // 브라우저 기본 저장(웹페이지 저장) 방지
+                handleSave();
+            }
+            // Ctrl + Alt + N (신규 작성)
+            if (e.ctrlKey && e.altKey && (e.key === 'n' || e.key === 'N')) {
+                e.preventDefault();
+                createNew(true);
+            }
+        });
+    }
+
+    /* ==========================================
+       드래그 앤 드롭 (순서 변경) 로직
+       ========================================== */
+    function setupDragAndDrop() {
+        const container = document.getElementById('articlesContainer');
+        
+        container.addEventListener('dragstart', e => {
+            const block = e.target.closest('.article-block');
+            if (block) {
+                block.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+            }
+        });
+
+        container.addEventListener('dragend', e => {
+            const block = e.target.closest('.article-block');
+            if (block) {
+                block.classList.remove('dragging');
+                block.removeAttribute('draggable'); // 드래그 종료 시 초기화 (텍스트 선택 방해 방지)
+                updateSidebarTOC(); // 드롭 완료 후 실시간 목차(TOC) 새로고침
+            }
+        });
+
+        container.addEventListener('dragover', e => {
+            e.preventDefault(); // 드롭 허용
+            const dragging = document.querySelector('.dragging');
+            if (!dragging) return;
+            
+            const afterElement = getDragAfterElement(container, e.clientY);
+            if (afterElement == null) {
+                container.appendChild(dragging);
+            } else {
+                container.insertBefore(dragging, afterElement);
+            }
+        });
+
+        function getDragAfterElement(container, y) {
+            const draggableElements = [...container.querySelectorAll('.article-block:not(.dragging)')];
+            return draggableElements.reduce((closest, child) => {
+                const box = child.getBoundingClientRect();
+                const offset = y - box.top - box.height / 2; // 마우스 Y가 요소 중앙을 넘었는지 판별
+                if (offset < 0 && offset > closest.offset) {
+                    return { offset: offset, element: child };
+                } else {
+                    return closest;
+                }
+            }, { offset: Number.NEGATIVE_INFINITY }).element;
+        }
+    }
+
+    /* ==========================================
+       IndexedDB 로컬 저장소 로직
+       ========================================== */
+    function initDB() {
+        const request = indexedDB.open(dbName, 1);
+        request.onupgradeneeded = (e) => {
+            db = e.target.result;
+            if(!db.objectStoreNames.contains("docs")) db.createObjectStore("docs", { keyPath: "id", autoIncrement: true });
+        };
+        request.onsuccess = (e) => {
+            db = e.target.result; 
+            loadTimeline();
+        };
+    }
+
+    function loadTimeline() {
+        if(!db) return;
+        const tx = db.transaction("docs", "readonly");
+        const store = tx.objectStore("docs");
+        const request = store.getAll();
+        
+        request.onsuccess = () => {
+            let dataList = request.result || [];
+            dataList.sort((a, b) => new Date(b.date) - new Date(a.date) || b.id - a.id);
+
+            const container = document.getElementById('timelineList');
+            container.innerHTML = ''; 
+            
+            if (dataList.length === 0) {
+                container.innerHTML = '<div style="text-align:center; color:#64748b; font-size:13px; padding:20px;">저장된 내역이 없습니다.</div>';
+                return;
+            }
+            
+            dataList.forEach(item => {
+                const div = document.createElement('div');
+                div.className = `timeline-item ${item.id === currentEditId ? 'active' : ''}`;
+                div.setAttribute('onclick', `loadDataToForm(${item.id})`);
+                
+                div.innerHTML = `
+                    <div class="tl-info">
+                        <div class="tl-title" title="${item.title}">${item.title || "제목 없음"}</div>
+                        <div class="tl-date">${item.date}</div>
+                    </div>
+                    <button class="tl-delete-btn" onclick="handleDeleteById(event, ${item.id})" title="삭제">🗑️</button>
+                `;
+                container.appendChild(div);
+            });
+        };
+    }
+
+    function gatherFormData() {
+        const title = document.getElementById('docTitle').value;
+        const date = document.getElementById('docDate').value;
+        const desc = document.getElementById('docDesc').value;
+        if (!title) return null;
+
+        const articles = [];
+        document.querySelectorAll('.article-block').forEach(block => {
+            const visualType = block.querySelector('.a-visual-type').value;
+            const presType = block.querySelector('.a-pres-type') ? block.querySelector('.a-pres-type').value : 'split3';
+            let presData = {};
+            if(visualType === 'pres1') {
+                const fields = block.querySelector('.pres-layout-fields');
+                if(fields) {
+                    fields.querySelectorAll('input, textarea, select').forEach(el => {
+                        const keyMatch = el.className.match(/p-([a-zA-Z0-9_]+)/);
+                        if(keyMatch) presData[keyMatch[1]] = el.value;
+                    });
+                }
+            }
+            const getVal = (cls) => { const el = block.querySelector(cls); return el ? el.value : ''; };
+
+            articles.push({
+                depth: block.querySelector('.a-depth').value,
+                title: block.querySelector('.a-title').value.trim(),
+                content: block.querySelector('.a-content').value,
+                visualType: visualType, vIcon: getVal('.a-v-icon'), vTitle: getVal('.a-v-title'), vFooter: getVal('.a-v-footer'),
+                presType: presType, presData: presData,
+                igK1: getVal('.a-ig-k1'), igV1: getVal('.a-ig-v1'), igD1: getVal('.a-ig-d1'), 
+                igK2: getVal('.a-ig-k2'), igV2: getVal('.a-ig-v2'), igD2: getVal('.a-ig-d2'),
+                igK3: getVal('.a-ig-k3'), igV3: getVal('.a-ig-v3'), igD3: getVal('.a-ig-d3'), 
+                igK4: getVal('.a-ig-k4'), igV4: getVal('.a-ig-v4'), igD4: getVal('.a-ig-d4'),
+                igK5: getVal('.a-ig-k5'), igV5: getVal('.a-ig-v5'), igD5: getVal('.a-ig-d5'), 
+                igK6: getVal('.a-ig-k6'), igV6: getVal('.a-ig-v6'), igD6: getVal('.a-ig-d6')
+            });
+        });
+
+        return { id: currentEditId, title, date, desc, articles, updatedAt: Date.now() };
+    }
+
+    function handleSave() {
+        const data = gatherFormData();
+        if (!data) return showToast("⚠️ 문서 제목을 입력해주세요.");
+        
+        const tx = db.transaction("docs", "readwrite");
+        const store = tx.objectStore("docs");
+        if (data.id === null) delete data.id;
+        
+        const req = store.put(data);
+        req.onsuccess = (e) => {
+            currentEditId = e.target.result;
+            loadTimeline();
+            showToast("💾 저장이 완료되었습니다.");
+        };
+    }
+
+    function loadDataToForm(id) {
+        const tx = db.transaction("docs", "readonly");
+        const store = tx.objectStore("docs");
+        const request = store.get(id);
+        
+        request.onsuccess = () => {
+            const data = request.result;
+            if(!data) return;
+            
+            currentEditId = data.id;
+            document.getElementById('docTitle').value = data.title;
+            document.getElementById('docDate').value = data.date;
+            document.getElementById('docDesc').value = data.desc || '';
+            
+            document.getElementById('articlesContainer').innerHTML = '';
+            articleCount = 0;
+            
+            if (data.articles && data.articles.length > 0) {
+                data.articles.forEach(art => addArticle(art));
+            } else {
+                addArticle();
+            }
+            
+            loadTimeline();
+            updateSidebarTOC();
+            document.getElementById('mainContent').scrollTo({top: 0, behavior: 'smooth'});
+        };
+    }
+
+    // 신규 작성 (showMsg 파라미터로 토스트 메시지 제어)
+    function createNew(showMsg = true) {
+        currentEditId = null;
+        document.getElementById('docTitle').value = '';
+        document.getElementById('docDate').value = new Date().toISOString().split('T')[0];
+        document.getElementById('docDesc').value = '';
+        
+        document.getElementById('articlesContainer').innerHTML = '';
+        articleCount = 0;
+        addArticle();
+        
+        loadTimeline();
+        updateSidebarTOC();
+        
+        if (showMsg) {
+            showToast("✨ 새로운 문서를 시작합니다.");
+        }
+    }
+
+    function handleDeleteById(event, id) {
+        event.stopPropagation();
+        if (confirm("정말 이 문서를 삭제하시겠습니까?")) {
+            const tx = db.transaction("docs", "readwrite");
+            tx.objectStore("docs").delete(id).onsuccess = () => {
+                showToast("🗑️ 삭제되었습니다.");
+                // 삭제 후 폼 초기화 시 새 문서 메시지는 숨김
+                if (currentEditId === id) createNew(false); 
+                else loadTimeline();
+            };
+        }
+    }
+
+    function handleDelete() {
+        if (!currentEditId) return showToast("아직 저장되지 않은 글입니다.");
+        handleDeleteById({stopPropagation:()=>{}}, currentEditId);
+    }
+
+    /* ==========================================
+       UI 및 블록 편집 로직
+       ========================================== */
+    function toggleVisualOptions(id, type) {
+        const block = document.getElementById(id); 
+        block.querySelectorAll('.visual-options').forEach(opt => opt.style.display = 'none');
+        const commonHeader = block.querySelector('.visual-common-header'); 
+        const commonFooter = block.querySelector('.visual-common-footer');
+        
+        if(type !== 'none') {
+            commonHeader.style.display = 'block'; 
+            commonFooter.style.display = 'block'; 
+            const target = block.querySelector(`.v-${type}`);
+            if(target) target.style.display = 'block'; 
+            if(type === 'pres1') togglePresLayout(id, block.querySelector('.a-pres-type').value);
+        } else { 
+            commonHeader.style.display = 'none'; 
+            commonFooter.style.display = 'none'; 
+        }
+    }
+
+    function togglePresLayout(id, layout) {
+        const block = document.getElementById(id); 
+        const container = block.querySelector('.pres-layout-fields'); 
+        let html = '';
+        if(layout === 'split3') { 
+            html = `<div class="flex-row"><input type="text" class="p-l1" placeholder="라벨1"> <input type="text" class="p-v1" placeholder="내용1"></div><div class="flex-row"><input type="text" class="p-l2" placeholder="라벨2"> <input type="text" class="p-v2" placeholder="내용2"></div><div class="flex-row"><input type="text" class="p-l3" placeholder="라벨3"> <input type="text" class="p-v3" placeholder="내용3"></div>`; 
+        } 
+        else if(layout === 'split2') { 
+            html = `<div class="flex-row"><select class="p-connector"><option value="→">연결 (→)</option><option value="+">조합 (+)</option><option value="VS">대조 (VS)</option></select><select class="p-color"><option value="normal">기본색상(회색/빨강)</option><option value="green">초록색상</option><option value="blue">파란색상</option></select></div><div class="flex-row"><textarea class="p-v1" placeholder="왼쪽 카드"></textarea><textarea class="p-v2" placeholder="오른쪽 카드"></textarea></div>`; 
+        } 
+        else if(layout === 'table_p') { 
+            html = `<input type="text" class="p-header" placeholder="표 헤더 (예: 구분|A|B)" style="margin-bottom:16px;"><textarea class="p-rows" placeholder="내용을 | 와 엔터로 구분 (예: 1|가|나)"></textarea>`; 
+        }
+        container.innerHTML = html;
+    }
+
+    function addArticle(data = null) {
+        articleCount++;
+        const id = `article_${articleCount}`;
+        
+        let tableRowsHtml = '';
+        for(let i=1; i<=6; i++) tableRowsHtml += `<div class="flex-row"><div><input type="text" class="a-ig-k${i}" placeholder="${i}행 1열"></div><div><input type="text" class="a-ig-v${i}" placeholder="${i}행 2열"></div><div><input type="text" class="a-ig-d${i}" placeholder="${i}행 3열"></div></div>`;
+        
+        const html = `
+            <div class="article-block" id="${id}">
+                <div class="block-header">
+                    <!-- 드래그 핸들: mousedown 시에만 draggable 속성을 부여하여 텍스트 복사 및 폼 입력 방해를 차단합니다 -->
+                    <span class="drag-handle" title="드래그하여 순서 변경"
+                          onmousedown="document.getElementById('${id}').setAttribute('draggable', true)"
+                          onmouseup="document.getElementById('${id}').setAttribute('draggable', false)"
+                          onmouseleave="document.getElementById('${id}').setAttribute('draggable', false)">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="9" cy="12" r="1.5"/><circle cx="9" cy="5" r="1.5"/><circle cx="9" cy="19" r="1.5"/>
+                            <circle cx="15" cy="12" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="15" cy="19" r="1.5"/>
+                        </svg>
+                    </span>
+                    
+                    <select class="a-depth" onchange="updateSidebarTOC()">
+                        <option value="1">H1 (대주제)</option>
+                        <option value="2" selected>H2 (중주제)</option>
+                        <option value="3">H3 (소주제)</option>
+                        <option value="0">본문 내용만 (제목없음)</option>
+                    </select>
+                    
+                    <input type="text" class="a-title" placeholder="제목을 입력하세요" oninput="updateSidebarTOC()" style="flex:1; margin:0;">
+                    
+                    <!-- 삭제 버튼을 블록 헤더 우측 끝에 배치하여 완벽히 수직 정렬됨 -->
+                    <button class="remove-btn" onclick="removeArticle('${id}')" title="이 블록 삭제">삭제</button>
+                </div>
+
+                <div class="form-group" style="margin-bottom:0;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <label style="margin:0;">내용 (마크다운 지원)</label>
+                        <label for="img-upload-${id}" style="cursor:pointer; font-size:12px; color:var(--primary); font-weight:600;">🖼️ 이미지 첨부(내장)</label>
+                        <input type="file" id="img-upload-${id}" accept="image/*" style="display: none;" onchange="insertImage(this, '${id}')">
+                    </div>
+                    <textarea class="a-content" placeholder="이곳에 내용을 작성하세요..."></textarea>
+                </div>
+                
+                <!-- 시각자료 추가 기능 -->
+                <div class="visual-selector">
+                    <label style="margin-bottom:12px; display:block; font-weight:700;">📊 하단 시각자료 추가 (선택)</label>
+                    <select class="a-visual-type" onchange="toggleVisualOptions('${id}', this.value)">
+                        <option value="none">사용 안 함</option>
+                        <option value="table">인포그래픽 요약표 (3열)</option>
+                        <option value="pres1">UI 컴포넌트형 (2/3분할, 색상표)</option>
+                    </select>
+                    
+                    <div class="visual-common-header visual-common-fields" style="display:none; margin-top: 20px;">
+                        <div class="flex-row" style="margin-bottom:0;">
+                            <div style="flex: 0 0 100px;"><label>아이콘</label><input type="text" class="a-v-icon" placeholder="예: 📊"></div>
+                            <div style="flex: 1;"><label>시각 자료 타이틀</label><input type="text" class="a-v-title" placeholder="예: 핵심 지표 비교"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="visual-options v-table" style="display:none; margin-top: 16px;">
+                        ${tableRowsHtml}
+                    </div>
+                    
+                    <div class="visual-options v-pres1" style="display:none; margin-top: 16px;">
+                        <div class="form-group">
+                            <select class="a-pres-type" onchange="togglePresLayout('${id}', this.value)">
+                                <option value="split3">3분할 강조 카드</option>
+                                <option value="split2">2분할 대조/연결 카드</option>
+                                <option value="table_p">스타일 적용된 표</option>
+                            </select>
+                        </div>
+                        <div class="pres-layout-fields" style="margin-top:16px;"></div>
+                    </div>
+                    
+                    <div class="visual-common-footer visual-common-fields" style="display:none; margin-top: 16px; margin-bottom:0;">
+                        <label>👉 하단 마무리 요약 문구 (선택)</label>
+                        <input type="text" class="a-v-footer" placeholder="예: 요약 설명...">
+                    </div>
+                </div>
+            </div>
+        `;
+        document.getElementById('articlesContainer').insertAdjacentHTML('beforeend', html);
+        
+        if (data) {
+            const block = document.getElementById(id);
+            block.querySelector('.a-depth').value = data.depth || '2';
+            block.querySelector('.a-title').value = data.title || '';
+            block.querySelector('.a-content').value = data.content || '';
+            
+            const vType = data.visualType || 'none'; 
+            block.querySelector('.a-visual-type').value = vType; 
+            toggleVisualOptions(id, vType);
+            
+            if (data.vIcon) block.querySelector('.a-v-icon').value = data.vIcon; 
+            if (data.vTitle) block.querySelector('.a-v-title').value = data.vTitle; 
+            if (data.vFooter) block.querySelector('.a-v-footer').value = data.vFooter;
+            
+            if(vType === 'table') { 
+                for(let i=1; i<=6; i++) { 
+                    if(block.querySelector(`.a-ig-k${i}`)) block.querySelector(`.a-ig-k${i}`).value = data[`igK${i}`] || ''; 
+                    if(block.querySelector(`.a-ig-v${i}`)) block.querySelector(`.a-ig-v${i}`).value = data[`igV${i}`] || ''; 
+                    if(block.querySelector(`.a-ig-d${i}`)) block.querySelector(`.a-ig-d${i}`).value = data[`igD${i}`] || ''; 
+                } 
+            } else if(vType === 'pres1') { 
+                block.querySelector('.a-pres-type').value = data.presType || 'split3'; 
+                togglePresLayout(id, data.presType || 'split3'); 
+                const fields = block.querySelector('.pres-layout-fields'); 
+                if(data.presData && fields) { 
+                    for(let key in data.presData) { 
+                        const el = fields.querySelector(`.p-${key}`); 
+                        if(el) el.value = data.presData[key]; 
+                    } 
+                } 
+            }
+        }
+        updateSidebarTOC();
+    }
+
+    function removeArticle(id) {
+        document.getElementById(id).remove();
+        updateSidebarTOC();
+    }
+
+    function updateSidebarTOC() {
+        const tocList = document.getElementById('tocList');
+        tocList.innerHTML = '';
+        
+        const docTitle = document.getElementById('docTitle').value || '제목 없는 문서';
+        tocList.innerHTML += `<div class="toc-item toc-level-1" style="color:var(--primary);">${docTitle}</div>`;
+
+        // DOM 트리에 존재하는 순서 그대로 쿼리하므로, 드래그 앤 드롭 직후에도 순서가 유지됩니다.
+        document.querySelectorAll('.article-block').forEach((block, index) => {
+            const depth = block.querySelector('.a-depth').value;
+            const title = block.querySelector('.a-title').value || `(빈 제목 ${index+1})`;
+            
+            if (depth === '0') return;
+
+            const a = document.createElement('a');
+            a.className = `toc-item toc-level-${depth}`;
+            a.textContent = title;
+            a.onclick = () => block.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            
+            tocList.appendChild(a);
+        });
+    }
+
+    // Base64 이미지 변환 및 삽입
+    async function insertImage(inputEl, blockId) {
+        if (!inputEl.files || inputEl.files.length === 0) return;
+        const textarea = document.querySelector(`#${blockId} .a-content`);
+        const file = inputEl.files[0];
+        
+        try {
+            const base64Data = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.onerror = (e) => reject(e);
+                reader.readAsDataURL(file);
+            });
+            const insertText = `\n![${file.name}](${base64Data.replace(/\s+/g, '')})\n`;
+            
+            const startPos = textarea.selectionStart;
+            const endPos = textarea.selectionEnd;
+            textarea.value = textarea.value.substring(0, startPos) + insertText + textarea.value.substring(endPos, textarea.value.length);
+            
+            showToast("✅ 이미지가 내장되었습니다.");
+        } catch(e) {
+            alert("이미지 변환에 실패했습니다.");
+        }
+        inputEl.value = '';
+    }
+
+    /* ==========================================
+       추가 기능: 폴더 연동, 설정, 미리보기, 다운로드
+       ========================================== */
+    async function linkMdFolder() {
+        try {
+            mdDirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+            const btn = document.getElementById('linkMdFolderBtn');
+            btn.style.backgroundColor = '#10b981';
+            btn.style.color = 'white';
+            btn.innerHTML = '✅ MD 폴더 연동됨';
+            alert('폴더가 성공적으로 연동되었습니다!\n이후 다운로드 시 해당 폴더에 자동 저장됩니다.');
+        } catch (error) {
+            if(error.name !== 'AbortError') alert('폴더 연동에 실패했습니다.');
+        }
+    }
+
+    function openSettings() {
+        document.getElementById('settingAuthor').value = localStorage.getItem('vercelAuthor') || '';
+        document.getElementById('settingsModal').style.display = 'flex';
+    }
+    function closeSettings() { document.getElementById('settingsModal').style.display = 'none'; }
+    function saveSettings() {
+        localStorage.setItem('vercelAuthor', document.getElementById('settingAuthor').value);
+        showToast('✅ 환경설정이 저장되었습니다.');
+        closeSettings();
+    }
+
+    const escapeHtml = (str) => {
+        if (!str) return ''; 
+        return str.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    };
+
+    function generateMarkdownString() {
+        const title = document.getElementById('docTitle').value || 'Untitled';
+        const date = document.getElementById('docDate').value;
+        const desc = document.getElementById('docDesc').value;
+        const author = localStorage.getItem('vercelAuthor') || '';
+        
+        let md = `---\ntitle: "${title.replace(/"/g, '\\"')}"\n`;
+        if(desc) md += `description: "${desc.replace(/"/g, '\\"')}"\n`;
+        if(date) md += `date: ${date}\n`;
+        if(author) md += `author: ${author}\n`;
+        md += `---\n\n`;
+
+        md += `# ${title}\n\n`;
+        if (desc) md += `> ${desc}\n\n`;
+
+        const articles = gatherFormData()?.articles || [];
+        
+        articles.forEach(art => {
+            if (art.depth !== '0' && art.title) {
+                const hMark = '#'.repeat(parseInt(art.depth) + 1); 
+                md += `${hMark} ${art.title}\n\n`;
+            }
+            if (art.content) md += `${art.content}\n\n`;
+            
+            if (art.visualType && art.visualType !== 'none') {
+                md += `<div class="visual-container" style="background: #fff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; margin: 32px 0;">\n`;
+                
+                if (art.vIcon || art.vTitle) {
+                    md += `  <div class="visual-header" style="display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 800; color: #1a3a6c; margin-bottom: 20px; padding-bottom: 14px; border-bottom: 2px solid #e8edf5;"><span class="v-icon">${escapeHtml(art.vIcon) || ''}</span> <span class="v-title">${escapeHtml(art.vTitle) || ''}</span></div>\n`;
+                }
+                
+                if (art.visualType === 'table') {
+                    md += `  <div class="table-presentation" style="width: 100%; border-radius: 8px; overflow: hidden; border: 1px solid #1a3a6c;">\n`; 
+                    let hasHeader = false; let trs = '';
+                    for(let i=1; i<=6; i++) {
+                        const k = escapeHtml(art[`igK${i}`] || ''); 
+                        const v = escapeHtml(art[`igV${i}`] || ''); 
+                        const d = escapeHtml(art[`igD${i}`] || '');
+                        if (!k && !v && !d) continue;
+                        
+                        if(i===1 && !hasHeader) { 
+                            md += `    <div class="tp-header" style="display: flex; background: #1a3a6c; color: white; font-weight: 700; text-align: center; font-size: 15px;"><div style="flex: 1; padding: 14px 10px; border-right: 1px solid rgba(255,255,255,0.2);">${k}</div><div style="flex: 1; padding: 14px 10px; border-right: 1px solid rgba(255,255,255,0.2);">${v}</div><div style="flex: 1; padding: 14px 10px;">${d}</div></div>\n`; 
+                            hasHeader = true; 
+                        } else { 
+                            let bg = i % 2 === 0 ? '#f8fafc' : 'white';
+                            trs += `    <div class="tp-row" style="display: flex; border-bottom: 1px solid #e2e8f0; background: ${bg};"><div style="flex: 1; padding: 14px 10px; font-size: 14.5px; text-align: center; border-right: 1px solid #e2e8f0; color: #2d3748; display: flex; align-items: center; justify-content: center;">${k}</div><div style="flex: 1; padding: 14px 10px; font-size: 14.5px; text-align: center; border-right: 1px solid #e2e8f0; color: #2d3748; display: flex; align-items: center; justify-content: center;"><strong>${v}</strong></div><div style="flex: 1; padding: 14px 10px; font-size: 14.5px; text-align: center; color: #2d3748; display: flex; align-items: center; justify-content: center;">${d}</div></div>\n`; 
+                        }
+                    }
+                    md += trs; md += `  </div>\n`;
+                } else if (art.visualType === 'pres1') {
+                    const pd = art.presData || {};
+                    if(art.presType === 'split3') {
+                        md += `  <div class="split-3" style="display: flex; gap: 10px; margin-bottom: 20px;">\n`;
+                        if(pd.v1) md += `    <div style="flex: 1; padding: 16px 10px; border-radius: 12px; text-align: center; background: #fff5f5; border: 1px solid #e2e8f0; border-top: 4px solid #fc8181;">${pd.l1 ? `<div style="font-size: 12px; color: #718096; margin-bottom: 6px; font-weight: 700;">${escapeHtml(pd.l1)}</div>` : ''}<div style="font-size: 15px; font-weight: 800; color: #2d3748; line-height: 1.4;">${escapeHtml(pd.v1).replace(/\n/g, '<br>')}</div></div>\n`;
+                        if(pd.v2) md += `    <div style="flex: 1; padding: 16px 10px; border-radius: 12px; text-align: center; background: #fffaf0; border: 1px solid #e2e8f0; border-top: 4px solid #fbd38d;">${pd.l2 ? `<div style="font-size: 12px; color: #718096; margin-bottom: 6px; font-weight: 700;">${escapeHtml(pd.l2)}</div>` : ''}<div style="font-size: 15px; font-weight: 800; color: #2d3748; line-height: 1.4;">${escapeHtml(pd.v2).replace(/\n/g, '<br>')}</div></div>\n`;
+                        if(pd.v3) md += `    <div style="flex: 1; padding: 16px 10px; border-radius: 12px; text-align: center; background: #f0fff4; border: 1px solid #e2e8f0; border-top: 4px solid #9ae6b4;">${pd.l3 ? `<div style="font-size: 12px; color: #718096; margin-bottom: 6px; font-weight: 700;">${escapeHtml(pd.l3)}</div>` : ''}<div style="font-size: 15px; font-weight: 800; color: #2d3748; line-height: 1.4;">${escapeHtml(pd.v3).replace(/\n/g, '<br>')}</div></div>\n`;
+                        md += `  </div>\n`;
+                    } else if(art.presType === 'split2') {
+                        let colorStyle1 = "", colorStyle2 = "";
+                        if (pd.color === 'green') { colorStyle1 = 'border-top: 5px solid #68d391; background: #f0fff4;'; colorStyle2 = 'border-top: 5px solid #68d391; background: #f0fff4;'; } 
+                        else if (pd.color === 'blue') { colorStyle1 = 'border-top: 5px solid #63b3ed; background: #ebf8ff;'; colorStyle2 = 'border-top: 5px solid #63b3ed; background: #ebf8ff;'; } 
+                        else { colorStyle1 = 'border-top: 5px solid #fc8181; background: #fff5f5;'; colorStyle2 = 'border-top: 5px solid #90cdf4; background: #ebf8ff;'; }
+                        md += `  <div class="split-2" style="display: flex; align-items: stretch; gap: 12px; margin-bottom: 20px;">\n    <div style="flex: 1; padding: 24px 20px; border-radius: 12px; border: 1px solid #e2e8f0; text-align: center; font-size: 15px; font-weight: 700; color: #2d3748; line-height: 1.7; word-break: keep-all; ${colorStyle1}">${escapeHtml(pd.v1||'').replace(/\n/g, '<br>')}</div>\n    <div style="font-size: 28px; font-weight: 900; color: #4a5568; display: flex; align-items: center; justify-content: center;">${escapeHtml(pd.connector || 'VS')}</div>\n    <div style="flex: 1; padding: 24px 20px; border-radius: 12px; border: 1px solid #e2e8f0; text-align: center; font-size: 15px; font-weight: 700; color: #2d3748; line-height: 1.7; word-break: keep-all; ${colorStyle2}">${escapeHtml(pd.v2||'').replace(/\n/g, '<br>')}</div>\n  </div>\n`;
+                    } else if(art.presType === 'table_p') {
+                        md += `  <div class="table-presentation" style="width: 100%; border-radius: 8px; overflow: hidden; border: 1px solid #1a3a6c;">\n`; 
+                        const hCols = (pd.header || '').split('|'); 
+                        md += `    <div class="tp-header" style="display: flex; background: #1a3a6c; color: white; font-weight: 700; text-align: center; font-size: 15px;">${hCols.map(c => `<div style="flex: 1; padding: 14px 10px; border-right: 1px solid rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center;">${escapeHtml(c.trim())}</div>`).join('')}</div>\n`;
+                        const rows = (pd.rows || '').split('\n').filter(r => r.trim());
+                        rows.forEach((r, idx) => { 
+                            let bg = idx % 2 === 1 ? '#f8fafc' : 'white';
+                            const cols = r.split('|'); 
+                            md += `    <div class="tp-row" style="display: flex; border-bottom: 1px solid #e2e8f0; background: ${bg};">${cols.map(c => `<div style="flex: 1; padding: 14px 10px; font-size: 14.5px; text-align: center; border-right: 1px solid #e2e8f0; color: #2d3748; display: flex; align-items: center; justify-content: center;">${escapeHtml(c.trim())}</div>`).join('')}</div>\n`; 
+                        });
+                        md += `  </div>\n`;
+                    }
+                }
+                if (art.vFooter) { 
+                    md += `  <div style="margin-top: 20px; padding: 16px; background: #f8fafc; border-radius: 8px; text-align: center; font-size: 15.5px; color: #4a5568; font-weight: 700; border: 1px dashed #cbd5e1;">👉 ${escapeHtml(art.vFooter)}</div>\n`; 
+                }
+                md += `</div>\n\n`;
+            }
+        });
+
+        return { title, mdString: md.trim() };
+    }
+
+    function handlePreviewMD() {
+        const { mdString } = generateMarkdownString();
+        document.getElementById('previewText').innerHTML = marked.parse(mdString, { breaks: true, gfm: true });
+        document.getElementById('previewModal').style.display = 'flex';
+    }
+    function closePreview() { document.getElementById('previewModal').style.display = 'none'; }
+
+    async function handleDownloadMD() {
+        const { title, mdString } = generateMarkdownString();
+        const safeTitle = title.replace(/[^a-zA-Z0-9가-힣]/g, '-');
+        const filename = `${safeTitle}.md`;
+
+        if (mdDirHandle) {
+            try {
+                const fileHandle = await mdDirHandle.getFileHandle(filename, { create: true });
+                const writable = await fileHandle.createWritable();
+                await writable.write(mdString);
+                await writable.close();
+                showToast(`✅ [${filename}] 연동된 폴더에 저장되었습니다!`);
+                return;
+            } catch (e) {
+                console.warn('연동 폴더 저장 실패, 일반 다운로드로 전환합니다.', e);
+            }
+        }
+
+        const blob = new Blob([mdString], { type: 'text/markdown;charset=utf-8' });
+        const a = document.createElement('a'); 
+        a.href = URL.createObjectURL(blob); 
+        a.download = filename; 
+        a.click(); 
+        URL.revokeObjectURL(a.href);
+        showToast("📥 다운로드가 완료되었습니다.");
+    }
+
+    function showToast(msg) { 
+        const toast = document.getElementById("toast"); 
+        toast.textContent = msg; 
+        toast.className = "show"; 
+        if (toastTimeout) clearTimeout(toastTimeout);
+        toastTimeout = setTimeout(() => toast.className = toast.className.replace("show", ""), 1000); 
+    }
+</script>
+</body>
+</html>
