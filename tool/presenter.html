@@ -252,6 +252,15 @@
             <button class="btn" onclick="app.clearPage()" title="현재 페이지 전체 지우기 (단축키 8)"><i class="fas fa-trash" style="color:var(--danger);"></i></button>
         </div>
 
+        <!-- 🔥 백업 저장 및 복원 버튼 추가 -->
+        <div class="btn-group">
+            <button class="btn" onclick="app.exportBackup()" title="필기 데이터 백업 (JSON 다운로드)"><i class="fas fa-save" style="color:var(--primary);"></i></button>
+            <div class="file-input-wrapper">
+                <button class="btn" title="필기 데이터 복원 (JSON 불러오기)"><i class="fas fa-file-import" style="color:var(--primary);"></i></button>
+                <input type="file" accept=".json" onchange="app.importBackup(event)" />
+            </div>
+        </div>
+
         <div class="btn-group">
             <button class="btn" onclick="app.downloadPDF()" title="현재 열린 문서 필기 포함 저장"><i class="fas fa-download"></i></button>
             <div class="file-input-wrapper">
@@ -440,6 +449,79 @@ const app = {
         });
         const tx = this.db.transaction('pages', 'readwrite');
         tx.objectStore('pages').put({ id: `${this.fileId}_${pageNum}`, docId: this.fileId, page: pageNum, drawData, overlays });
+    },
+
+    // 🔥 필기 데이터 백업(JSON 다운로드) 기능
+    async exportBackup() {
+        if (!this.fileId || !this.db) return this.showToast("열려있는 PDF가 없습니다.");
+        this.showToast("필기 데이터를 백업하는 중...");
+
+        const docReq = this.db.transaction('docs', 'readonly').objectStore('docs').get(this.fileId);
+        docReq.onsuccess = (e) => {
+            const docData = e.target.result || { id: this.fileId, outlines: this.outlines, lastStickerPos: this.lastStickerPos };
+            
+            const pagesData = [];
+            const tx = this.db.transaction('pages', 'readonly');
+            const store = tx.objectStore('pages');
+            const cursorReq = store.openCursor();
+            
+            cursorReq.onsuccess = (e2) => {
+                const cursor = e2.target.result;
+                if (cursor) {
+                    if (cursor.value.docId === this.fileId) pagesData.push(cursor.value);
+                    cursor.continue();
+                } else {
+                    const backupObj = { fileId: this.fileId, doc: docData, pages: pagesData };
+                    const blob = new Blob([JSON.stringify(backupObj)], {type: "application/json"});
+                    const link = document.createElement('a');
+                    link.href = URL.createObjectURL(blob);
+                    link.download = this.loadedDocs[this.fileId].name + "_backup.json";
+                    link.click();
+                    this.showToast("백업 파일(.json)이 저장되었습니다.");
+                }
+            };
+        };
+    },
+
+    // 🔥 필기 데이터 복원(JSON 불러오기) 기능
+    async importBackup(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        e.target.value = ''; 
+        
+        if (!this.fileId || !this.db) return this.showToast("먼저 PDF 문서를 열어주세요.");
+
+        const reader = new FileReader();
+        reader.onload = async (ev) => {
+            try {
+                const data = JSON.parse(ev.target.result);
+                if (data.fileId !== this.fileId) {
+                    if(!confirm("현재 열린 문서와 백업 파일의 대상이 다를 수 있습니다. 계속 복원하시겠습니까?")) return;
+                }
+                
+                const docTx = this.db.transaction('docs', 'readwrite');
+                data.doc.id = this.fileId; 
+                docTx.objectStore('docs').put(data.doc);
+
+                const pageTx = this.db.transaction('pages', 'readwrite');
+                const pageStore = pageTx.objectStore('pages');
+                data.pages.forEach(p => {
+                    p.docId = this.fileId; 
+                    p.id = `${this.fileId}_${p.page}`; 
+                    pageStore.put(p);
+                });
+
+                pageTx.oncomplete = async () => {
+                    await this.loadDocData();
+                    await this.renderPage(this.pageNum);
+                    this.showToast("필기 데이터가 성공적으로 복원되었습니다!");
+                };
+            } catch (err) {
+                this.showToast("백업 파일을 읽는 중 오류가 발생했습니다.");
+                console.error(err);
+            }
+        };
+        reader.readAsText(file);
     },
 
     async loadPDFs(e) {
@@ -1007,7 +1089,6 @@ const app = {
                 const bgColor = style.backgroundColor; 
                 
                 if (isKeyword || (bgColor && bgColor !== 'rgba(0, 0, 0, 0)' && bgColor !== 'transparent')) {
-                    // 🔥 [수정] 뱃지(Sticker)일 때의 여백(padX, padY)을 넉넉하게 추가합니다.
                     const padX = (isSticker ? 14 : (isKeyword ? 12 : 4)) * exportScale; 
                     const padY = (isSticker ? 7 : (isKeyword ? 4 : 0)) * exportScale; 
                     const radius = (isSticker ? 16 : (isKeyword ? 8 : 6)) * exportScale;
