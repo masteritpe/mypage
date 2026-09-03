@@ -322,6 +322,11 @@
       <i class="fas fa-file-alt" style="color:#6366f1;"></i> MD 불러오기
       <input type="file" id="mdFile" accept=".md,.txt" style="display:none" />
     </label>
+    
+    <!-- Anki & Brainscape 버튼 추가 -->
+    <div style="width:1px; height:20px; background:#e5e7eb; margin:0 4px;"></div>
+    <button class="btn" id="btn-export-anki" title="Anki txt 추출"><i class="fas fa-clone" style="color:#3b82f6;"></i> Anki</button>
+    <button class="btn" id="btn-export-brainscape" title="Brainscape csv 추출"><i class="fas fa-file-csv" style="color:#8b5cf6;"></i> Brainscape</button>
   </div>
 </header>
 
@@ -1281,11 +1286,11 @@ document.addEventListener("DOMContentLoaded", async () => {
              if(rn===1) return;
              const rid = getCell(row, 1);
              if(rid) {
-                imgMap[rid] = {};
-                for(let i=1; i<=10; i++) { 
-                    const v = getCell(row, i+1); 
-                    if(v) imgMap[rid][`img${i}`] = v; 
-                }
+                 imgMap[rid] = {};
+                 for(let i=1; i<=10; i++) { 
+                     const v = getCell(row, i+1); 
+                     if(v) imgMap[rid][`img${i}`] = v; 
+                 }
              }
           });
        }
@@ -1450,6 +1455,65 @@ document.addEventListener("DOMContentLoaded", async () => {
      }
      e.target.value = "";
   };
+
+  // === Anki & Brainscape 플래시카드 내보내기 로직 ===
+  function toPlainForExport(html) {
+      if (!html) return '';
+      let s = String(html).replace(/<br\s*\/?>/gi, '\n').replace(/<\/div>/gi, '\n').replace(/<\/p>/gi, '\n');
+      s = s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/(^|\n)\s*\*\s/g, '$1- ').replace(/<[^>]+>/g, '').trim();
+      return s;
+  }
+
+  function executeFlashcardExport(type) {
+      const list = getFilteredSortedList();
+      if (!list.length) return App.toast('출력할 데이터가 없습니다.');
+
+      const escapeField = (t) => `"${String(t).replace(/"/g, '""')}"`;
+      let content = type === 'brainscape' ? "Question,Answer\n" : "";
+
+      list.forEach(t => {
+          const qPlain = toPlainForExport(t.question);
+          
+          // 뒷면: 정답 및 풀이 조합
+          let combinedAnswerHtml = (t.solution || '');
+          
+          // 핵심 해법에 실제 텍스트가 존재하는지 체크 (<p><br></p> 등 빈 태그 걸러냄)
+          if (toPlainForExport(t.keypoint)) {
+              // 풀이가 이미 있으면 줄바꿈 두 번 추가 후 핵심해법 연결
+              combinedAnswerHtml += (toPlainForExport(combinedAnswerHtml) ? '<br><br>' : '') + '<strong>[핵심 해법]</strong><br>' + t.keypoint;
+          }
+          
+          const aPlain = toPlainForExport(combinedAnswerHtml);
+          
+          if (!qPlain && !aPlain) return;
+
+          if (type === 'anki') {
+              // Anki용: 줄바꿈을 <br>로 치환하여 탭(\t)으로 앞/뒷면 구분
+              const qAnki = qPlain.replace(/\n/g, '<br>');
+              const aAnki = aPlain.replace(/\n/g, '<br>');
+              content += `${escapeField(qAnki)}\t${escapeField(aAnki)}\n`;
+          } else {
+              // Brainscape용: csv 기본 줄바꿈 지원
+              content += `${escapeField(qPlain)},${escapeField(aPlain)}\n`;
+          }
+      });
+
+      const mimeType = type === 'anki' ? 'text/plain;charset=utf-8' : 'text/csv;charset=utf-8';
+      const extension = type === 'anki' ? 'txt' : 'csv';
+      const prefix = App.state.dumpFilter ? App.state.dumpFilter : 'DumpStudy_All';
+      const filename = App.state.chapterFilter ? `${prefix}_Chapter_${App.state.chapterFilter}` : prefix;
+
+      const blob = new Blob([content], { type: mimeType });
+      const a_tag = document.createElement('a'); 
+      a_tag.href = URL.createObjectURL(blob); 
+      a_tag.download = `${filename}_${type === 'anki' ? 'Anki' : 'Brainscape'}.${extension}`; 
+      a_tag.click();
+      
+      App.toast(`${type === 'anki' ? 'Anki' : 'Brainscape'} 저장 완료`);
+  }
+
+  $("btn-export-anki").onclick = () => executeFlashcardExport('anki');
+  $("btn-export-brainscape").onclick = () => executeFlashcardExport('brainscape');
 
   try {
     await App.openDB();
