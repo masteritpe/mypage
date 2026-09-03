@@ -5,8 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
 <title>Presenter</title>
 
+<!-- PDF.js (화면 렌더링용) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<!-- jsPDF (기존 라이브러리 - 호환성 유지) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<!-- 🔥 pdf-lib (원본 PDF 유지 및 초고속 수정 병합용 라이브러리) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
@@ -133,7 +137,7 @@
     #draw-layer { position: absolute; top: 0; left: 0; cursor: crosshair; touch-action: none; z-index: 2; }
     #overlay-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; overflow: hidden; z-index: 10; }
 
-    /* 🔥 === PDF 텍스트 레이어 (드래그 선택 하이라이트 최적화) === */
+    /* 🔥 === PDF 텍스트 레이어 === */
     .textLayer, .textLayer * { 
         user-select: text !important; 
         -webkit-user-select: text !important; 
@@ -141,7 +145,6 @@
     .textLayer { 
         position: absolute; left: 0; top: 0; right: 0; bottom: 0; 
         overflow: hidden; line-height: 1.0; z-index: 1; 
-        /* 불투명한 색상이 캔버스와 자연스럽게 합성되도록 설정 */
         mix-blend-mode: multiply; 
     }
     .textLayer span { 
@@ -150,7 +153,6 @@
         cursor: text; transform-origin: 0% 0%; 
     }
     .textLayer span::selection { 
-        /* 반투명이 아닌 불투명한 단색을 사용하여 중첩 겹침 방지 */
         background: #bfdbfe !important; 
         color: transparent !important; 
     }
@@ -458,10 +460,13 @@ const app = {
 
             try {
                 const arrayBuffer = await file.arrayBuffer();
-                const typedarray = new Uint8Array(arrayBuffer);
-                const doc = await pdfjsLib.getDocument(typedarray).promise;
                 
-                this.loadedDocs[fId] = { doc: doc, name: file.name, numPages: doc.numPages };
+                const pdfJsBytes = new Uint8Array(arrayBuffer.slice(0));
+                const pdfLibBytes = new Uint8Array(arrayBuffer.slice(0));
+
+                const doc = await pdfjsLib.getDocument(pdfJsBytes).promise;
+                
+                this.loadedDocs[fId] = { doc: doc, name: file.name, numPages: doc.numPages, bytes: pdfLibBytes };
                 this.docSearchTexts[fId] = [];
                 
                 if (!firstNewFileId) firstNewFileId = fId;
@@ -937,54 +942,122 @@ const app = {
     clearPage() { this.drawCtx.clearRect(0, 0, this.drawCanvas.width, this.drawCanvas.height); document.querySelectorAll('.draggable-item').forEach(el => el.remove()); this.savePageData(this.pageNum); this.showToast("현재 페이지 전체 지우기 완료"); },
 
     async downloadPDF() {
-        if (!this.pdfDoc) return this.showToast("열려있는 PDF가 없습니다.");
-        this.showToast("문서를 고화질 PDF로 내보내는 중..."); this.commitText();
+        if (!this.pdfDoc || !this.fileId) return this.showToast("열려있는 PDF가 없습니다.");
+        this.showToast("원본 유지 및 수정사항 병합 중... (초고속 모드)"); 
+        this.commitText();
 
-        const { jsPDF } = window.jspdf; const pdf = new jsPDF('p', 'px', 'a4'); pdf.deletePage(1); 
-        const originalPage = this.pageNum; const originalScale = this.scale;
+        const { PDFDocument } = window.PDFLib;
+        const originalBytes = this.loadedDocs[this.fileId].bytes;
+        const pdfDocLib = await PDFDocument.load(originalBytes);
+        const pages = pdfDocLib.getPages();
         
-        this.scale = 1.5; const outputScale = this.getOutputScale();
+        const originalPage = this.pageNum; 
+        const originalScale = this.scale;
+        
+        const exportScale = 3.0; 
+        this.scale = exportScale; 
+        
+        let hasAnyModifications = false;
 
         for (let i = 1; i <= this.pdfDoc.numPages; i++) {
-            this.showToast(`PDF 렌더링 중... (${i}/${this.pdfDoc.numPages})`);
-            this.pageNum = i; const page = await this.pdfDoc.getPage(i); const viewport = page.getViewport({ scale: this.scale });
-            
-            this.canvas.width = Math.floor(viewport.width * outputScale); this.canvas.height = Math.floor(viewport.height * outputScale);
-            this.drawCanvas.width = Math.floor(viewport.width * outputScale); this.drawCanvas.height = Math.floor(viewport.height * outputScale);
+            let pageData = null;
+            if (this.db) {
+                pageData = await new Promise(r => {
+                    const req = this.db.transaction('pages', 'readonly').objectStore('pages').get(`${this.fileId}_${i}`);
+                    req.onsuccess = e => r(e.target.result);
+                    req.onerror = () => r(null);
+                });
+            }
 
-            await page.render({ canvasContext: this.ctx, transform: outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : null, viewport: viewport }).promise;
-            await this.restoreDrawing(i); await new Promise(r => setTimeout(r, 100)); 
+            if (!pageData) continue; 
 
-            const compositeCanvas = document.createElement('canvas'); compositeCanvas.width = this.canvas.width; compositeCanvas.height = this.canvas.height; const ctx = compositeCanvas.getContext('2d');
-            ctx.drawImage(this.canvas, 0, 0); ctx.drawImage(this.drawCanvas, 0, 0);
+            hasAnyModifications = true;
+            this.showToast(`수정된 페이지 병합 중... (${i}/${this.pdfDoc.numPages})`);
             
+            this.pageNum = i; 
+            const page = await this.pdfDoc.getPage(i); 
+            const viewport = page.getViewport({ scale: this.scale });
+            
+            this.drawCanvas.width = Math.floor(viewport.width); 
+            this.drawCanvas.height = Math.floor(viewport.height);
+            this.drawCtx.clearRect(0, 0, this.drawCanvas.width, this.drawCanvas.height);
+            
+            await this.restoreDrawing(i); 
+
+            const ctx = this.drawCtx;
             const items = document.querySelectorAll(`.draggable-item[data-page="${i}"]`);
+            
             items.forEach(el => {
-                const left = parseFloat(el.style.left); const top = parseFloat(el.style.top); const style = window.getComputedStyle(el);
-                ctx.save(); ctx.translate(left * outputScale, top * outputScale);
-                ctx.font = `${style.fontStyle} ${style.fontWeight} ${parseFloat(style.fontSize) * outputScale}px ${style.fontFamily}`;
-                const textWidth = ctx.measureText(el.innerText).width; const fontSize = parseFloat(style.fontSize) * outputScale;
-                const bgColor = style.backgroundColor; const isKeyword = el.classList.contains('draggable-keyword');
+                const x = parseFloat(el.dataset.baseX) * exportScale;
+                const y = parseFloat(el.dataset.baseY) * exportScale;
+                const style = window.getComputedStyle(el);
+                
+                ctx.save(); 
+                ctx.translate(x, y);
+                
+                const isSticker = el.classList.contains('draggable-sticker'); 
+                const isKeyword = el.classList.contains('draggable-keyword');
+                let baseSize = isSticker ? 14 : (isKeyword ? 24 : 18); 
+                if (el.dataset.baseSize) baseSize = parseFloat(el.dataset.baseSize);
+                
+                const fontSize = baseSize * exportScale;
+                ctx.font = `${style.fontStyle} ${style.fontWeight} ${fontSize}px ${style.fontFamily}`;
+                
+                const textWidth = ctx.measureText(el.innerText).width; 
+                const bgColor = style.backgroundColor; 
                 
                 if (isKeyword || (bgColor && bgColor !== 'rgba(0, 0, 0, 0)' && bgColor !== 'transparent')) {
-                    const padX = parseFloat(style.paddingLeft) * outputScale || (isKeyword ? 12 * outputScale : 4 * outputScale); const padY = parseFloat(style.paddingTop) * outputScale || (isKeyword ? 4 * outputScale : 0); const radius = parseFloat(style.borderTopLeftRadius) * outputScale || (isKeyword ? 8 * outputScale : 0);
-                    ctx.beginPath(); ctx.roundRect(-textWidth / 2 - padX, -fontSize * 0.5 - padY, textWidth + padX * 2, fontSize + padY * 2, radius);
+                    // 🔥 [수정] 뱃지(Sticker)일 때의 여백(padX, padY)을 넉넉하게 추가합니다.
+                    const padX = (isSticker ? 14 : (isKeyword ? 12 : 4)) * exportScale; 
+                    const padY = (isSticker ? 7 : (isKeyword ? 4 : 0)) * exportScale; 
+                    const radius = (isSticker ? 16 : (isKeyword ? 8 : 6)) * exportScale;
+                    const borderWidth = 3 * exportScale;
+                    
+                    ctx.beginPath(); 
+                    ctx.roundRect(-textWidth / 2 - padX, -fontSize * 0.5 - padY, textWidth + padX * 2, fontSize + padY * 2, radius);
                     if (bgColor && bgColor !== 'rgba(0, 0, 0, 0)' && bgColor !== 'transparent') { ctx.fillStyle = bgColor; ctx.fill(); }
-                    if (isKeyword) { ctx.strokeStyle = style.color || '#ef4444'; ctx.lineWidth = parseFloat(style.borderWidth) * outputScale || 3 * outputScale; ctx.stroke(); }
+                    if (isKeyword) { ctx.strokeStyle = style.color || '#ef4444'; ctx.lineWidth = borderWidth; ctx.stroke(); }
                 }
                 
-                ctx.fillStyle = style.color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(el.innerText, 0, 0);
+                ctx.fillStyle = style.color; 
+                ctx.textAlign = 'center'; 
+                ctx.textBaseline = 'middle'; 
+                ctx.fillText(el.innerText, 0, 0);
                 if (style.textDecorationLine && style.textDecorationLine.includes('underline')) { ctx.beginPath(); ctx.moveTo(-textWidth / 2, fontSize * 0.4); ctx.lineTo(textWidth / 2, fontSize * 0.4); ctx.lineWidth = fontSize * 0.08; ctx.strokeStyle = style.color; ctx.stroke(); }
                 if (style.textDecorationLine && style.textDecorationLine.includes('line-through')) { ctx.beginPath(); ctx.moveTo(-textWidth / 2, 0); ctx.lineTo(textWidth / 2, 0); ctx.lineWidth = fontSize * 0.08; ctx.strokeStyle = style.color; ctx.stroke(); }
                 ctx.restore();
             });
             
-            const imgData = compositeCanvas.toDataURL('image/jpeg', 0.95); const exportWidth = compositeCanvas.width / outputScale; const exportHeight = compositeCanvas.height / outputScale;
-            pdf.addPage([exportWidth, exportHeight], exportWidth > exportHeight ? 'landscape' : 'portrait'); pdf.addImage(imgData, 'JPEG', 0, 0, exportWidth, exportHeight);
+            const annoDataUrl = this.drawCanvas.toDataURL('image/png');
+            const pngImage = await pdfDocLib.embedPng(annoDataUrl);
+            const pdfPage = pages[i - 1];
+            
+            pdfPage.drawImage(pngImage, {
+                x: 0,
+                y: 0,
+                width: pdfPage.getWidth(),
+                height: pdfPage.getHeight(),
+            });
         }
         
-        pdf.save('Premium_Annotated_Presentation.pdf');
-        this.scale = originalScale; await this.renderPage(originalPage); this.showToast("PDF 내보내기가 성공적으로 완료되었습니다!");
+        const pdfBytes = await pdfDocLib.save();
+        const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        
+        const originalFileName = this.loadedDocs[this.fileId].name;
+        link.download = '(수정) ' + originalFileName;
+        link.click();
+        
+        this.scale = originalScale; 
+        this.pageNum = originalPage;
+        await this.renderPage(this.pageNum); 
+        
+        if (hasAnyModifications) {
+            this.showToast("수정된 페이지만 병합하여 초고속 저장이 완료되었습니다!");
+        } else {
+            this.showToast("수정사항이 없어 원본 그대로 저장되었습니다.");
+        }
     },
 
     handleKey(e) {
