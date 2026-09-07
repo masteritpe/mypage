@@ -83,6 +83,9 @@
         }
         .hint:hover { background: rgba(59, 130, 246, 0.2); }
         
+        #update-btn { background: rgba(20, 184, 166, 0.1); color: #0d9488; font-weight: 600; display: none; }
+        #update-btn:hover { background: rgba(20, 184, 166, 0.2); }
+
         #toggle-code-btn { background: rgba(236, 72, 153, 0.1); color: #db2777; font-weight: 600; }
         #toggle-code-btn:hover { background: rgba(236, 72, 153, 0.2); }
         #toggle-code-btn.active { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
@@ -270,7 +273,10 @@
                     <input type="file" id="compare-file-input" accept=".md" style="display: none;">
                     <span class="hint" id="compare-btn" title="비교할 MD 파일을 불러와 현재 문서와 나란히 비교합니다">비교 ⚖️</span>
                     <span class="hint" id="new-btn" title="새로운 문서를 작성합니다">새 문서 📄</span>
+                    
                     <span class="hint" id="save-btn" title="작성 중인 문서를 브라우저에 저장합니다 (Ctrl+S)">저장 💾</span>
+                    <span class="hint" id="update-btn" title="불러온 원본 파일에 변경사항을 덮어씁니다">업데이트 🔄</span>
+                    
                     <span class="hint" id="history-btn" title="저장된 문서 목록을 엽니다">목록 🗂️</span>
                     
                     <input type="file" id="md-file-input" accept=".md" style="display: none;">
@@ -355,7 +361,8 @@
         const APP_STATE = {
             isUpdating: false,
             currentDocId: null,
-            pendingSaveContent: ''
+            pendingSaveContent: '',
+            fileHandle: null // 불러온 원본 파일 핸들(덮어쓰기용) 저장
         };
 
         const DB_CONFIG = {
@@ -384,6 +391,7 @@
             },
             buttons: {
                 save: document.getElementById('save-btn'),
+                update: document.getElementById('update-btn'),
                 confirmSave: document.getElementById('confirm-save-btn')
             },
             outputs: {
@@ -633,7 +641,12 @@
             document.getElementById('new-btn').addEventListener('click', () => {
                 editor.setMarkdown('');
                 DOM.mdOutput.value = '';
+                
+                // 파일 핸들 초기화 및 업데이트 버튼 숨김
                 APP_STATE.currentDocId = null;
+                APP_STATE.fileHandle = null;
+                DOM.buttons.update.style.display = 'none';
+                
                 UI.updateHeader(null); 
             });
 
@@ -651,6 +664,36 @@
                     DOM.inputs.docTitle.value = ''; 
                     DOM.modals.title.classList.add('active');
                     setTimeout(() => DOM.inputs.docTitle.focus(), 100);
+                }
+            });
+
+            // [신규] 원본 파일에 업데이트 저장 이벤트 
+            DOM.buttons.update.addEventListener('click', async function() {
+                if (!APP_STATE.fileHandle) {
+                    alert('업데이트할 원본 파일이 없습니다. PC에서 파일을 먼저 불러와 주세요.');
+                    return;
+                }
+
+                const content = MarkdownUtils.clean(editor.getMarkdown());
+                
+                try {
+                    // 파일 덮어쓰기 권한 확인 및 요청
+                    const options = { mode: 'readwrite' };
+                    if ((await APP_STATE.fileHandle.queryPermission(options)) !== 'granted') {
+                        if ((await APP_STATE.fileHandle.requestPermission(options)) !== 'granted') {
+                            throw new Error('파일 덮어쓰기 권한이 거부되었습니다.');
+                        }
+                    }
+
+                    // 파일에 덮어쓰기
+                    const writable = await APP_STATE.fileHandle.createWritable();
+                    await writable.write(content);
+                    await writable.close();
+                    
+                    UI.tempChangeText(this, '업데이트됨 ✔️', 2000);
+                } catch (err) {
+                    console.error('업데이트 실패:', err);
+                    alert('파일 업데이트에 실패했습니다. (' + err.message + ')');
                 }
             });
 
@@ -681,12 +724,16 @@
                             
                             // 문서 불러오기 로직 (클릭 시)
                             li.querySelector('.doc-info').addEventListener('click', (e) => {
-                                // 만약 클릭한 곳이 input(이름 수정 중)이라면 문서 불러오기를 실행하지 않음
                                 if(e.target.tagName === 'INPUT') return;
                                 
                                 editor.setMarkdown(doc.content);
                                 DOM.mdOutput.value = doc.content;
+                                
+                                // 기록에서 불러왔으므로 원본 파일 핸들 초기화 및 업데이트 버튼 숨김
                                 APP_STATE.currentDocId = doc.id;
+                                APP_STATE.fileHandle = null;
+                                DOM.buttons.update.style.display = 'none';
+                                
                                 UI.updateHeader(doc.title, 'history'); 
                                 DOM.modals.history.classList.remove('active');
                             });
@@ -747,8 +794,50 @@
                 });
             });
 
-            // File IO
-            document.getElementById('load-btn').addEventListener('click', () => DOM.mdFileInput.click());
+            // [변경] File IO (File System Access API 적용 - 덮어쓰기 권한 획득 목적)
+            document.getElementById('load-btn').addEventListener('click', async () => {
+                if (window.showOpenFilePicker) {
+                    try {
+                        const [fileHandle] = await window.showOpenFilePicker({
+                            types: [{
+                                description: 'Markdown Files',
+                                accept: { 'text/markdown': ['.md', '.markdown'] }
+                            }],
+                            multiple: false
+                        });
+                        
+                        const file = await fileHandle.getFile();
+                        const content = await file.text();
+                        
+                        let mdContent = content.replace(/\r\n|\r/g, '\n')
+                                             .replace(/^---\n[\s\S]*?\n---\n/, '')
+                                             .replace(/\{:[^\}]+\}/g, '')
+                                             .replace(/<br\s*\/?>/gi, ' ');
+                        
+                        mdContent = MarkdownUtils.clean(mdContent);
+                        editor.setMarkdown(mdContent);
+                        DOM.mdOutput.value = mdContent;
+                        
+                        // 현재 열린 DB 기록 해제 및 파일 핸들 설정
+                        APP_STATE.currentDocId = null;
+                        APP_STATE.fileHandle = fileHandle; 
+                        DOM.buttons.update.style.display = 'inline-flex'; // 업데이트 버튼 노출
+                        
+                        UI.updateHeader(file.name, 'load'); 
+                    } catch (err) {
+                        // 사용자가 파일 선택을 취소(AbortError)한 경우가 아닐 때 fallback 실행
+                        if (err.name !== 'AbortError') {
+                            console.warn('File System Access API를 사용할 수 없습니다. Fallback을 사용합니다.', err);
+                            DOM.mdFileInput.click();
+                        }
+                    }
+                } else {
+                    // 미지원 브라우저인 경우 기존 Input 방식 Fallback 실행
+                    DOM.mdFileInput.click();
+                }
+            });
+
+            // 기존 파일 Input 방식 이벤트(Fallback 및 구형 브라우저 대응 용도)
             DOM.mdFileInput.addEventListener('change', (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -762,7 +851,11 @@
                     mdContent = MarkdownUtils.clean(mdContent);
                     editor.setMarkdown(mdContent);
                     DOM.mdOutput.value = mdContent;
+                    
                     APP_STATE.currentDocId = null;
+                    APP_STATE.fileHandle = null; // 구형 API는 덮어쓰기를 지원하지 않음
+                    DOM.buttons.update.style.display = 'none';
+                    
                     UI.updateHeader(file.name, 'load'); 
                 };
                 reader.readAsText(file);
@@ -886,7 +979,6 @@
                 } catch (err) { alert('복사 실패. 브라우저 권한을 확인해주세요.'); }
             });
 
-            // HTML 다운로드 비동기(Promise) 에러 픽스
             document.getElementById('html-download-btn').addEventListener('click', function() {
                 const textContent = MarkdownUtils.clean(editor.getMarkdown());
                 if (!textContent.trim()) return alert('다운로드할 내용이 없습니다.');
