@@ -98,7 +98,7 @@ header .header-tools { display: flex; gap: 12px; }
 .section-title > span { display: flex; align-items: center; gap: 10px; }
 .section-title i { color: var(--primary); font-size: 18px; }
 
-/* ✨ Accordion Styles (공간 최적화 적용) */
+/* ✨ Accordion Styles */
 .accordion-toggle { cursor: pointer; user-select: none; transition: opacity 0.2s; }
 .accordion-toggle:hover { opacity: 0.7; }
 .accordion-toggle .chevron { transition: transform 0.3s ease; color: var(--text-sub); font-size: 14px; }
@@ -159,7 +159,6 @@ header .header-tools { display: flex; gap: 12px; }
 .link-input-url { flex: 1; height: 42px; padding: 0 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-family: var(--font-code); font-size: 14px; color: var(--primary); background: var(--bg-panel); }
 .link-input-title:focus, .link-input-url:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); outline: none; }
 .btn-link-action { width: 42px; height: 42px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg-panel); cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-sub); transition: 0.2s; flex-shrink: 0; box-shadow: var(--shadow-sm); }
-/* 수정됨: 링크 오픈 및 삭제 버튼 호버 분리 */
 .btn-link-open:hover { background: var(--primary-soft); color: var(--primary); border-color: var(--primary-light); }
 .btn-link-del:hover { background: var(--danger-light); color: var(--danger); border-color: #fecaca; }
 
@@ -434,6 +433,26 @@ function toast(m) {
     toastTimeout = setTimeout(() => t.classList.remove('show'), 1000); 
 }
 
+// 💡 투명 배경 이미지를 강제로 흰색 배경으로 합성 (투명도가 검은색으로 변환되는 현상 방지)
+function applyWhiteBackground(dataUrl, callback) {
+    if (!dataUrl || !dataUrl.startsWith('data:image/')) return callback(dataUrl);
+    const img = new Image();
+    img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        // 강제로 흰색 배경을 칠함
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // 그 위에 원본 이미지 랜더링
+        ctx.drawImage(img, 0, 0);
+        callback(canvas.toDataURL('image/png'));
+    };
+    img.onerror = () => callback(dataUrl);
+    img.src = dataUrl;
+}
+
 // 🛡️ 무적의 안전 다운로드 함수
 async function executeSafeDownload(dataURI, fileName) {
     try {
@@ -486,7 +505,11 @@ window.globalDownloadFile = function(idx) {
     const f = currentFiles[idx];
     if (!f || !f.data) return alert("파일 정보를 찾을 수 없습니다.");
     toast(`'${f.name}' 파일을 준비 중입니다...`);
-    setTimeout(() => executeSafeDownload(f.data, f.name), 50);
+    
+    // 다운로드 시에도 흰색 배경 처리 적용 보장
+    applyWhiteBackground(f.data, (processedData) => {
+        setTimeout(() => executeSafeDownload(processedData, f.name), 50);
+    });
 };
 
 window.globalDeleteFile = function(idx) {
@@ -499,8 +522,11 @@ window.globalDeleteFile = function(idx) {
 window.globalOpenImage = function(idx) {
     const f = currentFiles[idx];
     if(f && f.data) {
-        document.getElementById('modal-img-tag').src = f.data;
-        window.openModal('img-modal');
+        // 열기(우클릭 저장 대비) 시에도 흰색 배경 처리 적용
+        applyWhiteBackground(f.data, (processedData) => {
+            document.getElementById('modal-img-tag').src = processedData;
+            window.openModal('img-modal');
+        });
     }
 };
 
@@ -743,13 +769,16 @@ function bindEvents() {
                 e.preventDefault();
                 const r = new FileReader();
                 r.onload = ev => { 
-                    currentFiles.push({
-                        name: `Pasted_Image_${Date.now()}.png`, 
-                        type: 'image/png', 
-                        data: ev.target.result
-                    }); 
-                    renderAttachGrid(); 
-                    toast('클립보드 이미지가 첨부파일로 추가되었습니다.'); 
+                    // 붙여넣기 시에도 흰색 배경 사전 처리 적용
+                    applyWhiteBackground(ev.target.result, (processedData) => {
+                        currentFiles.push({
+                            name: `Pasted_Image_${Date.now()}.png`, 
+                            type: 'image/png', 
+                            data: processedData
+                        }); 
+                        renderAttachGrid(); 
+                        toast('클립보드 이미지가 첨부파일로 추가되었습니다.'); 
+                    });
                 };
                 r.readAsDataURL(i.getAsFile());
                 return; 
@@ -817,7 +846,18 @@ function bindEvents() {
 function handleFileUpload(input) {
     if(!input.files[0]) return;
     const f = input.files[0]; const r = new FileReader();
-    r.onload = e => { currentFiles.push({ name: f.name, type: f.type || 'application/octet-stream', data: e.target.result }); renderAttachGrid(); input.value = ''; };
+    r.onload = e => { 
+        if (f.type && f.type.startsWith('image/')) {
+            // 업로드 시 흰색 배경 사전 처리 적용
+            applyWhiteBackground(e.target.result, (processedData) => {
+                currentFiles.push({ name: f.name, type: 'image/png', data: processedData }); 
+                renderAttachGrid(); input.value = ''; 
+            });
+        } else {
+            currentFiles.push({ name: f.name, type: f.type || 'application/octet-stream', data: e.target.result }); 
+            renderAttachGrid(); input.value = ''; 
+        }
+    };
     r.readAsDataURL(f);
 }
 
