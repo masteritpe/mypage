@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Time Boxing</title>
+  
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <style>
+    :root {
+      --bg-body: #F4F5F7; 
+      --bg-surface: #FFFFFF;
+      --border-light: #F3F4F6;
+      --border-base: #E5E7EB;
+      --border-dark: #D1D5DB;
+      --text-main: #1F2937;
+      --text-muted: #6B7280;
+      --primary: #0F172A;
+      --primary-hover: #334155;
+      --secondary: #FFFFFF;
+      --secondary-hover: #F8FAFC;
+      --danger: #EF4444;
+      --active-ring: rgba(15, 23, 42, 0.08); 
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.04);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05);
+      --shadow-card: 0 8px 24px -4px rgba(0, 0, 0, 0.04);
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --radius-lg: 12px; 
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Pretendard', -apple-system, sans-serif;
+      background: var(--bg-body); color: var(--text-main); margin: 0; padding: 0;
+      -webkit-font-smoothing: antialiased; display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+    }
+
+    /* 탑바 */
+    .top-bar { 
+      background: var(--bg-surface); height: 60px; min-height: 60px; padding: 0 24px; 
+      border-bottom: 1px solid var(--border-base); display: flex; justify-content: space-between; align-items: center; z-index: 10; 
+    }
+    .app-title { font-size: 20px; font-weight: 700; display: flex; align-items: center; gap: 8px; color: var(--primary); }
+    .actions { display: flex; gap: 8px; align-items: center; }
+    .divider { width: 1px; height: 18px; background: var(--border-dark); margin: 0 6px; }
+
+    /* 버튼 공통 */
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 14px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; border: 1px solid transparent; outline: none; }
+    .btn-primary { background: var(--primary); color: white; box-shadow: var(--shadow-sm); }
+    .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); box-shadow: var(--shadow-md); }
+    .btn-outline { background: var(--secondary); color: var(--text-main); border-color: var(--border-base); }
+    .btn-outline:hover { background: var(--secondary-hover); border-color: #CBD5E1; }
+    
+    /* 레이아웃 */
+    .app-layout { display: flex; flex: 1; overflow: hidden; justify-content: center; }
+
+    /* 메인 콘텐츠 */
+    .main-area { flex: 1; overflow-y: auto; padding: 40px 32px; display: flex; flex-direction: column; align-items: center; }
+    .document-wrapper { width: 100%; max-width: 1380px; display: flex; flex-direction: column; gap: 24px; }
+    
+    /* 날짜 헤더 (다이어리 스타일) */
+    .diary-header { display: flex; justify-content: space-between; align-items: flex-end; padding-bottom: 16px; border-bottom: 2px solid var(--primary); margin-bottom: 8px;}
+    
+    .date-picker-wrapper { display: flex; align-items: center; gap: 8px; }
+    .diary-date-picker { 
+      font-size: 28px; font-weight: 800; color: var(--primary); 
+      border: none; background: transparent; outline: none; cursor: pointer; 
+      font-family: inherit; letter-spacing: -0.5px;
+    }
+    .diary-date-picker::-webkit-calendar-picker-indicator { cursor: pointer; opacity: 0.6; transition: 0.2s; }
+    .diary-date-picker::-webkit-calendar-picker-indicator:hover { opacity: 1; }
+
+    .btn-doc-delete { display: inline-flex; align-items: center; justify-content: center; gap: 4px; color: var(--danger); background: #FEF2F2; border: 1px solid #FECACA; padding: 8px 12px; font-size: 13px; font-weight: 600; border-radius: var(--radius-sm); transition: 0.2s; cursor: pointer; }
+    .btn-doc-delete:hover { background: #FEE2E2; border-color: #F87171; }
+
+    /* SIMOL 3단 레이아웃 (높이 정렬 & 너비 조정) */
+    .simol-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 420px; /* 타임박스 너비 확장 (340 -> 420) */
+      gap: 32px;
+      align-items: stretch; 
+    }
+
+    .simol-section { display: flex; flex-direction: column; gap: 20px; height: 100%; }
+    
+    .section-title { font-size: 15px; font-weight: 700; color: var(--primary); border-bottom: 2px solid var(--border-base); padding-bottom: 8px; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+
+    .input-field { display: flex; flex-direction: column; gap: 6px; }
+    .input-field input, .input-field textarea { 
+      padding: 12px; background: var(--bg-surface); border-radius: var(--radius-sm); 
+      font-size: 14px; font-weight: 500; outline: none; font-family: inherit; transition: 0.2s; 
+      border: 1px solid var(--border-base); width: 100%; box-shadow: var(--shadow-sm);
+    }
+    .input-field input:focus, .input-field textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 2px var(--active-ring); }
+    .input-field textarea { resize: none; line-height: 1.6; }
+
+    /* 폰트 크기 +2px 적용 클래스 */
+    #docFuture, #docWakeup { font-size: 16px !important; }
+    
+    /* 심플한 라인 입력창 */
+    .line-input {
+      border: none !important; border-bottom: 1px solid var(--border-dark) !important;
+      border-radius: 0 !important; box-shadow: none !important; background: transparent !important;
+      padding: 8px 4px !important; font-size: 15px !important;
+    }
+    .line-input:focus { border-bottom-color: var(--primary) !important; box-shadow: 0 2px 0 0 var(--primary) !important; }
+
+    /* 체크리스트 영역 */
+    .checklist-wrapper { display: flex; flex-direction: column; gap: 12px; background: var(--bg-surface); padding: 20px; border-radius: var(--radius-lg); border: 1px solid var(--border-base); box-shadow: var(--shadow-sm); }
+    .input-group { display: flex; gap: 8px; }
+    .task-add-input { flex: 1; padding: 10px 14px; border: 1px solid var(--border-base); border-radius: var(--radius-sm); font-size: 14px; outline: none; background: var(--bg-body); }
+    .task-add-input:focus { border-color: var(--primary); background: #FFFFFF; }
+    
+    .task-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+    .task-item { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; border-radius: var(--radius-sm); transition: all 0.2s; border: 1px solid transparent; background: #fff;}
+    .task-item:hover { border-color: var(--border-base); box-shadow: var(--shadow-sm); } 
+    .task-item.completed { opacity: 0.5; }
+    .task-item.completed .task-text-input { text-decoration: line-through; color: var(--text-muted); }
+    .task-item.is-big3 { background: #F0F9FF; border: 1px solid #BAE6FD; border-left: 3px solid #0EA5E9; }
+    
+    .task-item.dragging { opacity: 0.4; border: 1px dashed var(--border-dark); }
+    .task-item.drag-over { border-top: 2px solid var(--primary); transform: translateY(2px); }
+    
+    .drag-handle { cursor: grab; font-size: 18px; color: var(--text-muted); padding: 4px; opacity: 0.3; transition: 0.2s; }
+    .task-item:hover .drag-handle { opacity: 1; }
+    
+    .btn-star { background: none; border: none; cursor: pointer; padding: 4px; font-size: 18px; color: var(--border-dark); transition: 0.2s; margin-right: 4px; }
+    .btn-star:hover, .btn-star.active { color: #F59E0B; }
+    
+    .task-content { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+    .task-checkbox { width: 16px; height: 16px; accent-color: var(--primary); cursor: pointer; flex-shrink: 0; margin: 0; }
+    .task-text-input { flex: 1; font-size: 14px; color: var(--text-main); border: none; background: transparent; outline: none; padding: 4px 8px; font-family: inherit; width: 100%; border-radius: 4px;}
+    .task-text-input:focus { background: rgba(0,0,0,0.03); }
+    
+    .btn-task-delete { color: var(--danger); background: none; border: none; padding: 6px; border-radius: 4px; cursor: pointer; opacity: 0; transition: 0.2s; }
+    .task-item:hover .btn-task-delete { opacity: 1; background: #FEF2F2; } 
+
+    /* 타임박스 테이블 */
+    .timebox-container { width: 100%; border: 1px solid var(--border-base); border-radius: var(--radius-md); overflow: hidden; background: var(--bg-surface); box-shadow: var(--shadow-sm); }
+    .timebox-table { width: 100%; border-collapse: collapse; }
+    .timebox-table th, .timebox-table td { border-bottom: 1px solid var(--border-base); border-right: 1px solid var(--border-base); padding: 0; text-align: center; }
+    .timebox-table th { background: #F8FAFC; padding: 10px 4px; font-size: 12px; color: var(--text-muted); font-weight: 600; }
+    .timebox-table td.hour-cell { width: 44px; font-weight: 700; color: var(--primary); font-size: 13px; background: #F8FAFC; }
+    /* 타임박스 입력 스타일 수정 (왼쪽 정렬, 패딩 추가, 폰트 15px) */
+    .timebox-table td input { 
+      width: 100%; height: 36px; border: none; padding: 0 12px; 
+      font-size: 15px; outline: none; background: transparent; text-align: left; font-family: inherit;
+    }
+    .timebox-table td input:focus { background: #F1F5F9; }
+    .timebox-table tr:last-child th, .timebox-table tr:last-child td { border-bottom: none; }
+    .timebox-table td:last-child, .timebox-table th:last-child { border-right: none; }
+
+    /* 모달 (환경설정) */
+    .modal-overlay {
+      position: fixed; top:0; left:0; width:100%; height:100%;
+      background: rgba(0,0,0,0.4); display: none;
+      justify-content: center; align-items: center; z-index: 1000;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal-content {
+      background: var(--bg-surface); padding: 24px;
+      border-radius: var(--radius-lg); width: 340px;
+      box-shadow: var(--shadow-card);
+    }
+    .modal-content h3 { margin-top:0; margin-bottom: 20px; color: var(--primary); }
+
+    .toast { visibility: hidden; background-color: #1F2937; color: #fff; text-align: center; border-radius: 30px; padding: 12px 24px; position: fixed; z-index: 1000; left: 50%; bottom: 20px; transform: translateX(-50%); font-size: 14px; font-weight: 500; opacity: 0; transition: opacity 0.3s, bottom 0.3s; display: flex; align-items: center; gap: 8px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1); }
+    .toast.show { visibility: visible; opacity: 1; bottom: 40px; }
+  </style>
+</head>
+<body>
+
+  <div class="top-bar">
+    <div class="app-title"><i class="ph-fill ph-timer"></i> Time Boxing</div>
+    <div class="actions">
+      <button class="btn btn-outline" onclick="openSettings()"><i class="ph ph-gear"></i> 환경설정</button>
+      <div class="divider"></div>
+      <input type="file" id="excelInput" accept=".xlsx, .xls" style="display: none;" onchange="handleFileUpload(event)">
+      <button class="btn btn-outline" onclick="document.getElementById('excelInput').click()"><i class="ph ph-upload-simple"></i> 엑셀 로드</button>
+      <button class="btn btn-outline" onclick="exportToExcel()"><i class="ph ph-download-simple"></i> 엑셀 백업</button>
+      <div class="divider"></div>
+      <button class="btn btn-outline" onclick="goToToday()"><i class="ph ph-calendar-check"></i> 오늘로 이동</button>
+      <button class="btn btn-primary" onclick="saveDocument()"><i class="ph ph-floppy-disk"></i> 저장 (Ctrl+S)</button>
+    </div>
+  </div>
+
+  <div class="app-layout">
+    <main class="main-area">
+      <div class="document-wrapper">
+        
+        <div class="diary-header">
+          <div class="date-picker-wrapper">
+            <input type="date" id="docDate" class="diary-date-picker" onchange="checkAndLoadDate(this.value)">
+          </div>
+          <button class="btn-doc-delete" id="btnDeleteDoc" onclick="deleteDocument()" style="display: none;"><i class="ph ph-trash"></i> 기록 삭제</button>
+        </div>
+
+        <div class="simol-grid">
+          
+          <!-- Column 1: 마인드셋 -->
+          <div class="simol-section">
+            <div class="input-field" style="flex: 1; display: flex; flex-direction: column;">
+              <div class="section-title">미래 시각화</div>
+              <textarea id="docFuture" placeholder="장기 목표, 단기 목표를 그려보세요. (시각화)" spellcheck="false" style="flex: 1; resize: none;"></textarea>
+            </div>
+            <div class="input-field" style="margin-top: 8px;">
+              <div class="section-title" style="margin-bottom: 4px;">정체성</div>
+              <input type="text" id="docIdentity" class="line-input" placeholder="나는 ~하는 사람이다" spellcheck="false">
+            </div>
+            <div class="input-field" style="margin-top: 8px;">
+              <div class="section-title" style="margin-bottom: 4px;">내적동기</div>
+              <input type="text" id="docMotivation" class="line-input" placeholder="나는 날마다 모든 면에서 나아지고 있다." spellcheck="false">
+            </div>
+            <div class="input-field" style="margin-top: 8px;">
+              <div class="section-title" style="margin-bottom: 4px;">감사일기</div>
+              <input type="text" id="docGratitude" class="line-input" placeholder="오늘 하루 감사한 일" spellcheck="false">
+            </div>
+          </div>
+
+          <!-- Column 2: 액션 & 피드백 -->
+          <div class="simol-section">
+            <div class="input-field" style="flex: none;">
+              <div class="section-title">기상 직후 할 일</div>
+              <input type="text" id="docWakeup" placeholder="기상 직후 결단력 있게 실행할 행동" spellcheck="false">
+            </div>
+            
+            <div class="checklist-wrapper" style="margin-top: 8px; flex: 1; display: flex; flex-direction: column;">
+              <div class="section-title" style="border:none; padding:0; margin-bottom:8px;">Brain Dump & Big 3</div>
+              <div class="input-group">
+                <input type="text" id="taskInput" class="task-add-input" placeholder="머릿속 할 일 쏟아내기 (★로 Big3 선택)" spellcheck="false" onkeypress="handleKeyPress(event)">
+                <button class="btn btn-primary" onclick="addTask()" style="padding: 0 12px;"><i class="ph ph-plus"></i></button>
+              </div>
+              <ul id="taskList" class="task-list" style="flex: 1; overflow-y: auto;"></ul>
+            </div>
+
+            <div style="margin-top: 16px; flex: none;">
+              <div class="section-title">Feedback</div>
+              <div style="display: flex; flex-direction: column; gap: 10px;">
+                <input type="text" id="fbStart" placeholder="- 시작: 오늘 하루의 다짐" class="line-input">
+                <input type="text" id="fbMid" placeholder="- 중간: 잘한 점과 아쉬운 점" class="line-input">
+                <input type="text" id="fbEnd" placeholder="- 마무리: 고생한 나에게 한마디" class="line-input">
+              </div>
+            </div>
+          </div>
+
+          <!-- Column 3: 타임박스 -->
+          <div class="simol-section">
+            <div class="section-title">Time Box</div>
+            <div class="timebox-container">
+              <table class="timebox-table" id="timeboxTable">
+                <thead>
+                  <tr>
+                    <th class="hour-cell"></th>
+                    <th>30 mins</th>
+                    <th>30 mins</th>
+                  </tr>
+                </thead>
+                <tbody id="timeboxBody">
+                  <!-- JS 렌더링 -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- 환경설정 모달 -->
+  <div id="settingsModal" class="modal-overlay">
+    <div class="modal-content">
+      <h3><i class="ph-fill ph-gear"></i> 환경설정</h3>
+      <div class="input-field" style="margin-bottom: 16px;">
+        <label>타임박스 시작 시간 (0~23)</label>
+        <input type="number" id="setTbStart" min="0" max="23">
+      </div>
+      <div class="input-field">
+        <label>타임박스 종료 시간 (0~23)</label>
+        <input type="number" id="setTbEnd" min="0" max="23">
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:24px;">
+        <button class="btn btn-outline" onclick="closeSettings()">취소</button>
+        <button class="btn btn-primary" onclick="saveSettings()">저장</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toastMsg" class="toast"><i class="ph-bold ph-check"></i> 처리되었습니다</div>
+
+  <script>
+    // === 글로벌 데이터 및 설정 ===
+    let tbStart = parseInt(localStorage.getItem('simolTbStart')) || 5;
+    let tbEnd = parseInt(localStorage.getItem('simolTbEnd')) || 23;
+    let currentTbData = {}; // 백그라운드에서 전체(0~23시) 데이터 유지
+
+    function getToday() {
+      const offset = new Date().getTimezoneOffset() * 60000;
+      return new Date(Date.now() - offset).toISOString().split("T")[0];
+    }
+
+    // === 타임박스 렌더링 ===
+    function renderTimeBoxUI() {
+      const tbody = document.getElementById('timeboxBody');
+      tbody.innerHTML = '';
+      for (let i = tbStart; i <= tbEnd; i++) {
+        tbody.innerHTML += `
+          <tr>
+            <td class="hour-cell">${i}</td>
+            <td><input type="text" id="tb_${i}_0" class="tb-input" spellcheck="false"></td>
+            <td><input type="text" id="tb_${i}_30" class="tb-input" spellcheck="false"></td>
+          </tr>
+        `;
+      }
+    }
+    renderTimeBoxUI();
+
+    // === 타임박스 데이터 Sync (DOM <-> currentTbData) ===
+    function syncDOMtoData() {
+      for (let i = tbStart; i <= tbEnd; i++) {
+        const el0 = document.getElementById(`tb_${i}_0`);
+        const el30 = document.getElementById(`tb_${i}_30`);
+        if (el0) currentTbData[`${i}_0`] = el0.value;
+        if (el30) currentTbData[`${i}_30`] = el30.value;
+      }
+    }
+
+    function syncDataToDOM() {
+      for (let i = tbStart; i <= tbEnd; i++) {
+        const el0 = document.getElementById(`tb_${i}_0`);
+        const el30 = document.getElementById(`tb_${i}_30`);
+        if (el0) el0.value = currentTbData[`${i}_0`] || '';
+        if (el30) el30.value = currentTbData[`${i}_30`] || '';
+      }
+    }
+
+    // === 환경설정 (모달) ===
+    function openSettings() {
+      document.getElementById('setTbStart').value = tbStart;
+      document.getElementById('setTbEnd').value = tbEnd;
+      document.getElementById('settingsModal').classList.add('show');
+    }
+    
+    function closeSettings() {
+      document.getElementById('settingsModal').classList.remove('show');
+    }
+
+    function saveSettings() {
+      const startVal = parseInt(document.getElementById('setTbStart').value);
+      const endVal = parseInt(document.getElementById('setTbEnd').value);
+      
+      if (isNaN(startVal) || isNaN(endVal) || startVal < 0 || endVal > 23 || startVal > endVal) {
+        return alert("0부터 23 사이의 올바른 시간을 입력해주세요. (시작 시간이 종료 시간보다 커선 안됩니다)");
+      }
+
+      syncDOMtoData(); // 현재 보이는 화면 데이터 먼저 백업
+      
+      tbStart = startVal;
+      tbEnd = endVal;
+      localStorage.setItem('simolTbStart', tbStart);
+      localStorage.setItem('simolTbEnd', tbEnd);
+      
+      renderTimeBoxUI(); // 설정된 시간으로 테이블 재생성
+      syncDataToDOM();   // 재생성된 테이블에 백업된 데이터 매핑
+      
+      closeSettings();
+      showToast("환경설정이 저장되었습니다.");
+    }
+
+    // === IndexedDB 초기화 ===
+    let db;
+    let currentDocId = null;
+    let currentTasks = [];
+    let dragStartIndex = null;
+
+    const request = indexedDB.open("TimeBoxDB", 1); 
+
+    request.onupgradeneeded = function(e) {
+      db = e.target.result;
+      if (!db.objectStoreNames.contains("documents")) {
+        const store = db.createObjectStore("documents", { keyPath: "id", autoIncrement: true });
+        store.createIndex("date", "date", { unique: true });
+      }
+    };
+
+    request.onsuccess = function(e) {
+      db = e.target.result;
+      goToToday(); 
+    };
+
+    // === 단축키 ===
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.key.toLowerCase() === 's') { e.preventDefault(); saveDocument(); }
+    });
+
+    function showToast(msg, icon = 'ph-check') {
+      const toast = document.getElementById('toastMsg');
+      toast.innerHTML = `<i class="ph-bold ${icon}"></i> ${msg}`;
+      toast.classList.add('show');
+      setTimeout(() => { toast.classList.remove('show'); }, 2000);
+    }
+
+    // === 문서 관리 ===
+    function goToToday() {
+      checkAndLoadDate(getToday());
+    }
+
+    function checkAndLoadDate(targetDate) {
+      const tx = db.transaction(["documents"], "readonly");
+      const store = tx.objectStore("documents");
+      const index = store.index("date");
+      const req = index.get(targetDate);
+
+      req.onsuccess = function() {
+        if (req.result) {
+          loadDataIntoUI(req.result);
+        } else {
+          resetFormForNewDate(targetDate);
+        }
+      };
+    }
+
+    function loadDataIntoUI(data) {
+      currentDocId = data.id;
+      currentTasks = data.tasks || [];
+      document.getElementById("docDate").value = data.date;
+      
+      document.getElementById("docFuture").value = data.future || "";
+      document.getElementById("docIdentity").value = data.identity || "";
+      document.getElementById("docMotivation").value = data.motivation || "";
+      document.getElementById("docGratitude").value = data.gratitude || "";
+      document.getElementById("docWakeup").value = data.wakeup || "";
+      document.getElementById("fbStart").value = data.fbStart || "";
+      document.getElementById("fbMid").value = data.fbMid || "";
+      document.getElementById("fbEnd").value = data.fbEnd || "";
+      document.getElementById("taskInput").value = "";
+
+      currentTbData = data.timebox || {};
+      syncDataToDOM(); // 로드한 백그라운드 데이터를 현재 테이블 UI에 매핑
+
+      document.getElementById("btnDeleteDoc").style.display = "inline-flex";
+      renderTasks();
+    }
+
+    function resetFormForNewDate(dateStr) {
+      currentDocId = null;
+      currentTasks = [];
+      document.getElementById("docDate").value = dateStr;
+      
+      const fields = ["docFuture", "docIdentity", "docMotivation", "docGratitude", "docWakeup", "taskInput", "fbStart", "fbMid", "fbEnd"];
+      fields.forEach(id => document.getElementById(id).value = "");
+      
+      currentTbData = {};
+      document.querySelectorAll('.tb-input').forEach(el => el.value = '');
+
+      document.getElementById("btnDeleteDoc").style.display = "none";
+      renderTasks();
+    }
+
+    function saveDocument() {
+      const date = document.getElementById("docDate").value;
+      if (!date) return;
+
+      syncDOMtoData(); // 저장 전 현재 화면 입력값을 백그라운드 데이터에 동기화
+
+      const docData = {
+        date: date, tasks: currentTasks,
+        future: document.getElementById("docFuture").value,
+        identity: document.getElementById("docIdentity").value,
+        motivation: document.getElementById("docMotivation").value,
+        gratitude: document.getElementById("docGratitude").value,
+        wakeup: document.getElementById("docWakeup").value,
+        fbStart: document.getElementById("fbStart").value,
+        fbMid: document.getElementById("fbMid").value,
+        fbEnd: document.getElementById("fbEnd").value,
+        timebox: currentTbData, // 백그라운드 전체 데이터 저장
+        updatedAt: new Date().toISOString()
+      };
+
+      const tx = db.transaction(["documents"], "readwrite");
+      const store = tx.objectStore("documents");
+      const req = currentDocId ? store.put({ ...docData, id: currentDocId }) : store.add(docData);
+
+      req.onsuccess = function(e) {
+        if (!currentDocId) currentDocId = e.target.result; 
+        document.getElementById("btnDeleteDoc").style.display = "inline-flex";
+        showToast("다이어리가 저장되었습니다.", "ph-floppy-disk");
+      };
+    }
+
+    function deleteDocument() {
+      if (!currentDocId || !confirm("이 날의 다이어리를 삭제하시겠습니까?")) return;
+      const tx = db.transaction(["documents"], "readwrite");
+      const req = tx.objectStore("documents").delete(currentDocId);
+      req.onsuccess = function() { showToast("삭제되었습니다.", "ph-trash"); goToToday(); };
+    }
+
+    // === 체크리스트 로직 ===
+    function addTask() {
+      const input = document.getElementById("taskInput");
+      const text = input.value.trim();
+      if (!text) return;
+      currentTasks.push({ id: Date.now(), text: text, completed: false, isBig3: false });
+      input.value = ""; renderTasks();
+    }
+    
+    function toggleTask(id) {
+      const task = currentTasks.find(t => t.id === id);
+      if (task) { task.completed = !task.completed; renderTasks(); }
+    }
+
+    function toggleBig3(id) {
+      const task = currentTasks.find(t => t.id === id);
+      if (task) {
+        if (!task.isBig3 && currentTasks.filter(t => t.isBig3).length >= 3) {
+          return showToast("Big 3는 최대 3개까집니다.", "ph-warning-circle");
+        }
+        task.isBig3 = !task.isBig3; renderTasks();
+      }
+    }
+    
+    function deleteTask(id) { currentTasks = currentTasks.filter(t => t.id !== id); renderTasks(); }
+    function updateTaskText(id, text) { 
+      const task = currentTasks.find(t => t.id === id);
+      if (task) { task.text = text.trim() || task.text; renderTasks(); }
+    }
+    function handleKeyPress(e) { if (e.key === 'Enter') addTask(); }
+
+    // 드래그 앤 드롭
+    function handleDragStart(e) { if (e.target.tagName.toLowerCase() === 'input' || e.target.closest('button')) return; dragStartIndex = +this.dataset.index; this.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; }
+    function handleDragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; return false; }
+    function handleDragEnter(e) { e.preventDefault(); this.classList.add('drag-over'); }
+    function handleDragLeave(e) { this.classList.remove('drag-over'); }
+    function handleDrop(e) {
+      e.stopPropagation(); this.classList.remove('drag-over');
+      const dragEndIndex = +this.dataset.index;
+      if (dragStartIndex !== null && dragStartIndex !== dragEndIndex) {
+        currentTasks.splice(dragEndIndex, 0, currentTasks.splice(dragStartIndex, 1)[0]);
+        renderTasks();
+      }
+      return false;
+    }
+    function handleDragEnd(e) { this.classList.remove('dragging'); document.querySelectorAll('.task-item').forEach(i => i.classList.remove('drag-over')); dragStartIndex = null; }
+
+    function renderTasks() {
+      const list = document.getElementById("taskList");
+      list.innerHTML = "";
+      if (currentTasks.length === 0) {
+        list.innerHTML = `<div style="text-align:center; padding:20px 0; color:var(--border-dark); font-size:13px;">할 일이 없습니다.</div>`;
+      } else {
+        currentTasks.forEach((task, index) => {
+          const li = document.createElement("li");
+          li.className = `task-item ${task.completed ? 'completed' : ''} ${task.isBig3 ? 'is-big3' : ''}`;
+          li.draggable = true; li.dataset.index = index; 
+          li.innerHTML = `
+            <div style="display:flex; align-items:center; flex:1; min-width:0;">
+              <i class="ph ph-dots-six-vertical drag-handle"></i>
+              <button class="btn-star ${task.isBig3 ? 'active' : ''}" onclick="toggleBig3(${task.id})" title="Big 3 지정"><i class="${task.isBig3 ? 'ph-fill' : 'ph'} ph-star"></i></button>
+              <div class="task-content">
+                <input type="checkbox" class="task-checkbox" ${task.completed ? 'checked' : ''} onchange="toggleTask(${task.id})">
+                <input type="text" class="task-text-input" value="${task.text}" spellcheck="false" onblur="updateTaskText(${task.id}, this.value)" onkeydown="if(event.key==='Enter') this.blur();">
+              </div>
+            </div>
+            <button class="btn-task-delete" onclick="deleteTask(${task.id})"><i class="ph ph-trash"></i></button>
+          `;
+          li.addEventListener('dragstart', handleDragStart); li.addEventListener('dragover', handleDragOver);
+          li.addEventListener('dragenter', handleDragEnter); li.addEventListener('dragleave', handleDragLeave);
+          li.addEventListener('drop', handleDrop); li.addEventListener('dragend', handleDragEnd);
+          list.appendChild(li);
+        });
+      }
+    }
+
+    // === 엑셀 연동 ===
+    function handleFileUpload(e) {
+      const file = e.target.files[0]; if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        try {
+          const data = new Uint8Array(evt.target.result);
+          const json = XLSX.utils.sheet_to_json(XLSX.read(data, {type: 'array'}).Sheets[workbook.SheetNames[0]]);
+          json.forEach((row, idx) => {
+            const txtKey = Object.keys(row).find(k => k.includes('작업') || k.includes('항목'));
+            if (txtKey && row[txtKey]) currentTasks.push({ id: Date.now() + idx, text: row[txtKey].toString(), completed: false, isBig3: false });
+          });
+          renderTasks(); showToast("업로드 완료");
+        } catch (err) { alert("업로드 오류"); }
+        e.target.value = '';
+      };
+      reader.readAsArrayBuffer(file);
+    }
+    function exportToExcel() {
+      if (currentTasks.length === 0) return alert("다운로드할 항목이 없습니다.");
+      const ws_data = [["작업항목", "완료여부(O/X)", "Big3여부(O/X)"]];
+      currentTasks.forEach(t => ws_data.push([t.text, t.completed ? "O" : "X", t.isBig3 ? "O" : "X"]));
+      const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ws_data), "작업목록");
+      XLSX.writeFile(wb, `${document.getElementById("docDate").value}_몰입기록.xlsx`);
+    }
+  </script>
+</body>
+</html>
