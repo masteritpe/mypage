@@ -132,13 +132,13 @@
 
     table {
       border-collapse: separate; border-spacing: 0;
-      width: 100%; min-width: 800px; /* 2열 구조를 위해 너비 확보 */
+      width: 100%; min-width: 800px; 
       font-size: 14px; text-align: left;
     }
     
     th, td {
       padding: 16px 20px;
-      white-space: pre-wrap; /* 줄바꿈 유지 핵심 속성 */
+      white-space: pre-wrap; 
       word-break: break-all;
       cursor: cell; position: relative;
       border-bottom: 1px solid var(--border-light);
@@ -148,7 +148,6 @@
       vertical-align: top;
     }
     
-    /* 1열(페이지 번호) 고정 너비 및 강조 */
     td:first-child {
       width: 120px;
       font-weight: 600;
@@ -192,7 +191,6 @@
       padding: 80px 20px; text-align: center; color: var(--text-muted);
       display: flex; flex-direction: column; align-items: center; gap: 12px;
     }
-    /* 첨부 이미지 참고하여 연한 회색으로 수정된 부분 */
     .empty-msg i { font-size: 44px; color: #D1D5DB; }
 
     @keyframes spin { 100% { transform: rotate(360deg); } }
@@ -216,6 +214,15 @@
         
         <button class="btn btn-outline" onclick="applySelectionToPreview()">
           <i class="ph ph-crop"></i> 영역 자르기
+        </button>
+
+        <button class="btn btn-outline" onclick="exportToExcel()">
+          <i class="ph ph-file-xls"></i> 엑셀 저장
+        </button>
+
+        <!-- 추가된 TXT 저장 버튼 -->
+        <button class="btn btn-outline" onclick="exportToTxt()">
+          <i class="ph ph-file-text"></i> TXT 저장
         </button>
       </div>
     </div>
@@ -245,7 +252,6 @@
     const wrapper = document.getElementById('table-wrapper');
     const toggleContainer = document.getElementById('column-toggles');
 
-    // 1. PDF 텍스트 추출 로직 (페이지 당 1행 처리, 줄바꿈 유지)
     document.getElementById('upload-pdf').addEventListener('change', async function(e) {
       const file = e.target.files[0];
       if (!file) return;
@@ -262,7 +268,6 @@
         const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
         const pdf = await loadingTask.promise;
         
-        // 2열 구조 헤더
         let allRows = [["Page", "Content"]];
 
         for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
@@ -272,7 +277,6 @@
           let items = textContent.items.filter(item => item.str.trim() !== '');
           if(items.length === 0) continue;
 
-          // 위에서 아래로(Y좌표 내림차순), 좌에서 우로(X좌표 오름차순) 정렬
           items.sort((a, b) => {
              const yDiff = b.transform[5] - a.transform[5];
              if (Math.abs(yDiff) > 5) return yDiff; 
@@ -283,10 +287,9 @@
           let line = [];
           let pageLines = [];
 
-          // Y좌표를 기준으로 한 줄씩 묶기
           items.forEach(item => {
             if (Math.abs(item.transform[5] - currentY) > 5) {
-              pageLines.push(line.join(' ')); // 완성된 한 줄을 배열에 저장
+              pageLines.push(line.join(' ')); 
               line = [item.str];
               currentY = item.transform[5];
             } else {
@@ -298,7 +301,6 @@
             pageLines.push(line.join(' '));
           }
 
-          // 배열에 담긴 줄들을 줄바꿈(\n) 문자로 합쳐서 하나의 셀 내용으로 만듦
           let fullPageContent = pageLines.join('\n');
           allRows.push([`Page ${pageNum}`, fullPageContent]);
         }
@@ -316,12 +318,10 @@
       }
     });
 
-    // 2. 특수문자 이스케이프 (HTML 태그 깨짐 방지)
     function escapeHTML(str) {
       return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
-    // 3. 테이블 렌더링
     function renderTable(data) {
       if (!data || data.length <= 1) { 
         wrapper.innerHTML = `
@@ -340,7 +340,6 @@
           const tag = rowIndex === 0 ? 'th' : 'td';
           let text = cell !== undefined ? escapeHTML(String(cell)) : '';
           
-          // td 요소들에 맞춤법 검사 제외(spellcheck="false") 속성 부여
           const attr = rowIndex === 0 ? '' : ' spellcheck="false"';
           html += `<${tag}${attr}>${text}</${tag}>`;
         });
@@ -353,7 +352,6 @@
       updateColumnToggles();
     }
 
-    // 4. 필터 제어 UI 
     function updateColumnToggles() {
       const table = document.querySelector('table');
       if (!table || table.rows.length === 0) {
@@ -408,7 +406,6 @@
       return { r: cell.parentElement.rowIndex, c: cell.cellIndex };
     }
 
-    // 드래그 선택 기능 
     wrapper.addEventListener('mousedown', (e) => {
       const editingCell = document.querySelector('[contenteditable="true"]');
       if (editingCell && editingCell !== e.target.closest('td, th')) {
@@ -438,7 +435,6 @@
       if (!isDragging) return;
       isDragging = false;
       
-      // 단일 클릭 처리 (클립보드 복사)
       if (startCell && endCell && startCell.r === endCell.r && startCell.c === endCell.c) {
         const cell = e.target.closest('td, th');
         if (cell) {
@@ -449,13 +445,12 @@
       }
     });
 
-    // 더블클릭 수정 (맞춤법 검사 방지 추가)
     wrapper.addEventListener('dblclick', (e) => {
       const cell = e.target.closest('td, th');
       if (!cell) return;
       
       cell.setAttribute('contenteditable', 'true');
-      cell.setAttribute('spellcheck', 'false'); // 수정 중에도 빨간 밑줄 방지
+      cell.setAttribute('spellcheck', 'false'); 
       cell.focus();
       
       const range = document.createRange();
@@ -473,7 +468,6 @@
       }
     }, true); 
 
-    // 단축키 제어
     wrapper.addEventListener('keydown', (e) => {
       const editingCell = document.querySelector('[contenteditable="true"]');
       if (!editingCell) return;
@@ -499,7 +493,6 @@
       }
     });
 
-    // 시각적 하이라이트
     function highlightSelection() {
       document.querySelectorAll('.selected-cell').forEach(c => c.classList.remove('selected-cell'));
       if (!startCell || !endCell) return;
@@ -528,7 +521,6 @@
       endCell = null;
     }
 
-    // 영역 자르기
     function applySelectionToPreview() {
       if (!startCell || !endCell) {
         alert('먼저 남기고 싶은 텍스트 영역을 마우스 드래그로 선택해주세요.');
@@ -557,6 +549,83 @@
       }
       clearSelection();
       updateColumnToggles();
+    }
+
+    function exportToExcel() {
+      const table = document.querySelector('table');
+      if (!table || table.rows.length === 0) {
+        alert('엑셀로 저장할 데이터가 없습니다.');
+        return;
+      }
+      
+      let html = '<html xmlns:x="urn:schemas-microsoft-com:office:excel">';
+      html += '<head><meta charset="utf-8"></head><body>';
+      html += table.outerHTML;
+      html += '</body></html>';
+      
+      const blob = new Blob([html], { type: 'application/vnd.ms-excel' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      
+      a.href = url;
+      a.download = 'extracted_data.xls';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // 새롭게 추가된 TXT 저장 함수
+    function exportToTxt() {
+      const table = document.querySelector('table');
+      if (!table || table.rows.length <= 1) {
+        alert('TXT로 저장할 데이터가 없습니다.');
+        return;
+      }
+
+      let txtContent = '';
+      const headerRow = table.rows[0];
+      
+      // 'Page' 헤더를 가진 열(페이지 번호)을 제외한 나머지 열의 인덱스 확인
+      let colsToInclude = [];
+      for (let c = 0; c < headerRow.cells.length; c++) {
+        if (headerRow.cells[c].innerText.trim() !== 'Page' && headerRow.cells[c].style.display !== 'none') {
+          colsToInclude.push(c);
+        }
+      }
+
+      // 본문 텍스트 추출 (첫 번째 헤더 행 제외)
+      for (let i = 1; i < table.rows.length; i++) {
+        const row = table.rows[i];
+        let rowText = [];
+        
+        for (let c of colsToInclude) {
+          if (row.cells[c]) {
+            rowText.push(row.cells[c].innerText);
+          }
+        }
+        
+        if (rowText.length > 0) {
+          // 각 열의 데이터는 줄바꿈으로 연결하고, 각 행(페이지 등)은 빈 줄 2개로 확실히 구분
+          txtContent += rowText.join('\n') + '\n\n';
+        }
+      }
+
+      if (!txtContent.trim()) {
+        alert('출력할 텍스트 내용이 없습니다.');
+        return;
+      }
+
+      const blob = new Blob([txtContent], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      
+      a.href = url;
+      a.download = 'extracted_data.txt';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     }
   </script>
 </body>
