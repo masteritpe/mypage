@@ -8,6 +8,21 @@
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css" />
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
+<!-- MathJax 라이브러리 추가 (수식 렌더링용) -->
+<script>
+    window.MathJax = {
+        tex: {
+            inlineMath: [['$', '$'], ['\\(', '\\)']],
+            displayMath: [['$$', '$$'], ['\\[', '\\]']],
+            processEscapes: true
+        },
+        startup: {
+            typeset: false // 미리보기 시 수동으로 렌더링하기 위해 false 설정
+        }
+    };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
 <style>
     /* 
       ====================================
@@ -991,10 +1006,8 @@
         const title = document.getElementById('docTitle').value || 'Untitled';
         const excerpt = document.getElementById('docExcerpt').value;
         
-        // 사용자가 커버 이미지를 입력한 값 (없으면 'cover.jpg')
         let rawCoverImage = document.getElementById('docCoverImage').value.trim() || 'cover.jpg';
         
-        // 입력된 값에 경로가 없다면 자동으로 '/assets/blog/preview/' 고정 경로를 붙여줌
         if (!rawCoverImage.startsWith('/assets/blog/preview/')) {
             rawCoverImage = `/assets/blog/preview/${rawCoverImage.replace(/^\/+/, '')}`;
         }
@@ -1002,7 +1015,6 @@
         const author = localStorage.getItem('vercelAuthor') || 'masteritpe';
         const dateStr = new Date().toISOString();
         
-        // Frontmatter 형식 생성 (요청한 구조 완벽 매핑)
         let md = `---\n`;
         md += `title: "${title.replace(/"/g, '\\"')}"\n`;
         
@@ -1021,7 +1033,6 @@
         md += `  url: "${rawCoverImage}"\n`;
         md += `---\n\n`;
 
-        // Body 생성
         const articles = gatherFormData()?.articles || [];
         
         articles.forEach(art => {
@@ -1095,9 +1106,39 @@
 
     function handlePreviewMD() {
         const { mdString } = generateMarkdownString();
-        document.getElementById('previewText').innerHTML = marked.parse(mdString, { breaks: true, gfm: true });
+        
+        let processedMd = mdString;
+        const mathBlocks = [];
+        
+        // 마크다운 문법에 영향받지 않는 안전한 치환 문자열 사용
+        processedMd = processedMd.replace(/\$\$([\s\S]+?)\$\$/g, (match) => {
+            mathBlocks.push(match);
+            return `MATHBLOCKPLACEHOLDER${mathBlocks.length - 1}END`;
+        });
+        
+        processedMd = processedMd.replace(/\$(.+?)\$/g, (match) => {
+            mathBlocks.push(match);
+            return `MATHINLINEPLACEHOLDER${mathBlocks.length - 1}END`;
+        });
+
+        // 마크다운 파싱 처리
+        let html = marked.parse(processedMd, { breaks: true, gfm: true });
+
+        // 보호된 수식 다시 복원
+        html = html.replace(/MATHBLOCKPLACEHOLDER(\d+)END/g, (match, i) => mathBlocks[i]);
+        html = html.replace(/MATHINLINEPLACEHOLDER(\d+)END/g, (match, i) => mathBlocks[i]);
+
+        document.getElementById('previewText').innerHTML = html;
+        
+        // MathJax를 호출하여 수식 렌더링 진행
+        if (window.MathJax) {
+            MathJax.typesetClear([document.getElementById('previewText')]);
+            MathJax.typesetPromise([document.getElementById('previewText')]).catch(err => console.error('MathJax error:', err));
+        }
+        
         document.getElementById('previewModal').style.display = 'flex';
     }
+
     function closePreview() { document.getElementById('previewModal').style.display = 'none'; }
 
     async function handleDownloadMD() {
