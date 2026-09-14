@@ -184,10 +184,19 @@
         #node-editor-panel { 
             position: absolute; top: 0; right: 0; width: 600px; height: 100%; 
             background: #FFF; box-shadow: -5px 0 25px rgba(0,0,0,0.05); z-index: 50; 
-            transform: translateX(100%); transition: transform 0.3s ease; 
+            transform: translateX(100%); transition: transform 0.3s ease, width 0.3s ease; 
             display: flex; flex-direction: column; border-left: 1px solid var(--border-medium); 
         }
         #node-editor-panel.open { transform: translateX(0); }
+        
+        /* 상세 문서 전체화면 모드 */
+        #node-editor-panel.fullscreen-mode {
+            width: 100% !important;
+            z-index: 200;
+        }
+        #node-editor-panel.fullscreen-mode #panel-resizer {
+            display: none; /* 전체화면 시 리사이저 숨김 */
+        }
         
         #panel-resizer {
             position: absolute; top: 0; left: -10px; width: 20px; height: 100%; 
@@ -318,7 +327,7 @@
                 </div>
             </div>
             <div class="editor-panel-content">
-                <div style="margin-bottom: 10px; font-size: 13px; color: var(--text-muted);"><i class="ph ph-info"></i> 단축키 지원 (Ctrl+B, 취소선 Ctrl+0, 글자색 등) / 마크다운 텍스트 복사 및 렌더링 지원</div>
+                <div style="margin-bottom: 10px; font-size: 13px; color: var(--text-muted);"><i class="ph ph-info"></i> 단축키 지원 (Ctrl+B, 취소선 Ctrl+0, 글자색 정하기 등) / 마크다운 텍스트 복사 및 렌더링 지원</div>
                 <div id="quill-editor"></div>
 
                 <div class="attach-section">
@@ -369,6 +378,7 @@
                 <div class="shortcut-item"><span>몰입 모드 (사이드바/상단바 숨김)</span> <div><kbd>Ctrl</kbd> + <kbd>H</kbd></div></div>
                 <div class="shortcut-item"><span>상세 문서 패널 닫기</span> <div><kbd>Alt</kbd> + <kbd>L</kbd> (입력 중 아닐 때)</div></div>
                 <div class="shortcut-item"><span>상세 문서 순차 열기</span> <div><kbd>Alt</kbd> + <kbd>K</kbd></div></div>
+                <div class="shortcut-item"><span>상세 문서 전체화면 토글</span> <div><kbd>Alt</kbd> + <kbd>J</kbd></div></div>
                 <div class="shortcut-item"><span>중요도(🚩) 마커 토글</span> <div><kbd>Alt</kbd> + <kbd>1</kbd></div></div>
                 
                 <hr style="border: 0; border-top: 1px solid var(--border-medium); margin: 18px 0;">
@@ -592,6 +602,7 @@
         let currentNodeForEditor = null;
         let currentFiles = [];
         let targetIconNodeId = null;
+        let draggedSidebarItem = null;
 
         const generateId = () => 'id_' + Math.random().toString(36).substr(2, 9);
 
@@ -1554,7 +1565,11 @@
         }
 
         function closeNodeEditor() {
-            saveNodeEditor(false); document.getElementById('node-editor-panel').classList.remove('open'); currentNodeForEditor = null;
+            saveNodeEditor(false); 
+            const panel = document.getElementById('node-editor-panel');
+            panel.classList.remove('open'); 
+            panel.classList.remove('fullscreen-mode'); // 화면 닫을 때 전체화면 해제
+            currentNodeForEditor = null;
         }
 
         function saveNodeEditor(showMsg = true) {
@@ -1629,15 +1644,87 @@
             }
         }
 
+        // --- 맵 순서 드래그 앤 드롭 업데이트 로직 추가 ---
+        async function updateSidebarOrder() {
+            const items = document.querySelectorAll('.tree-list-item');
+            const maps = await getAllMaps();
+            items.forEach((item, index) => {
+                const map = maps.find(m => m.id === item.dataset.id);
+                if (map) {
+                    map.sortOrder = index;
+                    saveToDB(map);
+                }
+            });
+        }
+
         async function refreshSidebar() {
             const maps = await getAllMaps();
             const list = document.getElementById('tree-list'); list.innerHTML = '';
-            maps.sort((a, b) => b.updatedAt - a.updatedAt).forEach(t => {
-                const li = document.createElement('li'); li.className = `tree-list-item ${t.id === currentMapId ? 'active' : ''}`;
-                li.innerHTML = `<span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${t.title}</span>`;
+            
+            // sortOrder 값이 있으면 우선 순위 반영, 없으면 최신 업데이트 순
+            maps.sort((a, b) => {
+                if (a.sortOrder !== undefined && b.sortOrder !== undefined) return a.sortOrder - b.sortOrder;
+                if (a.sortOrder === undefined && b.sortOrder !== undefined) return -1;
+                if (a.sortOrder !== undefined && b.sortOrder === undefined) return 1;
+                return b.updatedAt - a.updatedAt;
+            }).forEach(t => {
+                const li = document.createElement('li'); 
+                li.className = `tree-list-item ${t.id === currentMapId ? 'active' : ''}`;
+                li.dataset.id = t.id;
+                li.setAttribute('draggable', 'true'); // 드래그 활성화
+                li.innerHTML = `<span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; pointer-events:none;">${t.title}</span>`;
+                
                 const del = document.createElement('button'); del.className = 'btn-delete-tree'; del.innerHTML = '<i class="ph ph-trash"></i>';
                 del.onclick = (e) => { e.stopPropagation(); deleteMap(t.id); };
-                li.appendChild(del); li.onclick = () => loadMap(t); list.appendChild(li);
+                li.appendChild(del); 
+                li.onclick = () => loadMap(t); 
+
+                // --- 드래그 앤 드롭 이벤트 등록 ---
+                li.addEventListener('dragstart', function(e) {
+                    draggedSidebarItem = this;
+                    e.dataTransfer.effectAllowed = 'move';
+                    this.style.opacity = '0.5';
+                });
+
+                li.addEventListener('dragover', function(e) {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    const bounding = this.getBoundingClientRect();
+                    const offset = e.clientY - bounding.top;
+                    // 절반을 기준으로 위/아래 삽입 위치 시각적 가이드 표시
+                    this.style.boxShadow = offset > bounding.height / 2 
+                        ? 'inset 0 -2px 0 0 var(--primary)' 
+                        : 'inset 0 2px 0 0 var(--primary)';
+                    return false;
+                });
+
+                li.addEventListener('dragleave', function(e) {
+                    this.style.boxShadow = '';
+                });
+
+                li.addEventListener('drop', function(e) {
+                    e.stopPropagation();
+                    this.style.boxShadow = '';
+                    if (draggedSidebarItem !== this && draggedSidebarItem) {
+                        const bounding = this.getBoundingClientRect();
+                        const offset = e.clientY - bounding.top;
+                        if (offset > bounding.height / 2) {
+                            this.after(draggedSidebarItem);
+                        } else {
+                            this.before(draggedSidebarItem);
+                        }
+                        updateSidebarOrder(); // DB에 새로운 순서 저장
+                    }
+                    return false;
+                });
+
+                li.addEventListener('dragend', function(e) {
+                    this.style.opacity = '1';
+                    document.querySelectorAll('.tree-list-item').forEach(item => item.style.boxShadow = '');
+                    draggedSidebarItem = null;
+                });
+                
+                list.appendChild(li);
             });
         }
 
@@ -1651,7 +1738,21 @@
         function autoSave() {
             if (!currentMapId) return;
             const titleInput = document.getElementById('tree-title-input').value;
-            saveToDB({ id: currentMapId, title: titleInput || '제목 없음', updatedAt: Date.now(), data: { nodes: mapNodes, links: mapLinks } });
+            
+            const baseMap = { 
+                id: currentMapId, 
+                title: titleInput || '제목 없음', 
+                updatedAt: Date.now(), 
+                data: { nodes: mapNodes, links: mapLinks } 
+            };
+            
+            getAllMaps().then(maps => {
+                const existingMap = maps.find(m => m.id === currentMapId);
+                if (existingMap && existingMap.sortOrder !== undefined) {
+                    baseMap.sortOrder = existingMap.sortOrder;
+                }
+                saveToDB(baseMap);
+            });
         }
         function autoSaveAndRefresh() { autoSave(); setTimeout(refreshSidebar, 150); }
         function saveMap() { autoSave(); if(currentNodeForEditor) saveNodeEditor(false); showToast('성공적으로 저장되었습니다.'); refreshSidebar(); }
@@ -1695,6 +1796,17 @@
                 return;
             }
             
+            // --- [단축키 추가] Alt + J: 상세 문서 전체화면 토글 ---
+            if (isAlt && !isCtrl && !isShift && key === 'j') { 
+                e.preventDefault(); 
+                const panel = document.getElementById('node-editor-panel');
+                if (panel.classList.contains('open')) {
+                    panel.classList.toggle('fullscreen-mode');
+                    showToast(panel.classList.contains('fullscreen-mode') ? '상세 문서 전체화면 켜짐' : '상세 문서 전체화면 꺼짐');
+                }
+                return; 
+            }
+
             if (isCtrl && !isAlt && !isShift && key === 'h') {
                 e.preventDefault();
                 toggleImmersionMode();
@@ -1994,11 +2106,22 @@
             }
         }, true);
 
+        // 앱 초기 로드시에도 sortOrder 반영 적용
         window.onload = async () => { 
             await initDB(); 
             const maps = await getAllMaps();
-            if(maps.length === 0) { await createNewMap(); } 
-            else { await refreshSidebar(); loadMap(maps.sort((a, b) => b.updatedAt - a.updatedAt)[0]); }
+            if(maps.length === 0) { 
+                await createNewMap(); 
+            } else { 
+                await refreshSidebar(); 
+                maps.sort((a, b) => {
+                    if (a.sortOrder !== undefined && b.sortOrder !== undefined) return a.sortOrder - b.sortOrder;
+                    if (a.sortOrder === undefined && b.sortOrder !== undefined) return -1;
+                    if (a.sortOrder !== undefined && b.sortOrder === undefined) return 1;
+                    return b.updatedAt - a.updatedAt;
+                });
+                loadMap(maps[0]); 
+            }
         };
     </script>
 </body>
