@@ -920,6 +920,48 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.querySelector('#editor-solution .ql-editor').classList.add('s-editor');
   document.querySelector('#editor-keypoint .ql-editor').classList.add('k-editor');
 
+  // =========================================================================
+  // [추가된 부분] 텍스트 입력 시 특정 기호를 화면에 보이는 형태(→)로 자동 치환
+  // =========================================================================
+  const setupAutoReplace = (quillInstance) => {
+      quillInstance.on('text-change', (delta, oldDelta, source) => {
+          // 사용자가 직접 입력/붙여넣기 했을 때만 동작
+          if (source !== 'user') return;
+          
+          let text = quillInstance.getText();
+          // -> 와 $\rightarrow$ 를 매칭
+          let regex = /(->|\$\\rightarrow\$)/;
+          let match = regex.exec(text);
+          
+          while (match) {
+              const selection = quillInstance.getSelection();
+              const currentIndex = match.index;
+              const length = match[0].length;
+              
+              // 텍스트를 지우고 화살표로 치환
+              quillInstance.deleteText(currentIndex, length, 'api');
+              quillInstance.insertText(currentIndex, '→', 'api');
+              
+              // 치환 후 커서 위치 자연스럽게 보정
+              if (selection) {
+                  let newPos = selection.index;
+                  if (selection.index >= currentIndex + length) {
+                      newPos = selection.index - length + 1;
+                  }
+                  quillInstance.setSelection(newPos, selection.length, 'api');
+              }
+              // 다음 치환할 기호가 있는지 갱신된 텍스트로 재검색
+              text = quillInstance.getText();
+              match = regex.exec(text);
+          }
+      });
+  };
+
+  setupAutoReplace(quillQ);
+  setupAutoReplace(quillS);
+  setupAutoReplace(quillK);
+  // =========================================================================
+
   // Image Floating Toolbar Setup
   const imgToolbar = $("img-toolbar");
   const btnHl = $("btn-hl-img");
