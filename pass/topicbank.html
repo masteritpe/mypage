@@ -37,7 +37,6 @@
       --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
     }
 
-    /* 오프라인 배너 적용 시 UI 깨짐을 방지하기 위해 body를 flex로 변경 */
     * { box-sizing: border-box; font-family: 'Pretendard', sans-serif; }
     html, body { height: 100%; margin: 0; padding: 0; background: var(--bg-app); color: var(--text-main); overflow: hidden; display: flex; flex-direction: column; }
 
@@ -51,12 +50,7 @@
     #offline-banner { display: none; background: #4B5563; color: white; text-align: center; padding: 8px; font-size: 14px; font-weight: 600; z-index: 1000; flex-shrink: 0; }
 
     /* --- Font Fallback CSS --- */
-    .icons-failed i[class^="icon-"]::before { font-style: normal !important; font-family: sans-serif !important; display: inline-block; text-align: center; line-height: 1; }
-    .icons-failed i.icon-edit::before { content: "✏️"; }
-    .icons-failed i.icon-delete::before { content: "🗑️"; }
-    .icons-failed i.icon-open::before { content: "📂"; }
-    .icons-failed i.icon-save::before { content: "💾"; }
-    .icons-failed i.icon-print::before { content: "📄"; }
+    .icons-failed i[class^="icon-"] { display: none !important; }
 
     /* --- Header --- */
     .app-header {
@@ -74,7 +68,6 @@
     .btn.ghost:hover { background: #f3f4f6; color: var(--text-main); }
 
     /* --- Layout --- */
-    /* 배너 삽입 시 자연스럽게 높이가 조절되도록 flex: 1 적용 */
     .app-layout { display: flex; width: 100%; flex: 1; gap: 1px; background: var(--border-light); overflow: hidden; }
     
     /* Left Main Area */
@@ -95,11 +88,18 @@
     
     .table-wrapper { flex: 1; overflow: auto; padding: 0 28px; }
     .table-container { background: var(--bg-card); border-radius: var(--radius-lg); border: 1px solid var(--border-light); overflow: hidden; margin-top: 20px; margin-bottom: 20px; box-shadow: var(--shadow-sm); }
-    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; table-layout: fixed; }
     thead { position: sticky; top: 0; background: #f8fafc; z-index: 5; }
     thead::after { content:''; position:absolute; left:0; right:0; bottom:0; border-bottom:1px solid var(--border-light); }
-    th { padding: 14px 16px; color: #475569; font-weight: 600; text-align: left; cursor: pointer; white-space: nowrap; transition: 0.2s; }
+    
+    /* th 수정: position: relative 추가 (resizer 위치 기준점) */
+    th { position: relative; padding: 14px 16px; color: #475569; font-weight: 600; text-align: left; cursor: pointer; white-space: nowrap; transition: 0.2s; }
     th:hover { color: var(--brand); background: #f1f5f9; }
+    
+    /* 리사이저 스타일 추가 */
+    .resizer { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; user-select: none; z-index: 10; transition: background-color 0.2s; }
+    .resizer:hover, .resizer.resizing { background-color: var(--brand); opacity: 0.8; }
+    
     td { padding: 16px; border-bottom: 1px solid #f1f5f9; color: #334155; vertical-align: top; text-align: left; transition: background 0.2s; }
     tr:last-child td { border-bottom: none; }
     tr:hover td { background: #f0fdf4; cursor: pointer; }
@@ -677,14 +677,14 @@ window.addEventListener('keydown', function(e) {
       });
       try {
         const pngBlob = await convertToPng(blob); const file = new File([pngBlob], `clipboard_${Date.now()}.png`, { type: 'image/png' });
-        const inp1 = $('fImg1'), inp2 = $('fImg2');
+        const inp1 = $('fImg1'), inp2 =$('fImg2');
         let targetInput = null, previewId = null, rmId = null;
         if(!inp1.files.length && !(state.editing?.img1Id && !$('rmImg1').checked)) { targetInput = inp1; previewId = 'prev1'; rmId = 'rmImg1'; }
         else if(!inp2.files.length && !(state.editing?.img2Id && !$('rmImg2').checked)) { targetInput = inp2; previewId = 'prev2'; rmId = 'rmImg2'; }
 
         if(targetInput) {
           const dt = new DataTransfer(); dt.items.add(file); targetInput.files = dt.files;
-          $(rmId).checked = false; $(previewId).src = URL.createObjectURL(file); $(previewId).parentNode.style.display = 'flex'; toast('📋 클립보드 이미지 첨부됨');
+          $(rmId).checked = false; $(previewId).src = URL.createObjectURL(file);$(previewId).parentNode.style.display = 'flex'; toast('📋 클립보드 이미지 첨부됨');
         } else { toast('⚠️ 이미지 첨부 슬롯 부족'); }
       } catch(err) { toast('❌ 이미지 처리 오류'); }
     }
@@ -723,8 +723,7 @@ window.addEventListener('keydown', function(e) {
   };
 
   // JSON 복원 (가져오기 & 병합 처리)
-  $('btn-json-import').onclick = () => $('jsonFileInput').click();
-  $('jsonFileInput').onchange = async e => {
+  $('btn-json-import').onclick = () => $('jsonFileInput').click();$('jsonFileInput').onchange = async e => {
     const file = e.target.files[0];
     if(!file) return;
     
@@ -908,8 +907,7 @@ window.addEventListener('keydown', function(e) {
   };
 
   // 엑셀 가져오기
-  $('btn-open').onclick = () => $('fileInput').click();
-  $('fileInput').onchange = async e => {
+  $('btn-open').onclick = () => $('fileInput').click();$('fileInput').onchange = async e => {
     const f = e.target.files[0]; if(!f) return; const wb = new ExcelJS.Workbook();
     try {
       await wb.xlsx.load(await f.arrayBuffer()); 
@@ -988,8 +986,7 @@ window.addEventListener('keydown', function(e) {
     const getTopHtml = (obj, targetType) => Object.entries(obj).sort((a,b)=>b[1]-a[1]).slice(0,3).map(x => `<div class="stat-row" onclick="navigateAnalysis('${targetType}', '${escapeHtml(x[0])}')"><span>${escapeHtml(x[0])}</span><strong>${x[1]}건</strong></div>`).join('') || '<div style="color:#9ca3af; font-size:13px;">데이터 없음</div>';
 
     $('analyzeTotal').textContent = `${matches.length}건`;
-    $('analyzeTopCat').innerHTML = getTopHtml(catCnt, 'category');
-    $('analyzeTopType').innerHTML = getTopHtml(typeCnt, 'type');
+    $('analyzeTopCat').innerHTML = getTopHtml(catCnt, 'category');$('analyzeTopType').innerHTML = getTopHtml(typeCnt, 'type');
 
     const wordCnt = {};
     allText.replace(/[^\w가-힣\s]/g, ' ').split(/\s+/).forEach(t => {
@@ -1004,7 +1001,7 @@ window.addEventListener('keydown', function(e) {
   window.navigateAnalysis = function(targetType, targetValue) {
       if (targetType === 'category') $('filterCategory').value = targetValue;
       else if (targetType === 'type') $('filterType').value = targetValue;
-      else if (targetType === 'keyword' && !$('searchInput').value.includes(targetValue)) $('searchInput').value += ' ' + targetValue;
+      else if (targetType === 'keyword' && !$('searchInput').value.includes(targetValue))$('searchInput').value += ' ' + targetValue;
       applyFilter(); toast('필터가 적용되었습니다.');
   };
   $('btn-analyze').onclick = runAnalysis; $('analyzeInput').onkeypress = e => { if(e.key === 'Enter') runAnalysis(); };
@@ -1088,16 +1085,56 @@ window.addEventListener('keydown', function(e) {
     
     $('examPaperModal').style.display = 'flex';
   };
-  $('btnCloseExam').onclick = () => $('examPaperModal').style.display = 'none';
+  $('btnCloseExam').onclick = () =>$('examPaperModal').style.display = 'none';
+
+  // --- 테이블 컬럼 리사이징 초기화 함수 추가 ---
+  function initColResize() {
+    const table = $('resultTable');
+    const cols = table.querySelectorAll('colgroup col');
+    const ths = table.querySelectorAll('thead th');
+
+    ths.forEach((th, i) => {
+      // 마지막 열(가변 길이)에는 핸들 추가를 생략하여 UI를 깔끔하게 유지합니다.
+      if (i === ths.length - 1) return;
+      
+      const resizer = document.createElement('div');
+      resizer.className = 'resizer';
+      th.appendChild(resizer);
+
+      let startX, startWidth;
+
+      const onMouseMove = (e) => {
+        const newWidth = startWidth + (e.clientX - startX);
+        if (newWidth > 30) { // 최소 너비 방어 로직
+          cols[i].width = newWidth;
+          cols[i].style.width = newWidth + 'px';
+        }
+      };
+
+      const onMouseUp = () => {
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        resizer.classList.remove('resizing');
+      };
+
+      resizer.addEventListener('mousedown', (e) => {
+        e.stopPropagation(); // 헤더 클릭을 통한 정렬 이벤트 방지
+        startX = e.clientX;
+        startWidth = parseFloat(cols[i].width || cols[i].getBoundingClientRect().width);
+        resizer.classList.add('resizing');
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+      });
+      
+      // 리사이저 클릭 시 헤더 정렬 동작이 일어나지 않도록 방지
+      resizer.addEventListener('click', e => e.stopPropagation());
+    });
+  }
 
   // Events & Init
-  ['searchInput','filterRound','filterCategory','filterType'].forEach(id=>$(id).onchange=()=>applyFilter());
-  $('searchInput').onkeypress=e=>{if(e.key==='Enter')applyFilter()};
-  $('btn-search').onclick=()=>applyFilter();
-  $('btn-reset').onclick=()=>{ ['searchInput','filterRound','filterCategory','filterType'].forEach(id=>$(id).value=''); applyFilter(true); };
-  $('pageSizeSel').onchange=e=>{ state.pageSize=parseInt(e.target.value); applyFilter(true); };
-  $('prevPage').onclick=()=>{if(state.page>1){state.page--;renderTable();}};
-  $('nextPage').onclick=()=>{state.page++;renderTable();};
+  ['searchInput','filterRound','filterCategory','filterType'].forEach(id=>$(id).onchange=()=>applyFilter());$('searchInput').onkeypress=e=>{if(e.key==='Enter')applyFilter()};
+  $('btn-search').onclick=()=>applyFilter();$('btn-reset').onclick=()=>{ ['searchInput','filterRound','filterCategory','filterType'].forEach(id=>$(id).value=''); applyFilter(true); };$('pageSizeSel').onchange=e=>{ state.pageSize=parseInt(e.target.value); applyFilter(true); };
+  $('prevPage').onclick=()=>{if(state.page>1){state.page--;renderTable();}};$('nextPage').onclick=()=>{state.page++;renderTable();};
   document.querySelectorAll('th[data-sort]').forEach(th => th.onclick = () => { 
     state.sortOrder = state.sortKey === th.dataset.sort ? (state.sortOrder === 'asc' ? 'desc' : 'asc') : 'asc'; state.sortKey = th.dataset.sort; doSort(); renderTable(); 
   });
@@ -1123,6 +1160,9 @@ window.addEventListener('keydown', function(e) {
     await openBankDB(); 
     await refreshData(); 
     await openSearchDB(); 
+    
+    // 테이블 및 데이터 준비 완료 시점에 리사이징 적용
+    initColResize();
     
     const urlParams = new URLSearchParams(window.location.search);
     const uid = urlParams.get('uid');
