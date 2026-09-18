@@ -5,32 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Dump Study</title>
   
-  <!-- 1. 외부 CDN 리소스 폴백(Fallback) 처리 - CSS -->
+  <!-- 1. 외부 CDN 리소스 로드 (실패 시 로컬 폴백 처리) -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" onerror="this.onerror=null; this.href='../nexus/all.min.css';">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" onerror="this.onerror=null; this.href='../nexus/fonts.css';">
   <link rel="stylesheet" as="style" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css" onerror="this.onerror=null; this.href='../nexus/pretendard.css';">
-  
-  <link href="https://cdn.jsdelivr.net/npm/quill@1.3.6/dist/quill.snow.css" rel="stylesheet" onerror="this.onerror=null; this.href='../nexus/quill.snow.css';">
-
-  <!-- 1. 외부 CDN 리소스 폴백(Fallback) 처리 - JS 로드 에러 핸들러 -->
-  <script>
-    function handleScriptError(scriptEl, fallbackSrc) {
-      // 스크립트 로드 실패 시 오프라인/에러 모드 클래스 부여
-      document.documentElement.classList.add('icons-failed');
-      // 안전한 DOM 방식(createElement)으로 로컬 파일 주입
-      var s = document.createElement('script');
-      s.src = fallbackSrc;
-      document.head.appendChild(s);
-    }
-  </script>
-
-  <script src="https://unpkg.com/@phosphor-icons/web" onerror="handleScriptError(this, '../nexus/web.js')"></script>
-  <script src="https://cdn.jsdelivr.net/npm/quill@1.3.6/dist/quill.min.js" onerror="handleScriptError(this, '../nexus/quill.min.js')"></script>
-  <script src="https://unpkg.com/quill-image-resize@3.0.9/image-resize.min.js" onerror="handleScriptError(this, '../nexus/image-resize.min.js')"></script>
-  <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js" onerror="handleScriptError(this, '../nexus/exceljs.min.js')"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" onerror="handleScriptError(this, '../nexus/html2canvas.min.js')"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" onerror="handleScriptError(this, '../nexus/jspdf.umd.min.js')"></script>
+  <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet" onerror="this.onerror=null; this.href='../nexus/quill.snow.css';">  
 
   <style>
     /* === 1. Reset & Variables === */
@@ -44,8 +24,11 @@
       --danger: #ef4444;
       --success: #10b981;
       --gray: #6b7280;
-      --font-ui: 'Pretendard', 'Inter', sans-serif;
-      --font-code: 'JetBrains Mono', monospace;
+      /* 온라인 웹 폰트 우선 적용, 오프라인 시 시스템 기본 폰트로 폴백(Fallback) */
+	  --main-font: 'Pretendard', 'Inter', -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+	  --mono-font: 'JetBrains Mono', Consolas, "Courier New", monospace; 
+	  --font-ui: var(--main-font); 
+	  --font-code: var(--mono-font);
       --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
       /* 에디터 폰트 사이즈 +2px 상향 (15px -> 17px) */
       --editor-font-size: 17px;
@@ -56,6 +39,10 @@
       margin: 0; background: var(--bg-app); color: var(--text-main);
       font-family: var(--font-ui); font-size: 14px;
       height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+    }
+
+    code, pre {
+        font-family: var(--font-code);
     }
 
     /* 2. 오프라인 상태 감지 배너 CSS */
@@ -245,8 +232,8 @@
     }
     #btnStatusToggle[data-status="미체크"] { background: #f3f4f6; color: #9ca3af; border-color: #e5e7eb; }
     #btnStatusToggle[data-status="미체크"]:hover { background: #e5e7eb; color: #6b7280; }
-    #btnStatusToggle[data-status="체크완료"] { background: #ecfdf5; color: #10b981; border-color: #10b981; }
-    #btnStatusToggle[data-status="체크완료"]:hover { background: #d1fae5; color: #059669; }
+    #btnStatusToggle[data-status="체크"] { background: #ecfdf5; color: #10b981; border-color: #10b981; }
+    #btnStatusToggle[data-status="체크"]:hover { background: #d1fae5; color: #059669; }
 
     .section-label {
       font-size: 12px; font-weight: 700; text-transform: uppercase;
@@ -473,7 +460,7 @@
     <h1 class="logo"><i class="fas fa-brain"></i> Dump Study</h1>
     <div class="status-summary">
         <span class="status-badge bg-gray" id="filter-unchecked" title="클릭하여 미체크 항목만 보기 (토글)"><i class="far fa-circle"></i> 미체크 <span id="cnt-unchecked">0</span></span>
-        <span class="status-badge bg-green" id="filter-checked" title="클릭하여 체크완료 항목만 보기 (토글)"><i class="fas fa-check-circle"></i> 체크완료 <span id="cnt-checked">0</span></span>
+        <span class="status-badge bg-green" id="filter-checked" title="클릭하여 체크 항목만 보기 (토글)"><i class="fas fa-check-circle"></i> 체크 <span id="cnt-checked">0</span></span>
     </div>
   </div>
 
@@ -762,6 +749,23 @@
 <div id="batch-render-container"></div>
 <div id="toast-area"></div>
 
+<!-- 4. JS 외부 라이브러리 로드 (HTML 파서 오류를 완벽 차단하는 안전한 Fallback 패턴) -->
+<script src="https://cdn.jsdelivr.net/npm/quill@1.3.6/dist/quill.min.js"></script>
+<script>if(typeof Quill === 'undefined') document.write('<script src="../nexus/quill.min.js"><' + '/script>');</script>
+
+<script src="https://unpkg.com/quill-image-resize@3.0.9/image-resize.min.js"></script>
+<script>if(typeof window.ImageResize === 'undefined') document.write('<script src="../nexus/image-resize.min.js"><' + '/script>');</script>
+
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+<script>if(typeof ExcelJS === 'undefined') document.write('<script src="../nexus/exceljs.min.js"><' + '/script>');</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>if(typeof html2canvas === 'undefined') document.write('<script src="../nexus/html2canvas.min.js"><' + '/script>');</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>if(typeof window.jspdf === 'undefined') document.write('<script src="../nexus/jspdf.umd.min.js"><' + '/script>');</script>
+
+
 <!-- 3. 네트워크 상태 감지 자바스크립트 추가 -->
 <script>
   function checkNetworkStatus() {
@@ -845,51 +849,60 @@
 // ==========================================
 // 2. Quill.js Setup & Extensions
 // ==========================================
-const BaseImageFormat = Quill.import('formats/image');
-class ImageFormat extends BaseImageFormat {
-    static formats(domNode) {
-        return {
-            width: domNode.getAttribute('width') || domNode.style.width,
-            height: domNode.getAttribute('height') || domNode.style.height,
-            imghighlight: domNode.classList.contains('img-highlight')
-        };
-    }
-    format(name, value) {
-        if (name === 'width' || name === 'height') {
-            if (value) {
-                this.domNode.setAttribute(name, value);
-                this.domNode.style[name] = value.includes('px') || value.includes('%') ? value : value + 'px';
-            } else {
-                this.domNode.removeAttribute(name);
-                this.domNode.style[name] = '';
-            }
-        } else if (name === 'imghighlight') {
-            if (value) this.domNode.classList.add('img-highlight');
-            else this.domNode.classList.remove('img-highlight');
-        } else {
-            super.format(name, value);
-        }
-    }
-}
-Quill.register(ImageFormat, true);
 
-const customBindings = {
-    customStrike: { key: '0', shortKey: true, handler: function(r, c) { this.quill.format('strike', !c.format.strike); } },
-    customRed: { key: 'R', shortKey: true, altKey: true, handler: function(r, c) { this.quill.format('color', c.format.color === 'red' ? false : 'red'); } },
-    customBlue: { key: 'B', shortKey: true, altKey: true, handler: function(r, c) { this.quill.format('color', c.format.color === 'blue' ? false : 'blue'); } },
-    customClear: { key: 'X', shortKey: true, shiftKey: true, handler: function(r, c) { 
-        if (r.length > 0) this.quill.removeFormat(r.index, r.length); 
-        else { const f = this.quill.getFormat(r); for (let k in f) this.quill.format(k, false); }
-    }},
-    customHighlight1: { key: '1', shortKey: true, handler: function(r, c) { this.quill.format('background', c.format.background === '#ffedd5' ? false : '#ffedd5'); } },
-    customHighlight2: { key: '2', shortKey: true, handler: function(r, c) { this.quill.format('background', c.format.background === '#e0f2fe' ? false : '#e0f2fe'); } },
-    customHighlight3: { key: '3', shortKey: true, handler: function(r, c) { this.quill.format('background', c.format.background === '#fef08a' ? false : '#fef08a'); } },
-    customHighlight4: { key: '4', shortKey: true, handler: function(r, c) { this.quill.format('background', c.format.background === '#dcfce7' ? false : '#dcfce7'); } },
-    customHighlight5: { key: '5', shortKey: true, handler: function(r, c) { this.quill.format('background', c.format.background === '#fce7f3' ? false : '#fce7f3'); } },
-    customHighlight6: { key: '6', shortKey: true, handler: function(r, c) { this.quill.format('background', c.format.background === '#e6d5c3' ? false : '#e6d5c3'); } },
-    customHighlight7: { key: '7', shortKey: true, handler: function(r, c) { this.quill.format('background', c.format.background === '#e5e7eb' ? false : '#e5e7eb'); } },
-    customList: { key: 'L', shortKey: true, handler: function(r, c) { this.quill.format('list', 'bullet'); } }
-};
+// 5. 실행 스크립트 (에러 방어 코드 적용) - Quill 클래스 존재 여부 체크
+if (typeof Quill !== 'undefined') {
+  const BaseImageFormat = Quill.import('formats/image');
+  class ImageFormat extends BaseImageFormat {
+      static formats(domNode) {
+          return {
+              width: domNode.getAttribute('width') || domNode.style.width,
+              height: domNode.getAttribute('height') || domNode.style.height,
+              imghighlight: domNode.classList.contains('img-highlight')
+          };
+      }
+      format(name, value) {
+          if (name === 'width' || name === 'height') {
+              if (value) {
+                  this.domNode.setAttribute(name, value);
+                  this.domNode.style[name] = value.includes('px') || value.includes('%') ? value : value + 'px';
+              } else {
+                  this.domNode.removeAttribute(name);
+                  this.domNode.style[name] = '';
+              }
+          } else if (name === 'imghighlight') {
+              if (value) this.domNode.classList.add('img-highlight');
+              else this.domNode.classList.remove('img-highlight');
+          } else {
+              super.format(name, value);
+          }
+      }
+  }
+  Quill.register(ImageFormat, true);
+  
+  const customBindings = {
+      customStrike: { key: '0', shortKey: true, handler: function(r, c) { this.quill.format('strike', !c.format.strike); } },
+      customRed: { key: 'R', shortKey: true, altKey: true, handler: function(r, c) { this.quill.format('color', c.format.color === 'red' ? false : 'red'); } },
+      customBlue: { key: 'B', shortKey: true, altKey: true, handler: function(r, c) { this.quill.format('color', c.format.color === 'blue' ? false : 'blue'); } },
+      customClear: { key: 'X', shortKey: true, shiftKey: true, handler: function(r, c) { 
+          if (r.length > 0) this.quill.removeFormat(r.index, r.length); 
+          else { const f = this.quill.getFormat(r); for (let k in f) this.quill.format(k, false); }
+      }},
+      customHighlight1: { key: '1', shortKey: true, handler: function(r, c) { this.quill.format('background', c.format.background === '#ffedd5' ? false : '#ffedd5'); } },
+      customHighlight2: { key: '2', shortKey: true, handler: function(r, c) { this.quill.format('background', c.format.background === '#e0f2fe' ? false : '#e0f2fe'); } },
+      customHighlight3: { key: '3', shortKey: true, handler: function(r, c) { this.quill.format('background', c.format.background === '#fef08a' ? false : '#fef08a'); } },
+      customHighlight4: { key: '4', shortKey: true, handler: function(r, c) { this.quill.format('background', c.format.background === '#dcfce7' ? false : '#dcfce7'); } },
+      customHighlight5: { key: '5', shortKey: true, handler: function(r, c) { this.quill.format('background', c.format.background === '#fce7f3' ? false : '#fce7f3'); } },
+      customHighlight6: { key: '6', shortKey: true, handler: function(r, c) { this.quill.format('background', c.format.background === '#e6d5c3' ? false : '#e6d5c3'); } },
+      customHighlight7: { key: '7', shortKey: true, handler: function(r, c) { this.quill.format('background', c.format.background === '#e5e7eb' ? false : '#e5e7eb'); } },
+      customList: { key: 'L', shortKey: true, handler: function(r, c) { this.quill.format('list', 'bullet'); } }
+  };
+  
+  // Custom bindings 변수를 window 객체에 할당하여 에러 방지
+  window.customBindings = customBindings;
+} else {
+    console.error("오프라인 모드: Quill 라이브러리를 로드하지 못했습니다. 로컬 파일 경로를 확인하세요.");
+}
 
 let quillQ, quillS, quillK;
 let activeTargetImage = null;
@@ -915,29 +928,43 @@ document.addEventListener("DOMContentLoaded", async () => {
     imgCount: $("img-count")
   };
 
-  // Initialize Quill Editors
-  const quillConfig = {
-      theme: 'snow',
-      scrollingContainer: '.editor-scroller',
-      modules: { toolbar: false, keyboard: { bindings: customBindings }, imageResize: { displaySize: true } }
-  };
+  // Initialize Quill Editors (에러 방어 로직 적용)
+  if (typeof Quill !== 'undefined') {
+    const quillConfig = {
+        theme: 'snow',
+        scrollingContainer: '.editor-scroller',
+        modules: { toolbar: false, keyboard: { bindings: window.customBindings }, imageResize: { displaySize: true } }
+    };
+    
+    quillQ = new Quill('#editor-question', { ...quillConfig, placeholder: '문제 본문을 작성하거나 이미지를 붙여넣으세요...' });
+    quillS = new Quill('#editor-solution', { ...quillConfig, placeholder: '정답 및 상세 풀이를 작성하세요...' });
+    quillK = new Quill('#editor-keypoint', { ...quillConfig, placeholder: '암기법, 공식, 핵심 키워드...' });
+    
+    quillQ.root.setAttribute('spellcheck', false);
+    quillS.root.setAttribute('spellcheck', false);
+    quillK.root.setAttribute('spellcheck', false);
+    
+    document.querySelector('#editor-question .ql-editor').classList.add('q-editor');
+    document.querySelector('#editor-solution .ql-editor').classList.add('s-editor');
+    document.querySelector('#editor-keypoint .ql-editor').classList.add('k-editor');
+  } else {
+    // 에디터 영역에 에러 메시지 표시
+    const errorMsg = "<div style='color:red; padding:20px;'>오프라인 라이브러리(Quill)를 찾을 수 없어 에디터를 로드하지 못했습니다.</div>";
+    document.getElementById('editor-question').innerHTML = errorMsg;
+    document.getElementById('editor-solution').innerHTML = errorMsg;
+    document.getElementById('editor-keypoint').innerHTML = errorMsg;
+  }
   
-  quillQ = new Quill('#editor-question', { ...quillConfig, placeholder: '문제 본문을 작성하거나 이미지를 붙여넣으세요...' });
-  quillS = new Quill('#editor-solution', { ...quillConfig, placeholder: '정답 및 상세 풀이를 작성하세요...' });
-  quillK = new Quill('#editor-keypoint', { ...quillConfig, placeholder: '암기법, 공식, 핵심 키워드...' });
-  
-  quillQ.root.setAttribute('spellcheck', false);
-  quillS.root.setAttribute('spellcheck', false);
-  quillK.root.setAttribute('spellcheck', false);
-  
-  document.querySelector('#editor-question .ql-editor').classList.add('q-editor');
-  document.querySelector('#editor-solution .ql-editor').classList.add('s-editor');
-  document.querySelector('#editor-keypoint .ql-editor').classList.add('k-editor');
+  // 기타 라이브러리 로드 상태 체크 (디버깅 용이)
+  if (typeof html2canvas === 'undefined') console.warn("html2canvas가 로드되지 않았습니다.");
+  if (typeof ExcelJS === 'undefined') console.warn("ExcelJS가 로드되지 않았습니다.");
+  if (typeof window.jspdf === 'undefined') console.warn("jsPDF가 로드되지 않았습니다.");
 
   // =========================================================================
   // [추가된 부분] 텍스트 입력 시 특정 기호를 화면에 보이는 형태(→)로 자동 치환
   // =========================================================================
   const setupAutoReplace = (quillInstance) => {
+      if (!quillInstance) return;
       quillInstance.on('text-change', (delta, oldDelta, source) => {
           // 사용자가 직접 입력/붙여넣기 했을 때만 동작
           if (source !== 'user') return;
@@ -1051,7 +1078,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // 데이터 관리 - 일괄 체크 해제 추가
   $("btn-uncheck-all").onclick = async () => {
       const list = getFilteredSortedList();
-      const checkedList = list.filter(t => t.status === "체크완료");
+      const checkedList = list.filter(t => t.status === "체크");
       if(checkedList.length === 0) {
           App.toast("현재 목록에 해제할 체크 항목이 없습니다.");
           return;
@@ -1090,44 +1117,60 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
       
       btnFilterUnchecked.classList.toggle("active-filter", App.state.statusFilter === "미체크");
-      btnFilterChecked.classList.toggle("active-filter", App.state.statusFilter === "체크완료");
+      btnFilterChecked.classList.toggle("active-filter", App.state.statusFilter === "체크");
       
       renderList();
   }
 
   btnFilterUnchecked.onclick = () => toggleStatusFilter("미체크");
-  btnFilterChecked.onclick = () => toggleStatusFilter("체크완료");
+  btnFilterChecked.onclick = () => toggleStatusFilter("체크");
 
   // Status Toggle Logic
   function renderStatusButton(status, btnElement) {
       const btn = btnElement || els.statusBtn;
-      const isChecked = status === "체크완료";
-      btn.dataset.status = isChecked ? "체크완료" : "미체크";
+      const isChecked = status === "체크";
+      btn.dataset.status = isChecked ? "체크" : "미체크";
       btn.innerHTML = isChecked 
-          ? '<i class="fas fa-check-circle"></i> 체크완료' 
+          ? '<i class="fas fa-check-circle"></i> 체크' 
           : '<i class="far fa-circle"></i> 미체크';
   }
 
-  els.statusBtn.onclick = () => {
+  els.statusBtn.onclick = async () => {
       const current = els.statusBtn.dataset.status;
-      const next = current === "미체크" ? "체크완료" : "미체크";
+      const next = current === "미체크" ? "체크" : "미체크";
       renderStatusButton(next);
 
-	  // 별도의 저장 버튼 클릭 없이 변경된 체크 상태를 바로 저장 반영
-      // (단, 문제 번호가 입력되어 있어야 DB 저장이 가능함)
-      if (els.number.value.trim() !== "") {
-          saveCurrent();    
-	  }    
+      // 별도의 저장 버튼 클릭 없이 변경된 체크 상태를 바로 저장 반영
+      if (App.state.editingId) {
+          // 오프라인/에디터 미로드 상태라도 DB의 상태만 즉시 업데이트
+          const currentTest = App.state.tests.find(x => x.id === App.state.editingId);
+          if (currentTest) {
+              currentTest.status = next;
+              await App.putTest(currentTest);
+              App.state.tests = await App.getAllTests();
+              renderList();
+              // UI 유지를 위해 불필요한 토스트 생략
+          }
+      } else if (els.number.value.trim() !== "") {
+          // 신규 항목인 경우 번호가 있을 때 전체 저장
+          if (typeof quillQ !== 'undefined' && quillQ) {
+              saveCurrent();    
+          }
+      }    
   };
 
   function updateStats() {
-      // 덤프 필터에 따라 해당 덤프의 상태값만 카운팅
+      // 덤프 및 챕터 필터에 따라 상태값 카운팅
       let tests = App.state.tests;
       if (App.state.dumpFilter) {
           tests = tests.filter(t => (t.dumpName||"").trim() === App.state.dumpFilter);
       }
+      if (App.state.chapterFilter) {
+          tests = tests.filter(t => (t.chapter||"").trim() === App.state.chapterFilter);
+      }
+      
       els.cntUnchecked.textContent = tests.filter(t => (t.status || "미체크") === "미체크").length;
-      els.cntChecked.textContent = tests.filter(t => t.status === "체크완료").length;
+      els.cntChecked.textContent = tests.filter(t => t.status === "체크").length;
   }
   
   function renderDumpFilter() {
@@ -1208,7 +1251,7 @@ document.addEventListener("DOMContentLoaded", async () => {
        
        let statusClass = "st-unchecked";
        let statusIcon = '<i class="far fa-circle"></i>';
-       if(t.status === "체크완료") {
+       if(t.status === "체크") {
            statusClass = "st-checked";
            statusIcon = '<i class="fas fa-check-circle" style="color:#10b981;"></i>';
        }
@@ -1252,9 +1295,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     els.number.value = t.number || "";
     renderStatusButton(t.status || "미체크");
     
-    quillQ.root.innerHTML = App.renderHtml(t.question);
-    quillS.root.innerHTML = App.renderHtml(t.solution);
-    quillK.root.innerHTML = App.renderHtml(t.keypoint);
+    if (quillQ && quillS && quillK) {
+        quillQ.root.innerHTML = App.renderHtml(t.question);
+        quillS.root.innerHTML = App.renderHtml(t.solution);
+        quillK.root.innerHTML = App.renderHtml(t.keypoint);
+    }
 
     currentFiles = [];
     for(let i=1; i<=10; i++){
@@ -1289,9 +1334,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     
     renderStatusButton("미체크");
-    quillQ.root.innerHTML = "";
-    quillS.root.innerHTML = "";
-    quillK.root.innerHTML = "";
+    
+    if (quillQ && quillS && quillK) {
+        quillQ.root.innerHTML = "";
+        quillS.root.innerHTML = "";
+        quillK.root.innerHTML = "";
+    }
     
     renderFiles();
     renderList();
@@ -1303,6 +1351,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const chapter = els.chapter.value.trim();
     const number = els.number.value.trim();
     if(!number) { App.toast("문제 번호를 입력하세요."); els.number.focus(); return; }
+    if (!quillQ) { App.toast("에디터가 로드되지 않아 저장할 수 없습니다."); return; }
 
     const isNew = !App.state.editingId;
     const id = isNew ? App.uid() : App.state.editingId;
@@ -1412,7 +1461,7 @@ document.addEventListener("DOMContentLoaded", async () => {
          e.stopPropagation(); // 이벤트 전파 방지
          
          // 문제 내용 에디터 내부에 있을 경우
-         if (activeElement && activeElement.closest('#editor-question')) {
+         if (quillQ && activeElement && activeElement.closest('#editor-question')) {
              const reader = new FileReader();
              reader.onload = (event) => {
                  // 커서 위치 가져오기 (커서가 명확하지 않으면 맨 끝에 삽입)
@@ -1463,6 +1512,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // === PDF GENERATION HELPER ===
   async function generatePDFFromElement(element, pdf, isFirstPage, fileName) {
+      if(typeof html2canvas === 'undefined' || typeof window.jspdf === 'undefined') {
+          App.toast("오프라인 모드에서는 PDF 변환 라이브러리를 로드해야 합니다.");
+          throw new Error("Missing PDF libraries");
+      }
+      
       element.classList.add('printing-mode');
       const inputs = element.querySelectorAll('input, select');
       const tempSpans = [];
@@ -1581,6 +1635,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   
   $("btn-export").onclick = async () => {
     if(!App.state.tests.length) return App.toast("데이터가 없습니다.");
+    if(typeof ExcelJS === 'undefined') return App.toast("오프라인 모드: ExcelJS 라이브러리를 로드하지 못했습니다.");
+    
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet("DumpData");
     const imgWs = wb.addWorksheet("_IMGDATA"); imgWs.state = "veryHidden";
@@ -1632,6 +1688,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("xlsxFile").onchange = async (e) => {
      const f = e.target.files[0];
      if(!f) return;
+     if(typeof ExcelJS === 'undefined') return App.toast("오프라인 모드: ExcelJS 라이브러리를 로드하지 못했습니다.");
+     
      try {
        App.toast("파일을 읽는 중입니다...");
        const wb = new ExcelJS.Workbook();
@@ -1896,7 +1954,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       const blob = new Blob([content], { type: mimeType });
       const a_tag = document.createElement('a'); 
       a_tag.href = URL.createObjectURL(blob); 
-      a_tag.download = `${filename}_${type === 'anki' ? 'Anki' : 'Brainscape'}.${extension}`; 
+      a_tag.download = `${filename}_${type === 'anki' ? 'Anki' : 'Brainscape'}.${extension}`;
       a_tag.click();
       
       App.toast(`${type === 'anki' ? 'Anki' : 'Brainscape'} 저장 완료`);
@@ -1999,6 +2057,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   };
 
   $("btn-execute-replace").onclick = () => {
+      if(!quillQ) return;
       const before = $("replace-before").value;
       const after = $("replace-after").value;
 
