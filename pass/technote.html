@@ -97,10 +97,60 @@ header .brand i { font-size: 22px; color: var(--accent); }
 .ql-editor img:hover { opacity: 0.85; outline: 2px solid var(--primary); outline-offset: 2px; }
 .ql-editor img.img-highlight { outline: 4px solid #FDBA74 !important; outline-offset: 2px !important; }
 
-.quill-raw-table { margin: 1.5rem 0; width: 100%; overflow-x: auto; border-radius: var(--radius-md); box-shadow: 0 0 0 1px var(--border); background: #fff; }
-.quill-raw-table table { border-collapse: collapse !important; width: 100%; margin: 0; font-size: 13px; color: var(--text-main); text-align: left; }
-.quill-raw-table th, .quill-raw-table td { border: 1px solid var(--border); padding: 8px 12px; }
-.quill-raw-table thead th, .quill-raw-table th { background-color: #f8fafc; font-weight: 600; }
+/* ==============================================================
+   완벽한 둥근 테두리 표 CSS (Quill의 렌더링 버그 원천 차단)
+   ============================================================== */
+.quill-raw-table {
+    margin: 1.5rem 0;
+    width: 100%;
+    overflow-x: auto;
+    background: transparent;
+    border: none;
+    padding: 0;
+}
+
+.quill-raw-table table {
+    border-collapse: separate !important;
+    border-spacing: 0;
+    width: 100%;
+    min-width: 100%;
+    margin: 0;
+    font-size: var(--editor-font-size) !important;
+    line-height: 1.7 !important;
+    color: var(--text-main);
+    text-align: left;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+}
+
+.quill-raw-table th, .quill-raw-table td {
+    border-bottom: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    padding: 8px 12px;
+}
+
+.quill-raw-table tr th:last-child,
+.quill-raw-table tr td:last-child {
+    border-right: none;
+}
+.quill-raw-table tr:last-child th,
+.quill-raw-table tr:last-child td {
+    border-bottom: none;
+}
+
+.quill-raw-table thead th, .quill-raw-table th {
+    background-color: #f8fafc;
+    font-weight: 600;
+}
+.quill-raw-table tr:first-child th:first-child,
+.quill-raw-table tr:first-child td:first-child { border-top-left-radius: 9px; }
+.quill-raw-table tr:first-child th:last-child,
+.quill-raw-table tr:first-child td:last-child { border-top-right-radius: 9px; }
+.quill-raw-table tr:last-child th:first-child,
+.quill-raw-table tr:last-child td:first-child { border-bottom-left-radius: 9px; }
+.quill-raw-table tr:last-child th:last-child,
+.quill-raw-table tr:last-child td:last-child { border-bottom-right-radius: 9px; }
 
 .custom-img-toolbar { position: absolute; display: flex; align-items: center; gap: 4px; background: #fff; border: 1px solid var(--border); padding: 4px; border-radius: 6px; box-shadow: var(--shadow-md); z-index: 100; transition: opacity 0.2s; }
 
@@ -366,7 +416,7 @@ class RawTableBlot extends BlockEmbed {
     static create(value) {
         const node = super.create();
         node.innerHTML = value;
-        node.setAttribute('contenteditable', 'false'); 
+        node.setAttribute('contenteditable', 'true'); 
         return node;
     }
     static value(node) {
@@ -668,6 +718,7 @@ const App = {
             quillNote.clipboard.addMatcher(tag, fakeListMatcher);
         });
 
+        // LaTeX 수식 기호 변환 기능 추가 (복사/붙여넣기 시 특수기호 깨짐 방지)
         const replaceLatexArrowsMatcher = function(node, delta) {
             delta.ops.forEach(op => {
                 if (typeof op.insert === 'string') {
@@ -683,7 +734,21 @@ const App = {
                         .replace(/\$\s*\\Leftrightarrow\s*\$/g, '⇔')
                         .replace(/\\Leftrightarrow\b/g, '⇔')
                         .replace(/\$\s*\\leftrightarrow\s*\$/g, '↔')
-                        .replace(/\\leftrightarrow\b/g, '↔');
+                        .replace(/\\leftrightarrow\b/g, '↔')
+                        // 수학/그리스 문자 및 형식 변환 추가
+                        .replace(/\\times\b/g, '×')
+                        .replace(/\\mu\b/g, 'μ')
+                        .replace(/\\alpha\b/g, 'α')
+                        .replace(/\\beta\b/g, 'β')
+                        .replace(/\\gamma\b/g, 'γ')
+                        .replace(/\\theta\b/g, 'θ')
+                        .replace(/\\pi\b/g, 'π')
+                        .replace(/\\sigma\b/g, 'σ')
+                        .replace(/\\Delta\b/g, 'Δ')
+                        .replace(/\\lambda\b/g, 'λ')
+                        .replace(/\\omega\b/g, 'ω')
+                        .replace(/\\text\{([^}]+)\}/g, '$1')
+                        .replace(/\$/g, '');
                 }
             });
             return delta;
@@ -788,11 +853,79 @@ const App = {
                 }
             }
 
-            if(isCmdCtrl && !isAlt && e.key.toLowerCase() === 's') { e.preventDefault(); this.save(); return; }
-            if(isCmdCtrl && isAlt && e.key.toLowerCase() === 'n') { e.preventDefault(); this.formNew(); return; }
+            // 전역 저장/신규 단축키 (IME 한글 입력 상태 대비 e.code 추가 확인)
+            const keyS = e.key.toLowerCase() === 's' || e.code === 'KeyS';
+            const keyN = e.key.toLowerCase() === 'n' || e.code === 'KeyN';
+            
+            if(isCmdCtrl && !isAlt && keyS) { e.preventDefault(); this.save(); return; }
+            if(isCmdCtrl && isAlt && keyN) { e.preventDefault(); this.formNew(); return; }
 
-            if (!isCmdCtrl && isAlt && e.key.toLowerCase() === 'n') {
+            // ==========================================
+            // 표(Table) 내부 편집 시 전용 단축키 가로채기 (Native 브라우저 API 활용)
+            // ==========================================
+            const sel = window.getSelection();
+            let activeTable = null;
+            if (sel.rangeCount > 0) {
+                let node = sel.anchorNode;
+                if (node && node.nodeType === 3) node = node.parentNode; // 텍스트 노드인 경우 부모 노드 추적
+                if (node && node.closest) activeTable = node.closest('.quill-raw-table');
+            }
+
+            const keyB = e.key.toLowerCase() === 'b' || e.code === 'KeyB';
+            const keyR = e.key.toLowerCase() === 'r' || e.code === 'KeyR';
+            const keyX = e.key.toLowerCase() === 'x' || e.code === 'KeyX';
+            const keyL = e.key.toLowerCase() === 'l' || e.code === 'KeyL';
+
+            if (activeTable) {
+                // 표 내부 - 취소선 (Ctrl+0)
+                if (isCmdCtrl && !isAlt && !e.shiftKey && e.key === '0') {
+                    e.preventDefault(); document.execCommand('strikeThrough', false, null); return;
+                }
+                // 표 내부 - 굵게 (Ctrl+B)
+                if (isCmdCtrl && !isAlt && !e.shiftKey && keyB) {
+                    e.preventDefault(); document.execCommand('bold', false, null); return;
+                }
+                // 표 내부 - 빨강 글씨 (Ctrl+Alt+R)
+                if (isCmdCtrl && isAlt && !e.shiftKey && keyR) {
+                    e.preventDefault(); document.execCommand('styleWithCSS', false, true); document.execCommand('foreColor', false, 'red'); return;
+                }
+                // 표 내부 - 파랑 글씨 (Ctrl+Alt+B)
+                if (isCmdCtrl && isAlt && !e.shiftKey && keyB) {
+                    e.preventDefault(); document.execCommand('styleWithCSS', false, true); document.execCommand('foreColor', false, 'blue'); return;
+                }
+                // 표 내부 - 서식 지우기 (Ctrl+Shift+X)
+                if (isCmdCtrl && !isAlt && e.shiftKey && keyX) {
+                    e.preventDefault(); document.execCommand('removeFormat', false, null); return;
+                }
+                // 표 내부 - 배경 형광펜 (Ctrl + 1~7)
+                if (isCmdCtrl && !isAlt && !e.shiftKey && /^[1-7]$/.test(e.key)) {
+                    e.preventDefault();
+                    const colors = {'1':'#ffedd5', '2':'#e0f2fe', '3':'#fef08a', '4':'#dcfce7', '5':'#fce7f3', '6':'#e6d5c3', '7':'#e5e7eb'};
+                    document.execCommand('styleWithCSS', false, true);
+                    document.execCommand('backColor', false, colors[e.key]);
+                    document.execCommand('hiliteColor', false, colors[e.key]);
+                    return;
+                }
+            }
+
+            // 두음 강조 (Alt+N: 남색 바탕 + 흰글씨 + 굵게)
+            if (!isCmdCtrl && isAlt && keyN) {
                 e.preventDefault();
+                if (activeTable) {
+                    const currentBg = document.queryCommandValue('backColor');
+                    if (currentBg === 'rgb(13, 58, 158)' || currentBg === '#0d3a9e') {
+                        document.execCommand('removeFormat', false, null);
+                    } else {
+                        document.execCommand('styleWithCSS', false, true);
+                        document.execCommand('backColor', false, '#0d3a9e');
+                        document.execCommand('hiliteColor', false, '#0d3a9e');
+                        document.execCommand('foreColor', false, '#ffffff');
+                        document.execCommand('bold', false, null);
+                    }
+                    return;
+                }
+                
+                // 표 바깥 (Quill 에디터 처리 영역)
                 let activeQuill = null;
                 if(quillBody && quillBody.hasFocus()) activeQuill = quillBody;
                 else if(quillNote && quillNote.hasFocus()) activeQuill = quillNote;
@@ -811,8 +944,24 @@ const App = {
                 return;
             }
 
-            if (!isCmdCtrl && isAlt && e.key.toLowerCase() === 'l') {
+            // 두음 강조 (Alt+L: 초록 바탕 + 흰글씨 + 굵게)
+            if (!isCmdCtrl && isAlt && keyL) {
                 e.preventDefault();
+                if (activeTable) {
+                    const currentBg = document.queryCommandValue('backColor');
+                    if (currentBg === 'rgb(41, 110, 1)' || currentBg === '#296e01') {
+                        document.execCommand('removeFormat', false, null);
+                    } else {
+                        document.execCommand('styleWithCSS', false, true);
+                        document.execCommand('backColor', false, '#296E01');
+                        document.execCommand('hiliteColor', false, '#296E01');
+                        document.execCommand('foreColor', false, '#ffffff');
+                        document.execCommand('bold', false, null);
+                    }
+                    return;
+                }
+                
+                // 표 바깥 (Quill 에디터 처리 영역)
                 let activeQuill = null;
                 if(quillBody && quillBody.hasFocus()) activeQuill = quillBody;
                 else if(quillNote && quillNote.hasFocus()) activeQuill = quillNote;
