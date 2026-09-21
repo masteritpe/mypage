@@ -524,7 +524,7 @@
           <i class="fas fa-save"></i> 저장
         </button>
         
-        <!-- 프롬프트 영역 (상단 UI 간소화, 복사 및 수정 버튼만 제공) -->
+        <!-- 프롬프트 영역 (상단 UI 간소화, 복사 및 수정 버튼만 제공 + 진척율 추가) -->
         <div style="display: flex; align-items: center; gap: 8px; margin-left: 12px; padding-left: 12px; border-left: 2px solid #e5e7eb;">
           <button class="btn" id="btn-copy-prompt" title="프롬프트 복사" style="height: 34px; padding: 0 12px; font-size: 13px; font-weight: 600; white-space: nowrap; color: #4f46e5; border-color: #c7d2fe; background: #eef2ff;">
             <i class="far fa-copy"></i> 프롬프트 복사
@@ -532,6 +532,12 @@
           <button class="btn" onclick="window.openPromptModal()" title="프롬프트 수정" style="height: 34px; padding: 0 12px; font-size: 13px; font-weight: 600; white-space: nowrap; color: #4b5563;">
             <i class="fas fa-edit"></i> 수정
           </button>
+          
+          <!-- 일일 진척율 표시 영역 -->
+          <div id="daily-progress-container" style="display: flex; align-items: center; gap: 6px; margin-left: 8px; padding-left: 8px; border-left: 1px dashed #d1d5db; font-size: 13px; font-weight: 600; color: #374151;">
+              <i class="fas fa-chart-line" style="color: var(--success);"></i> 
+              <span title="금일 체크 수 / 목표 수">진척율: <span id="daily-progress-text">0% (0/50)</span></span>
+          </div>
         </div>
       </div>
       <div>
@@ -655,7 +661,7 @@
             <li><b>글자 확대/축소:</b> Ctrl + ➕ / ➖</li>
             <li><b>이미지 크게 보기:</b> 에디터 또는 첨부파일 내 이미지 <b>더블클릭</b></li>
             <li><b>에디터 굵게:</b> Ctrl + B</li>
-            <li><b>에디터 서식:</b> 취소선(Ctrl+0) | 빨강(Ctrl+Alt+R) | 파랑(Ctrl+Alt+B)</li>
+            <li><b>에디터 서식:</b> 취소선(Ctrl+0) | 빨강(Alt+1) | 파랑(Alt+2) | 초록(Alt+3)</li>
             <li><b>컬러 형광펜:</b> 주황(1) 파랑(2) 노랑(3) 녹색(4) 분홍(5) 갈색(6) 회색(7) <span style="font-size:11px;color:gray;">*Ctrl과 함께</span></li>
             <li><b>이미지 강조(테두리):</b> 에디터 내 이미지 클릭 시 나타나는 플로팅 메뉴 사용</li>
             <li><b>서식 지우기:</b> Ctrl + Shift + X</li>
@@ -678,6 +684,11 @@
         <div style="margin-top:16px;">
             <label style="font-size:13px; font-weight:700; color:#4b5563; display:block; margin-bottom:8px;">기본 챕터번호 설정</label>
             <input type="text" id="settings-chapter" class="search-input" style="width:100%; font-size:14px; padding:10px;" placeholder="예: 01">
+        </div>
+        <!-- 일일 목표 수량 설정 추가 -->
+        <div style="margin-top:16px;">
+            <label style="font-size:13px; font-weight:700; color:#4b5563; display:block; margin-bottom:8px;">일일 목표 문제 수</label>
+            <input type="number" id="settings-daily-goal" class="search-input" style="width:100%; font-size:14px; padding:10px;" placeholder="예: 50" min="1">
         </div>
         <p style="font-size:11px; color:#9ca3af; margin-top:12px;">* 설정한 DUMP명과 챕터번호는 <b>'신규 문제'</b> 및 <b>'MD 불러오기'</b>를 실행할 때 기본값으로 세팅됩니다. 기존 문제의 정보는 에디터 상단에서 직접 수정할 수 있습니다.</p>
         
@@ -795,7 +806,6 @@
   let db = null;
 
   window.App = {
-    // statusFilter 상태값 추가
     state: { tests: [], editingId: null, dumpFilter: "", chapterFilter: "", search: "", statusFilter: "" },
     openDB: function(){
       return new Promise((resolve,reject)=>{
@@ -818,6 +828,13 @@
     getImageBlob: function(id){ if(!id)return Promise.resolve(null); return new Promise((res)=>{ const r=this.tx("images").get(id); r.onsuccess=()=>res(r.result?r.result.blob:null); }); },
     uid: () => "Q"+Math.random().toString(36).slice(2,8).toUpperCase(),
     nowISO: () => new Date().toISOString(),
+    
+    // 로컬 타임존 기반 오늘 날짜 문자열 반환 YYYY-MM-DD
+    getTodayStr: () => {
+        const d = new Date();
+        const tzOffset = d.getTimezoneOffset() * 60000;
+        return (new Date(d - tzOffset)).toISOString().slice(0, 10);
+    },
 
     toast: (msg) => {
       const area = document.getElementById("toast-area");
@@ -825,7 +842,6 @@
       el.className = "toast";
       el.textContent = msg;
       area.appendChild(el);
-      // 유지 시간 1초(1000ms)로 변경
       setTimeout(()=> el.remove(), 1000);
     },
     htmlDecode: (s) => String(s).replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&').replace(/&quot;/g,'"'),
@@ -850,7 +866,6 @@
 // 2. Quill.js Setup & Extensions
 // ==========================================
 
-// 5. 실행 스크립트 (에러 방어 코드 적용) - Quill 클래스 존재 여부 체크
 if (typeof Quill !== 'undefined') {
   const BaseImageFormat = Quill.import('formats/image');
   class ImageFormat extends BaseImageFormat {
@@ -882,8 +897,9 @@ if (typeof Quill !== 'undefined') {
   
   const customBindings = {
       customStrike: { key: '0', shortKey: true, handler: function(r, c) { this.quill.format('strike', !c.format.strike); } },
-      customRed: { key: 'R', shortKey: true, altKey: true, handler: function(r, c) { this.quill.format('color', c.format.color === 'red' ? false : 'red'); } },
-      customBlue: { key: 'B', shortKey: true, altKey: true, handler: function(r, c) { this.quill.format('color', c.format.color === 'blue' ? false : 'blue'); } },
+      customRed: { key: '1', altKey: true, handler: function(r, c) { this.quill.format('color', c.format.color === 'red' ? false : 'red'); } },
+      customBlue: { key: '2', altKey: true, handler: function(r, c) { this.quill.format('color', c.format.color === 'blue' ? false : 'blue'); } },
+      customGreen: { key: '3', altKey: true, handler: function(r, c) { this.quill.format('color', c.format.color === 'green' ? false : 'green'); } },
       customClear: { key: 'X', shortKey: true, shiftKey: true, handler: function(r, c) { 
           if (r.length > 0) this.quill.removeFormat(r.index, r.length); 
           else { const f = this.quill.getFormat(r); for (let k in f) this.quill.format(k, false); }
@@ -898,15 +914,14 @@ if (typeof Quill !== 'undefined') {
       customList: { key: 'L', shortKey: true, handler: function(r, c) { this.quill.format('list', 'bullet'); } }
   };
   
-  // Custom bindings 변수를 window 객체에 할당하여 에러 방지
   window.customBindings = customBindings;
 } else {
-    console.error("오프라인 모드: Quill 라이브러리를 로드하지 못했습니다. 로컬 파일 경로를 확인하세요.");
+    console.error("오프라인 모드: Quill 라이브러리를 로드하지 못했습니다.");
 }
 
 let quillQ, quillS, quillK;
 let activeTargetImage = null;
-let currentEditorFontSize = 17; /* Default to match CSS var */
+let currentEditorFontSize = 17;
 let currentFiles = [];
 
 // ==========================================
@@ -928,7 +943,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     imgCount: $("img-count")
   };
 
-  // Initialize Quill Editors (에러 방어 로직 적용)
+  // Initialize Quill Editors
   if (typeof Quill !== 'undefined') {
     const quillConfig = {
         theme: 'snow',
@@ -948,29 +963,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.querySelector('#editor-solution .ql-editor').classList.add('s-editor');
     document.querySelector('#editor-keypoint .ql-editor').classList.add('k-editor');
   } else {
-    // 에디터 영역에 에러 메시지 표시
     const errorMsg = "<div style='color:red; padding:20px;'>오프라인 라이브러리(Quill)를 찾을 수 없어 에디터를 로드하지 못했습니다.</div>";
     document.getElementById('editor-question').innerHTML = errorMsg;
     document.getElementById('editor-solution').innerHTML = errorMsg;
     document.getElementById('editor-keypoint').innerHTML = errorMsg;
   }
   
-  // 기타 라이브러리 로드 상태 체크 (디버깅 용이)
   if (typeof html2canvas === 'undefined') console.warn("html2canvas가 로드되지 않았습니다.");
   if (typeof ExcelJS === 'undefined') console.warn("ExcelJS가 로드되지 않았습니다.");
   if (typeof window.jspdf === 'undefined') console.warn("jsPDF가 로드되지 않았습니다.");
 
-  // =========================================================================
-  // [추가된 부분] 텍스트 입력 시 특정 기호를 화면에 보이는 형태(→)로 자동 치환
-  // =========================================================================
   const setupAutoReplace = (quillInstance) => {
       if (!quillInstance) return;
       quillInstance.on('text-change', (delta, oldDelta, source) => {
-          // 사용자가 직접 입력/붙여넣기 했을 때만 동작
           if (source !== 'user') return;
-          
           let text = quillInstance.getText();
-          // -> 와 $\rightarrow$ 를 매칭
           let regex = /(->|\$\\rightarrow\$)/;
           let match = regex.exec(text);
           
@@ -979,11 +986,9 @@ document.addEventListener("DOMContentLoaded", async () => {
               const currentIndex = match.index;
               const length = match[0].length;
               
-              // 텍스트를 지우고 화살표로 치환
               quillInstance.deleteText(currentIndex, length, 'api');
               quillInstance.insertText(currentIndex, '→', 'api');
               
-              // 치환 후 커서 위치 자연스럽게 보정
               if (selection) {
                   let newPos = selection.index;
                   if (selection.index >= currentIndex + length) {
@@ -991,7 +996,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                   }
                   quillInstance.setSelection(newPos, selection.length, 'api');
               }
-              // 다음 치환할 기호가 있는지 갱신된 텍스트로 재검색
               text = quillInstance.getText();
               match = regex.exec(text);
           }
@@ -1001,9 +1005,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   setupAutoReplace(quillQ);
   setupAutoReplace(quillS);
   setupAutoReplace(quillK);
-  // =========================================================================
 
-  // Image Floating Toolbar Setup
   const imgToolbar = $("img-toolbar");
   const btnHl = $("btn-hl-img");
   const btnClr = $("btn-clr-img");
@@ -1048,7 +1050,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
   };
 
-  // Global Image Double Click Viewer
   document.addEventListener('dblclick', function(e) {
       if (e.target.tagName === 'IMG' && (e.target.closest('.ql-editor') || e.target.closest('.img-card'))) {
           $("imageViewerImg").src = e.target.src;
@@ -1062,20 +1063,25 @@ document.addEventListener("DOMContentLoaded", async () => {
       setTimeout(() => { $("imageViewerImg").src = ''; }, 200); 
   };
 
-  // 환경설정(기본 덤프명, 챕터) 초기 세팅
+  // 환경설정(기본 덤프명, 챕터, 일일 목표수량) 초기 세팅
   $("settings-dump-name").value = localStorage.getItem("dumpstudy_dump_name") || "";
   $("settings-chapter").value = localStorage.getItem("dumpstudy_chapter") || "";
+  $("settings-daily-goal").value = localStorage.getItem("dumpstudy_daily_goal") || "50";
 
   $("btn-save-settings").onclick = () => {
       const dumpVal = $("settings-dump-name").value.trim();
       const chapVal = $("settings-chapter").value.trim();
+      const goalVal = $("settings-daily-goal").value.trim() || "50";
+
       localStorage.setItem("dumpstudy_dump_name", dumpVal);
       localStorage.setItem("dumpstudy_chapter", chapVal);
+      localStorage.setItem("dumpstudy_daily_goal", goalVal);
+      
       $("settings-modal").style.display = 'none';
+      updateProgress();
       App.toast("환경설정이 저장되었습니다.");
   };
 
-  // 데이터 관리 - 일괄 체크 해제 추가
   $("btn-uncheck-all").onclick = async () => {
       const list = getFilteredSortedList();
       const checkedList = list.filter(t => t.status === "체크");
@@ -1088,6 +1094,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       App.toast("일괄 체크 해제 중...");
       const updatePromises = checkedList.map(t => {
           t.status = "미체크";
+          t.checkDate = ""; // 일괄 초기화 시 당일 체크 날짜도 제거
           return App.putTest(t);
       });
       
@@ -1095,6 +1102,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       
       App.state.tests = await App.getAllTests();
       renderList();
+      updateProgress();
       
       if (App.state.editingId) {
           const currentTest = App.state.tests.find(x => x.id === App.state.editingId);
@@ -1105,15 +1113,37 @@ document.addEventListener("DOMContentLoaded", async () => {
       $("settings-modal").style.display = 'none';
   };
 
-  // 상태 뱃지 클릭 필터링 이벤트 추가
+  // === 진척율 계산 및 업데이트 ===
+  function updateProgress() {
+      const today = App.getTodayStr();
+      const goal = parseInt(localStorage.getItem("dumpstudy_daily_goal") || "50", 10);
+      
+      const todayCheckedCount = App.state.tests.filter(t => t.status === "체크" && t.checkDate === today).length;
+      
+      let percentage = 0;
+      if (goal > 0) {
+          percentage = Math.floor((todayCheckedCount / goal) * 100);
+      }
+      
+      const progressText = $("daily-progress-text");
+      if (progressText) {
+          progressText.textContent = `${percentage}% (${todayCheckedCount}/${goal})`;
+          if (percentage >= 100) {
+              progressText.style.color = "var(--success)";
+          } else {
+              progressText.style.color = "#374151"; // 기본 색상 복귀
+          }
+      }
+  }
+
   const btnFilterUnchecked = $("filter-unchecked");
   const btnFilterChecked = $("filter-checked");
 
   function toggleStatusFilter(targetStatus) {
       if(App.state.statusFilter === targetStatus) {
-          App.state.statusFilter = ""; // 이미 활성화된 상태에서 한 번 더 누르면 필터 해제
+          App.state.statusFilter = "";
       } else {
-          App.state.statusFilter = targetStatus; // 해당 상태로 필터 적용
+          App.state.statusFilter = targetStatus;
       }
       
       btnFilterUnchecked.classList.toggle("active-filter", App.state.statusFilter === "미체크");
@@ -1125,7 +1155,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   btnFilterUnchecked.onclick = () => toggleStatusFilter("미체크");
   btnFilterChecked.onclick = () => toggleStatusFilter("체크");
 
-  // Status Toggle Logic
   function renderStatusButton(status, btnElement) {
       const btn = btnElement || els.statusBtn;
       const isChecked = status === "체크";
@@ -1140,19 +1169,23 @@ document.addEventListener("DOMContentLoaded", async () => {
       const next = current === "미체크" ? "체크" : "미체크";
       renderStatusButton(next);
 
-      // 별도의 저장 버튼 클릭 없이 변경된 체크 상태를 바로 저장 반영
       if (App.state.editingId) {
-          // 오프라인/에디터 미로드 상태라도 DB의 상태만 즉시 업데이트
           const currentTest = App.state.tests.find(x => x.id === App.state.editingId);
           if (currentTest) {
               currentTest.status = next;
+              
+              if (next === "체크") {
+                  currentTest.checkDate = App.getTodayStr(); // 체크 시 당일 날짜 기록
+              } else {
+                  currentTest.checkDate = ""; // 미체크 시 날짜 기록 제거
+              }
+              
               await App.putTest(currentTest);
               App.state.tests = await App.getAllTests();
               renderList();
-              // UI 유지를 위해 불필요한 토스트 생략
+              updateProgress();
           }
       } else if (els.number.value.trim() !== "") {
-          // 신규 항목인 경우 번호가 있을 때 전체 저장
           if (typeof quillQ !== 'undefined' && quillQ) {
               saveCurrent();    
           }
@@ -1160,7 +1193,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   };
 
   function updateStats() {
-      // 덤프 및 챕터 필터에 따라 상태값 카운팅
       let tests = App.state.tests;
       if (App.state.dumpFilter) {
           tests = tests.filter(t => (t.dumpName||"").trim() === App.state.dumpFilter);
@@ -1187,7 +1219,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   function renderChapterFilter() {
     const sel = $("chapterFilter");
     
-    // 선택된 덤프에 속한 챕터들만 필터링
     let tests = App.state.tests;
     if (App.state.dumpFilter) {
         tests = tests.filter(t => (t.dumpName||"").trim() === App.state.dumpFilter);
@@ -1212,7 +1243,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         if(dumpFilter && (t.dumpName||"").trim() !== dumpFilter) return false;
         if(chapterFilter && (t.chapter||"").trim() !== chapterFilter) return false;
         
-        // 상태 뱃지 클릭 필터 적용
         if(statusFilter) {
             const currentStatus = t.status || "미체크";
             if (currentStatus !== statusFilter) return false;
@@ -1225,7 +1255,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         return true;
       });
       return filtered.sort((a,b) => {
-          // 덤프 정렬 -> 챕터 정렬 -> 번호 정렬
           const dumpA = (a.dumpName || "").toLowerCase();
           const dumpB = (b.dumpName || "").toLowerCase();
           if(dumpA !== dumpB) return dumpA.localeCompare(dumpB, undefined, {numeric: true, sensitivity: 'base'});
@@ -1260,7 +1289,6 @@ document.addEventListener("DOMContentLoaded", async () => {
        const cleanQ = (t.question||"(내용 없음)").replace(/<[^>]+>/g, "").substring(0, 60);
        const imgCount = [1,2,3,4,5,6,7,8,9,10].filter(n=>t[`img${n}Id`]).length;
        
-       // 전체 덤프를 볼 때 덤프명을 표시하여 구분하기 쉽게 함
        const dumpChip = t.dumpName && !App.state.dumpFilter 
             ? `<span class="chip-dump">${t.dumpName}</span>` : '';
        
@@ -1318,7 +1346,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     App.state.editingId = null;
     currentFiles = [];
     
-    // 신규 생성시 환경설정의 덤프명, 챕터 자동 부여
     els.dumpName.value = localStorage.getItem("dumpstudy_dump_name") || "";
     
     const settingChap = localStorage.getItem("dumpstudy_chapter");
@@ -1358,16 +1385,23 @@ document.addEventListener("DOMContentLoaded", async () => {
     
     if(chapter) localStorage.setItem("dumpstudy_last_chap", chapter);
 
+    let existingCheckDate = "";
+    if (!isNew) {
+        const ext = App.state.tests.find(x => x.id === id);
+        if(ext) existingCheckDate = ext.checkDate || "";
+    }
+
     const item = {
       id, ts: App.nowISO(), 
       dumpName, chapter, number, 
       status: els.statusBtn.dataset.status,
+      // 상태가 '체크'일 때 기존에 날짜가 없다면 당일 날짜로 신규 생성
+      checkDate: els.statusBtn.dataset.status === "체크" ? (existingCheckDate || App.getTodayStr()) : "",
       question: quillQ.root.innerHTML, 
       solution: quillS.root.innerHTML, 
       keypoint: quillK.root.innerHTML
     };
 
-    // Save attachment slots 1-10
     for(let i=0; i<10; i++){
        const f = currentFiles[i];
        if(f && f.blob) item[`img${i+1}Id`] = await App.putImageBlob(f.blob);
@@ -1382,6 +1416,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     renderDumpFilter();
     renderChapterFilter();
     renderList(); 
+    updateProgress();
     App.toast("저장되었습니다.");
   }
 
@@ -1394,7 +1429,6 @@ document.addEventListener("DOMContentLoaded", async () => {
           const card = document.createElement("div");
           card.className = "img-card";
 
-          // 거대한 하단 바 대신 깔끔한 삭제 아이콘만 우측 상단에 표시
           card.innerHTML = `
               <div class="img-card-view"><img src="${f.data}" title="IMG #${i+1} (더블클릭하여 확대)"></div>
               <div class="btn-del-img" title="삭제"><i class="fas fa-times"></i></div>`;
@@ -1425,7 +1459,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("btnAddImg").onclick = () => $("globalImgInput").click();
   $("globalImgInput").onchange = (e) => { if(e.target.files[0]) handleFile(e.target.files[0]); e.target.value=""; };
 
-  // 에디터 붙여넣기시 스크롤 튐 방지
   ['paste', 'drop'].forEach(evt => {
       document.addEventListener(evt, (e) => {
           const activeElement = document.activeElement;
@@ -1438,7 +1471,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       }, true);
   });
 
-  // 글로벌 이미지 붙여넣기 제어 (직접 Base64 읽어서 삽입)
   document.addEventListener("paste", (e) => {
      const activeElement = document.activeElement;
      const items = (e.clipboardData || window.clipboardData).items;
@@ -1457,29 +1489,24 @@ document.addEventListener("DOMContentLoaded", async () => {
      }
      
      if (isImagePasted) {
-         e.preventDefault(); // 브라우저 기본 붙여넣기 방지
-         e.stopPropagation(); // 이벤트 전파 방지
+         e.preventDefault(); 
+         e.stopPropagation(); 
          
-         // 문제 내용 에디터 내부에 있을 경우
          if (quillQ && activeElement && activeElement.closest('#editor-question')) {
              const reader = new FileReader();
              reader.onload = (event) => {
-                 // 커서 위치 가져오기 (커서가 명확하지 않으면 맨 끝에 삽입)
                  const range = quillQ.getSelection(true) || { index: quillQ.getLength() };
-                 // 읽어들인 Base64 데이터를 에디터 커서 위치에 바로 Embed
                  quillQ.insertEmbed(range.index, 'image', event.target.result);
-                 quillQ.setSelection(range.index + 1); // 커서를 이미지 뒤로 이동
+                 quillQ.setSelection(range.index + 1); 
              };
              reader.readAsDataURL(imageFile);
              return; 
          }
          
-         // 그 외 (정답, 핵심 해법, 에디터 외부) 영역은 참고 자료에 추가
          handleFile(imageFile);
      }
   }, true); 
 
-  // 글로벌 화면 배율 단축키 무시 처리
   window.addEventListener('keydown', e => {
       const isCmdCtrl = (navigator.platform.toUpperCase().indexOf('MAC') >= 0) ? e.metaKey : e.ctrlKey;
       if (isCmdCtrl) {
@@ -1510,7 +1537,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (isCmdCtrl) e.preventDefault();
   }, { passive: false });
 
-  // === PDF GENERATION HELPER ===
   async function generatePDFFromElement(element, pdf, isFirstPage, fileName) {
       if(typeof html2canvas === 'undefined' || typeof window.jspdf === 'undefined') {
           App.toast("오프라인 모드에서는 PDF 변환 라이브러리를 로드해야 합니다.");
@@ -1734,10 +1760,9 @@ document.addEventListener("DOMContentLoaded", async () => {
        
        ws.eachRow((row, rn) => {
           if(rn===1) return;
-          // Col 1: DumpName, Col 2: Chapter, Col 3: No, Col 4: Status, Col 5: Question, Col 6: Solution, Col 7: KeyPoint, Col 8: RID
           const dName = getCell(row, 1);
           const chap = getCell(row, 2);
-          if(!chap && !dName) return; // 필수값 무시
+          if(!chap && !dName) return; 
           
           const rid = getCell(row, 8);
           const test = {
@@ -1753,7 +1778,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           
           if(imgs) {
              for(let i=1; i<=10; i++){
-                test[`img${i}Id`] = ""; // default
+                test[`img${i}Id`] = ""; 
                 if(imgs[`img${i}`]){
                    try {
                        const parts = String(imgs[`img${i}`]).split(',');
@@ -1785,6 +1810,7 @@ document.addEventListener("DOMContentLoaded", async () => {
        renderDumpFilter();
        renderChapterFilter(); 
        renderList();
+       updateProgress();
        App.toast(`${count}건 가져오기 완료`);
        
      } catch(e) { 
@@ -1815,11 +1841,9 @@ document.addEventListener("DOMContentLoaded", async () => {
          let startNumber = 1;
 
          if (defaultChapter) {
-             // 1-1. 환경설정에 챕터가 지정되어 있으면 해당 챕터 사용 및 이어서 넘버링
              currentChapter = defaultChapter;
              startNumber = parseInt(App.getNextNumber(defaultDumpName, currentChapter), 10);
          } else {
-             // 1-2. 환경설정에 챕터가 없으면 가장 큰 연번 추출하여 신규 챕터 생성
              let maxChap = 0;
              App.state.tests.forEach(t => {
                  if((t.dumpName || "") === defaultDumpName) {
@@ -1835,7 +1859,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
          let questions = [];
          let currentQ = null;
-         let parseState = 'NONE'; // 'QUESTION', 'SOLUTION'
+         let parseState = 'NONE';
 
          for(let i=0; i<lines.length; i++) {
              let line = lines[i].trim();
@@ -1845,7 +1869,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                  if(currentQ) questions.push(currentQ);
                  currentQ = { question: [], solution: [] };
                  parseState = 'QUESTION';
-                 // '## 문제 XX' 같은 제목 라인은 본문에 넣지 않고 건너뜀
                  continue;
              }
              
@@ -1854,13 +1877,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                      parseState = 'SOLUTION';
                  }
                  
-                 // '---' 같은 구분선 라인 제거
                  if(/^-{3,}$/.test(line)) continue;
                  
                  let parsedLine = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
                  
                  if(parseState === 'QUESTION') {
-                     // "질문 22. ", "문제 22. " 등으로 시작하는 텍스트 패턴 제거
                      parsedLine = parsedLine.replace(/^(?:질문|문제)\s*\d+[\.\)]\s*/, '');
                      currentQ.question.push(`<p>${parsedLine}</p>`);
                  } else if (parseState === 'SOLUTION') {
@@ -1904,7 +1925,6 @@ document.addEventListener("DOMContentLoaded", async () => {
      e.target.value = "";
   };
 
-  // === Anki & Brainscape 플래시카드 내보내기 로직 ===
   function toPlainForExport(html) {
       if (!html) return '';
       let s = String(html).replace(/<br\s*\/?>/gi, '\n').replace(/<\/div>/gi, '\n').replace(/<\/p>/gi, '\n');
@@ -1922,12 +1942,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       list.forEach(t => {
           const qPlain = toPlainForExport(t.question);
           
-          // 뒷면: 정답 및 풀이 조합
           let combinedAnswerHtml = (t.solution || '');
           
-          // 핵심 해법에 실제 텍스트가 존재하는지 체크 (<p><br></p> 등 빈 태그 걸러냄)
           if (toPlainForExport(t.keypoint)) {
-              // 풀이가 이미 있으면 줄바꿈 두 번 추가 후 핵심해법 연결
               combinedAnswerHtml += (toPlainForExport(combinedAnswerHtml) ? '<br><br>' : '') + '<strong>[핵심 해법]</strong><br>' + t.keypoint;
           }
           
@@ -1936,12 +1953,10 @@ document.addEventListener("DOMContentLoaded", async () => {
           if (!qPlain && !aPlain) return;
 
           if (type === 'anki') {
-              // Anki용: 줄바꿈을 <br>로 치환하여 탭(\t)으로 앞/뒷면 구분
               const qAnki = qPlain.replace(/\n/g, '<br>');
               const aAnki = aPlain.replace(/\n/g, '<br>');
               content += `${escapeField(qAnki)}\t${escapeField(aAnki)}\n`;
           } else {
-              // Brainscape용: csv 기본 줄바꿈 지원
               content += `${escapeField(qPlain)},${escapeField(aPlain)}\n`;
           }
       });
@@ -1969,6 +1984,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     renderDumpFilter();
     renderChapterFilter(); 
     clearEditor();
+    updateProgress();
     App.toast("덤프 학습 준비 완료");
   } catch(e) { console.error(e); alert("DB Init Failed"); }
 
@@ -1983,6 +1999,7 @@ document.addEventListener("DOMContentLoaded", async () => {
      renderDumpFilter();
      renderChapterFilter(); 
      renderList();
+     updateProgress();
      App.toast("삭제되었습니다.");
   };
 
@@ -1999,7 +2016,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("btn-close-memo").onclick = () => memoSidebar.classList.remove("open");
 
 
-  // === 단어 교체 기능 및 히스토리 관리 ===
   function escapeRegExp(string) {
       return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); 
   }
@@ -2069,7 +2085,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       const regex = new RegExp(escapeRegExp(before) + "(?![^<]*>)", "g");
       let matchCount = 0;
 
-      // 에디터 내용 매치 횟수 카운트
       const qHtml = quillQ.root.innerHTML;
       const sHtml = quillS.root.innerHTML;
       const kHtml = quillK.root.innerHTML;
@@ -2079,12 +2094,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       matchCount += (kHtml.match(regex) || []).length;
 
       if (matchCount > 0) {
-          // 에디터 내용 교체 (메타 정보 제외)
           quillQ.root.innerHTML = qHtml.replace(regex, after);
           quillS.root.innerHTML = sHtml.replace(regex, after);
           quillK.root.innerHTML = kHtml.replace(regex, after);
 
-          // 히스토리 저장 (최대 10개)
           let history = JSON.parse(localStorage.getItem("dumpstudy_replace_history") || "[]");
           history = history.filter(h => h.before !== before); 
           history.unshift({ before, after });
@@ -2103,9 +2116,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
   };
 
-  // === Keydown Shortcuts ===
   document.addEventListener("keydown", (e) => {
-      // 1. 전역 단축키
       const isCmdCtrl = (navigator.platform.toUpperCase().indexOf('MAC') >= 0) ? e.metaKey : e.ctrlKey;
       
       if (isCmdCtrl && !e.altKey && e.key.toLowerCase() === 's') { 
@@ -2120,16 +2131,14 @@ document.addEventListener("DOMContentLoaded", async () => {
           return; 
       }
 
-      // --- 단어 교체 단축키 ---
       if (isCmdCtrl && e.altKey && e.key.toLowerCase() === 'h') {
           e.preventDefault();
-          renderReplaceHistory(); // 모달 띄우기 직전에 히스토리 최신화
+          renderReplaceHistory();
           $("replace-modal").style.display = 'flex';
           $("replace-before").focus();
           return;
       }
 
-      // --- 몰입모드 토글 단축키 (넓게) ---
       if (isCmdCtrl && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'h') {
           e.preventDefault();
           document.body.classList.toggle('immersive-mode');
@@ -2141,7 +2150,6 @@ document.addEventListener("DOMContentLoaded", async () => {
           return;
       }
       
-      // --- 몰입모드 분할버전 단축키 (Alt+H) ---
       if (!isCmdCtrl && e.altKey && !e.shiftKey && e.key.toLowerCase() === 'h') {
           e.preventDefault();
           document.body.classList.toggle('immersive-split-mode');
@@ -2155,17 +2163,14 @@ document.addEventListener("DOMContentLoaded", async () => {
       
       const tag = e.target.tagName.toUpperCase();
       
-      // 2. 입력창에 있을 때는 방향키 및 백틱(`) 단축키 무시 (텍스트 정상 입력)
       if(tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable || e.target.closest('.ql-editor')) return;
 
-      // 3. 백틱(`) 키로 창 숨기기 (빈 페이지로 즉시 이동)
       if(e.key === "`" || e.key === "Backquote") {
           e.preventDefault();
           window.location.href = "about:blank";
           return;
       }
 
-      // 4. 좌우 화살표: 이전/다음 문제
       if(e.key === "ArrowLeft" || e.key === "ArrowRight") {
           e.preventDefault();
           const list = getFilteredSortedList();
@@ -2191,7 +2196,6 @@ document.addEventListener("DOMContentLoaded", async () => {
           }
       }
 
-      // 5. 위아래 화살표: 스크롤
       if(e.key === "ArrowUp" || e.key === "ArrowDown") {
           e.preventDefault();
           const scroller = document.querySelector(".editor-scroller");
@@ -2204,7 +2208,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
   });
 
-  // === 프롬프트 설정 및 복사 제어 로직 ===
   const DEFAULT_PROMPT = `"[역할] 당신은 IT/클라우드 자격증(AWS, GCP, Azure 등) 객관식 문제 풀이 전문가입니다. 사용자가 제공하는 객관식 문제를 분석하여 지정된 양식에 맞춰 정답, 상세 풀이, 핵심 해법을 작성하세요. [출력 양식 및 제약 조건] 1. 인사말, 서론("이 문제의 정답은...", "해설입니다" 등)을 일절 작성하지 말고 곧바로 **정답:** 으로 시작하세요. 2. 아래 정의된 마크다운 구조와 강조 표시(**)를 정확히 준수하세요. --- **정답:** **[정답 알파벳]** --- ### **정답 및 풀이** * **정답인 이유 ([정답 알파벳]):** [문제에서 요구하는 핵심 조건과 정답 선택지가 이를 어떻게 충족하는지 상세히 설명] * **오답 분석:** * **[오답 알파벳1]이 틀린 이유:** [해당 오답이 올바르지 않은 구체적인 이유] * **[오답 알파벳2]이 틀린 이유:** [해당 신오답이 일바르지 않은 구체적인 이유] * **[오답 알파벳3]이 틀린 이유:** [해당 오답이 올바르지 않은 구체적인 이유] --- ### **핵심 해법** * **[핵심 개념/서비스명 1]:** [이 문제를 통해 기억해야 시 핵심 도메인 지식 1] * **[핵심 개념/서비스명 2]:** [이 문제를 통해 기억해야 할 핵심 도메인 지식 2] --- [작성 가이드라인] - '오답 분석'에는 정답을 제외한 나머지 모든 오답 선택지(A, B, C, D 중)를 빠짐없이 각각 항목화하여 설명하세요. - '핵심 해법'은 유사한 문제를 다시 만났을 때 바로 적용할 수 있는 키워드 중심의 암기 포인트나 아키텍처 공식을 2~3개 불릿으로 간결하게 정리하세요."`;
 
   window.openPromptModal = () => {
@@ -2240,7 +2243,6 @@ document.addEventListener("DOMContentLoaded", async () => {
      }
   });
   
-  // === 복사 기능 전역 함수 등록 ===
   window.copySectionText = async function(quillInstance) {
       if (!quillInstance) return;
       const text = quillInstance.getText().trim();
@@ -2257,7 +2259,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
   };
 
-  // === 일괄복사 기능 (프롬프트 + 문제내용) ===
   window.copyBatchQ = async function() {
       const promptText = localStorage.getItem("dumpstudy_prompt_text") || DEFAULT_PROMPT;
       
@@ -2282,21 +2283,16 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 });
   
-// [송신 페이지] 실시간 클립보드 동기화 스크립트
 document.addEventListener('copy', function() {
-    // 1. 사용자가 드래그한 텍스트 가져오기
     const selection = window.getSelection();
     let copiedText = selection.toString();
 
-    // 텍스트가 없으면 종료
     if (!copiedText) return;
 
-    // 2. 불필요한 연속 공백과 줄바꿈을 하나의 공백으로 치환하고 양끝 공백 정리 (trim)
     copiedText = copiedText.replace(/\s+/g, ' ').trim();
 
     if (!copiedText) return;
 
-    // 3. localStorage에서 기존 아이디어 클립 배열 불러오기
     let clipItems = [];
     try {
         const storedItems = localStorage.getItem('idea_clip_items');
@@ -2308,15 +2304,11 @@ document.addEventListener('copy', function() {
         clipItems = [];
     }
 
-    // 4. 중복된 텍스트가 없는지 확인
     if (!clipItems.includes(copiedText)) {
-        // 5. 중복되지 않은 경우 배열 끝에 추가 (최신 항목이 뒤에 옴)
         clipItems.push(copiedText);
         
-        // localStorage 업데이트 (수신 페이지의 'storage' 이벤트를 트리거함)
         localStorage.setItem('idea_clip_items', JSON.stringify(clipItems));
         
-        // 개발자 확인용 로그 (선택사항)
         console.log("아이디어 블록에 동기화 됨:", copiedText);
     }
 });
