@@ -165,7 +165,6 @@
         .clipboard-input { flex: 1; padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: var(--radius-sm); font-size: 14px; outline: none; transition: 0.2s; background: #fff; }
         .clipboard-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(79,70,229,0.1); }
         
-        /* 패딩을 추가하여 최상단 항목 hover 시 라인이 잘리는 현상 방지 */
         .clipboard-list { 
             flex: 1; 
             overflow-y: auto; 
@@ -274,7 +273,6 @@
                 <button class="btn btn-outline" onclick="toggleGuide()">
                     <i class="ph-bold ph-info"></i> 가이드
                 </button>
-                <!-- 🚀 툴팁(title)에 단축키 안내 추가 -->
                 <button class="btn btn-outline" id="btn-open-clipboard" style="color: var(--accent); border-color: var(--accent-light);" title="단축키: Alt + C">
                     <i class="ph-bold ph-clipboard-text"></i> 클립보드
                 </button>
@@ -282,6 +280,19 @@
                 <button class="btn btn-primary" onclick="saveToDB()" title="단축키: Ctrl + S">
                     <i class="ph-bold ph-floppy-disk"></i> 저장
                 </button>
+                
+                <!-- 복원 버튼 -->
+                <input type="file" id="jsonFileInput" accept=".json" style="display:none;" onchange="handleFileImport(event)">
+                <button class="btn btn-outline" onclick="document.getElementById('jsonFileInput').click()" title="JSON 파일에서 복원">
+                    <i class="ph-bold ph-upload-simple"></i> 복원
+                </button>
+                
+                <!-- JSON 백업 버튼 -->
+                <button class="btn btn-outline" onclick="openBackupModal()" title="선택한 블록을 JSON으로 다운로드">
+                    <i class="ph-bold ph-download-simple"></i> 백업
+                </button>
+                
+                <!-- PDF/인쇄 버튼 -->
                 <button class="btn btn-outline" onclick="window.print()">
                     <i class="ph-bold ph-printer"></i> PDF/인쇄
                 </button>
@@ -308,7 +319,6 @@
         <div style="font-weight:700; color:var(--accent); font-size: 16px; display: flex; align-items: center; gap: 8px;">
             <i class="ph-fill ph-clipboard-text" style="font-size: 20px;"></i> 클립보드 블록
         </div>
-        <!-- 초기화 버튼 -->
         <div style="display: flex; gap: 8px; align-items: center;">
             <button class="btn btn-outline btn-micro" id="btn-clear-clipboard" style="color: #ef4444; border-color: #f87171; background: #fef2f2; padding: 0 8px; font-size: 12px;" title="모든 항목 초기화">
                 <i class="ph-bold ph-trash"></i> 초기화
@@ -403,6 +413,38 @@
         </div>
     </div>
 
+    <!-- 신규: JSON 백업 설정 모달 -->
+    <div id="backupModal" class="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-[100] hidden items-center justify-center p-4 no-print">
+        <div class="bg-white rounded-[20px] shadow-2xl w-full max-w-sm modal-enter flex flex-col border border-gray-100 overflow-hidden">
+            <div class="flex justify-between items-center p-5 border-b border-gray-100 bg-gray-50/50">
+                <h3 class="text-lg font-extrabold text-gray-800 flex items-center gap-2">
+                    <i class="ph-fill ph-download-simple text-indigo-600 text-xl"></i> JSON 백업 범위 설정
+                </h3>
+                <button onclick="closeBackupModal()" class="text-gray-400 hover:text-gray-700 transition w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-200 border-none bg-transparent cursor-pointer">
+                    <i class="ph-bold ph-x text-lg"></i>
+                </button>
+            </div>
+            
+            <div class="p-6 bg-white flex flex-col gap-4">
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">시작 블록 번호</label>
+                    <input type="number" id="backupStartInput" min="1" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow text-gray-800 font-medium">
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">끝 블록 번호</label>
+                    <input type="number" id="backupEndInput" min="1" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow text-gray-800 font-medium">
+                </div>
+            </div>
+            
+            <div class="p-4 border-t border-gray-100 flex justify-end gap-2 bg-gray-50/50">
+                <button onclick="closeBackupModal()" class="btn btn-outline px-5 py-2 text-sm font-medium">취소</button>
+                <button onclick="executeJSONBackup()" class="btn btn-primary px-5 py-2 text-sm font-bold shadow-md">
+                    다운로드
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- JavaScript Logic -->
     <script>
         let blockCounter = 0;
@@ -437,7 +479,8 @@
             });
         }
 
-        async function saveToDB() {
+        // 모든 블록 데이터를 추출하는 공통 함수
+        function getAllBlocksData() {
             const blocksData = [];
             document.querySelectorAll('.topic-block').forEach(block => {
                 const titleEl = block.querySelector('.topic-title');
@@ -468,7 +511,11 @@
                     rows
                 });
             });
+            return blocksData;
+        }
 
+        async function saveToDB() {
+            const blocksData = getAllBlocksData();
             const tx = db.transaction(STORE_NAME, "readwrite");
             const store = tx.objectStore(STORE_NAME);
             store.put({ id: "main_doc", blocks: blocksData });
@@ -510,8 +557,9 @@
             req.onerror = () => { addTopicBlock(); };
         }
 
-        function renderBlockFromData(b) {
-            const blockHTML = `
+        // 블록 HTML을 생성하여 반환하는 함수 (신규 렌더링 및 복원시 덮어쓰기에 사용)
+        function generateBlockHTML(b) {
+            return `
             <div id="${b.id}" class="keynote-card topic-block">
                 <div class="card-num block-number"></div>
                 
@@ -526,7 +574,7 @@
                 </div>
 
                 <header class="text-left mb-6 pt-2">
-                    <h1 contenteditable="true" spellcheck="false" onblur="updateSidebar()" data-placeholder="" class="topic-title text-2xl md:text-3xl font-extrabold text-gray-900 inline-block min-w-[300px] p-2 tracking-tight text-left">${b.title}</h1>
+                    <h1 contenteditable="true" spellcheck="false" onblur="updateSidebar()" data-placeholder="${b.titlePlaceholder || ''}" class="topic-title text-2xl md:text-3xl font-extrabold text-gray-900 inline-block min-w-[300px] p-2 tracking-tight text-left">${b.title}</h1>
                 </header>
 
                 <div class="overflow-x-auto pb-2">
@@ -555,7 +603,10 @@
                 </div>
             </div>
             `;
-            document.getElementById('topicsContainer').insertAdjacentHTML('beforeend', blockHTML);
+        }
+
+        function renderBlockFromData(b) {
+            document.getElementById('topicsContainer').insertAdjacentHTML('beforeend', generateBlockHTML(b));
         }
 
         // ================= Application Initialization =================
@@ -579,6 +630,139 @@
                 modal.classList.add('hidden');
                 modal.classList.remove('flex');
             }
+        }
+
+        // ================= Backup & Restore (JSON) =================
+        
+        function openBackupModal() {
+            const blocksData = getAllBlocksData();
+            if (blocksData.length === 0) {
+                alert("백업할 블록이 없습니다.");
+                return;
+            }
+
+            const modal = document.getElementById('backupModal');
+            const startInput = document.getElementById('backupStartInput');
+            const endInput = document.getElementById('backupEndInput');
+
+            // 값 초기화 (1 ~ 현재 블록 개수)
+            startInput.value = 1;
+            endInput.value = blocksData.length;
+            startInput.max = blocksData.length;
+            endInput.max = blocksData.length;
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeBackupModal() {
+            const modal = document.getElementById('backupModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function executeJSONBackup() {
+            const blocksData = getAllBlocksData();
+            const startInput = document.getElementById('backupStartInput').value;
+            const endInput = document.getElementById('backupEndInput').value;
+            
+            const startNum = parseInt(startInput, 10);
+            const endNum = parseInt(endInput, 10);
+
+            if (isNaN(startNum) || isNaN(endNum) || startNum < 1 || endNum < startNum) {
+                alert("유효하지 않은 범위입니다. 시작 번호는 1 이상, 끝 번호는 시작 번호 이상이어야 합니다.");
+                return;
+            }
+
+            // 블록 필터링 (화면에 보이는 번호 1, 2, 3... 기준)
+            const backupData = blocksData.filter((b, index) => {
+                const actualNum = index + 1;
+                return actualNum >= startNum && actualNum <= endNum;
+            });
+
+            if (backupData.length === 0) {
+                alert("해당 범위에 속하는 블록이 없습니다.");
+                return;
+            }
+
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData, null, 2));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", `ideablock_backup_${startNum}_to_${endNum}.json`);
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+            
+            showToast(`${backupData.length}개의 블록이 JSON으로 백업되었습니다.`);
+            closeBackupModal(); // 모달 닫기
+        }
+
+        function handleFileImport(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const importedBlocks = JSON.parse(e.target.result);
+                    if (!Array.isArray(importedBlocks)) {
+                        alert("올바른 백업 파일 형식이 아닙니다.");
+                        return;
+                    }
+
+                    let addedCount = 0;
+                    let updatedCount = 0;
+
+                    importedBlocks.forEach(impBlock => {
+                        // 텍스트 매칭을 위해 임시 element 생성하여 순수 텍스트 추출
+                        const tempDiv = document.createElement('div');
+                        tempDiv.innerHTML = impBlock.title || "";
+                        const impTitleText = tempDiv.innerText.trim();
+
+                        let existingBlock = null;
+
+                        // 토픽명이 존재할 때만 매칭(업데이트) 검사, 비어있으면 무조건 신규 추가
+                        if (impTitleText !== '') {
+                            const titles = document.querySelectorAll('.topic-title');
+                            for (let t of titles) {
+                                if (t.innerText.trim() === impTitleText) {
+                                    existingBlock = t.closest('.topic-block');
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (existingBlock) {
+                            // 같은 이름이 있으면 덮어쓰기 (기존 ID 유지)
+                            impBlock.id = existingBlock.id;
+                            const blockHTML = generateBlockHTML(impBlock);
+                            existingBlock.insertAdjacentHTML('beforebegin', blockHTML);
+                            existingBlock.remove();
+                            updatedCount++;
+                        } else {
+                            // 매칭 실패하거나 토픽명이 비어있으면 새로 추가
+                            blockCounter++;
+                            impBlock.id = `topic-${blockCounter}`;
+                            const blockHTML = generateBlockHTML(impBlock);
+                            document.getElementById('topicsContainer').insertAdjacentHTML('beforeend', blockHTML);
+                            addedCount++;
+                        }
+                    });
+
+                    updateBlockNumbers();
+                    updateSidebar();
+                    updateCellStyles();
+                    saveToDB(); // 복원 후 자동 저장 처리
+
+                    showToast(`복원 완료: ${updatedCount}개 업데이트됨, ${addedCount}개 추가됨.`);
+                } catch (err) {
+                    console.error(err);
+                    alert("파일을 읽는 중 오류가 발생했습니다. 올바른 JSON 백업 파일인지 확인하세요.");
+                } finally {
+                    event.target.value = ""; // 입력창 초기화
+                }
+            };
+            reader.readAsText(file);
         }
 
         // ================= Add/Remove Logic =================
@@ -829,7 +1013,7 @@
         });
 
         /* =========================================
-           Clipboard Real-Time Feature Logic
+           Clipboard Real-Time Feature Logic & Plain Text Paste
            ========================================= */
         const clipSidebar = document.getElementById("clipboard-sidebar");
         
@@ -944,6 +1128,7 @@
             const activeEl = document.activeElement;
             const isInputActive = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.getAttribute('contenteditable') === 'true');
             
+            // 일반 영역에 붙여넣기 시 클립보드 패널에 추가하는 로직 (기존)
             if (!isInputActive) {
                 const text = (e.clipboardData || window.clipboardData).getData('text');
                 if (text && text.trim() !== "") {
@@ -956,6 +1141,12 @@
                         document.body.classList.add("clipboard-active");
                     }
                 }
+            } 
+            // contenteditable 영역(타이틀, 헤더, 셀)에 붙여넣기 할 때 서식을 지우고 순수 텍스트만 삽입하는 로직 (신규)
+            else if (activeEl && activeEl.getAttribute('contenteditable') === 'true') {
+                e.preventDefault();
+                const text = (e.clipboardData || window.clipboardData).getData('text/plain');
+                document.execCommand('insertText', false, text);
             }
         });
 

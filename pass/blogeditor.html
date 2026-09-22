@@ -188,6 +188,7 @@ window.MathJax = {
                     <option value="drill">📝 Drill</option>
                     <option value="technote">📑 technote</option>
                     <option value="chat">💬 Chat</option>
+                    <option value="ideablock">💡 Idea Block</option>
                     <option value="ismsp">🛡️ ISMS-P</option>
                     <option value="link">🔗 Link</option>
                     <option value="mdSplit">📄 MD</option>
@@ -306,7 +307,7 @@ window.MathJax = {
     let mdDirHandle = null; 
     let toastTimeout = null;
 
-    const defaultCategories = ["IT기술", "정보처리", "기출문제", "문제분석", "에세이", "technote", "참조자료", "패스리딩"]; 
+    const defaultCategories = ["IT기술", "정보처리", "기출문제", "문제분석", "에세이", "technote", "참조자료", "패스리딩", "Idea Block"]; 
 
     document.addEventListener('keydown', function(e) {
         if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'n') {
@@ -630,11 +631,83 @@ window.MathJax = {
         else if (type === 'drill') handleDrillImport(event);
         else if (type === 'technote') handleTechnoteImport(event);
         else if (type === 'chat') handleChatImport(event);
+        else if (type === 'ideablock') handleIdeaBlockImport(event);
         else if (type === 'ismsp') handleIsmspImport(event);
         else if (type === 'link') handleLinkImport(event);
         else if (type === 'mdSplit') handleMdSplitImport(event);
         else if (type === 'pdf') handlePdfImport(event); 
         else if (type === 'pathreading') handlePathreadingImport(event);
+    }
+
+    function handleIdeaBlockImport(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const fileNameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                let jsonArr = JSON.parse(e.target.result);
+                if (!Array.isArray(jsonArr)) throw new Error("배열 형태의 데이터가 아닙니다.");
+
+                const today = new Date().toISOString().split('T')[0];
+                document.getElementById('issueDate').value = today;
+                document.getElementById('postTitle').value = fileNameWithoutExt;
+
+                // 4. 카테고리, 태그는 Idea Block
+                setCategoryAndTag('Idea Block', 'Idea Block');
+                document.getElementById('articlesContainer').innerHTML = '';
+                articleCount = 0;
+
+                if (jsonArr.length > 0) {
+                    for (let index = 0; index < jsonArr.length; index++) {
+                        const topic = jsonArr[index];
+                        const titleText = topic.title || topic.titlePlaceholder || `Idea Block 주제 ${index + 1}`;
+                        const title = stripHtmlTags(titleText);
+                        
+                        let mdTable = "";
+
+                        // 헤더 처리 (해당 값이 비어있고 플레이스홀더에 내용 있으면 반영)
+                        if (topic.headers && topic.headers.length > 0) {
+                            let headerRow = "|";
+                            let separatorRow = "|";
+                            topic.headers.forEach(h => {
+                                let val = (h.html && h.html.trim() !== "") ? h.html : (h.placeholder || " ");
+                                val = stripHtmlTags(val).trim() || " ";
+                                headerRow += ` ${val} |`;
+                                separatorRow += " --- |";
+                            });
+                            mdTable += headerRow + "\n" + separatorRow + "\n";
+                        }
+
+                        // 로우 처리 (해당 값이 비어있고 플레이스홀더에 내용 있으면 반영)
+                        if (topic.rows && topic.rows.length > 0) {
+                            topic.rows.forEach(row => {
+                                let rowStr = "|";
+                                row.forEach(cell => {
+                                    let val = (cell.html && cell.html.trim() !== "") ? cell.html : (cell.placeholder || " ");
+                                    val = stripHtmlTags(val).trim() || " ";
+                                    val = val.replace(/\n/g, ' '); // 마크다운 표 구조가 깨지지 않도록 줄바꿈을 공백으로 대체
+                                    rowStr += ` ${val} |`;
+                                });
+                                mdTable += rowStr + "\n";
+                            });
+                        }
+
+                        addArticle({ title: title, content: mdTable.trim(), visualType: 'none' });
+                    }
+                } else {
+                    addArticle();
+                }
+                showToast("✅ Idea Block 데이터를 성공적으로 불러왔습니다.");
+                jsonArr = null;
+            } catch (error) {
+                alert("JSON 파일 파싱 중 오류가 발생했습니다. 포맷을 확인해주세요.");
+            }
+            e.target.result = null;
+            event.target.value = '';
+        };
+        reader.readAsText(file);
     }
 
     function handlePathreadingImport(event) {
