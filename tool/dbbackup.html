@@ -204,7 +204,6 @@
     <h1 class="logo"><i class="fas fa-database"></i> DB 백업 매니저</h1>
   </div>
   <div class="toolbar">
-    <!-- 🌟 단축키 모달 버튼 추가 -->
     <button class="btn" onclick="openShortcutModal()">
       <i class="fas fa-keyboard"></i> 단축키
     </button>
@@ -222,11 +221,11 @@
     <div class="sidebar-header">
       <i class="fas fa-list-ul"></i> 백업 스케줄 목록
     </div>
-    <!-- 🌟 사이드바 검색 필터 영역 -->
+    <!-- 🌟 사이드바 검색 필터 영역 (로그 메시지 기반 스케줄 검색) -->
     <div style="padding: 12px 20px; border-bottom: 1px solid var(--border); background: #fff;">
         <div style="position: relative;">
             <i class="fas fa-search" style="position: absolute; left: 12px; top: 12px; color: #9ca3af; font-size: 13px;"></i>
-            <input type="text" id="sidebarFilter" class="form-control" placeholder="스케줄 검색..." style="width: 100%; font-size: 13px; padding: 10px 10px 10px 34px;">
+            <input type="text" id="sidebarFilter" class="form-control" placeholder="테이블/스케줄명 검색..." style="width: 100%; font-size: 13px; padding: 10px 10px 10px 34px;">
         </div>
     </div>
     <div class="list-scroll" id="jobList"></div>
@@ -290,7 +289,7 @@
                         <tr>
                             <th style="width: 180px;">일시</th>
                             <th style="width: 120px;">상태</th>
-                            <th>메시지</th>
+                            <th>메시지 (테이블 내역)</th>
                         </tr>
                     </thead>
                     <tbody id="logTableBody"></tbody>
@@ -340,7 +339,7 @@
     </div>
 </div>
 
-<!-- 🌟 단축키 안내 모달 -->
+<!-- 단축키 안내 모달 -->
 <div id="shortcutModal" class="modal-overlay" onclick="closeShortcutModal()">
     <div class="modal-box" onclick="event.stopPropagation()" style="width: 400px; padding: 24px;">
         <div class="modal-header" style="margin-bottom: 16px;">
@@ -385,7 +384,7 @@
         setTimeout(() => el.remove(), 1000); 
     }
 
-    // 🌟 모달 제어 (단축키)
+    // 모달 제어 (단축키)
     function openShortcutModal() { document.getElementById('shortcutModal').style.display = 'flex'; }
     function closeShortcutModal() { document.getElementById('shortcutModal').style.display = 'none'; }
 
@@ -393,7 +392,6 @@
     document.addEventListener("keydown", (e) => {
         const isCmdCtrl = (navigator.platform.toUpperCase().indexOf('MAC') >= 0) ? e.metaKey : e.ctrlKey;
         
-        // Ctrl + S : 저장
         if (isCmdCtrl && !e.altKey && e.key.toLowerCase() === 's') { 
             e.preventDefault(); 
             if (currentJobId && document.getElementById('mainContent').style.display !== 'none') {
@@ -402,7 +400,6 @@
             return; 
         }
         
-        // Alt + S : 지금 실행
         if (!isCmdCtrl && e.altKey && e.key.toLowerCase() === 's') {
             e.preventDefault();
             if (currentJobId && document.getElementById('mainContent').style.display !== 'none') {
@@ -412,19 +409,37 @@
         }
     });
 
-    // 🌟 사이드바 검색 필터 이벤트 리스너
+    // 🌟 사이드바 검색 필터 이벤트 리스너 (테이블명 DB 검색 -> 스케줄 목록 필터링)
     document.getElementById('sidebarFilter').addEventListener('input', function(e) {
         const keyword = e.target.value.toLowerCase();
         const listItems = document.querySelectorAll('#jobList .list-item');
         
-        listItems.forEach(item => {
-            const text = item.textContent.toLowerCase();
-            if(text.includes(keyword)) {
-                item.style.display = 'flex';
-            } else {
-                item.style.display = 'none';
-            }
-        });
+        if (!keyword) {
+            listItems.forEach(item => item.style.display = 'flex');
+            return;
+        }
+
+        // 전체 로그를 순회하며 검색어가 포함된 스케줄 ID를 추출
+        managerDB.transaction('logs').objectStore('logs').getAll().onsuccess = event => {
+            const allLogs = event.target.result;
+            const matchingJobIds = new Set();
+            
+            allLogs.forEach(log => {
+                if (log.message && log.message.toLowerCase().includes(keyword)) {
+                    matchingJobIds.add(log.jobId);
+                }
+            });
+
+            // 추출된 스케줄 ID 또는 스케줄 이름이 일치하는 경우 목록에 표시
+            listItems.forEach(item => {
+                const isNameMatch = item.textContent.toLowerCase().includes(keyword);
+                if (isNameMatch || matchingJobIds.has(item.dataset.id)) {
+                    item.style.display = 'flex';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        };
     });
 
     window.onload = async () => {
@@ -771,27 +786,28 @@
         const list = document.getElementById('jobList');
         managerDB.transaction('jobs').objectStore('jobs').getAll().onsuccess = e => {
             list.innerHTML = '';
-            const filterKeyword = document.getElementById('sidebarFilter').value.toLowerCase();
             
             e.target.result.forEach(j => {
                 const item = document.createElement('div');
                 item.className = `list-item ${currentJobId === j.id ? 'active' : ''}`;
+                // 🌟 필터링을 위해 dataset에 id 저장
+                item.dataset.id = j.id;
                 item.innerHTML = j.name;
                 item.onclick = () => selectJob(j.id);
-                
-                // 검색어에 따른 초기 디스플레이 설정
-                if(j.name.toLowerCase().includes(filterKeyword)) {
-                    item.style.display = 'flex';
-                } else {
-                    item.style.display = 'none';
-                }
                 list.appendChild(item);
             });
+
+            // 검색어가 남아있다면 필터 로직 재호출
+            const keyword = document.getElementById('sidebarFilter').value;
+            if(keyword) {
+                document.getElementById('sidebarFilter').dispatchEvent(new Event('input'));
+            }
         };
     }
     
     function selectJob(id) {
-        currentJobId = id; loadJobs();
+        currentJobId = id; 
+        loadJobs();
         document.getElementById('mainEmpty').style.display = 'none';
         document.getElementById('mainContent').style.display = 'flex';
         managerDB.transaction('jobs').objectStore('jobs').get(id).onsuccess = e => {
@@ -806,10 +822,12 @@
     function loadLogs(jobId) {
         managerDB.transaction('logs').objectStore('logs').index('jobId').getAll(IDBKeyRange.only(jobId)).onsuccess = e => {
             const logs = e.target.result.sort((a,b) => b.id - a.id);
+            
             document.getElementById('logTableBody').innerHTML = logs.map(l => {
                 const statusBadge = l.status === '성공' 
                     ? `<span class="status-badge status-success"><i class="fas fa-check-circle"></i> 성공</span>` 
                     : `<span class="status-badge status-fail"><i class="fas fa-exclamation-circle"></i> 실패</span>`;
+                
                 return `<tr>
                     <td style="color:#6b7280; font-family:var(--font-code);">${l.time}</td>
                     <td>${statusBadge}</td>
