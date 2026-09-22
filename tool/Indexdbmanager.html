@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IndexedDB Admin - Ultimate Edition</title>
+    <title>IndexedDB Admin</title>
     <style>
         :root {
             --bg: #f4f5f7; --card: #ffffff; --text: #172b4d; --border: #dfe1e6;
@@ -45,11 +45,18 @@
         .store-item.active .badge { background: rgba(0, 82, 204, 0.1); color: var(--primary); }
 
         main { flex: 1; display: flex; flex-direction: column; padding: 20px; overflow: hidden; background: #fff; }
-        .toolbar { display: flex; gap: 8px; margin-bottom: 16px; align-items: center; background: #fff; padding: 4px 0; }
+        
+        /* 💡 툴바 가로 스크롤 및 내부 아이템 크기 고정 */
+        .toolbar { display: flex; gap: 8px; margin-bottom: 16px; align-items: center; background: #fff; padding: 4px 2px; overflow-x: auto; }
+        .toolbar::-webkit-scrollbar { height: 6px; }
+        .toolbar::-webkit-scrollbar-thumb { background: #dfe1e6; border-radius: 3px; }
+        .toolbar > * { flex-shrink: 0; } /* 절대 찌그러지지 않도록 강제 */
+        
         .current-table-title { font-size: 18px; font-weight: 700; color: #172b4d; margin-right: 15px; display: flex; align-items: center; gap: 8px;}
+        
         .search-area { display: flex; gap: 0; background: #fff; border-radius: 4px; border: 1px solid #dfe1e6; overflow: hidden; align-items: center; height: 34px;}
-        .search-area select { border: none; background: #f9f9f9; width: 140px; height: 100%; border-right: 1px solid #dfe1e6; font-size: 12px; padding-left: 8px; outline: none; color:#172b4d; }
-        .search-area input { border: none; width: 220px; padding: 0 10px; height: 100%; outline: none; font-size: 13px; }
+        .search-area select { border: none; background: #f9f9f9; width: 140px; height: 100%; border-right: 1px solid #dfe1e6; font-size: 12px; padding-left: 8px; outline: none; color:#172b4d;}
+        .search-area input { border: none; width: 220px; padding: 0 10px; height: 100%; outline: none; font-size: 13px;}
         .search-btn { border: none; background: transparent; padding: 0 12px; cursor: pointer; color: #5e6c84; border-left: 1px solid #dfe1e6; height: 100%; transition: 0.2s;}
         .search-btn:hover { background: #ebecf0; color: var(--primary); }
         
@@ -57,7 +64,6 @@
         table { width: 100%; border-collapse: collapse; min-width: 100%; }
         th, td { padding: 8px 12px; border-bottom: 1px solid #dfe1e6; text-align: left; white-space: nowrap; height: 40px; }
         
-        /* 컬럼 리사이즈 및 정렬 UI 적용 */
         th { background: #fafbfc; font-weight: 600; position: sticky; top: 0; z-index: 10; border-right: 1px solid #dfe1e6; color: #5e6c84; font-size: 12px; user-select: none; }
         th:hover { background: #f4f5f7; }
         .resizer { position: absolute; top: 0; right: 0; width: 5px; height: 100%; cursor: col-resize; background-color: transparent; z-index: 10; }
@@ -88,7 +94,6 @@
         
         .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #6b778c; gap:12px; }
 
-        /* 동적 폼 및 컬럼 UI */
         .editor-tabs { display: flex; border-bottom: 1px solid #dfe1e6; margin-bottom: 0px; }
         .editor-tab { padding: 8px 16px; cursor: pointer; border-bottom: 2px solid transparent; font-weight: 600; color: #6b778c; }
         .editor-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
@@ -97,7 +102,6 @@
         .form-control { width: 100%; padding: 8px; border: 1px solid #dfe1e6; border-radius: 4px; font-family: inherit; outline: none; }
         .form-control:focus { border-color: var(--primary); }
         
-        /* 테이블 및 에디터 텍스트 여백/통일화 CSS (크기 고정 오버라이딩) */
         [contenteditable="true"], [contenteditable="true"] *, #dataTable td, #dataTable td * {
             font-size: 13px !important;
             font-family: "Pretendard", -apple-system, sans-serif !important;
@@ -158,25 +162,27 @@
 
         <main>
             <div class="toolbar">
-                <div class="current-table-title" id="currentStoreInfo">테이블 미선택</div>
+                <div class="current-table-title" id="currentStoreInfo"></div>
                 
                 <div class="search-area">
                     <select id="searchTargetSelector"><option value="">전체 검색(Raw)</option></select>
                     <input type="text" id="searchInput" placeholder="검색어 입력..." onkeydown="if(event.key==='Enter') performSearch()">
                     <button class="search-btn" onclick="performSearch()">🔍</button>
                 </div>
-
-                <span style="flex:1"></span>
-
-                <button class="btn btn-outline-primary" onclick="openColumnModal()">👁️ 컬럼 설정</button>
-                <button id="btnBulkDelete" class="btn btn-danger" onclick="deleteSelectedData()" style="display:none;">🗑️ 선택 삭제</button>
                 
-                <button class="btn" onclick="openBulkUpdateModal()">✨ 일괄 변경</button>
-                <button class="btn" onclick="openBulkAppendModal()" style="color:var(--success); border-color:var(--success);">➕ 일괄 추가</button>
-                
-                <button class="btn" onclick="openDropTableModal()" style="color:var(--danger); border-color:#ffbdad; background:#fff0ed; margin-left:15px; margin-right: 15px;">🔥 테이블 삭제</button>
+                <span id="searchCountDisplay" style="font-size: 13px; color: #5e6c84; font-weight: 600; margin-left: 2px;"></span>
 
-                <button class="btn btn-primary" onclick="openModal('add')">+ 추가</button>
+                <!-- 💡 빈 스페이서 대신 버튼 자체에 margin-left: auto를 주어 안전하게 우측 밀기 -->
+                <button class="btn btn-outline-primary" onclick="openColumnModal()" style="margin-left: auto;">👁️ 컬럼</button>
+                <button id="btnBulkDelete" class="btn btn-danger" onclick="deleteSelectedData()" style="display:none;">🗑️ 삭제</button>
+                
+                <button class="btn" onclick="openBulkUpdateModal()">✨ 변경</button>
+                <button class="btn" onclick="openBulkAppendModal()" style="color:var(--success); border-color:var(--success);">➕ 추가</button>
+                
+                <!-- 💡 제각각인 간격의 원인이던 margin 속성 제거 -->
+                <button class="btn" onclick="openDropTableModal()" style="color:var(--danger); border-color:#ffbdad; background:#fff0ed;">🔥 테이블 삭제</button>
+
+                <button class="btn btn-primary" onclick="openModal('add')">+ 라인추가</button>
                 <button class="btn btn-outline-danger" onclick="clearCurrentStore()">⚠️ 비우기</button>
                 <button class="btn" onclick="performSearch(true)">🔄 새로고침</button>
             </div>
@@ -625,7 +631,7 @@
                 clearTable();
                 document.getElementById('emptyState').style.display = 'flex';
                 document.querySelector('#emptyState div:last-child').innerText = "좌측 목록에서 조회할 테이블을 선택하세요.";
-                document.getElementById('currentStoreInfo').innerText = "테이블 미선택";
+                document.getElementById('currentStoreInfo').innerText = "";
             };
         }
 
@@ -892,6 +898,19 @@
             const emptyState = document.getElementById('emptyState');
             const btnBulkDelete = document.getElementById('btnBulkDelete');
             
+            // 💡 갯수 표시 간소화
+            const countDisplay = document.getElementById('searchCountDisplay');
+            if (currentStoreName) {
+                const keyword = document.getElementById('searchInput').value.trim();
+                if (keyword) {
+                    countDisplay.innerText = `(${tableDisplayRows.length}/${currentRows.length})`;
+                } else {
+                    countDisplay.innerText = `(${currentRows.length})`;
+                }
+            } else {
+                countDisplay.innerText = '';
+            }
+
             thead.innerHTML = ''; tbody.innerHTML = '';
             btnBulkDelete.style.display = 'none';
             tableRenderedCount = 0; 
@@ -1486,7 +1505,7 @@
                 alert(`[${storeToDrop}] 테이블이 영구적으로 삭제되었습니다.`);
                 
                 currentStoreName = "";
-                document.getElementById('currentStoreInfo').innerText = "테이블 미선택";
+                document.getElementById('currentStoreInfo').innerText = "";
                 renderStoreList(currentDB.objectStoreNames);
                 clearTable();
                 
