@@ -471,16 +471,25 @@
     <button class="btn" id="btn-pdf-all"><i class="fas fa-layer-group" style="color:#ef4444;"></i> 일괄 PDF</button>
     <button class="btn" id="btn-memo"><i class="fas fa-sticky-note" style="color:#f59e0b;"></i> 메모</button>
     <div style="width:1px; height:20px; background:#e5e7eb; margin:0 4px;"></div>
-    <button class="btn" id="btn-export"><i class="fas fa-file-excel" style="color:#10b981;"></i> 엑셀 저장</button>
+    
+    <!-- JSON 백업 및 복원 -->
+    <button class="btn" id="btn-export-json"><i class="fas fa-file-code" style="color:#f59e0b;"></i> JSON 백업</button>
+    <label class="btn" style="cursor:pointer">
+      <i class="fas fa-file-import" style="color:#10b981;"></i> JSON 복원
+      <input type="file" id="jsonFile" accept=".json" style="display:none" />
+    </label>
+    
+    <!-- 공간 확보를 위해 임시 숨김 처리 (display: none) -->
+    <button class="btn" id="btn-export" style="display:none;"><i class="fas fa-file-excel" style="color:#10b981;"></i> 엑셀 저장</button>
     
     <!-- 엑셀 불러오기 -->
-    <label class="btn" style="cursor:pointer">
+    <label class="btn" style="cursor:pointer; display:none;">
       <i class="fas fa-file-excel"></i> 엑셀 불러오기
       <input type="file" id="xlsxFile" accept=".xlsx" style="display:none" />
     </label>
     
     <!-- MD 불러오기 -->
-    <label class="btn" style="cursor:pointer">
+    <label class="btn" style="cursor:pointer; display:none;">
       <i class="fas fa-file-alt" style="color:#6366f1;"></i> MD 불러오기
       <input type="file" id="mdFile" accept=".md,.txt" style="display:none" />
     </label>
@@ -692,6 +701,11 @@
             <input type="number" id="settings-daily-goal" class="search-input" style="width:100%; font-size:14px; padding:10px;" placeholder="예: 50" min="1">
         </div>
         <p style="font-size:11px; color:#9ca3af; margin-top:12px;">* 설정한 DUMP명과 챕터번호는 <b>'신규 문제'</b> 및 <b>'MD 불러오기'</b>를 실행할 때 기본값으로 세팅됩니다. 기존 문제의 정보는 에디터 상단에서 직접 수정할 수 있습니다.</p>
+        
+        <!-- 숨김 기능 안내 코멘트 추가 -->
+        <div style="margin-top:12px; padding:10px 12px; background-color:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; font-size:11px; color:#64748b; line-height: 1.5;">
+            <i class="fas fa-info-circle" style="color:#94a3b8;"></i> <b>숨김 기능 안내:</b> 상단 툴바의 공간 확보를 위해 <b>'엑셀 저장', '엑셀 불러오기', 'MD 불러오기'</b> 기능은 화면에서 임시로 숨김 처리되었습니다. (기능 자체는 유지되어 추후 재활성화 가능합니다.)
+        </div>
         
         <div style="margin-top:24px; padding-top:16px; border-top:1px solid #e5e7eb;">
             <label style="font-size:13px; font-weight:700; color:#4b5563; display:block; margin-bottom:8px;">데이터 관리</label>
@@ -1661,6 +1675,116 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   function stripTags(s) { return App.htmlDecode(s).replace(/<[^>]+>/g, "").trim(); }
   
+  // --- JSON 백업 (현재 검색 필터 적용된 항목들 백업) ---
+  $("btn-export-json").onclick = async () => {
+      const list = getFilteredSortedList();
+      if(!list.length) return App.toast("백업할 데이터가 없습니다.");
+      App.toast("JSON 백업 생성 중...");
+
+      const backupData = [];
+      for (const t of list) {
+          const item = { ...t }; 
+          
+          // 이미지를 Base64 형태로 함께 저장하여 유실 방지
+          for (let i = 1; i <= 10; i++) {
+              const imgId = item[`img${i}Id`];
+              if (imgId) {
+                  const blob = await App.getImageBlob(imgId);
+                  if (blob) {
+                      const reader = new FileReader();
+                      const b64 = await new Promise(res => { reader.onload = e => res(e.target.result); reader.readAsDataURL(blob); });
+                      item[`img${i}_b64`] = b64;
+                  }
+              }
+          }
+          backupData.push(item);
+      }
+
+      const jsonString = JSON.stringify(backupData, null, 2);
+      const blob = new Blob([jsonString], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      
+      // 파일명에 현재 필터링 상태와 날짜 포함
+      const prefix = App.state.dumpFilter ? App.state.dumpFilter : 'DumpStudy';
+      const filename = App.state.chapterFilter ? `${prefix}_Chapter_${App.state.chapterFilter}` : prefix;
+      a.download = `${filename}_Backup_${new Date().toISOString().slice(0, 10)}.json`;
+      
+      a.click();
+      App.toast("JSON 백업 완료");
+  };
+
+  // --- JSON 복원 (ID가 있으면 덮어쓰기(업데이트), 없으면 신규 추가) ---
+  $("jsonFile").onchange = async (e) => {
+      const f = e.target.files[0];
+      if(!f) return;
+      
+      try {
+          App.toast("JSON 복원 중...");
+          const text = await new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = e => resolve(e.target.result);
+              reader.onerror = e => reject(e);
+              reader.readAsText(f);
+          });
+
+          const data = JSON.parse(text);
+          if (!Array.isArray(data)) throw new Error("Invalid JSON format");
+
+          let count = 0;
+          const importPromises = [];
+
+          for (const item of data) {
+              // 백업된 이미지 데이터 복원 (Base64 -> Blob -> IndexedDB)
+              for (let i = 1; i <= 10; i++) {
+                  const b64 = item[`img${i}_b64`];
+                  if (b64) {
+                      try {
+                          const parts = String(b64).split(',');
+                          if (parts.length === 2) {
+                              const mimeMatch = parts[0].match(/:(.*?);/);
+                              if (mimeMatch) {
+                                  const mime = mimeMatch[1];
+                                  const bstr = atob(parts[1]);
+                                  let n = bstr.length; const u8arr = new Uint8Array(n);
+                                  while (n--) u8arr[n] = bstr.charCodeAt(n);
+                                  const blob = new Blob([u8arr], { type: mime });
+                                  item[`img${i}Id`] = await App.putImageBlob(blob);
+                              }
+                          }
+                      } catch (err) {
+                          console.warn("JSON Image restore error", err);
+                      }
+                      delete item[`img${i}_b64`]; // 저장소 용량을 위해 임시 데이터 삭제
+                  }
+              }
+              // IndexedDB의 put 특성에 따라 ID가 같으면 자동 업데이트, 없으면 신규 추가됨
+              importPromises.push(App.putTest(item));
+              count++;
+          }
+
+          await Promise.all(importPromises);
+          
+          // 데이터베이스 및 UI 리로드
+          App.state.tests = await App.getAllTests();
+          renderDumpFilter();
+          renderChapterFilter();
+          renderList();
+          updateProgress();
+          
+          // 복원된 데이터 중에 현재 에디터에 열려있는 항목이 있다면 다시 불러오기
+          if (App.state.editingId && data.find(d => d.id === App.state.editingId)) {
+              loadTest(App.state.editingId);
+          }
+          
+          App.toast(`${count}건 JSON 복원 완료`);
+      } catch (err) {
+          console.error("JSON Import Error:", err);
+          App.toast("JSON 파일 읽기 실패: 올바른 형식인지 확인해주세요.");
+      }
+      e.target.value = "";
+  };
+
   $("btn-export").onclick = async () => {
     if(!App.state.tests.length) return App.toast("데이터가 없습니다.");
     if(typeof ExcelJS === 'undefined') return App.toast("오프라인 모드: ExcelJS 라이브러리를 로드하지 못했습니다.");
