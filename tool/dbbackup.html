@@ -1,451 +1,864 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DB 백업</title>
-    <style>
-        @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
-        
-        :root {
-            --bg-body: #f1f5f9; --bg-surface: #ffffff; --bg-sidebar: #f8fafc;
-            --text-main: #0f172a; --text-muted: #64748b; --border-color: #e2e8f0;
-            --primary: #4f46e5; --success: #10b981; --danger: #ef4444;
-            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05); --radius-md: 8px; --radius-lg: 12px;
-        }
-        
-        * { box-sizing: border-box; }
-        
-        /* 폰트 통일 강제화 */
-        body, button, input, select, textarea {
-            margin: 0; 
-            font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
-            -webkit-font-smoothing: antialiased;
-        }
-        
-        body { background: var(--bg-body); color: var(--text-main); font-size: 14px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-        
-        header { background: var(--bg-surface); border-bottom: 1px solid var(--border-color); height: 60px; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; box-shadow: var(--shadow-sm); z-index: 20; }
-        .app-title { font-size: 19px; font-weight: 800; display: flex; align-items: center; gap: 8px; letter-spacing: -0.5px; color: #0f172a; }
-        .app-title-icon { background: var(--primary); color: white; border-radius: 6px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 14px; }
-        
-        .container { flex: 1; display: flex; overflow: hidden; }
-        aside { width: 280px; background: var(--bg-surface); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; z-index: 10; }
-        .sidebar-header { padding: 20px; font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
-        .script-list { list-style: none; padding: 0 10px; margin: 0; overflow-y: auto; flex: 1; }
-        .script-item { padding: 12px 14px; margin-bottom: 4px; cursor: pointer; border-radius: var(--radius-md); display: flex; justify-content: space-between; align-items: center; font-size: 14px; font-weight: 600; color: var(--text-muted); transition: 0.1s; border: 1px solid transparent; }
-        .script-item:hover { background: var(--bg-sidebar); color: var(--text-main); }
-        .script-item.active { background: #eef2ff; color: var(--primary); border-color: #c7d2fe; box-shadow: var(--shadow-sm); }
-        .badge { background: #f1f5f9; padding: 4px 10px; border-radius: 9999px; font-size: 11px; font-weight: 700; letter-spacing: -0.2px; color: #64748b;}
-        .badge.success { background: #d1fae5; color: #047857; }
-        .script-item.active .badge { background: #e0e7ff; color: var(--primary); }
-        
-        main { flex: 1; display: flex; flex-direction: column; padding: 24px 32px; overflow: hidden; }
-        .toolbar { display: flex; gap: 10px; margin-bottom: 24px; align-items: center; }
-        
-        /* 수정 가능한 제목(Input) 스타일 */
-        .editable-title {
-            font-size: 24px; font-weight: 800; color: var(--text-main); letter-spacing: -0.5px;
-            border: 1px solid transparent; background: transparent; padding: 4px 8px; border-radius: 6px;
-            outline: none; transition: all 0.2s; width: 350px;
-        }
-        .editable-title:hover { border-color: var(--border-color); background: #f8fafc; }
-        .editable-title:focus { border-color: var(--primary); background: #fff; box-shadow: 0 0 0 3px rgba(79,70,229,0.1); }
-        
-        .content-split { display: flex; flex-direction: column; gap: 20px; flex: 1; overflow: hidden; }
-        .section-card { background: var(--bg-surface); border-radius: var(--radius-lg); padding: 24px; box-shadow: var(--shadow-sm); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 16px; }
-        .section-card.flex-1 { flex: 1; overflow: hidden; padding: 0; }
-        .section-title { font-size: 15px; font-weight: 700; padding: 20px 24px 0 24px; color: var(--text-main); }
-        
-        .config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
-        .config-group { display: flex; flex-direction: column; gap: 8px; }
-        .config-label { font-size: 13px; font-weight: 700; color: var(--text-muted); }
-        .config-select, .config-input { width: 100%; padding: 12px 14px; border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: 14px; font-weight: 500; outline: none; background: #f8fafc; transition: 0.2s; color: var(--text-main); }
-        .config-select:focus, .config-input:focus { border-color: var(--primary); background: #fff; box-shadow: 0 0 0 3px rgba(79,70,229,0.1); }
-        
-        .folder-picker-area { display: flex; gap: 12px; align-items: center; background: #f8fafc; padding: 12px 16px; border-radius: 8px; border: 1px dashed #cbd5e1; }
-        .folder-path { flex: 1; font-family: "D2Coding", "Consolas", monospace; font-size: 13px; color: var(--primary); word-break: break-all; font-weight: 600; }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DB 백업 매니저</title>
+  
+  <!-- 폰트 및 아이콘 로드 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
 
-        .table-wrapper { flex: 1; overflow: auto; border-top: 1px solid var(--border-color); }
-        table { width: 100%; border-collapse: collapse; text-align: left; }
-        th, td { padding: 14px 24px; border-bottom: 1px solid var(--border-color); font-size: 13px; }
-        th { background: #f8fafc; font-weight: 700; color: var(--text-muted); position: sticky; top: 0; letter-spacing: -0.2px; }
-        td { font-weight: 500; }
-        
-        .btn { padding: 0 16px; border-radius: var(--radius-md); border: 1px solid var(--border-color); background: var(--bg-surface); color: var(--text-main); font-weight: 700; cursor: pointer; font-size: 13px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 38px; transition: 0.15s; letter-spacing: -0.2px; }
-        .btn:hover { background: #f1f5f9; transform: translateY(-1px); }
-        .btn:active { transform: translateY(0); }
-        .btn-primary { background: var(--primary); color: #fff; border: none; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2); }
-        .btn-primary:hover { background: var(--primary-hover); }
-        .btn-success { background: var(--success); color: #fff; border: none; }
-        .btn-success:hover { background: #059669; }
-        .btn-danger { color: var(--danger); border-color: #fecaca; background: #fef2f2; }
-        .btn-danger:hover { background: #fee2e2; }
-        
-        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.6); z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
-        .modal-box { background: var(--bg-surface); border-radius: var(--radius-lg); width: 450px; display: flex; flex-direction: column; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); }
-        .modal-header { padding: 20px 24px; font-size: 16px; font-weight: 800; display:flex; justify-content:space-between; border-bottom: 1px solid var(--border-color); letter-spacing: -0.5px; }
-        .modal-body { padding: 24px; display: flex; flex-direction: column; gap: 16px; }
-        .modal-footer { padding: 16px 24px; text-align: right; border-top: 1px solid var(--border-color); background: #f8fafc; border-bottom-left-radius: var(--radius-lg); border-bottom-right-radius: var(--radius-lg); }
-    </style>
+  <style>
+    /* === 1. Reset & Variables === */
+    :root {
+      --bg-app: #f3f4f6;
+      --text-main: #1f2937;
+      --border: #e5e7eb;
+      --accent: #4f46e5;
+      --accent-light: #e0e7ff;
+      --accent-bg: #eef2ff;
+      --danger: #ef4444;
+      --success: #10b981;
+      --gray: #6b7280;
+      /* 폰트 완벽 통일 */
+      --main-font: 'Pretendard', -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --font-code: 'JetBrains Mono', Consolas, "Courier New", monospace; 
+      --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    }
+
+    * { box-sizing: border-box; outline: none; }
+    body, button, input, select, textarea {
+      margin: 0; 
+      font-family: var(--main-font); 
+      -webkit-font-smoothing: antialiased;
+      letter-spacing: -0.01em;
+    }
+    body {
+      background: var(--bg-app); color: var(--text-main);
+      font-size: 15px;
+      height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+    }
+
+    /* === 2. Header === */
+    header {
+      background: #fff; height: 64px; padding: 0 24px;
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid var(--border); z-index: 50; flex-shrink: 0;
+    }
+    
+    .header-left { display: flex; align-items: center; gap: 16px; }
+    .logo { 
+        font-size: 20px; font-weight: 800; color: var(--accent); 
+        display: flex; align-items: center; gap: 10px; margin: 0; white-space: nowrap; 
+    }
+
+    .toolbar { display: flex; gap: 10px; align-items: center; }
+    
+    .btn {
+      height: 38px; padding: 0 16px; border-radius: 6px; border: 1px solid var(--border);
+      background: #fff; cursor: pointer; display: inline-flex; align-items: center; gap: 8px;
+      font-weight: 600; font-size: 14px; color: #4b5563; transition: 0.2s; white-space: nowrap;
+    }
+    .btn:hover { background: #f9fafb; border-color: #d1d5db; color: #111827; }
+    .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .btn-primary:hover { background: #4338ca; }
+    .btn-icon { border: none; background: transparent; cursor: pointer; color: #9ca3af; font-size: 18px; transition:0.2s; padding: 6px; border-radius: 6px;}
+    .btn-icon:hover { color: var(--accent); background: #f3f4f6; }
+
+    /* === 3. Main Layout === */
+    main { flex: 1; display: flex; height: calc(100vh - 64px); overflow: hidden; }
+
+    #sidebar {
+      width: 300px; background: #fff; border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; flex-shrink: 0; z-index: 20;
+    }
+    
+    .sidebar-header { 
+        height: 60px;
+        padding: 0 20px; 
+        border-bottom: 1px solid var(--border); 
+        background: #f9fafb; 
+        display: flex; 
+        flex-direction: row; 
+        align-items: center; 
+        gap: 8px; 
+        font-weight: 700; 
+        color: var(--gray); 
+        font-size: 14px; 
+        flex-shrink: 0;
+    }
+    .list-scroll { flex: 1; overflow-y: auto; }
+    
+    .list-item {
+      padding: 14px 20px; border-bottom: 1px solid #f3f4f6; cursor: pointer;
+      display: flex; flex-direction: column; gap: 4px; transition: 0.1s; border-left: 4px solid transparent; font-weight: 500; color: #4b5563; font-size: 15px;
+    }
+    .list-item:hover { background: #f9fafb; }
+    .list-item.active { background: var(--accent-bg); border-left-color: var(--accent); color: var(--accent); font-weight: 700;}
+
+    #editor-area { flex: 1; display: flex; flex-direction: column; background: var(--bg-app); position: relative; }
+    
+    .editor-actions {
+      height: 60px; 
+      flex-shrink: 0; padding: 0 28px; background: rgba(255,255,255,0.95);
+      border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;
+      gap: 24px;
+      backdrop-filter: blur(5px); z-index: 10;
+    }
+
+    .editor-scroller { flex: 1; overflow-y: auto; padding: 24px; scroll-behavior: smooth; }
+    
+    .paper {
+      max-width: 900px; margin: 0 auto 40px auto; background: #fff;
+      padding: 32px 40px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
+      border-radius: 12px; display: flex; flex-direction: column; gap: 24px; border: 1px solid #e5e7eb;
+    }
+
+    .paper-input-lg {
+      border: none; background: transparent; font-family: var(--main-font);
+      font-size: 22px; font-weight: 800; color: #1f2937;
+      width: 100%; transition: 0.2s; padding: 4px 8px; margin: 0;
+      border-bottom: 2px solid transparent; outline: none; border-radius: 6px; letter-spacing: -0.02em;
+      min-width: 0;
+    }
+    .paper-input-lg:focus { border-bottom-color: var(--accent); background: #f9fafb; box-shadow: 0 0 0 3px var(--accent-light); }
+    .paper-input-lg::placeholder { color: #d1d5db; }
+
+    .section-label {
+      font-size: 14px; font-weight: 700; color: #6b7280; margin-bottom: 12px; display: flex; gap:8px; align-items: center;
+      border-bottom: 2px solid #f3f4f6; padding-bottom: 10px;
+    }
+
+    /* === Form Elements === */
+    .form-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+    .form-label { font-size: 13px; font-weight: 700; color: #6b7280; }
+    .form-control { padding: 12px 14px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; outline: none; transition: 0.2s; color: #1f2937; background: #fff;}
+    .form-control:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-light); }
+    
+    .folder-picker-area { display: flex; gap: 12px; align-items: center; background: #f9fafb; padding: 12px 16px; border-radius: 8px; border: 1px dashed #d1d5db; }
+    .folder-path { flex: 1; font-family: var(--font-code); font-size: 14px; color: var(--accent); word-break: break-all; font-weight: 600; }
+
+    /* === Table === */
+    .table-wrapper { border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; margin-top: 8px; }
+    table { width: 100%; border-collapse: collapse; text-align: left; background: #fff; }
+    th, td { padding: 14px 20px; border-bottom: 1px solid #e5e7eb; font-size: 14px; }
+    th { background: #f9fafb; font-weight: 700; color: #6b7280; }
+    tbody tr:hover { background: #f9fafb; }
+    .status-badge { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; padding: 4px 10px; border-radius: 6px; font-size: 13px; }
+    .status-success { background: #ecfdf5; color: #10b981; }
+    .status-fail { background: #fef2f2; color: #ef4444; }
+
+    /* === Modals === */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(2px); z-index: 2500; display: none; align-items: center; justify-content: center; }
+    .modal-box { background: #fff; width: 480px; padding: 32px; border-radius: 16px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); display: flex; flex-direction: column; gap: 20px; }
+    
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .modal-header h3 { margin: 0; font-size: 18px; font-weight: 800; color: var(--text-main); display: flex; align-items: center; gap: 10px; }
+    
+    .modal-footer { margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px; }
+
+    /* === Progress Loader === */
+    .progress-box { width: 340px; text-align: center; align-items: center; padding: 48px 32px; }
+    .spinner {
+        font-size: 48px; color: var(--accent); margin-bottom: 20px;
+        animation: spin 1s linear infinite;
+    }
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+
+    /* 🌟 Toast Notification */
+    #toast-area { 
+        position: fixed; 
+        bottom: 40px; 
+        left: 50%; 
+        transform: translateX(-50%); 
+        z-index: 3000; 
+        display: flex; 
+        flex-direction: column; 
+        gap: 10px; 
+        align-items: center;
+        pointer-events: none;
+    }
+    .toast { 
+        background: rgba(17, 24, 39, 0.9);
+        color: #fff; 
+        padding: 12px 24px; 
+        border-radius: 8px; 
+        font-size: 14px; 
+        font-weight: 600; 
+        box-shadow: 0 10px 15px -3px rgba(0,0,0,0.2); 
+        animation: toast-fade 1s ease-in-out forwards; 
+    }
+    @keyframes toast-fade { 
+        0% { opacity: 0; transform: translateY(15px); } 
+        20% { opacity: 1; transform: translateY(0); } 
+        80% { opacity: 1; transform: translateY(0); } 
+        100% { opacity: 0; transform: translateY(-15px); } 
+    }
+  </style>
 </head>
 <body>
 
-    <header>
-        <div class="app-title"><div class="app-title-icon">💾</div> DB 백업</div>
-        <button class="btn btn-primary" onclick="openAddModal()">＋ 새 스케줄 등록</button>
-    </header>
+<header>
+  <div class="header-left">
+    <h1 class="logo"><i class="fas fa-database"></i> DB 백업 매니저</h1>
+  </div>
+  <div class="toolbar">
+    <!-- 🌟 단축키 모달 버튼 추가 -->
+    <button class="btn" onclick="openShortcutModal()">
+      <i class="fas fa-keyboard"></i> 단축키
+    </button>
+    <label class="btn" style="cursor:pointer">
+      <i class="fas fa-file-import" style="color:#f59e0b;"></i> 데이터 복구
+      <input type="file" id="restoreFileInput" accept=".json" style="display:none" multiple onchange="handleRestoreFiles(this)">
+    </label>
+    <div style="width:1px; height:24px; background:#e5e7eb; margin:0 8px;"></div>
+    <button class="btn btn-primary" onclick="openAddModal()"><i class="fas fa-plus"></i> 새 스케줄</button>
+  </div>
+</header>
 
-    <div class="container">
-        <aside>
-            <div class="sidebar-header">백업 리스트</div>
-            <div class="script-list" id="jobList"></div>
-        </aside>
-
-        <main>
-            <div id="mainContent" style="display:none; height:100%; flex-direction:column;">
-                <div class="toolbar">
-                    <input type="text" id="editJobName" class="editable-title" placeholder="백업 스케줄명 입력" title="클릭하여 이름 수정">
-                    
-                    <span style="flex:1"></span>
-                    <button class="btn btn-success" id="btnRun" onclick="runBackupJob('수동실행')">▶ 지금 실행</button>
-                    <button class="btn" onclick="saveJobConfig()" id="btnSaveConfig" title="단축키: Ctrl + S">💾 설정 저장</button>
-                    <button class="btn btn-danger" onclick="deleteJob()">🗑️ 삭제</button>
-                </div>
-
-                <div class="content-split">
-                    <div class="section-card">
-                        <div class="config-grid">
-                            <div class="config-group">
-                                <label class="config-label">백업 대상 DB</label>
-                                <select id="editTargetDB" class="config-select"></select>
-                            </div>
-                            <div class="config-group">
-                                <label class="config-label">실행 주기</label>
-                                <select id="editCycle" class="config-select">
-                                    <option value="daily">매일 1회 (Daily)</option>
-                                    <option value="manual">수동 (Manual)</option>
-                                </select>
-                            </div>
-                        </div>
-                        
-                        <div class="config-group" style="margin-top:10px;">
-                            <label class="config-label">🗂️ 백업 저장소(폴더) 지정</label>
-                            <div class="folder-picker-area">
-                                <button class="btn" onclick="selectSaveDirectory()">폴더 선택</button>
-                                <div class="folder-path" id="savePathDisplay">지정되지 않음 (기본 다운로드)</div>
-                            </div>
-                            <p style="font-size:12px; color:var(--text-muted); margin:0; font-weight:500;">* 보안상 브라우저 재시작 시 최초 1회 폴더 접근 권한을 물어볼 수 있습니다.</p>
-                        </div>
-                    </div>
-
-                    <div class="section-card flex-1">
-                        <div class="section-title">📊 최근 실행 이력</div>
-                        <div class="table-wrapper">
-                            <table>
-                                <thead><tr><th style="width: 180px;">실행 일시</th><th style="width: 100px;">상태</th><th>메시지/파일명</th></tr></thead>
-                                <tbody id="logTableBody"></tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div id="mainEmpty" style="display:flex; flex:1; align-items:center; justify-content:center; color:var(--text-muted); font-size: 16px; font-weight: 600;">좌측에서 스케줄을 선택하세요.</div>
-        </main>
+<main>
+  <aside id="sidebar">
+    <div class="sidebar-header">
+      <i class="fas fa-list-ul"></i> 백업 스케줄 목록
     </div>
-
-    <div id="addModal" class="modal-overlay">
-        <div class="modal-box">
-            <div class="modal-header"><span>새 스케줄 등록</span><button style="border:none;background:transparent;cursor:pointer;font-size:20px;color:var(--text-muted);" onclick="closeModal()">×</button></div>
-            <div class="modal-body">
-                <div class="config-group">
-                    <label class="config-label">스케줄 이름</label>
-                    <input type="text" id="newJobName" class="config-input" placeholder="예: 주요 데이터 백업">
-                </div>
-                <div class="config-group">
-                    <label class="config-label">대상 DB</label>
-                    <select id="newTargetDB" class="config-select"></select>
-                </div>
-                <div class="config-group">
-                    <label class="config-label">주기 설정</label>
-                    <select id="newCycle" class="config-select"><option value="daily">매일 1회</option><option value="manual">수동으로만</option></select>
-                </div>
-            </div>
-            <div class="modal-footer"><button class="btn btn-primary" onclick="addNewJob()" style="padding: 0 24px;">완료</button></div>
+    <!-- 🌟 사이드바 검색 필터 영역 -->
+    <div style="padding: 12px 20px; border-bottom: 1px solid var(--border); background: #fff;">
+        <div style="position: relative;">
+            <i class="fas fa-search" style="position: absolute; left: 12px; top: 12px; color: #9ca3af; font-size: 13px;"></i>
+            <input type="text" id="sidebarFilter" class="form-control" placeholder="스케줄 검색..." style="width: 100%; font-size: 13px; padding: 10px 10px 10px 34px;">
         </div>
     </div>
+    <div class="list-scroll" id="jobList"></div>
+  </aside>
 
-    <script>
-        const MANAGER_DB_NAME = 'BackupDB';
-        let managerDB, currentJobId = null, availableDBs = [];
-        let directoryHandle = null; 
+  <section id="editor-area">
+    <div id="mainContent" style="display:none; height:100%; flex-direction:column;">
+        <div class="editor-actions">
+          <div style="display: flex; align-items: center; flex: 1; min-width: 0;">
+            <input type="text" id="editJobName" class="paper-input-lg" placeholder="스케줄 이름 입력">
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
+            <button class="btn" id="btnRun" onclick="runBackupJob('수동실행')" style="color:#10b981; border-color:#a7f3d0; background:#ecfdf5;" title="단축키: Alt + S">
+              <i class="fas fa-play"></i> 지금 실행
+            </button>
+            <button class="btn" onclick="saveJobConfig()" id="btnSaveConfig" title="단축키: Ctrl + S">
+              <i class="fas fa-save"></i> 저장
+            </button>
+            <div style="width:1px; height:24px; background:#e5e7eb; margin:0 8px;"></div>
+            <button class="btn-icon" onclick="deleteJob()" title="삭제" style="color:#ef4444;">
+              <i class="far fa-trash-alt"></i>
+            </button>
+          </div>
+        </div>
 
-        window.onload = async () => {
-            await fetchAvailableDBs();
-            await initManagerDB();
-            await loadJobs();
-            await checkDailyBatches();
-        };
+        <div class="editor-scroller">
+          <div class="paper">
+            
+            <div class="section-label">
+                <i class="fas fa-cog"></i> 설정 (Configuration)
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+                <div class="form-group">
+                    <label class="form-label">대상 DB</label>
+                    <select id="editTargetDB" class="form-control"></select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">실행 주기</label>
+                    <select id="editCycle" class="form-control">
+                        <option value="daily">매일 1회</option>
+                        <option value="manual">수동 전용</option>
+                    </select>
+                </div>
+            </div>
 
-        // 단축키 설정 (Ctrl + S / Cmd + S)
-        document.addEventListener('keydown', function(e) {
-            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-                e.preventDefault(); // 브라우저 기본 웹페이지 저장 기능 막기
-                if (currentJobId && document.getElementById('mainContent').style.display !== 'none') {
-                    saveJobConfig();
-                }
+            <div class="form-group" style="margin-top: 12px;">
+                <label class="form-label">백업 저장 폴더</label>
+                <div class="folder-picker-area">
+                    <button class="btn" style="height:34px;" onclick="selectSaveDirectory()"><i class="far fa-folder-open"></i> 폴더 선택</button>
+                    <div class="folder-path" id="savePathDisplay">기본 다운로드 경로 사용</div>
+                </div>
+            </div>
+
+            <div class="section-label" style="margin-top: 32px;">
+                <i class="fas fa-history"></i> 실행 이력 (Logs)
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 180px;">일시</th>
+                            <th style="width: 120px;">상태</th>
+                            <th>메시지</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logTableBody"></tbody>
+                </table>
+            </div>
+
+          </div>
+        </div>
+    </div>
+    
+    <!-- Empty State -->
+    <div id="mainEmpty" style="display:flex; flex:1; align-items:center; justify-content:center; color:#9ca3af; flex-direction:column; gap:20px;">
+        <i class="fas fa-layer-group" style="font-size:56px; opacity:0.5;"></i>
+        <div style="font-size: 16px; font-weight: 600;">좌측에서 스케줄을 선택하거나 새로 등록하세요.</div>
+    </div>
+  </section>
+</main>
+
+<!-- 스케줄 추가 모달 -->
+<div id="addModal" class="modal-overlay">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h3><i class="fas fa-plus-circle" style="color:var(--accent)"></i> 새 스케줄 등록</h3>
+            <button class="btn-icon" onclick="closeModal()"><i class="fas fa-times"></i></button>
+        </div>
+        
+        <div class="form-group">
+            <label class="form-label">스케줄 이름</label>
+            <input type="text" id="newJobName" class="form-control" placeholder="예: 전체 데이터 일일 백업">
+        </div>
+        <div class="form-group">
+            <label class="form-label">대상 DB</label>
+            <select id="newTargetDB" class="form-control"></select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">주기 설정</label>
+            <select id="newCycle" class="form-control">
+                <option value="daily">매일 1회</option>
+                <option value="manual">수동으로만</option>
+            </select>
+        </div>
+        
+        <div class="modal-footer">
+            <button class="btn" onclick="closeModal()">취소</button>
+            <button class="btn btn-primary" onclick="addNewJob()"><i class="fas fa-save"></i> 저장</button>
+        </div>
+    </div>
+</div>
+
+<!-- 🌟 단축키 안내 모달 -->
+<div id="shortcutModal" class="modal-overlay" onclick="closeShortcutModal()">
+    <div class="modal-box" onclick="event.stopPropagation()" style="width: 400px; padding: 24px;">
+        <div class="modal-header" style="margin-bottom: 16px;">
+            <h3><i class="fas fa-keyboard" style="color:var(--accent)"></i> 키보드 단축키</h3>
+            <button class="btn-icon" onclick="closeShortcutModal()"><i class="fas fa-times"></i></button>
+        </div>
+        <ul style="font-size: 14px; color: var(--text-main); padding-left: 24px; line-height: 2.2; margin: 0;">
+            <li><b>저장하기:</b> <kbd style="background:#f3f4f6; border:1px solid #d1d5db; padding:2px 6px; border-radius:4px; font-family:var(--font-code); font-size:12px;">Ctrl</kbd> + <kbd style="background:#f3f4f6; border:1px solid #d1d5db; padding:2px 6px; border-radius:4px; font-family:var(--font-code); font-size:12px;">S</kbd></li>
+            <li><b>지금 실행:</b> <kbd style="background:#f3f4f6; border:1px solid #d1d5db; padding:2px 6px; border-radius:4px; font-family:var(--font-code); font-size:12px;">Alt</kbd> + <kbd style="background:#f3f4f6; border:1px solid #d1d5db; padding:2px 6px; border-radius:4px; font-family:var(--font-code); font-size:12px;">S</kbd></li>
+        </ul>
+        <div class="modal-footer" style="margin-top: 16px;">
+            <button class="btn btn-primary" onclick="closeShortcutModal()">확인</button>
+        </div>
+    </div>
+</div>
+
+<!-- 처리중 프로그레스 모달 -->
+<div id="progressModal" class="modal-overlay">
+    <div class="modal-box progress-box">
+        <i class="fas fa-circle-notch spinner"></i>
+        <h3 id="progressTitle" style="margin:0 0 12px 0; font-size:18px; color:#1f2937;">처리 중...</h3>
+        <p id="progressDesc" style="margin:0; font-size:14px; color:#6b7280; line-height:1.5;">데이터를 안전하게 처리하고 있습니다.</p>
+    </div>
+</div>
+
+<!-- 토스트 팝업 컨테이너 -->
+<div id="toast-area"></div>
+
+<script>
+    const MANAGER_DB_NAME = 'BackupDB';
+    let managerDB, currentJobId = null, availableDBs = [];
+    let directoryHandle = null; 
+
+    // 토스트 알림 함수
+    function showToast(msg) {
+        const area = document.getElementById("toast-area");
+        const el = document.createElement("div");
+        el.className = "toast";
+        el.textContent = msg;
+        area.appendChild(el);
+        
+        setTimeout(() => el.remove(), 1000); 
+    }
+
+    // 🌟 모달 제어 (단축키)
+    function openShortcutModal() { document.getElementById('shortcutModal').style.display = 'flex'; }
+    function closeShortcutModal() { document.getElementById('shortcutModal').style.display = 'none'; }
+
+    // 단축키 이벤트 리스너
+    document.addEventListener("keydown", (e) => {
+        const isCmdCtrl = (navigator.platform.toUpperCase().indexOf('MAC') >= 0) ? e.metaKey : e.ctrlKey;
+        
+        // Ctrl + S : 저장
+        if (isCmdCtrl && !e.altKey && e.key.toLowerCase() === 's') { 
+            e.preventDefault(); 
+            if (currentJobId && document.getElementById('mainContent').style.display !== 'none') {
+                saveJobConfig(); 
+            }
+            return; 
+        }
+        
+        // Alt + S : 지금 실행
+        if (!isCmdCtrl && e.altKey && e.key.toLowerCase() === 's') {
+            e.preventDefault();
+            if (currentJobId && document.getElementById('mainContent').style.display !== 'none') {
+                runBackupJob('수동실행');
+            }
+            return;
+        }
+    });
+
+    // 🌟 사이드바 검색 필터 이벤트 리스너
+    document.getElementById('sidebarFilter').addEventListener('input', function(e) {
+        const keyword = e.target.value.toLowerCase();
+        const listItems = document.querySelectorAll('#jobList .list-item');
+        
+        listItems.forEach(item => {
+            const text = item.textContent.toLowerCase();
+            if(text.includes(keyword)) {
+                item.style.display = 'flex';
+            } else {
+                item.style.display = 'none';
             }
         });
+    });
 
-        async function fetchAvailableDBs() {
-            if (indexedDB.databases) {
-                const dbs = await indexedDB.databases();
-                availableDBs = dbs.map(d => d.name).filter(n => !n.startsWith('BackupSchedulerDB'));
+    window.onload = async () => {
+        await fetchAvailableDBs();
+        await initManagerDB();
+        await loadJobs();
+    };
+
+    async function fetchAvailableDBs() {
+        if (indexedDB.databases) {
+            const dbs = await indexedDB.databases();
+            availableDBs = dbs.map(d => d.name).filter(n => !n.startsWith('BackupSchedulerDB'));
+        }
+        ['newTargetDB', 'editTargetDB'].forEach(id => {
+            const sel = document.getElementById(id);
+            sel.innerHTML = '<option value="">DB 선택...</option><option value="ALL">전체 DB 백업 (ALL)</option>';
+            availableDBs.forEach(db => sel.innerHTML += `<option value="${db}">${db}</option>`);
+        });
+    }
+
+    function initManagerDB() {
+        return new Promise((res, rej) => {
+            const req = indexedDB.open(MANAGER_DB_NAME, 1);
+            req.onupgradeneeded = e => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains('jobs')) db.createObjectStore('jobs', { keyPath: 'id' });
+                if (!db.objectStoreNames.contains('logs')) db.createObjectStore('logs', { keyPath: 'id', autoIncrement: true }).createIndex('jobId', 'jobId');
+                if (!db.objectStoreNames.contains('config')) db.createObjectStore('config', { keyPath: 'key' });
+            };
+            req.onsuccess = async e => { managerDB = e.target.result; await loadDirectoryHandle(); res(); };
+            req.onerror = e => rej(e);
+        });
+    }
+
+    async function selectSaveDirectory() {
+        try {
+            directoryHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+            document.getElementById('savePathDisplay').innerText = directoryHandle.name;
+            managerDB.transaction('config', 'readwrite').objectStore('config').put({ key: 'backupFolder', handle: directoryHandle });
+        } catch (err) {}
+    }
+
+    async function loadDirectoryHandle() {
+        return new Promise((resolve) => {
+            managerDB.transaction('config', 'readonly').objectStore('config').get('backupFolder').onsuccess = async (e) => {
+                if (e.target.result) {
+                    directoryHandle = e.target.result.handle;
+                    document.getElementById('savePathDisplay').innerText = `${directoryHandle.name} (권한 필요)`;
+                }
+                resolve();
+            };
+        });
+    }
+
+    async function verifyPermission(fileHandle) {
+        const options = { mode: 'readwrite' };
+        if ((await fileHandle.queryPermission(options)) === 'granted') return true;
+        if ((await fileHandle.requestPermission(options)) === 'granted') return true;
+        return false;
+    }
+
+    // --- 백업 로직 ---
+    async function processValueForBackup(val) {
+        if (val instanceof Blob || val instanceof File) {
+            const chunkSize = 5 * 1024 * 1024;
+            const chunks = [];
+            for (let offset = 0; offset < val.size; offset += chunkSize) {
+                const slice = val.slice(offset, offset + chunkSize);
+                const base64 = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result.indexOf(',') !== -1 ? reader.result.split(',')[1] : reader.result);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(slice);
+                });
+                chunks.push(base64 || "");
             }
-            ['newTargetDB', 'editTargetDB'].forEach(id => {
-                const sel = document.getElementById(id);
-                sel.innerHTML = '<option value="">DB 선택...</option>';
-                availableDBs.forEach(db => sel.innerHTML += `<option value="${db}">${db}</option>`);
+            return { __type: "ChunkedBlob", mime: val.type, dataChunks: chunks, name: val.name || "" };
+        } else if (Array.isArray(val)) {
+            return await Promise.all(val.map(item => processValueForBackup(item)));
+        } else if (val && typeof val === 'object' && val !== null) {
+            if (val instanceof ArrayBuffer || ArrayBuffer.isView(val)) return await processValueForBackup(new Blob([val]));
+            const newVal = {};
+            for (const key of Object.keys(val)) newVal[key] = await processValueForBackup(val[key]);
+            return newVal;
+        }
+        return val;
+    }
+
+    function showProgress(title, desc) {
+        document.getElementById('progressTitle').innerText = title;
+        document.getElementById('progressDesc').innerText = desc;
+        document.getElementById('progressModal').style.display = 'flex';
+    }
+    function hideProgress() {
+        document.getElementById('progressModal').style.display = 'none';
+    }
+
+    async function runBackupJob(type) {
+        if(!currentJobId) return;
+        const btn = document.getElementById('btnRun');
+        const originalBtnHTML = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 실행 중'; 
+        btn.disabled = true;
+        
+        showProgress('데이터 백업', '초기화 중입니다...');
+
+        try {
+            const job = await new Promise(res => managerDB.transaction('jobs').objectStore('jobs').get(currentJobId).onsuccess = e => res(e.target.result));
+            job.targetDB = document.getElementById('editTargetDB').value;
+            
+            const dbsToBackup = job.targetDB === 'ALL' ? availableDBs : [job.targetDB];
+            let allMessages = [];
+
+            if (directoryHandle) await verifyPermission(directoryHandle);
+
+            for (let dbName of dbsToBackup) {
+                document.getElementById('progressDesc').innerText = `${dbName} 추출 중...`;
+                const msg = await executeBackupSingleDB(dbName);
+                allMessages.push(msg);
+            }
+
+            const finalMsg = allMessages.join(" | ");
+            managerDB.transaction('logs', 'readwrite').objectStore('logs').add({
+                jobId: job.id, time: new Date().toLocaleString(), type, status: '성공', message: finalMsg
             });
-        }
-
-        function initManagerDB() {
-            return new Promise((res, rej) => {
-                const req = indexedDB.open(MANAGER_DB_NAME, 1);
-                req.onupgradeneeded = e => {
-                    const db = e.target.result;
-                    if (!db.objectStoreNames.contains('jobs')) db.createObjectStore('jobs', { keyPath: 'id' });
-                    if (!db.objectStoreNames.contains('logs')) db.createObjectStore('logs', { keyPath: 'id', autoIncrement: true }).createIndex('jobId', 'jobId');
-                    if (!db.objectStoreNames.contains('config')) db.createObjectStore('config', { keyPath: 'key' });
-                };
-                req.onsuccess = async e => { 
-                    managerDB = e.target.result; 
-                    await loadDirectoryHandle(); 
-                    res(); 
-                };
-                req.onerror = e => rej(e);
+            
+            job.lastRunDate = new Date().toISOString().split('T')[0];
+            managerDB.transaction('jobs', 'readwrite').objectStore('jobs').put(job);
+            
+            showToast('백업이 완료되었습니다.');
+        } catch (err) {
+            managerDB.transaction('logs', 'readwrite').objectStore('logs').add({
+                jobId: currentJobId, time: new Date().toLocaleString(), type, status: '실패', message: err.message || err
             });
+            showToast('백업 중 오류가 발생했습니다.');
+        } finally {
+            btn.innerHTML = originalBtnHTML; 
+            btn.disabled = false;
+            hideProgress();
+            loadJobs(); loadLogs(currentJobId);
         }
+    }
 
-        async function selectSaveDirectory() {
-            try {
-                directoryHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
-                document.getElementById('savePathDisplay').innerText = `[ ${directoryHandle.name} ]`;
-                managerDB.transaction('config', 'readwrite').objectStore('config').put({ key: 'backupFolder', handle: directoryHandle });
-            } catch (err) { console.log('폴더 선택 취소됨', err); }
-        }
+    async function executeBackupSingleDB(dbName) {
+        const request = indexedDB.open(dbName);
+        const db = await new Promise((res, rej) => {
+            request.onsuccess = e => res(e.target.result);
+            request.onerror = () => rej("DB 오픈 실패: " + dbName);
+        });
 
-        async function loadDirectoryHandle() {
-            return new Promise((resolve) => {
-                managerDB.transaction('config', 'readonly').objectStore('config').get('backupFolder').onsuccess = async (e) => {
-                    if (e.target.result) {
-                        directoryHandle = e.target.result.handle;
-                        document.getElementById('savePathDisplay').innerText = `[ ${directoryHandle.name} ] (권한 확인 필요)`;
+        const stores = Array.from(db.objectStoreNames);
+        const MAX_CHUNK_LENGTH = 100 * 1024 * 1024; 
+
+        let partIndex = 1;
+        let jsonParts = [];
+        let currentChunkSize = 0;
+        let currentStore = null;
+        let isFirstItem = true;
+        let stringBuffer = "";
+
+        const flushBuffer = () => { if(stringBuffer.length > 0) { jsonParts.push(stringBuffer); currentChunkSize += stringBuffer.length; stringBuffer = ""; } };
+        const pushStr = (str) => { stringBuffer += str; if(stringBuffer.length > 512 * 1024) flushBuffer(); };
+
+        const streamStringify = (val) => {
+            if(val === null || val === undefined) pushStr("null");
+            else if(typeof val === "string") pushStr(JSON.stringify(val));
+            else if(typeof val === "number" || typeof val === "boolean") pushStr(String(val));
+            else if(Array.isArray(val)) {
+                pushStr("["); for(let i=0; i<val.length; i++) { streamStringify(val[i]); if(i < val.length-1) pushStr(","); } pushStr("]");
+            } else if(typeof val === "object") {
+                pushStr("{"); const keys = Object.keys(val);
+                for(let i=0; i<keys.length; i++) {
+                    pushStr(JSON.stringify(keys[i]) + ":"); streamStringify(val[keys[i]]); if(i < keys.length-1) pushStr(",");
+                }
+                pushStr("}");
+            }
+        };
+
+        const startNewChunk = (storeName) => {
+            const startStr = `{"database":"${db.name}","version":${db.version},"part":${partIndex},"stores":{"${storeName}":[`;
+            jsonParts = []; stringBuffer = ""; currentChunkSize = 0; pushStr(startStr); currentStore = storeName; isFirstItem = true;
+        };
+
+        let generatedFiles = [];
+        const closeAndDownloadChunk = async () => {
+            pushStr(`]}}`); flushBuffer();
+            const blob = new Blob(jsonParts, { type: "application/json" });
+            const timeStr = new Date().toISOString().replace(/[:T-]/g, '').slice(0, 14);
+            const fileName = `${db.name}_Backup_${timeStr}_part${partIndex}.json`;
+
+            if (directoryHandle) {
+                const fileHandle = await directoryHandle.getFileHandle(fileName, { create: true });
+                const writable = await fileHandle.createWritable();
+                await writable.write(blob);
+                await writable.close();
+            } else {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href = url; a.download = fileName;
+                document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }
+            generatedFiles.push(`part${partIndex}`);
+            partIndex++; jsonParts = []; stringBuffer = ""; currentChunkSize = 0;
+        };
+
+        for (const storeName of stores) {
+            if (jsonParts.length === 0 && stringBuffer.length === 0) startNewChunk(storeName);
+            else if (currentStore !== storeName) { pushStr(`], "${storeName}":[`); currentStore = storeName; isFirstItem = true; }
+
+            let lastKey = null; let hasMore = true;
+            while (hasMore) {
+                const batch = await new Promise((res, rej) => {
+                    const tx = db.transaction(storeName, 'readonly');
+                    const store = tx.objectStore(storeName);
+                    const range = lastKey !== null ? IDBKeyRange.lowerBound(lastKey, true) : null;
+                    const req = store.openCursor(range);
+                    const results = []; let count = 0;
+                    
+                    req.onsuccess = e => {
+                        const cursor = e.target.result;
+                        if(cursor && count < 50) {
+                            let val = cursor.value;
+                            if(!store.keyPath && val && typeof val === 'object') val.__idb_out_key = cursor.key;
+                            results.push(val); lastKey = cursor.key; count++; cursor.continue();
+                        } else res(results);
+                    };
+                    req.onerror = rej;
+                });
+
+                if(batch.length === 0) break;
+                
+                for(let i=0; i<batch.length; i++) {
+                    const processedItem = await processValueForBackup(batch[i]);
+                    if(!isFirstItem) pushStr(",");
+                    streamStringify(processedItem);
+                    isFirstItem = false;
+
+                    if (currentChunkSize + stringBuffer.length > MAX_CHUNK_LENGTH) {
+                        await closeAndDownloadChunk();
+                        startNewChunk(storeName);
                     }
-                    resolve();
-                };
-            });
+                }
+            }
         }
+        if(jsonParts.length > 0 || stringBuffer.length > 0) await closeAndDownloadChunk();
+        
+        db.close();
+        return `[${dbName}] 완료 (${generatedFiles.length}개 파일)`;
+    }
 
-        async function verifyPermission(fileHandle, readWrite) {
-            const options = { mode: readWrite ? 'readwrite' : 'read' };
-            if ((await fileHandle.queryPermission(options)) === 'granted') return true;
-            if ((await fileHandle.requestPermission(options)) === 'granted') return true;
-            return false;
-        }
-
-        function blobToBase64(blob) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result);
-                reader.onerror = reject;
-                reader.readAsDataURL(blob);
-            });
-        }
-
-        async function processValueForBackup(val) {
-            if (val instanceof Blob || val instanceof File) {
-                const base64 = await blobToBase64(val);
-                return { __type: "Blob", mime: val.type, data: base64, name: val.name || "" };
+    // --- 데이터 복구(Restore) ---
+    async function processValueForRestore(val) {
+        if (val && typeof val === 'object') {
+            if (val.__type === "ChunkedBlob") {
+                const byteArrays = [];
+                for (const b64Chunk of val.dataChunks) {
+                    const byteString = atob(b64Chunk);
+                    const byteNumbers = new Array(byteString.length);
+                    for (let i = 0; i < byteString.length; i++) byteNumbers[i] = byteString.charCodeAt(i);
+                    byteArrays.push(new Uint8Array(byteNumbers));
+                }
+                const blob = new Blob(byteArrays, { type: val.mime });
+                if(val.name) return new File([blob], val.name, { type: val.mime });
+                return blob;
             } else if (Array.isArray(val)) {
-                return await Promise.all(val.map(item => processValueForBackup(item)));
-            } else if (val && typeof val === 'object' && val !== null) {
+                return await Promise.all(val.map(item => processValueForRestore(item)));
+            } else {
                 const newVal = {};
-                for (const key of Object.keys(val)) { newVal[key] = await processValueForBackup(val[key]); }
+                for (const key of Object.keys(val)) newVal[key] = await processValueForRestore(val[key]);
                 return newVal;
             }
-            return val; 
+        }
+        return val;
+    }
+
+    async function handleRestoreFiles(input) {
+        if(!input.files || input.files.length === 0) return;
+        
+        if(!confirm(`선택한 ${input.files.length}개의 백업 파일을 복구하시겠습니까?\n(동일한 키가 존재하면 덮어쓰기 됩니다)`)) {
+            input.value = ''; return;
         }
 
-        function getToday() { return new Date().toISOString().split('T')[0]; }
+        showProgress('데이터 복구', '파일 분석 및 덮어쓰기 중...');
 
-        async function checkDailyBatches() {
-            managerDB.transaction('jobs').objectStore('jobs').getAll().onsuccess = async e => {
-                const jobs = e.target.result;
-                for (let job of jobs) {
-                    if (job.cycle === 'daily' && job.lastRunDate !== getToday()) {
-                        await executeBackup(job, '자동');
-                        job.lastRunDate = getToday();
-                        managerDB.transaction('jobs', 'readwrite').objectStore('jobs').put(job);
-                    }
-                }
-                loadJobs();
-            };
-        }
-
-        async function runBackupJob(type) {
-            if(!currentJobId) return;
-            const btn = document.getElementById('btnRun');
-            const originText = btn.innerText;
-            btn.innerText = '⏳ 백업 중...';
-            btn.disabled = true;
-
-            try {
-                const job = await new Promise(res => managerDB.transaction('jobs').objectStore('jobs').get(currentJobId).onsuccess = e => res(e.target.result));
-                job.targetDB = document.getElementById('editTargetDB').value;
-                await executeBackup(job, type);
-                job.lastRunDate = getToday();
-                managerDB.transaction('jobs', 'readwrite').objectStore('jobs').put(job);
-            } finally {
-                btn.innerText = originText;
-                btn.disabled = false;
-                loadJobs(); loadLogs(currentJobId);
-            }
-        }
-
-        async function executeBackup(job, type) {
-            let status = '성공', message = '';
-            try {
-                if(!job.targetDB) throw new Error("대상 DB 설정 필요");
+        try {
+            for(let file of input.files) {
+                document.getElementById('progressDesc').innerText = `${file.name} 복구 중...`;
+                const textData = await file.text();
+                const json = JSON.parse(textData);
                 
-                const request = indexedDB.open(job.targetDB);
+                if(!json.database || !json.stores) throw new Error("유효하지 않은 백업 파일 형식이 포함되어 있습니다.");
+                const dbName = json.database;
+
+                const request = indexedDB.open(dbName);
                 const db = await new Promise((res, rej) => {
                     request.onsuccess = e => res(e.target.result);
-                    request.onerror = () => rej("DB 오픈 실패");
+                    request.onerror = () => rej(`'${dbName}' DB 접근 실패`);
                 });
 
-                const exportData = { database: db.name, version: db.version, stores: {} };
-                for (const storeName of Array.from(db.objectStoreNames)) {
-                    const rawData = await new Promise((res) => {
-                        db.transaction(storeName).objectStore(storeName).getAll().onsuccess = e => res(e.target.result);
-                    });
-                    exportData.stores[storeName] = await Promise.all(rawData.map(item => processValueForBackup(item)));
+                for (const storeName of Object.keys(json.stores)) {
+                    if(!db.objectStoreNames.contains(storeName)) continue;
+
+                    const rawRecords = json.stores[storeName];
+                    const processedRecords = await Promise.all(rawRecords.map(async (record) => await processValueForRestore(record)));
+
+                    const tempTx = db.transaction(storeName, 'readonly');
+                    const keyPath = tempTx.objectStore(storeName).keyPath;
+
+                    const tx = db.transaction(storeName, 'readwrite');
+                    const store = tx.objectStore(storeName);
+                    
+                    for (let finalData of processedRecords) {
+                        if (keyPath) store.put(finalData);
+                        else {
+                            let explicitKey = finalData.__idb_out_key;
+                            if (explicitKey !== undefined) delete finalData.__idb_out_key;
+                            else explicitKey = finalData.id || finalData._id || finalData.key;
+
+                            if (explicitKey !== undefined) store.put(finalData, explicitKey);
+                            else store.put(finalData);
+                        }
+                    }
+
+                    await new Promise((resolve, reject) => { tx.oncomplete = resolve; tx.onerror = () => reject("데이터 덮어쓰기 에러"); });
                 }
                 db.close();
-
-                const jsonStr = JSON.stringify(exportData, null, 2);
-                const now = new Date();
-                const timeStr = now.getFullYear() + String(now.getMonth()+1).padStart(2,'0') + String(now.getDate()).padStart(2,'0') + "_" + String(now.getHours()).padStart(2,'0') + String(now.getMinutes()).padStart(2,'0');
-                const fileName = `${job.targetDB}_Backup_${timeStr}.json`;
-
-                if (directoryHandle && await verifyPermission(directoryHandle, true)) {
-                    const fileHandle = await directoryHandle.getFileHandle(fileName, { create: true });
-                    const writable = await fileHandle.createWritable();
-                    await writable.write(jsonStr);
-                    await writable.close();
-                    message = `[폴더] ${fileName}`;
-                    document.getElementById('savePathDisplay').innerText = `[ ${directoryHandle.name} ] (연결됨)`;
-                } else {
-                    const blob = new Blob([jsonStr], { type: "application/json" });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url; a.download = fileName;
-                    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                    message = `[다운로드] ${fileName}`;
-                }
-
-            } catch (err) {
-                status = '실패'; message = err.message || err;
             }
-
-            return new Promise(res => managerDB.transaction('logs', 'readwrite').objectStore('logs').add({
-                jobId: job.id, time: new Date().toLocaleString(), type, status, message
-            }).onsuccess = res);
-        }
-
-        function loadJobs() {
-            const list = document.getElementById('jobList');
-            managerDB.transaction('jobs').objectStore('jobs').getAll().onsuccess = e => {
-                list.innerHTML = '';
-                e.target.result.forEach(j => {
-                    const item = document.createElement('li');
-                    item.className = `script-item ${currentJobId === j.id ? 'active' : ''}`;
-                    const badge = j.lastRunDate === getToday() ? '<span class="badge success">오늘완료</span>' : '<span class="badge">대기중</span>';
-                    item.innerHTML = `<span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${j.name}</span>${badge}`;
-                    item.onclick = () => selectJob(j.id);
-                    list.appendChild(item);
-                });
-            };
-        }
-
-        function selectJob(id) {
-            currentJobId = id; loadJobs();
-            document.getElementById('mainEmpty').style.display = 'none';
-            document.getElementById('mainContent').style.display = 'flex';
-            managerDB.transaction('jobs').objectStore('jobs').get(id).onsuccess = e => {
-                const j = e.target.result;
-                document.getElementById('editJobName').value = j.name; // Input Value 바인딩
-                document.getElementById('editTargetDB').value = j.targetDB || '';
-                document.getElementById('editCycle').value = j.cycle;
-                loadLogs(id);
-            };
-        }
-
-        function openAddModal() { 
-            document.getElementById('newJobName').value = '';
-            document.getElementById('addModal').style.display = 'flex'; 
-            document.getElementById('newJobName').focus();
-        }
-        function closeModal() { document.getElementById('addModal').style.display = 'none'; }
-        
-        function addNewJob() {
-            const name = document.getElementById('newJobName').value.trim();
-            if(!name) return alert("스케줄 이름을 입력해주세요.");
-            const newJob = { id: 'job_'+Date.now(), name, targetDB: document.getElementById('newTargetDB').value, cycle: document.getElementById('newCycle').value, lastRunDate: '' };
-            managerDB.transaction('jobs', 'readwrite').objectStore('jobs').add(newJob).onsuccess = () => { closeModal(); loadJobs(); selectJob(newJob.id); };
-        }
-
-        function saveJobConfig() {
-            if(!currentJobId) return;
-            const newName = document.getElementById('editJobName').value.trim();
-            if(!newName) return alert("스케줄명을 입력해주세요.");
             
-            managerDB.transaction('jobs', 'readwrite').objectStore('jobs').get(currentJobId).onsuccess = e => {
-                const j = e.target.result;
-                j.name = newName; // 이름 업데이트
-                j.targetDB = document.getElementById('editTargetDB').value; 
-                j.cycle = document.getElementById('editCycle').value;
+            setTimeout(() => {
+                hideProgress();
+                showToast("복구가 완료되었습니다.");
+            }, 500);
+            
+        } catch (err) {
+            hideProgress();
+            alert("복구 중 에러 발생: " + err.message);
+        } finally {
+            input.value = '';
+        }
+    }
+
+    // --- 기타 UI 제어 ---
+    function loadJobs() {
+        const list = document.getElementById('jobList');
+        managerDB.transaction('jobs').objectStore('jobs').getAll().onsuccess = e => {
+            list.innerHTML = '';
+            const filterKeyword = document.getElementById('sidebarFilter').value.toLowerCase();
+            
+            e.target.result.forEach(j => {
+                const item = document.createElement('div');
+                item.className = `list-item ${currentJobId === j.id ? 'active' : ''}`;
+                item.innerHTML = j.name;
+                item.onclick = () => selectJob(j.id);
                 
-                managerDB.transaction('jobs', 'readwrite').objectStore('jobs').put(j).onsuccess = () => {
-                    // 저장 시각적 피드백
-                    const btn = document.getElementById('btnSaveConfig');
-                    const originHtml = btn.innerHTML;
-                    btn.innerHTML = '✅ 저장됨';
-                    btn.style.background = '#f0fdf4';
-                    btn.style.borderColor = '#bbf7d0';
-                    setTimeout(() => { btn.innerHTML = originHtml; btn.style.background = ''; btn.style.borderColor = ''; }, 1000);
-                    loadJobs(); // 좌측 리스트 이름 반영
-                };
+                // 검색어에 따른 초기 디스플레이 설정
+                if(j.name.toLowerCase().includes(filterKeyword)) {
+                    item.style.display = 'flex';
+                } else {
+                    item.style.display = 'none';
+                }
+                list.appendChild(item);
+            });
+        };
+    }
+    
+    function selectJob(id) {
+        currentJobId = id; loadJobs();
+        document.getElementById('mainEmpty').style.display = 'none';
+        document.getElementById('mainContent').style.display = 'flex';
+        managerDB.transaction('jobs').objectStore('jobs').get(id).onsuccess = e => {
+            const j = e.target.result;
+            document.getElementById('editJobName').value = j.name; 
+            document.getElementById('editTargetDB').value = j.targetDB || '';
+            document.getElementById('editCycle').value = j.cycle;
+            loadLogs(id);
+        };
+    }
+    
+    function loadLogs(jobId) {
+        managerDB.transaction('logs').objectStore('logs').index('jobId').getAll(IDBKeyRange.only(jobId)).onsuccess = e => {
+            const logs = e.target.result.sort((a,b) => b.id - a.id);
+            document.getElementById('logTableBody').innerHTML = logs.map(l => {
+                const statusBadge = l.status === '성공' 
+                    ? `<span class="status-badge status-success"><i class="fas fa-check-circle"></i> 성공</span>` 
+                    : `<span class="status-badge status-fail"><i class="fas fa-exclamation-circle"></i> 실패</span>`;
+                return `<tr>
+                    <td style="color:#6b7280; font-family:var(--font-code);">${l.time}</td>
+                    <td>${statusBadge}</td>
+                    <td style="color:#374151; line-height:1.4;">${l.message}</td>
+                </tr>`;
+            }).join('');
+        };
+    }
+    
+    function openAddModal() { 
+        document.getElementById('newJobName').value = '';
+        document.getElementById('addModal').style.display = 'flex'; 
+    }
+    function closeModal() { document.getElementById('addModal').style.display = 'none'; }
+    
+    function addNewJob() {
+        const name = document.getElementById('newJobName').value.trim();
+        if(!name) return alert("스케줄 이름을 입력해주세요.");
+        const newJob = { id: 'job_'+Date.now(), name, targetDB: document.getElementById('newTargetDB').value, cycle: document.getElementById('newCycle').value, lastRunDate: '' };
+        managerDB.transaction('jobs', 'readwrite').objectStore('jobs').add(newJob).onsuccess = () => { 
+            closeModal(); loadJobs(); selectJob(newJob.id); 
+            showToast("새 스케줄이 등록되었습니다.");
+        };
+    }
+    
+    function saveJobConfig() {
+        if(!currentJobId) return;
+        managerDB.transaction('jobs', 'readwrite').objectStore('jobs').get(currentJobId).onsuccess = e => {
+            const j = e.target.result;
+            j.name = document.getElementById('editJobName').value.trim();
+            j.targetDB = document.getElementById('editTargetDB').value; 
+            j.cycle = document.getElementById('editCycle').value;
+            managerDB.transaction('jobs', 'readwrite').objectStore('jobs').put(j).onsuccess = () => {
+                showToast("저장되었습니다.");
+                loadJobs();
             };
-        }
-
-        function deleteJob() {
-            if(!currentJobId || !confirm('삭제하시겠습니까?')) return;
-            managerDB.transaction('jobs', 'readwrite').objectStore('jobs').delete(currentJobId).onsuccess = () => { 
-                currentJobId=null; 
-                document.getElementById('mainContent').style.display='none'; 
-                document.getElementById('mainEmpty').style.display='flex'; 
-                loadJobs(); 
-            };
-        }
-
-        function loadLogs(jobId) {
-            managerDB.transaction('logs').objectStore('logs').index('jobId').getAll(IDBKeyRange.only(jobId)).onsuccess = e => {
-                const logs = e.target.result.sort((a,b) => b.id - a.id);
-                document.getElementById('logTableBody').innerHTML = logs.map(l => `<tr><td style="color:var(--text-muted); font-family:monospace; font-size:12px;">${l.time}</td><td style="color:${l.status==='성공'?'var(--success)':'var(--danger)'}; font-weight:700;">${l.status}</td><td style="word-break:break-all; font-family:monospace; font-size:12px;">${l.message}</td></tr>`).join('');
-            };
-        }
-    </script>
+        };
+    }
+    
+    function deleteJob() {
+        if(!currentJobId || !confirm('해당 백업 스케줄을 삭제하시겠습니까?')) return;
+        managerDB.transaction('jobs', 'readwrite').objectStore('jobs').delete(currentJobId).onsuccess = () => { 
+            currentJobId=null; 
+            document.getElementById('mainContent').style.display='none'; 
+            document.getElementById('mainEmpty').style.display='flex'; 
+            loadJobs(); 
+            showToast("스케줄이 삭제되었습니다.");
+        };
+    }
+</script>
 </body>
 </html>
