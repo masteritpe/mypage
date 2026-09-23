@@ -96,6 +96,7 @@
     .icons-failed i.fa-arrow-right::before { content: "➡️" !important; }
     .icons-failed i.fa-exchange-alt::before { content: "🔁" !important; }
     .icons-failed i.fa-history::before { content: "🕒" !important; }
+    .icons-failed i.fa-star::before { content: "⭐" !important; }
     
     /* Phosphor Icons -> 이모지 매핑 */
     .icons-failed i.ph-highlighter::before { content: "🖍️" !important; }
@@ -589,6 +590,8 @@
                   <div class="section-label">
                       <span style="display:flex; align-items:center; gap:6px;"><i class="fas fa-question-circle"></i> 문제 내용 (Question)</span>
                       <div style="display:flex; gap:12px; align-items:center;">
+                          <!-- 별표 표시 컨테이너를 일괄복사 버튼 왼쪽으로 이동 -->
+                          <div id="importance-stars" style="color: #9ca3af; font-size: 12px; display: flex; align-items: center;"></div>
                           <button class="btn-icon" onclick="window.copyBatchQ()" style="font-size:12px; display:flex; align-items:center; gap:4px; color:var(--accent); font-weight:600;" title="프롬프트 + 문제내용 일괄복사"><i class="fas fa-layer-group"></i> 일괄복사</button>
                           <button class="btn-icon" onclick="window.copySectionText(quillQ)" style="font-size:12px; display:flex; align-items:center; gap:4px;" title="문제 내용 복사"><i class="far fa-copy"></i> 복사</button>
                       </div>
@@ -666,6 +669,7 @@
             <li><b>몰입모드(화면 넓게):</b> Ctrl + H</li>
             <li><b>몰입모드(분할화면):</b> Alt + H</li>
             <li><b>체크 상태 토글:</b> Alt + C</li>
+            <li><b>중요도 표시(별표):</b> Alt + V (1~3개 별표 토글)</li>
             <li><b>저장하기:</b> Ctrl + S</li>
             <li><b>이전/다음 문제:</b> 좌/우 방향키 (<i class="fas fa-arrow-left"></i> <i class="fas fa-arrow-right"></i>) *에디터 외부에서*</li>
             <li><b>글자 확대/축소:</b> Ctrl + ➕ / ➖</li>
@@ -821,7 +825,15 @@
   let db = null;
 
   window.App = {
-    state: { tests: [], editingId: null, dumpFilter: "", chapterFilter: "", search: "", statusFilter: "" },
+    state: { 
+        tests: [], 
+        editingId: null, 
+        dumpFilter: "", 
+        chapterFilter: "", 
+        search: "", 
+        statusFilter: "",
+        currentImportance: 0 // 현재 에디터의 중요도 상태
+    },
     openDB: function(){
       return new Promise((resolve,reject)=>{
         const req = indexedDB.open(DB_NAME, DB_VER);
@@ -1180,6 +1192,18 @@ document.addEventListener("DOMContentLoaded", async () => {
           : '<i class="far fa-circle"></i> 미체크';
   }
 
+  // === 중요도 렌더링 ===
+  window.renderImportance = function() {
+      const container = $("importance-stars");
+      if(!container) return;
+      const count = App.state.currentImportance || 0;
+      let html = "";
+      for(let i = 0; i < count; i++){
+          html += '<i class="fas fa-star" style="margin-right: 4px;"></i>';
+      }
+      container.innerHTML = html;
+  };
+
   els.statusBtn.onclick = async () => {
       const current = els.statusBtn.dataset.status;
       const next = current === "미체크" ? "체크" : "미체크";
@@ -1339,6 +1363,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     els.number.value = t.number || "";
     renderStatusButton(t.status || "미체크");
     
+    App.state.currentImportance = t.importance || 0;
+    renderImportance();
+    
     if (quillQ && quillS && quillK) {
         quillQ.root.innerHTML = App.renderHtml(t.question);
         quillS.root.innerHTML = App.renderHtml(t.solution);
@@ -1377,6 +1404,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     
     renderStatusButton("미체크");
+    App.state.currentImportance = 0;
+    renderImportance();
     
     if (quillQ && quillS && quillK) {
         quillQ.root.innerHTML = "";
@@ -1413,6 +1442,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       status: els.statusBtn.dataset.status,
       // 상태가 '체크'일 때 기존에 날짜가 없다면 당일 날짜로 신규 생성
       checkDate: els.statusBtn.dataset.status === "체크" ? (existingCheckDate || App.getTodayStr()) : "",
+      importance: App.state.currentImportance || 0,
       question: quillQ.root.innerHTML, 
       solution: quillS.root.innerHTML, 
       keypoint: quillK.root.innerHTML
@@ -1797,6 +1827,7 @@ document.addEventListener("DOMContentLoaded", async () => {
        {header:"Chapter", key:"chapter", width:15}, 
        {header:"No", key:"number", width:10}, 
        {header:"Status", key:"status", width:10},
+       {header:"Importance", key:"importance", width:10},
        {header:"Question", key:"question", width:40}, 
        {header:"Solution", key:"solution", width:50}, 
        {header:"KeyPoint", key:"keypoint", width:40},
@@ -1823,7 +1854,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           }
        }
        ws.addRow({
-          dumpName: t.dumpName, chapter: t.chapter, number: t.number, status: t.status,
+          dumpName: t.dumpName, chapter: t.chapter, number: t.number, status: t.status, importance: t.importance,
           question: stripTags(t.question), solution: stripTags(t.solution), keypoint: stripTags(t.keypoint), 
           rowid: rid
        });
@@ -1890,13 +1921,13 @@ document.addEventListener("DOMContentLoaded", async () => {
           const chap = getCell(row, 2);
           if(!chap && !dName) return; 
           
-          const rid = getCell(row, 8);
+          const rid = getCell(row, 9);
           const test = {
              id: App.uid(), ts: App.nowISO(), 
-             dumpName: dName, chapter: chap, number: getCell(row, 3), status: getCell(row, 4),
-             question: App.htmlDecode(getCell(row, 5)), 
-             solution: App.htmlDecode(getCell(row, 6)), 
-             keypoint: App.htmlDecode(getCell(row, 7))
+             dumpName: dName, chapter: chap, number: getCell(row, 3), status: getCell(row, 4), importance: parseInt(getCell(row, 5)) || 0,
+             question: App.htmlDecode(getCell(row, 6)), 
+             solution: App.htmlDecode(getCell(row, 7)), 
+             keypoint: App.htmlDecode(getCell(row, 8))
           };
           
           const imgs = imgMap[rid];
@@ -2029,6 +2060,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                  chapter: currentChapter,
                  number: String(startNumber + i).padStart(3, '0'),
                  status: "미체크",
+                 importance: 0,
                  question: mdToHtml(q.question),
                  solution: mdToHtml(q.solution),
                  keypoint: ""
@@ -2291,6 +2323,25 @@ document.addEventListener("DOMContentLoaded", async () => {
           e.preventDefault();
           const btnStatusToggle = document.getElementById('btnStatusToggle');
           if (btnStatusToggle) btnStatusToggle.click();
+          return;
+      }
+      
+      // === 중요도 표시 제어 (Alt + V) ===
+      if (!isCmdCtrl && e.altKey && !e.shiftKey && e.key.toLowerCase() === 'v') {
+          e.preventDefault();
+          App.state.currentImportance = ((App.state.currentImportance || 0) + 1) % 4;
+          renderImportance();
+          
+          if (App.state.editingId) {
+              const currentTest = App.state.tests.find(x => x.id === App.state.editingId);
+              if (currentTest) {
+                  currentTest.importance = App.state.currentImportance;
+                  // DB에 즉시 업데이트
+                  App.putTest(currentTest).then(() => {
+                      // 필요한 경우 목록 재랜더링 (현재 목록에는 별을 그리지 않으므로 생략해도 됨)
+                  });
+              }
+          }
           return;
       }
       
