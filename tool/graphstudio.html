@@ -7,7 +7,8 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@300;400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+<!-- Mermaid 버전 업데이트 (10.6.1 -> 11) -->
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
 
 <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
 <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
@@ -395,13 +396,11 @@ function initQuill() {
         }
     });
 
-    // 💡 [수정사항] Quill 에디터 자체의 맞춤법 검사 비활성화
     quill.root.setAttribute('spellcheck', 'false');
 
     // 클립보드 매처: 붙여넣기 시 <table> 태그를 감지하여 하이브리드 블록으로 우회 삽입
     quill.clipboard.addMatcher('TABLE', function(node, delta) {
         const Delta = Quill.import('delta');
-        // 기존 인라인 스타일과 width 제거하여 UI 통일성 유지
         node.removeAttribute('style');
         node.removeAttribute('width');
         node.removeAttribute('border');
@@ -647,9 +646,7 @@ function injectAntigravityStyle(code) {
         .split('\n')
         .filter(line => {
             const t = line.trim();
-            // classDef 정의 줄 제거
             if (/^classDef\s+/.test(t)) return false;
-            // class 할당 줄 제거 (예: class GitHub github;)
             if (/^class\s+[\w,]+\s+\w+;/.test(t)) return false;
             return true;
         })
@@ -670,9 +667,6 @@ async function renderDiagram() {
 
     const isAntigravity = theme === 'antigravity';
 
-    // antigravity 테마는 Inter/Noto Sans KR 웹폰트를 쓰는데, 폰트가 로드되기 전에
-    // Mermaid가 노드 크기를 계산하면 대체 폰트 기준 크기로 박스가 잡혀
-    // 실제 폰트 적용 시 라벨(특히 2줄 텍스트)이 잘려 보인다. 렌더 전에 로드를 보장한다.
     if (isAntigravity && document.fonts) {
         try {
             await Promise.all([
@@ -686,34 +680,26 @@ async function renderDiagram() {
     }
 
     if (isAntigravity) {
-        // classDef/class 색상 구문을 코드에서 제거 후 렌더링
         code = injectAntigravityStyle(code);
         mermaid.initialize({
             startOnLoad: false,
             theme: 'base',
             securityLevel: 'loose',
             themeVariables: {
-                /* 노드: 흰 배경, 진한 테두리 */
                 primaryColor:           '#ffffff',
                 primaryBorderColor:     '#475569',
                 primaryTextColor:       '#0f172a',
-                /* 연결선 */
                 lineColor:              '#334155',
-                /* subgraph: 거의 흰색 배경 */
                 clusterBkg:             '#fafafa',
                 clusterBorder:          '#475569',
-                /* 에지 라벨 */
                 edgeLabelBackground:    '#ffffff',
-                /* 보조/서브 노드 */
                 secondaryColor:         '#f9fafb',
                 secondaryBorderColor:   '#64748b',
                 secondaryTextColor:     '#1e293b',
                 tertiaryColor:          '#f9fafb',
                 tertiaryBorderColor:    '#64748b',
-                /* 폰트 */
                 fontFamily:             'Inter, Noto Sans KR, sans-serif',
                 fontSize:               '13px',
-                /* 노트 */
                 noteBkgColor:           '#fffbeb',
                 noteTextColor:          '#92400e',
             }
@@ -745,10 +731,6 @@ async function renderDiagram() {
     }
 }
 
-// data:image/svg+xml 로 만든 <img>는 문서의 <link> 스타일시트(구글 폰트)를 전혀 참조하지
-// 못해 대체 폰트로 그려진다. 대체 폰트는 줄 높이가 달라 2줄 라벨이 도형 밖으로 잘려 보이므로,
-// 실제 사용중인 웹폰트를 base64로 인라인해서 SVG 자체에 심어준다. 최초 1회만 네트워크로 받고
-// 이후 내보내기부터는 캐시를 재사용한다.
 let embeddedFontCssPromise = null;
 function getEmbeddedFontCss() {
     if (embeddedFontCssPromise) return embeddedFontCssPromise;
@@ -786,9 +768,6 @@ async function exportToPng() {
     const svgEl = document.querySelector('#mermaid-output svg');
     if(!svgEl) return toast('내보낼 다이어그램이 없습니다.');
 
-    // 서브그래프 타이틀 등이 SVG의 선언된 viewBox/width/height 밖으로 삐져나오는 경우가 있어
-    // getBoundingClientRect 대신 실제 렌더링된 콘텐츠의 bbox를 구해 viewBox를 보정하고
-    // 여유 패딩을 둔다.
     const clone = svgEl.cloneNode(true);
     const contentBox = svgEl.getBBox();
     const padding = 10;
