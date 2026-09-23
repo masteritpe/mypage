@@ -217,6 +217,13 @@ window.MathJax = {
         <div class="card">
             <h2 class="card-title">⚙️ 1. 블로그 기본정보</h2>
             <div class="form-group">
+                <label>출력 포맷 설정</label>
+                <select id="outputFormat" style="width: 50%; display: inline-block;">
+                    <option value="md">MD (기존 블로그 양식)</option>
+                    <option value="mdx">MDX (신규 블로그 양식)</option>
+                </select>
+            </div>
+            <div class="form-group">
                 <label>포스트 제목 (title)</label>
                 <input type="text" id="postTitle" placeholder="예: 6G·AI 네트워크 협력 확대와 차세대 통신 기술 동향">
             </div>
@@ -1507,6 +1514,7 @@ window.MathJax = {
     function gatherFormData() {
         const date = document.getElementById('issueDate').value;
         const postTitle = document.getElementById('postTitle').value;
+        const outputFormat = document.getElementById('outputFormat').value; // 추가됨
         if (!date || !postTitle) return null;
         const articles = [];
         document.querySelectorAll('.article-block').forEach(block => {
@@ -1534,22 +1542,34 @@ window.MathJax = {
         });
         return {
             id: currentEditId, date: date, postTitle: postTitle, category: document.getElementById('postCategory').value,
-            tags: document.getElementById('postTags').value, quoteKo: document.getElementById('quoteKo').value, introText: document.getElementById('introText').value, articles: articles, updatedAt: Date.now()
+            tags: document.getElementById('postTags').value, quoteKo: document.getElementById('quoteKo').value, 
+            introText: document.getElementById('introText').value, outputFormat: outputFormat, // 추가됨
+            articles: articles, updatedAt: Date.now()
         };
     }
 
     function createNew() {
-        currentEditId = null; document.getElementById('postTitle').value = ''; document.getElementById('issueDate').value = new Date().toISOString().split('T')[0];
-        document.getElementById('postCategory').selectedIndex = 0; document.getElementById('postTags').value = ''; document.getElementById('quoteKo').value = ''; document.getElementById('introText').value = '';
-        document.getElementById('articlesContainer').innerHTML = ''; articleCount = 0; 
-        addArticle(); loadTimeline(); showToast("✨ 새로운 마크다운 문서를 시작합니다.");
+        currentEditId = null; 
+        document.getElementById('postTitle').value = ''; 
+        document.getElementById('issueDate').value = new Date().toISOString().split('T')[0];
+        document.getElementById('outputFormat').value = 'md'; // 신규 작성 시 기본값 md
+        document.getElementById('postCategory').selectedIndex = 0; 
+        document.getElementById('postTags').value = ''; 
+        document.getElementById('quoteKo').value = ''; 
+        document.getElementById('introText').value = '';
+        document.getElementById('articlesContainer').innerHTML = ''; 
+        articleCount = 0; 
+        addArticle(); loadTimeline(); showToast("✨ 새로운 문서를 시작합니다.");
     }
 
     function loadDataToForm(id) {
         if(!db) return; const tx = db.transaction("posts", "readonly"); const store = tx.objectStore("posts"); const request = store.get(id);
         request.onsuccess = () => {
             const data = request.result; if(!data) return;
-            currentEditId = data.id; document.getElementById('postTitle').value = data.postTitle; document.getElementById('issueDate').value = data.date;
+            currentEditId = data.id; 
+            document.getElementById('postTitle').value = data.postTitle; 
+            document.getElementById('issueDate').value = data.date;
+            document.getElementById('outputFormat').value = data.outputFormat || 'md'; // 추가됨
             
             const catSelect = document.getElementById('postCategory');
             if (Array.from(catSelect.options).some(opt => opt.value === data.category)) catSelect.value = data.category;
@@ -1588,7 +1608,6 @@ window.MathJax = {
             <div class="article-block card" id="${id}">
                 <button class="remove-btn" onclick="document.getElementById('${id}').remove()">삭제</button>
                 <div class="section-tag">본문 블록 ${articleCount}</div>
-                <!-- 소제목 H2 격상 안내 문구 변경 -->
                 <div class="form-group"><label>소제목 (## 헤더로 변환됨)</label><input type="text" class="a-title" placeholder="예: 6G 핵심 기술 요소"></div>
                 <div class="form-group">
                     <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 8px;">
@@ -1693,12 +1712,22 @@ window.MathJax = {
         
         if (!isPreview) {
             const tagsArr = data.tags ? data.tags.split(',').map(t => t.trim()).filter(t => t) : []; 
-            const tagsStr = tagsArr.length > 0 ? `[${tagsArr.join(', ')}]` : '[]';
-            const mathJaxScript = `\n<script>\n    window.MathJax = {\n        tex: {\n            inlineMath: [['$', '$'], ['\\\\(', '\\\\)']],\n            displayMath: [['$$', '$$'], ['\\\\[', '\\\\]']],\n            processEscapes: true\n        }\n    };\n<\/script>\n<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"><\/script>\n`;
-            header += `---\nlayout: post\ntitle: "${data.postTitle.replace(/"/g, '\\"')}"\ndate: ${data.date}\ncategories: ${data.category}\ntags: ${tagsStr}\n---\n\n${mathJaxScript}\n\n`;
+            const tagsStrPlain = tagsArr.length > 0 ? `[${tagsArr.join(', ')}]` : '[]';
+            
+            if (data.outputFormat === 'mdx') {
+                const catStr = `[${data.category}]`;
+                let desc = data.introText ? data.introText.substring(0, 100).replace(/\n/g, ' ').replace(/"/g, '\\"') : data.postTitle.replace(/"/g, '\\"');
+                header += `---\ntitle: "${data.postTitle.replace(/"/g, '\\"')}"\ndate: ${data.date}\ncategories: ${catStr}\ntags: ${tagsStrPlain}\ndescription: "${desc}"\n---\n\n`;
+            } else {
+                const mathJaxScript = `\n<script>\n    window.MathJax = {\n        tex: {\n            inlineMath: [['$', '$'], ['\\\\(', '\\\\)']],\n            displayMath: [['$$', '$$'], ['\\\\[', '\\\\]']],\n            processEscapes: true\n        }\n    };\n<\/script>\n<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"><\/script>\n`;
+                header += `---\nlayout: post\ntitle: "${data.postTitle.replace(/"/g, '\\"')}"\ndate: ${data.date}\ncategories: ${data.category}\ntags: ${tagsStrPlain}\n---\n\n${mathJaxScript}\n\n`;
+            }
         }
 
-        header += `<style>\n.easy-box { background: linear-gradient(135deg, #fff8e1 0%, #fef5e7 100%); border-left: 4px solid #d68910; border-radius: 8px; padding: 16px 20px; margin-bottom: 28px; }\n.easy-box .easy-title { font-size: 16px; font-weight: 700; color: #b9770e; margin-bottom: 10px; letter-spacing: 0.5px; }\n.easy-box p { font-size: 15px; line-height: 1.7; color: #3a3a3a; word-break: keep-all; margin: 0; }\n\n.visual-container { background: #fff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; margin-bottom: 32px; }\n.visual-header { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 800; color: #1a3a6c; margin-bottom: 20px; padding-bottom: 14px; border-bottom: 2px solid #e8edf5; }\n\n.table-presentation { width: 100%; border-radius: 8px; overflow: hidden; border: 1px solid #1a3a6c; }\n.tp-header { display: flex; background: #1a3a6c; color: white; font-weight: 700; text-align: center; font-size: 15px; }\n.tp-header-col { flex: 1; padding: 14px 10px; border-right: 1px solid rgba(255,255,255,0.2); word-break: keep-all; display: flex; align-items: center; justify-content: center; }\n.tp-header-col:last-child { border-right: none; }\n.tp-row { display: flex; border-bottom: 1px solid #e2e8f0; background: white; }\n.tp-row:last-child { border-bottom: none; }\n.tp-row:nth-child(even) { background: #f8fafc; }\n.tp-col { flex: 1; padding: 14px 10px; font-size: 14.5px; text-align: center; border-right: 1px solid #e2e8f0; word-break: keep-all; color: #2d3748; display: flex; align-items: center; justify-content: center; }\n.tp-col:last-child { border-right: none; }\n\n.quote-card { background: linear-gradient(135deg, #f7f4ec 0%, #faf8f1 100%); border-radius: 12px; padding: 26px 28px; border-left: 5px solid #c0392b; box-shadow: 0 4px 12px rgba(0,0,0,0.06); margin-bottom: 32px; }\n.quote-card .quote-header { font-size: 14px; font-weight: 700; color: #c0392b; letter-spacing: 2px; margin-bottom: 14px; }\n.quote-card .quote-ko { font-size: 18px; line-height: 1.6; color: #1a1a1a; font-weight: 600; word-break: keep-all; margin: 0; }\n\n.split-2 { display: flex; align-items: stretch; gap: 12px; margin-bottom: 20px; }\n.split-2-card { flex: 1; padding: 24px 20px; border-radius: 12px; background: #f8fafc; border: 1px solid #e2e8f0; text-align: center; font-size: 15px; font-weight: 700; color: #2d3748; line-height: 1.7; word-break: keep-all; }\n.split-2-connector { font-size: 28px; font-weight: 900; color: #4a5568; display: flex; align-items: center; justify-content: center; }\n\n.split-3 { display: flex; gap: 10px; margin-bottom: 20px;}\n.split-3-item { flex: 1; padding: 16px 10px; border-radius: 12px; text-align: center; background: #f8fafc; border: 1px solid #e2e8f0; }\n.split-3-item.c1 { background: #fff5f5; border-top: 4px solid #fc8181; }\n.split-3-item.c2 { background: #fffaf0; border-top: 4px solid #fbd38d; }\n.split-3-item.c3 { background: #f0fff4; border-top: 4px solid #9ae6b4; }\n.split-label { font-size: 12px; color: #718096; margin-bottom: 6px; font-weight: 700; }\n.split-val { font-size: 15px; font-weight: 800; color: #2d3748; line-height: 1.4; }\n\n.dueum-box { background-color: #1a3a6c; color: #ffffff; border-radius: 8px; padding: 16px 20px; margin-top: 8px; margin-bottom: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }\n#previewText .dueum-box p, .dueum-box p { font-size: 16.5px !important; line-height: 1.7 !important; color: #ffffff !important; word-break: keep-all !important; margin: 0 !important; font-weight: 700 !important; }\n</style>\n\n`;
+        // MDX가 아니거나 미리보기 모드일 때만 <style> 블록 유지
+        if (data.outputFormat !== 'mdx' || isPreview) {
+            header += `<style>\n.easy-box { background: linear-gradient(135deg, #fff8e1 0%, #fef5e7 100%); border-left: 4px solid #d68910; border-radius: 8px; padding: 16px 20px; margin-bottom: 28px; }\n.easy-box .easy-title { font-size: 16px; font-weight: 700; color: #b9770e; margin-bottom: 10px; letter-spacing: 0.5px; }\n.easy-box p { font-size: 15px; line-height: 1.7; color: #3a3a3a; word-break: keep-all; margin: 0; }\n\n.visual-container { background: #fff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; margin-bottom: 32px; }\n.visual-header { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 800; color: #1a3a6c; margin-bottom: 20px; padding-bottom: 14px; border-bottom: 2px solid #e8edf5; }\n\n.table-presentation { width: 100%; border-radius: 8px; overflow: hidden; border: 1px solid #1a3a6c; }\n.tp-header { display: flex; background: #1a3a6c; color: white; font-weight: 700; text-align: center; font-size: 15px; }\n.tp-header-col { flex: 1; padding: 14px 10px; border-right: 1px solid rgba(255,255,255,0.2); word-break: keep-all; display: flex; align-items: center; justify-content: center; }\n.tp-header-col:last-child { border-right: none; }\n.tp-row { display: flex; border-bottom: 1px solid #e2e8f0; background: white; }\n.tp-row:last-child { border-bottom: none; }\n.tp-row:nth-child(even) { background: #f8fafc; }\n.tp-col { flex: 1; padding: 14px 10px; font-size: 14.5px; text-align: center; border-right: 1px solid #e2e8f0; word-break: keep-all; color: #2d3748; display: flex; align-items: center; justify-content: center; }\n.tp-col:last-child { border-right: none; }\n\n.quote-card { background: linear-gradient(135deg, #f7f4ec 0%, #faf8f1 100%); border-radius: 12px; padding: 26px 28px; border-left: 5px solid #c0392b; box-shadow: 0 4px 12px rgba(0,0,0,0.06); margin-bottom: 32px; }\n.quote-card .quote-header { font-size: 14px; font-weight: 700; color: #c0392b; letter-spacing: 2px; margin-bottom: 14px; }\n.quote-card .quote-ko { font-size: 18px; line-height: 1.6; color: #1a1a1a; font-weight: 600; word-break: keep-all; margin: 0; }\n\n.split-2 { display: flex; align-items: stretch; gap: 12px; margin-bottom: 20px; }\n.split-2-card { flex: 1; padding: 24px 20px; border-radius: 12px; background: #f8fafc; border: 1px solid #e2e8f0; text-align: center; font-size: 15px; font-weight: 700; color: #2d3748; line-height: 1.7; word-break: keep-all; }\n.split-2-connector { font-size: 28px; font-weight: 900; color: #4a5568; display: flex; align-items: center; justify-content: center; }\n\n.split-3 { display: flex; gap: 10px; margin-bottom: 20px;}\n.split-3-item { flex: 1; padding: 16px 10px; border-radius: 12px; text-align: center; background: #f8fafc; border: 1px solid #e2e8f0; }\n.split-3-item.c1 { background: #fff5f5; border-top: 4px solid #fc8181; }\n.split-3-item.c2 { background: #fffaf0; border-top: 4px solid #fbd38d; }\n.split-3-item.c3 { background: #f0fff4; border-top: 4px solid #9ae6b4; }\n.split-label { font-size: 12px; color: #718096; margin-bottom: 6px; font-weight: 700; }\n.split-val { font-size: 15px; font-weight: 800; color: #2d3748; line-height: 1.4; }\n\n.dueum-box { background-color: #1a3a6c; color: #ffffff; border-radius: 8px; padding: 16px 20px; margin-top: 8px; margin-bottom: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }\n#previewText .dueum-box p, .dueum-box p { font-size: 16.5px !important; line-height: 1.7 !important; color: #ffffff !important; word-break: keep-all !important; margin: 0 !important; font-weight: 700 !important; }\n</style>\n\n`;
+        }
 
         if (data.quoteKo) header += `<div class="quote-card">\n    <div class="quote-header">💬 오늘의 한 줄</div>\n    <p class="quote-ko">"${escapeHtml(data.quoteKo)}"</p>\n</div>\n\n`;
         
@@ -1710,9 +1739,11 @@ window.MathJax = {
             let artMd = "";
             
             if (art.title) {
-                let fixedTitle = art.title.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/\*\*/g, '');
-                // 핵심 수정부: 블록 단위 소제목을 ###(H3)에서 ##(H2)로 상향시켜 
-                // 본문 내부에 H2, H3를 쓰더라도 종속(들여쓰기)되는 위계 역전을 방지합니다.
+                let fixedTitle = art.title;
+                // MDX 포맷이 아닐 때만 <b> 태그로 변환
+                if (data.outputFormat !== 'mdx') {
+                    fixedTitle = fixedTitle.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/\*\*/g, '');
+                }
                 artMd += `## ${escapeHtml(fixedTitle)}\n\n`;
             }
             
@@ -1761,21 +1792,20 @@ window.MathJax = {
                 let plines = processedContent.split('\n');
                 for (let j = 0; j < plines.length; j++) {
                     let line = plines[j];
-                    line = line.replace(/\*\*(.*?)\*\*/g, (match, inner) => {
-                        if (inner.trim() === '') return '';
-                        return '<b>' + inner.trim() + '</b>';
-                    });
-                    line = line.replace(/\*\*/g, '');
+                    // MDX 포맷이 아닐 때만 <b> 태그로 변환
+                    if (data.outputFormat !== 'mdx') {
+                        line = line.replace(/\*\*(.*?)\*\*/g, (match, inner) => {
+                            if (inner.trim() === '') return '';
+                            return '<b>' + inner.trim() + '</b>';
+                        });
+                        line = line.replace(/\*\*/g, '');
+                    }
                     plines[j] = line;
                 }
                 processedContent = plines.join('\n');
                 
-                // 삭제된 부분: 기존에는 JSON 데이터를 불러왔을 때 
-                // 본문 안의 헤더(#)를 무조건 볼드(**)로 바꿔버려 목차 인식을 날려버리던 코드가 있었습니다.
-                // 사용자의 의도대로 본문 안의 헤더들도 목차에서 제대로 보이도록 완전히 삭제했습니다.
-                
-                const tagsStr = "리드|개념|상세설명 및 해결방안|상세설명|정의\\/개념|정의|핵심\\/키워드|두음\\/키워드|분류|인증기준|주요 확인사항|결함사례|참조\\/Notes";
-                const tagRegex = new RegExp(`(?:<\\/?(?:b|strong)>|\\*\\*|[ \\t])*\\[(${tagsStr})\\](?:<\\/?(?:b|strong)>|\\*\\*|[ \\t])*`, 'gi');
+                const tagsStrPattern = "리드|개념|상세설명 및 해결방안|상세설명|정의\\/개념|정의|핵심\\/키워드|두음\\/키워드|분류|인증기준|주요 확인사항|결함사례|참조\\/Notes";
+                const tagRegex = new RegExp(`(?:<\\/?(?:b|strong)>|\\*\\*|[ \\t])*\\[(${tagsStrPattern})\\](?:<\\/?(?:b|strong)>|\\*\\*|[ \\t])*`, 'gi');
                 processedContent = processedContent.replace(tagRegex, '\n\n**[$1]**\n\n');
                 
                 processedContent = processedContent.replace(/\n{3,}/g, '\n\n');
@@ -1922,6 +1952,11 @@ window.MathJax = {
             articlesMd.push(artMd);
         });
         
+        // MDX 다운로드 시 cache-bust 주석 추가
+        if (data.outputFormat === 'mdx' && !isPreview) {
+            articlesMd.push(`\n{/* cache-bust */}\n`);
+        }
+        
         return { header, articlesMd };
     }
 
@@ -2011,6 +2046,7 @@ window.MathJax = {
         const parts = generateMarkdownParts(data, false);
         const safeTitle = data.postTitle.replace(/[^a-zA-Z0-9가-힣]/g, '-').replace(/-+/g, '-');
         const baseFilename = `${data.date}-${safeTitle}`; 
+        const ext = data.outputFormat === 'mdx' ? 'mdx' : 'md'; // 파일 확장자 설정
         
         const encoder = new TextEncoder();
         const MAX_BYTES = 50 * 1024 * 1024; // 50MB 기준
@@ -2037,7 +2073,7 @@ window.MathJax = {
         if (headerBytes + totalBodyBytes <= MAX_BYTES) {
             let finalContent = parts.header + blocks.join('');
             finalContent = finalContent.replace(/\r?\n/g, '\r\n'); 
-            filesToSave.push({ name: `${baseFilename}.md`, content: finalContent });
+            filesToSave.push({ name: `${baseFilename}.${ext}`, content: finalContent });
         } else {
             let currentBody = "";
             let currentBytes = headerBytes;
@@ -2051,7 +2087,7 @@ window.MathJax = {
                     let finalContent = parts.header + currentBody;
                     finalContent = finalContent.replace(/\r?\n/g, '\r\n'); 
                     filesToSave.push({
-                        name: `${baseFilename}-${partIndex}.md`,
+                        name: `${baseFilename}-${partIndex}.${ext}`,
                         content: finalContent
                     });
                     partIndex++;
@@ -2067,7 +2103,7 @@ window.MathJax = {
                 let finalContent = parts.header + currentBody;
                 finalContent = finalContent.replace(/\r?\n/g, '\r\n'); 
                 filesToSave.push({
-                    name: `${baseFilename}-${partIndex}.md`,
+                    name: `${baseFilename}-${partIndex}.${ext}`,
                     content: finalContent
                 });
             }
@@ -2104,7 +2140,7 @@ window.MathJax = {
             }
         }
         
-        showToast(`📥 .md 다운로드가 완료되었습니다. ${filesToSave.length > 1 ? `(${filesToSave.length}개 분할)` : ''}`);
+        showToast(`📥 다운로드가 완료되었습니다. ${filesToSave.length > 1 ? `(${filesToSave.length}개 분할)` : ''}`);
         filesToSave = null;
     }
     
