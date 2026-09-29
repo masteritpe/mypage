@@ -246,6 +246,7 @@ window.MathJax = {
                     <option value="fiver">📘 5R</option>
                     <option value="drill">📝 Drill</option>
                     <option value="technote">📑 technote</option>
+                    <option value="analysis">📊 분석노트</option> <!-- 추가된 분석노트 항목 -->
                     <option value="chat">💬 Chat</option>
                     <option value="ideablock">💡 Idea Block</option>
                     <option value="ismsp">🛡️ ISMS-P</option>
@@ -380,7 +381,7 @@ window.MathJax = {
     let mdDirHandle = null; 
     let toastTimeout = null;
 
-    const defaultCategories = ["IT기술", "정보처리", "기출문제", "문제분석", "에세이", "technote", "참조자료", "패스리딩", "Idea Block"]; 
+    const defaultCategories = ["IT기술", "정보처리", "기출문제", "문제분석", "에세이", "technote", "참조자료", "패스리딩", "Idea Block", "분석노트"]; 
 
     document.addEventListener('keydown', function(e) {
         if (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'n') {
@@ -704,6 +705,7 @@ window.MathJax = {
         else if (type === 'fiver') handle5RImport(event);
         else if (type === 'drill') handleDrillImport(event);
         else if (type === 'technote') handleTechnoteImport(event);
+        else if (type === 'analysis') handleAnalysisImport(event); // 추가된 분석노트 처리
         else if (type === 'chat') handleChatImport(event);
         else if (type === 'ideablock') handleIdeaBlockImport(event);
         else if (type === 'ismsp') handleIsmspImport(event);
@@ -711,6 +713,69 @@ window.MathJax = {
         else if (type === 'mdSplit') handleMdSplitImport(event);
         else if (type === 'pdf') handlePdfImport(event); 
         else if (type === 'pathreading') handlePathreadingImport(event);
+    }
+
+    // 추가된 분석노트 Import 함수
+    function handleAnalysisImport(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const fileNameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                let jsonArr = JSON.parse(e.target.result);
+                if (!Array.isArray(jsonArr)) throw new Error("배열 형태의 데이터가 아닙니다.");
+
+                const today = new Date().toISOString().split('T')[0];
+                document.getElementById('issueDate').value = today;
+                
+                let postTitleStr = fileNameWithoutExt;
+                if (jsonArr.length > 0) {
+                    const firstTitle = jsonArr[0].title || '제목없음';
+                    postTitleStr = jsonArr.length === 1 ? `분석노트(${firstTitle})` : `분석노트(${firstTitle} 외)`;
+                }
+                document.getElementById('postTitle').value = postTitleStr;
+                
+                setCategoryAndTag('분석노트', '분석노트');
+                document.getElementById('articlesContainer').innerHTML = ''; 
+                articleCount = 0;
+                
+                if (jsonArr.length > 0) {
+                    for (let index = 0; index < jsonArr.length; index++) {
+                        const item = jsonArr[index];
+                        const title = item.title ? (item.source ? `[${item.source}] ${item.title}` : item.title) : `분석노트 ${index + 1}`;
+                        let content = '';
+                        
+                        let rawSummary = await processEmbeddedImages(item.summary || '', `AN_${index+1}_S`);
+                        let rawInsight = await processEmbeddedImages(item.insight || '', `AN_${index+1}_I`);
+                        let rawKeywords = await processEmbeddedImages(item.keywords || '', `AN_${index+1}_K`);
+                        let rawQuestions = await processEmbeddedImages(item.questions || '', `AN_${index+1}_Q`);
+                        
+                        let summaryMd = convertHtmlToMd(rawSummary).trim();
+                        let insightMd = convertHtmlToMd(rawInsight).trim();
+                        let keywordsMd = convertHtmlToMd(rawKeywords).trim();
+                        let questionsMd = convertHtmlToMd(rawQuestions).trim();
+                        
+                        if (summaryMd) content += `**[개요/요약]**\n\n${summaryMd}\n\n`;
+                        if (insightMd) content += `**[인사이트]**\n\n${insightMd}\n\n`;
+                        if (keywordsMd) content += `**[핵심/키워드]**\n\n${keywordsMd}\n\n`;
+                        if (questionsMd) content += `**[예상문제]**\n\n${questionsMd}\n\n`;
+                        
+                        addArticle({ title: title, content: content.trim(), visualType: 'none' });
+                    }
+                } else { 
+                    addArticle(); 
+                }
+                showToast("✅ 분석노트 데이터를 성공적으로 불러왔습니다.");
+                jsonArr = null;
+            } catch (error) { 
+                alert("JSON 파일 파싱 중 오류가 발생했습니다. 포맷을 확인해주세요."); 
+            }
+            e.target.result = null;
+            event.target.value = '';
+        };
+        reader.readAsText(file);
     }
 
     function handleIdeaBlockImport(event) {
@@ -1874,7 +1939,7 @@ window.MathJax = {
                 }
                 processedContent = plines.join('\n');
                 
-                const tagsStrPattern = "리드|개념|상세설명 및 해결방안|상세설명|정의\\/개념|정의|핵심\\/키워드|두음\\/키워드|분류|인증기준|주요 확인사항|결함사례|참조\\/Notes";
+                const tagsStrPattern = "리드|개념|상세설명 및 해결방안|상세설명|정의\\/개념|정의|핵심\\/키워드|두음\\/키워드|분류|인증기준|주요 확인사항|결함사례|참조\\/Notes|개요\\/요약|인사이트|예상문제";
                 const tagRegex = new RegExp(`(?:<\\/?(?:b|strong)>|\\*\\*|[ \\t])*\\[(${tagsStrPattern})\\](?:<\\/?(?:b|strong)>|\\*\\*|[ \\t])*`, 'gi');
                 processedContent = processedContent.replace(tagRegex, '\n\n**[$1]**\n\n');
                 

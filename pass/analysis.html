@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Analysis Note</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/gh/sunn-us/SUIT/fonts/static/woff2/SUIT.css" rel="stylesheet">
+
+<link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+<script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+<script src="https://unpkg.com/quill-image-resize@3.0.9/image-resize.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+<!-- 마크다운 자동 파싱을 위한 라이브러리 추가 -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+<style>
+/* === Executive Theme === */
+:root {
+    --bg-body: #f1f5f9; --bg-sidebar: #ffffff;
+    --primary: #1e293b; --primary-hover: #0f172a;
+    --accent: #3b82f6; --accent-light: #dbeafe;
+    --text-main: #0f172a; --text-sub: #64748b; --text-muted: #94a3b8;
+    --border: #e2e8f0; --radius-md: 10px;
+    --shadow-float: 0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
+    --font-ui: 'SUIT', 'Inter', sans-serif;
+    --font-code: 'JetBrains Mono', monospace;
+    --editor-font-size: 16px;
+}
+
+* { box-sizing: border-box; outline: none; }
+body { margin: 0; background: var(--bg-body); color: var(--text-main); font-family: var(--font-ui); font-size: 14px; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+
+/* Header */
+header { height: 64px; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 28px; flex-shrink: 0; justify-content: space-between; z-index: 50; }
+header .brand { font-weight: 800; font-size: 20px; color: var(--primary); display: flex; align-items: center; gap: 12px; }
+header .brand i { font-size: 22px; color: var(--accent); }
+
+/* Layout Structure */
+.workspace { display: flex; flex: 1; overflow: hidden; height: calc(100vh - 64px); position: relative; }
+
+/* Sidebar */
+.pane-list { width: 340px; background: var(--bg-sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; z-index: 20; }
+.search-area { padding: 20px; display: flex; flex-direction: column; gap: 12px; background: var(--bg-sidebar); flex-shrink: 0; }
+.search-wrapper { position: relative; }
+.search-wrapper i { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-muted); }
+.search-input { width: 100%; height: 42px; padding: 0 16px 0 40px; border: 1px solid var(--border); border-radius: var(--radius-md); background: #f8fafc; font-family: var(--font-ui); }
+.list-scroll { flex: 1; overflow-y: auto; padding: 0 12px 20px 12px; }
+
+/* Editor Pane */
+.pane-editor { flex: 1; background: var(--bg-body); display: flex; flex-direction: column; position: relative; min-width: 0; overflow: hidden; }
+.toolbar { height: 60px; display: flex; align-items: center; padding: 0 40px; justify-content: space-between; flex-shrink: 0; z-index: 30; background: var(--bg-body); border-bottom: 1px solid transparent; }
+.editor-wrapper { flex: 1; overflow-y: auto; padding: 20px 40px 100px 40px; scroll-behavior: smooth; }
+.paper-sheet { width: 100%; max-width: 900px; background: #fff; border-radius: 16px; box-shadow: var(--shadow-float); padding: 50px 60px; margin: 0 auto; display: flex; flex-direction: column; }
+
+/* List Items */
+.item-card { position: relative; padding: 16px; margin-bottom: 8px; border-radius: var(--radius-md); cursor: pointer; border: 1px solid transparent; background: #fff; transition: 0.2s; }
+.item-card:hover { transform: translateY(-2px); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+.item-card.active { border-color: var(--accent-light); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+.item-card.active::before { content: ''; position: absolute; left: 0; top: 12px; bottom: 12px; width: 4px; background: var(--accent); border-radius: 0 4px 4px 0; }
+.item-title { font-size: 15px; font-weight: 600; margin-bottom: 6px; padding-right: 24px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item-source { font-size: 12px; color: var(--accent); margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.btn-list-del { position: absolute; right: 12px; top: 14px; background: transparent; border: none; color: #cbd5e1; cursor: pointer; opacity: 0; transition: 0.2s; padding: 4px; border-radius: 4px; }
+.item-card:hover .btn-list-del { opacity: 1; }
+.btn-list-del:hover { color: #ef4444; background: #fee2e2; }
+
+/* Forms & Editors */
+.form-group { margin-bottom: 24px; }
+.section-label { font-size: 14px; font-weight: 700; color: var(--primary); margin-bottom: 10px; display: flex; align-items: center; gap: 8px; background: #f8fafc; padding: 8px 12px; border-radius: 6px; border-left: 4px solid var(--accent); }
+.input-modern { width: 100%; padding: 0 14px; border: 1px solid var(--border); border-radius: 6px; font-family: var(--font-ui); font-size: 15px; background: #fff; }
+.input-modern:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-light); }
+.input-title-lg { font-size: 24px; font-weight: 700; height: 50px; border: none; border-bottom: 2px solid var(--border); padding: 0 4px; border-radius: 0; background: transparent; margin-bottom: 10px; }
+.input-title-lg:focus { border-bottom-color: var(--accent); box-shadow: none; }
+.input-source { font-size: 15px; font-weight: 500; height: 40px; border: none; border-bottom: 2px solid var(--border); padding: 0 4px; border-radius: 0; background: transparent; margin-bottom: 30px; width: 100%; font-family: var(--font-ui); color: var(--text-sub); }
+.input-source:focus { border-bottom-color: var(--accent); box-shadow: none; outline: none; }
+
+
+/* Quill Overrides */
+.ql-container.ql-snow { border: 1px solid var(--border) !important; border-radius: 8px !important; font-family: var(--font-ui) !important; background: #fff; transition: 0.2s; }
+.ql-container.ql-snow:focus-within { border-color: var(--accent) !important; box-shadow: 0 0 0 3px var(--accent-light); }
+.ql-editor { font-size: var(--editor-font-size) !important; line-height: 1.7; color: #1e293b; min-height: 120px; padding: 16px !important; }
+.ql-editor p { margin-bottom: 6px; }
+.ql-editor ul, .ql-editor ol { padding-left: 20px; margin: 4px 0; }
+.ql-editor strong { color: #0f172a; font-weight: 700; }
+
+/* Buttons */
+.btn { height: 36px; padding: 0 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid transparent; display: inline-flex; align-items: center; gap: 8px; transition: 0.2s; font-family: var(--font-ui); }
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: var(--primary-hover); }
+.btn-accent { background: var(--accent); color: #fff; }
+.btn-accent:hover { background: #2563eb; }
+.btn-secondary { background: #fff; border-color: var(--border); color: var(--text-main); }
+.btn-secondary:hover { background: #f8fafc; }
+.btn-danger { color: #ef4444; background: #fff; border-color: #fee2e2; }
+
+/* Modals */
+.modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(2px); z-index: 1000; display: none; align-items: center; justify-content: center; }
+.modal-box { background: #fff; width: 600px; max-width: 90vw; padding: 32px; border-radius: 16px; box-shadow: var(--shadow-float); }
+
+/* Empty State */
+.empty-state { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--bg-body); z-index: 100; }
+
+#toast { position: fixed; bottom: -50px; left: 50%; transform: translateX(-50%); background: #1e293b; color: #fff; padding: 12px 24px; border-radius: 8px; opacity: 0; transition: 0.3s; z-index: 2000; pointer-events: none; }
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<header>
+    <div class="brand"><i class="fas fa-microscope"></i> Analysis Note</div>
+    <div style="display:flex; gap:10px;">
+        <button class="btn btn-secondary" id="btn-backup-json"><i class="fas fa-file-download" style="color:#3b82f6"></i> JSON 백업</button>
+        <button class="btn btn-secondary" id="btn-restore-json"><i class="fas fa-file-upload" style="color:#8b5cf6"></i> JSON 복원</button>
+        <button class="btn btn-secondary" id="btn-export"><i class="fas fa-file-excel" style="color:#10b981"></i> Excel 추출</button>
+        <!-- JSON 복원을 위한 파일 입력 창 (숨김 처리) -->
+        <input type="file" id="inp-file-json" accept=".json" style="display: none;">
+    </div>
+</header>
+
+<div class="workspace">
+    <aside class="pane-list">
+        <div class="search-area">
+            <div class="search-wrapper">
+                <i class="fas fa-search"></i>
+                <input type="text" id="search-input" class="search-input" placeholder="분석 자료 및 출처 검색...">
+            </div>
+        </div>
+        <div class="list-scroll" id="item-list"></div>
+    </aside>
+
+    <main class="pane-editor" id="mainContent">
+        <div class="toolbar">
+            <div id="editor-status" style="font-size:13px; color:var(--text-sub);"></div>
+            <div style="display:flex; gap:10px;">
+                <button class="btn btn-secondary" id="btn-new"><i class="fas fa-plus"></i> 신규 분석</button>
+                <button class="btn btn-accent" id="btn-import"><i class="fas fa-paste"></i> 데이터 가져오기</button>
+                <button class="btn btn-danger hidden" id="btn-delete"><i class="fas fa-trash"></i> 삭제</button>
+                <button class="btn btn-primary" id="btn-save"><i class="fas fa-save"></i> 저장</button>
+            </div>
+        </div>
+
+        <div class="editor-wrapper">
+            <div class="paper-sheet">
+                <input type="hidden" id="inp-uid">
+                <input type="text" id="inp-title" class="input-modern input-title-lg" placeholder="분석 대상 문서 / 아티클 제목 입력" spellcheck="false">
+                <input type="text" id="inp-source" class="input-source" placeholder="문서 출처 입력 (예: 주간기술동향 2221호)" spellcheck="false">
+
+                <!-- 1. 요약 -->
+                <div class="form-group">
+                    <div class="section-label"><i class="fas fa-align-left"></i> 1. 요약 (Summary)</div>
+                    <div id="editor-summary"></div>
+                </div>
+
+                <!-- 2. 인사이트 -->
+                <div class="form-group">
+                    <div class="section-label"><i class="fas fa-lightbulb"></i> 2. 인사이트 (Insight)</div>
+                    <div id="editor-insight"></div>
+                </div>
+
+                <!-- 3. 키워드 -->
+                <div class="form-group">
+                    <div class="section-label"><i class="fas fa-tags"></i> 3. 관련 키워드 (Keywords)</div>
+                    <div id="editor-keywords"></div>
+                </div>
+
+                <!-- 4. 출제예상문제 -->
+                <div class="form-group">
+                    <div class="section-label"><i class="fas fa-question-circle"></i> 4. 출제 예상문제 (Expected Questions)</div>
+                    <div id="editor-questions"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="empty-state" class="empty-state">
+            <div style="text-align:center;">
+                <i class="fas fa-file-signature" style="font-size:56px; color:#cbd5e1; margin-bottom:24px;"></i>
+                <h2 style="font-size:24px; color:var(--primary); margin-bottom:10px;">분석할 문서를 선택하거나 새로 작성하세요</h2>
+                <div style="display:flex; gap:10px; justify-content:center; margin-top:20px;">
+                    <button class="btn btn-secondary" id="btn-new-center" style="height:40px;"><i class="fas fa-plus"></i> 새 분석노트 작성</button>
+                    <button class="btn btn-accent" id="btn-import-center" style="height:40px;"><i class="fas fa-paste"></i> LLM 데이터 가져오기</button>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- 데이터 가져오기 모달창 -->
+<div id="import-modal" class="modal-overlay">
+    <div class="modal-box">
+        <div style="display:flex; justify-content:space-between; margin-bottom:12px; align-items:center;">
+            <h3 style="margin:0; font-size:18px; color:var(--primary);"><i class="fas fa-robot" style="color:var(--accent); margin-right:6px;"></i> 데이터 가져오기</h3>
+            <button class="btn-secondary" id="btn-close-modal" style="background:transparent; border:none; cursor:pointer; font-size:18px; color:var(--text-sub);"><i class="fas fa-times"></i></button>
+        </div>
+        <p style="font-size:13px; color:var(--text-sub); margin-bottom:20px; line-height:1.5;">
+            제미나이 등 LLM에서 생성된 텍스트를 붙여넣으세요.<br>
+            <strong>"1. 요약, 2. 인사이트, 3. 관련 키워드, 4. 출제 예상문제"</strong> 양식을 기준으로 자동 분할됩니다.
+        </p>
+        <textarea id="inp-llm-data" class="input-modern" style="height: 350px; padding: 16px; resize: vertical; line-height:1.6;" placeholder="이곳에 복사한 내용을 붙여넣으세요..."></textarea>
+        
+        <div style="text-align:right; margin-top:20px; display:flex; justify-content:flex-end; gap:10px;">
+            <button class="btn btn-secondary" id="btn-cancel-import">취소</button>
+            <button class="btn btn-primary" id="btn-apply-import"><i class="fas fa-check"></i> 4개 영역에 입력하기</button>
+        </div>
+    </div>
+</div>
+
+<div id="toast"><i class="fas fa-check-circle"></i> <span id="toast-msg"></span></div>
+
+<script>
+// 4개의 독립된 에디터 인스턴스 생성
+const editorConfig = { theme: 'snow', modules: { toolbar: false } };
+const quillSummary = new Quill('#editor-summary', editorConfig);
+const quillInsight = new Quill('#editor-insight', editorConfig);
+const quillKeywords = new Quill('#editor-keywords', editorConfig);
+const quillQuestions = new Quill('#editor-questions', editorConfig);
+
+[quillSummary, quillInsight, quillKeywords, quillQuestions].forEach(q => {
+    q.root.setAttribute('spellcheck', false);
+});
+
+// IndexedDB 세팅
+const DB = {
+    name: 'AnalysisNoteDB', version: 1, store: 'notes', db: null,
+    init: function() {
+        return new Promise((resolve) => {
+            const req = indexedDB.open(this.name, this.version);
+            req.onupgradeneeded = e => { 
+                if (!e.target.result.objectStoreNames.contains(this.store)) 
+                    e.target.result.createObjectStore(this.store, { keyPath: 'uid' }); 
+            };
+            req.onsuccess = e => { this.db = e.target.result; resolve(); };
+        });
+    },
+    getAll: function() { return new Promise(resolve => this.db.transaction(this.store, 'readonly').objectStore(this.store).getAll().onsuccess = e => resolve(e.target.result || [])); },
+    put: function(item) { return new Promise(resolve => this.db.transaction(this.store, 'readwrite').objectStore(this.store).put(item).onsuccess = () => resolve(item)); },
+    delete: function(uid) { return new Promise(resolve => this.db.transaction(this.store, 'readwrite').objectStore(this.store).delete(uid).onsuccess = () => resolve()); }
+};
+
+const App = {
+    state: { items: [], search: '', selectedUid: null },
+    
+    init: async function() {
+        await DB.init();
+        await this.checkAndSeedData(); 
+        this.bindEvents();
+        await this.refresh();
+    },
+
+    checkAndSeedData: async function() {
+        const items = await DB.getAll();
+        if(items.length === 0) {
+            const seedData = {
+                uid: Date.now().toString(),
+                title: "로봇 물리적 제어와 AI 학습 정책 결합 기술 동향",
+                source: "주간기술동향 2221호",
+                summary: "<p>본 문서는 접촉이 잦은 로봇 작업을 성공적으로 수행하기 위해 기존의 고정된 제어 방식에서 벗어나 인공지능 학습 정책과 컴플라이언스(Compliance) 제어를 결합하는 최신 기술 동향을 분석하고 있습니다. 단순한 위치 추종을 넘어 다족 로봇 및 휴머노이드의 전신 제어, 고가의 센서에 의존하지 않는 센서리스 힘 제어(Sensorless Force Control), 그리고 물체 중심의 힘 공간 학습 등으로 기술적 패러다임이 변화하고 있습니다. 결과적으로 로봇 제어 기술은 시뮬레이션과 현실 간의 전이(Sim-to-Real) 한계를 극복하고 상황에 맞는 물리적 반응을 유연하게 학습하는 방향으로 진화하고 있으며, 향후 안전성 보장과 다중 접촉 환경에서의 불확실성 인지 제어가 핵심 과제가 될 전망입니다.</p>",
+                insight: "<p><strong>시뮬레이션-현실 전이(Sim-to-Real) 아키텍처 고도화:</strong> 로봇 학습 환경에서 현실의 물리적 불확실성을 반영하기 위해 물체 중심의 추상화 및 관측 이력 기반의 오프라인-온라인 분리(잔차 보정) 학습 구조가 중요해지고 있습니다. 이는 기업이 디지털 트윈(Digital Twin) 기반 가상 공장이나 테스트베드를 구축할 때, 시뮬레이션의 물리 엔진 한계를 극복하기 위해 실시간 데이터를 바탕으로 동적 파라미터를 보정하는 적응형(Adaptive) AI 아키텍처를 설계해야 함을 시사합니다.</p><br><p><strong>불확실성 인지 기반 물리적 보안 및 거버넌스(Safety Guarantee) 체계:</strong> 학습 기반 제어 모델의 예측 불확실성을 임피던스 제어 등과 결합하여 사람과의 상호작용 시 접촉 충돌에 대한 안전 상한을 명시적으로 보장하는 구조가 부각되고 있습니다. 기업 IT 및 거버넌스 관점에서 이는, 인간-로봇 협업(HRI) 환경 도입 시 단순한 소프트웨어적 오류 방지를 넘어 물리적 피해를 예방하는 에너지 제한 및 수동성(Passivity) 보장 로직을 엣지(Edge) 제어 계층에 필수적으로 내재화해야 함을 의미합니다.</p><br><p><strong>센서리스(Sensorless) 기반 다중 모달(Multi-modal) 데이터 융합 기술:</strong> 고가의 힘/토크 센서 대신 모터 전류, 고유수용감각, 관측 이력 및 확산 모델(Diffusion Model) 등을 융합하여 접촉 위치와 외력을 추정하는 방식이 확산되고 있습니다. 이와 같은 변화는 기업의 IoT 인프라 및 디바이스 환경에서 센서 하드웨어 의존도를 낮추고, 제한된 실시간 스트리밍 데이터를 바탕으로 고차원의 물리량을 소프트웨어적으로 추론(Soft-sensing)하는 경량화 AI 모델의 활용 가치를 크게 높여줍니다.</p>",
+                keywords: "<p><strong>제어 이론:</strong> 컴플라이언스(Compliance) 제어, 임피던스(Impedance) 및 어드미턴스(Admittance) 제어, 하이브리드 위치/힘 제어</p><p><strong>기계학습 모델:</strong> 모방 학습(Imitation Learning), 선호도 기반 미세조정(Preference-based Fine-tuning), 접촉 확산 모델(Contact Diffusion Model, CDM)</p><p><strong>아키텍처 및 방법론:</strong> 시뮬레이션-현실 전이(Sim-to-Real), 센서리스 힘 제어(Sensorless Force Control), 물체 중심 추상화(Object-centric abstraction), 전신 제어(Whole-body Control)</p>",
+                questions: "<p><strong>[단답형] (1교시형) 문제 1:</strong> 로봇 제어에서 외란이나 접촉에 유연하게 대응하기 위한 '컴플라이언스 제어(Compliance Control)'의 개념과 대표적 기법인 임피던스 제어(Impedance Control), 어드미턴스 제어(Admittance Control)를 비교 설명하시오.</p><br><p><strong>[단답형] (1교시형) 문제 2:</strong> 로봇 및 강화학습 모델의 실제 환경 적용을 위한 '시뮬레이션-현실 전이(Sim-to-Real Transfer)' 기술의 한계점과 이를 극복하기 위한 잔차 학습(Residual Learning) 메커니즘에 대해 설명하시오.</p><br><p><strong>[서술형] (2~4교시형) 문제 1:</strong> 최근 제조 및 서비스 산업에서 인간과 협동하는 지능형 로봇(협동로봇, 휴머노이드 등)의 도입이 가속화되고 있다. 복잡한 물리적 접촉 작업의 성공률을 높이기 위한 전통적인 위치/힘 제어 방식의 한계점을 설명하고, AI 학습 기반의 힘/컴플라이언스(Force/Compliance) 제어 주요 접근 방식(하이브리드 제어, 물체 중심 학습, 센서리스 기반 등)과 IT 인프라/거버넌스 관점에서의 물리적 안전성 보장(Safety Guarantee) 방안에 대하여 서술하시오.</p>"
+            };
+            await DB.put(seedData);
+        }
+    },
+
+    bindEvents: function() {
+        const $= id => document.getElementById(id);$('btn-new').onclick = $('btn-new-center').onclick = () => this.formNew();$('btn-save').onclick = () => this.save();
+        $('btn-delete').onclick = () => this.delete();$('btn-export').onclick = () => this.exportExcel();
+        
+        // JSON 백업 및 복원 이벤트
+        $('btn-backup-json').onclick = () => this.backupJSON();$('btn-restore-json').onclick = () => $('inp-file-json').click();$('inp-file-json').onchange = (e) => this.restoreJSON(e);
+        
+        // 가져오기 모달창 이벤트
+        $('btn-import').onclick = $('btn-import-center').onclick = () => {$('import-modal').style.display = 'flex';
+            setTimeout(() => $('inp-llm-data').focus(), 100);         };$('btn-close-modal').onclick = $('btn-cancel-import').onclick = () => {$('import-modal').style.display = 'none';
+        };
+        $('btn-apply-import').onclick = () => this.processLlmData();
+        
+        $('item-list').onclick = e => { const card = e.target.closest('.item-card'); if(card) this.load(card.dataset.uid); };$('search-input').onkeyup = e => { this.state.search = e.target.value.toLowerCase(); this.renderList(); };
+        
+        document.addEventListener('keydown', e => {
+            if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 's')) {
+                e.preventDefault();
+                this.save();
+            }
+        });
+    },
+
+    processLlmData: function() {
+        const rawText = document.getElementById('inp-llm-data').value;
+        if(!rawText.trim()) return this.toast('텍스트를 입력해주세요.');
+
+        const markers = [
+            { name: 'summary', regex: /(?:^|\n)#*\s*1\.?\s*요약/ },
+            { name: 'insight', regex: /(?:^|\n)#*\s*2\.?\s*인사이트/ },
+            { name: 'keywords', regex: /(?:^|\n)#*\s*3\.?\s*(?:관련\s*)?키워드/ },
+            { name: 'questions', regex: /(?:^|\n)#*\s*4\.?\s*출제\s*(?:예상)?문제/ }
+        ];
+
+        markers.forEach(m => m.index = rawText.search(m.regex));
+        
+        const foundMarkers = markers.filter(m => m.index !== -1).sort((a, b) => a.index - b.index);
+        
+        const results = { summary: '', insight: '', keywords: '', questions: '' };
+
+        for (let i = 0; i < foundMarkers.length; i++) {
+            const match = rawText.match(foundMarkers[i].regex)[0];
+            const start = foundMarkers[i].index + match.length;
+            const end = (i + 1 < foundMarkers.length) ? foundMarkers[i+1].index : rawText.length;
+            
+            results[foundMarkers[i].name] = rawText.substring(start, end).trim();
+        }
+
+        if (!this.state.selectedUid) this.formNew();
+
+        const parseToHTML = (text) => text ? marked.parse(text).replace(/\n/g, '') : '';
+        
+        if (results.summary) quillSummary.clipboard.dangerouslyPasteHTML(parseToHTML(results.summary));
+        if (results.insight) quillInsight.clipboard.dangerouslyPasteHTML(parseToHTML(results.insight));
+        if (results.keywords) quillKeywords.clipboard.dangerouslyPasteHTML(parseToHTML(results.keywords));
+        if (results.questions) quillQuestions.clipboard.dangerouslyPasteHTML(parseToHTML(results.questions));
+
+        document.getElementById('import-modal').style.display = 'none';
+        document.getElementById('inp-llm-data').value = '';
+        this.toast('데이터가 성공적으로 분류되어 입력되었습니다.');
+    },
+
+    refresh: async function() {
+        this.state.items = await DB.getAll();
+        this.state.items.sort((a, b) => b.uid - a.uid); 
+        this.renderList();
+    },
+
+    // 엑셀 추출과 JSON 백업에서 공통으로 사용할 필터링 메서드
+    getFilteredItems: function() {
+        return this.state.items.filter(i => {
+            if(this.state.search) {
+                const term = this.state.search;
+                return (i.title || '').toLowerCase().includes(term) || (i.source || '').toLowerCase().includes(term);
+            }
+            return true;
+        });
+    },
+
+    renderList: function() {
+        const el = document.getElementById('item-list'); 
+        el.innerHTML = '';
+        
+        const filtered = this.getFilteredItems();
+
+        filtered.forEach(i => {
+            const card = document.createElement('div');
+            card.className = `item-card ${i.uid === this.state.selectedUid ? 'active' : ''}`; 
+            card.dataset.uid = i.uid;
+            
+            const dateStr = new Date(parseInt(i.uid)).toLocaleDateString();
+            const sourceHTML = i.source ? `<div class="item-source"><i class="fas fa-book-open"></i> ${i.source}</div>` : '';
+            
+            card.innerHTML = `
+                <button class="btn-list-del" title="삭제"><i class="fas fa-trash-alt"></i></button>
+                <div class="item-title">${i.title || '(제목 없음)'}</div>
+                ${sourceHTML}
+                <div style="font-size:11px; color:var(--text-muted);"><i class="far fa-calendar-alt"></i> ${dateStr}</div>
+            `;
+            
+            card.querySelector('.btn-list-del').onclick = async (e) => {
+                e.stopPropagation();
+                if(confirm(`해당 분석 자료를 삭제하시겠습니까?`)) {
+                    await DB.delete(i.uid);
+                    if (this.state.selectedUid === i.uid) this.formNew();
+                    await this.refresh();
+                }
+            };
+
+            el.appendChild(card);
+        });
+    },
+
+    formNew: function() {
+        this.state.selectedUid = null;
+        this.renderList();
+        document.getElementById('empty-state').style.display = 'none';
+        document.getElementById('btn-delete').classList.add('hidden');
+        document.getElementById('editor-status').innerHTML = '';
+        
+        document.getElementById('inp-uid').value = '';
+        document.getElementById('inp-title').value = '';
+        document.getElementById('inp-source').value = '';
+        
+        quillSummary.setContents([]);
+        quillInsight.setContents([]);
+        quillKeywords.setContents([]);
+        quillQuestions.setContents([]);
+        
+        setTimeout(() => document.getElementById('inp-title').focus(), 50);
+    },
+
+    load: function(uid) {
+        const item = this.state.items.find(i => i.uid === uid);
+        if(!item) return;
+        
+        this.state.selectedUid = uid;
+        this.renderList();
+        
+        document.getElementById('empty-state').style.display = 'none';
+        document.getElementById('btn-delete').classList.remove('hidden');
+        document.getElementById('editor-status').textContent = `마지막 수정: ${new Date(parseInt(item.uid)).toLocaleString()}`;
+        
+        document.getElementById('inp-uid').value = item.uid;
+        document.getElementById('inp-title').value = item.title || '';
+        document.getElementById('inp-source').value = item.source || '';
+        
+        const safeLoad = (quill, content) => {
+            let html = content || '';
+            if (html && !html.includes('<p>') && !html.includes('<br>')) html = html.replace(/\n/g, '<br>');
+            quill.clipboard.dangerouslyPasteHTML(html);
+        };
+
+        safeLoad(quillSummary, item.summary);
+        safeLoad(quillInsight, item.insight);
+        safeLoad(quillKeywords, item.keywords);
+        safeLoad(quillQuestions, item.questions);
+
+        document.querySelector('.editor-wrapper').scrollTo({ top: 0 });
+    },
+
+    save: async function() {
+        const title = document.getElementById('inp-title').value.trim();
+        if(!title) return this.toast('문서 제목을 입력해주세요.');
+
+        const item = {
+            uid: document.getElementById('inp-uid').value || Date.now().toString(),
+            title: title,
+            source: document.getElementById('inp-source').value.trim(),
+            summary: quillSummary.root.innerHTML,
+            insight: quillInsight.root.innerHTML,
+            keywords: quillKeywords.root.innerHTML,
+            questions: quillQuestions.root.innerHTML
+        };
+        
+        await DB.put(item);
+        this.state.selectedUid = item.uid;
+        document.getElementById('inp-uid').value = item.uid;
+        
+        document.getElementById('empty-state').style.display = 'none';
+        document.getElementById('btn-delete').classList.remove('hidden');
+        
+        await this.refresh();
+        this.toast('저장되었습니다.');
+    },
+
+    delete: async function() {
+        if(confirm('현재 분석 자료를 삭제하시겠습니까?')) {
+            await DB.delete(this.state.selectedUid);
+            this.formNew();
+            document.getElementById('empty-state').style.display = 'flex';
+            await this.refresh();
+        }
+    },
+
+    backupJSON: function() {
+        const itemsToExport = this.getFilteredItems();
+        if (itemsToExport.length === 0) return this.toast('백업할 데이터가 없습니다.');
+
+        const dataStr = JSON.stringify(itemsToExport, null, 2);
+        const blob = new Blob([dataStr], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Analysis_Backup_${new Date().toISOString().slice(0,10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+    },
+
+    restoreJSON: async function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            try {
+                const data = JSON.parse(event.target.result);
+                if (!Array.isArray(data)) throw new Error("유효한 JSON 배열 형식이 아닙니다.");
+
+                let count = 0;
+                for (const item of data) {
+                    if (item && item.uid) {
+                        // DB에 동일한 uid가 있으면 덮어쓰고, 없으면 추가됩니다.
+                        await DB.put(item); 
+                        count++;
+                    }
+                }
+                this.toast(`${count}개의 데이터를 성공적으로 복원했습니다.`);
+                await this.refresh();
+            } catch (err) {
+                console.error(err);
+                this.toast('올바른 JSON 파일 형식이 아닙니다.');
+            }
+            e.target.value = ''; // 재선택이 가능하도록 인풋값 초기화
+        };
+        reader.readAsText(file);
+    },
+
+    exportExcel: async function() {
+        const itemsToExport = this.getFilteredItems();
+        if (itemsToExport.length === 0) return this.toast('추출할 데이터가 없습니다.');
+
+        const wb = new ExcelJS.Workbook(); 
+        const ws = wb.addWorksheet('Data Analysis');
+        
+        ws.columns = [
+            { header: '제목', key: 'title', width: 40 },
+            { header: '출처', key: 'source', width: 30 },
+            { header: '1. 요약', key: 'sum', width: 50 },
+            { header: '2. 인사이트', key: 'ins', width: 50 },
+            { header: '3. 키워드', key: 'key', width: 30 },
+            { header: '4. 예상문제', key: 'que', width: 50 }
+        ];
+
+        const stripHTML = (html) => (html || '').replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>/gi, '\n').replace(/<[^>]*>/g, '').trim();
+
+        itemsToExport.forEach(x => {
+            ws.addRow({
+                title: x.title, 
+                source: x.source || '',
+                sum: stripHTML(x.summary), 
+                ins: stripHTML(x.insight), 
+                key: stripHTML(x.keywords),
+                que: stripHTML(x.questions)
+            });
+        });
+
+        ws.eachRow((row) => {
+            row.eachCell((cell) => { cell.alignment = { vertical: 'top', wrapText: true }; });
+        });
+
+        const buf = await wb.xlsx.writeBuffer();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([buf]));
+        a.download = `Analysis_Note_${new Date().toISOString().slice(0,10)}.xlsx`;
+        a.click();
+    },
+
+    toast: function(m) {
+        const t = document.getElementById('toast'); 
+        document.getElementById('toast-msg').textContent = m;
+        t.style.opacity = '1'; t.style.bottom = '30px'; 
+        setTimeout(() => { t.style.opacity = '0'; t.style.bottom = '-50px'; }, 1500);
+    }
+};
+
+window.onload = () => App.init();
+</script>
+</body>
+</html>
