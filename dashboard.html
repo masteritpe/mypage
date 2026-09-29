@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔖 대시보드</title>
+    <style>
+        :root {
+            --bg-body: #F4F5F7;
+            --bg-surface: #ffffff;
+            --text-main: #1E293B; 
+            --text-muted: #64748B;
+            --brand-primary: #8B5CF6; 
+            --border-color: #E2E8F0;
+            --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04);
+            --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06);
+            --shadow-hover: 0 10px 25px rgba(0, 0, 0, 0.08);
+            --radius-card: 16px;
+            --radius-btn: 12px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            /* 브라우저/OS 기본 시스템 폰트를 최우선으로 적용하여 가장 선명하게 렌더링 */
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
+            background: var(--bg-body);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            letter-spacing: -0.01em;
+        }
+
+        /* Top Bar */
+        .top-bar {
+            background: var(--bg-surface);
+            padding: 16px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: var(--shadow-sm);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .brand { font-size: 20px; font-weight: 700; color: #0F172A; display: flex; align-items: center; gap: 8px; }
+        
+        .header-actions { display: flex; align-items: center; gap: 16px; }
+
+        /* Search Input */
+        .search-container { position: relative; width: 280px; }
+        .search-input {
+            width: 100%; padding: 10px 16px 10px 40px;
+            border-radius: 20px; border: 1px solid var(--border-color);
+            background: #F8FAFC; font-size: 14px; outline: none; transition: all 0.2s;
+            font-family: inherit; font-weight: 500;
+        }
+        .search-input:focus { border-color: var(--brand-primary); background: #fff; box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1); }
+        .search-icon {
+            position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+            color: var(--text-muted); width: 16px; height: 16px;
+        }
+
+        .btn {
+            padding: 10px 16px; border-radius: 10px; border: none;
+            background: #F1F5F9; color: var(--text-main); font-size: 14px;
+            font-weight: 600; cursor: pointer; transition: 0.2s;
+            display: inline-flex; align-items: center; gap: 6px; font-family: inherit;
+        }
+        .btn:hover { background: #E2E8F0; }
+        .btn-primary { background: var(--brand-primary); color: #fff; }
+        .btn-primary:hover { background: #7C3AED; }
+
+        /* Main Content & Grid */
+        .main-content { padding: 40px; flex: 1; overflow-y: auto; }
+        
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+            gap: 24px;
+            align-items: start;
+        }
+
+        /* Category Card */
+        .category-card {
+            background: var(--bg-surface);
+            border-radius: var(--radius-card);
+            padding: 24px;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border-color);
+            transition: box-shadow 0.2s, transform 0.2s;
+        }
+        .category-card:hover { box-shadow: var(--shadow-md); }
+        
+        .category-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding-bottom: 16px; margin-bottom: 16px;
+            border-bottom: 1px dashed var(--border-color);
+        }
+        
+        /* 카테고리 드래그 핸들 (추가됨) */
+        .category-drag-handle {
+            cursor: grab; color: #CBD5E1; display: inline-flex; align-items: center; transition: color 0.2s;
+        }
+        .category-card:hover .category-drag-handle { color: #94A3B8; }
+        .category-drag-handle:active { cursor: grabbing; }
+
+        .category-title { font-size: 17px; font-weight: 700; display: flex; align-items: center; gap: 8px; color: #0F172A; }
+        
+        .category-actions { display: flex; gap: 6px; opacity: 0; transition: opacity 0.2s; }
+        .category-card:hover .category-actions { opacity: 1; }
+        
+        /* 아이콘 버튼 스타일 */
+        .icon-btn {
+            background: transparent; border: none; cursor: pointer;
+            padding: 6px; border-radius: 8px; 
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.2s;
+        }
+        .icon-btn:hover { transform: scale(1.05); }
+        
+        .icon-btn.add { color: #8B5CF6; background: #F3EBFF; }
+        .icon-btn.add:hover { background: #E9D5FF; }
+        .icon-btn.edit { color: #F97316; background: transparent; }
+        .icon-btn.edit:hover { background: #FFF7ED; }
+        .icon-btn.delete { color: #94A3B8; background: transparent; }
+        .icon-btn.delete:hover { background: #F1F5F9; color: #64748B; }
+
+        /* Bookmark Grid inside Category */
+        .item-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            min-height: 50px; 
+        }
+        
+        .bookmark-item {
+            display: flex; align-items: center; gap: 10px;
+            padding: 12px 14px; border-radius: var(--radius-btn);
+            background: #F8FAFC; border: 1px solid transparent;
+            cursor: pointer; 
+            transition: all 0.2s; position: relative;
+            text-decoration: none; color: inherit;
+        }
+        
+        /* 북마크 드래그 핸들 */
+        .drag-handle {
+            cursor: grab; color: #CBD5E1; opacity: 0; display: flex; align-items: center; transition: opacity 0.2s; margin-left: -6px;
+        }
+        .bookmark-item:hover .drag-handle { opacity: 1; }
+        .bookmark-item:active .drag-handle { cursor: grabbing; }
+
+        .bookmark-item:hover {
+            background: #fff; border-color: #E2E8F0; box-shadow: var(--shadow-sm);
+        }
+        
+        .bookmark-icon { font-size: 16px; display: flex; align-items: center; justify-content: center; }
+        .bookmark-title { font-size: 14.5px; font-weight: 600; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #334155; }
+        
+        .bookmark-actions {
+            position: absolute; right: 8px; display: none; gap: 2px;
+            background: #fff; padding: 4px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid #F1F5F9;
+        }
+        .bookmark-item:hover .bookmark-actions { display: flex; }
+
+        .drag-over { background: #F8FAFC !important; border: 2px dashed #CBD5E1 !important; box-shadow: none !important; }
+        .dragging { opacity: 0.4; }
+
+        /* Modals */
+        .overlay {
+            display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.4);
+            z-index: 900; backdrop-filter: blur(3px);
+        }
+        .modal {
+            display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: #fff; border-radius: 20px; padding: 28px; width: 100%; max-width: 420px;
+            z-index: 1000; box-shadow: var(--shadow-hover);
+        }
+        .modal.active, .overlay.active { display: block; }
+        .modal h3 { margin-bottom: 24px; font-size: 19px; font-weight: 700; color: #0F172A; }
+        .form-group { margin-bottom: 18px; }
+        .form-group label { display: block; font-size: 13px; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; }
+        .form-control {
+            width: 100%; padding: 12px 14px; border: 1px solid var(--border-color);
+            border-radius: 10px; font-size: 14.5px; font-family: inherit; outline: none; background: #F8FAFC; font-weight: 500; color: #1E293B; transition: all 0.2s;
+        }
+        .form-control:focus { border-color: var(--brand-primary); background: #fff; box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1); }
+        .modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 32px; }
+
+    </style>
+</head>
+<body>
+
+    <header class="top-bar">
+        <div class="brand">🔖 대시보드</div>
+        <div class="header-actions">
+            <div class="search-container">
+                <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" id="searchInput" class="search-input" placeholder="메뉴 검색..." oninput="searchBookmarks()">
+            </div>
+            <button class="btn btn-primary" onclick="openCategoryModal()">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                카테고리 추가
+            </button>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <div class="dashboard-grid" id="dashboardGrid">
+            <!-- 렌더링 영역 -->
+        </div>
+        <div id="noResults" style="display:none; text-align:center; padding: 40px; color: var(--text-muted); width: 100%; font-weight: 500;">
+            검색 결과가 없습니다.
+        </div>
+    </main>
+
+    <!-- 모달 오버레이 -->
+    <div class="overlay" id="overlay" onclick="closeModals()"></div>
+
+    <!-- 카테고리 추가/수정 모달 -->
+    <div class="modal" id="categoryModal">
+        <h3 id="categoryModalTitle">카테고리 추가</h3>
+        <input type="hidden" id="categoryId">
+        <div class="form-group">
+            <label>아이콘 (이모지)</label>
+            <input type="text" id="categoryIcon" class="form-control" placeholder="예: 📚">
+        </div>
+        <div class="form-group">
+            <label>카테고리 이름</label>
+            <input type="text" id="categoryName" class="form-control" placeholder="카테고리 이름을 입력하세요">
+        </div>
+        <div class="modal-footer">
+            <button class="btn" onclick="closeModals()">취소</button>
+            <button class="btn btn-primary" onclick="saveCategory()">저장</button>
+        </div>
+    </div>
+
+    <!-- 북마크 추가/수정 모달 -->
+    <div class="modal" id="bookmarkModal">
+        <h3 id="bookmarkModalTitle">북마크 추가</h3>
+        <input type="hidden" id="bookmarkId">
+        <input type="hidden" id="parentCategoryId">
+        <div class="form-group">
+            <label>아이콘 (이모지)</label>
+            <input type="text" id="bookmarkIcon" class="form-control" placeholder="예: 🗓️">
+        </div>
+        <div class="form-group">
+            <label>북마크 이름</label>
+            <input type="text" id="bookmarkName" class="form-control" placeholder="북마크 이름을 입력하세요">
+        </div>
+        <div class="form-group">
+            <label>URL</label>
+            <input type="text" id="bookmarkUrl" class="form-control" placeholder="https://..." value="https://">
+        </div>
+        <div class="modal-footer">
+            <button class="btn" onclick="closeModals()">취소</button>
+            <button class="btn btn-primary" onclick="saveBookmark()">저장</button>
+        </div>
+    </div>
+
+    <script>
+        const ICON_ADD = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>`;
+        const ICON_EDIT = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>`;
+        const ICON_DELETE = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>`;
+        const ICON_DRAG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="8" cy="5" r="1.5"/><circle cx="8" cy="12" r="1.5"/><circle cx="8" cy="19" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>`;
+
+        const DB_NAME = "BookmarkDashboardDB";
+        const STORE_NAME = "dashboard_store";
+        const DATA_KEY = "bookmark_data";
+
+        const defaultData = [
+            { id: 'c1', title: '업무용', icon: '📚', items: [
+                { id: 'b1', title: 'Study Planner', url: 'pass/studyplanner.html', icon: '🗓️' }
+            ]},
+            { id: 'c2', title: '학습용', icon: '📋', items: [
+                { id: 'b2', title: 'Reading 마스터', url: 'tool/reading.html', icon: '📒' }
+            ]},
+            { id: 'c3', title: '유틸리티', icon: '🛠️', items: [
+                { id: 'b3', title: 'Smart Clipboard', url: 'tool/clipboard.html', icon: '🖼️' }
+            ]}
+        ];
+
+        let data = [];
+
+        function initDB() {
+            return new Promise((resolve, reject) => {
+                const req = indexedDB.open(DB_NAME, 1);
+                
+                req.onupgradeneeded = e => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains(STORE_NAME)) {
+                        db.createObjectStore(STORE_NAME);
+                    }
+                };
+                
+                req.onsuccess = e => {
+                    const db = e.target.result;
+                    const tx = db.transaction(STORE_NAME, "readonly");
+                    const store = tx.objectStore(STORE_NAME);
+                    const getReq = store.get(DATA_KEY);
+                    
+                    getReq.onsuccess = () => {
+                        if (getReq.result) {
+                            resolve(getReq.result);
+                        } else {
+                            const txW = db.transaction(STORE_NAME, "readwrite");
+                            txW.objectStore(STORE_NAME).put(defaultData, DATA_KEY);
+                            txW.oncomplete = () => resolve(defaultData);
+                        }
+                    };
+                };
+                req.onerror = () => reject("IndexedDB 연결 실패");
+            });
+        }
+
+        function saveDB(newData) {
+            return new Promise((resolve, reject) => {
+                const req = indexedDB.open(DB_NAME, 1);
+                req.onsuccess = e => {
+                    const db = e.target.result;
+                    const tx = db.transaction(STORE_NAME, "readwrite");
+                    tx.objectStore(STORE_NAME).put(newData, DATA_KEY);
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = () => reject();
+                };
+            });
+        }
+
+        window.onload = async function() {
+            try {
+                data = await initDB();
+            } catch (error) {
+                console.error(error);
+                data = JSON.parse(JSON.stringify(defaultData)); 
+            }
+            renderDashboard();
+        };
+
+        function renderDashboard() {
+            const grid = document.getElementById('dashboardGrid');
+            grid.innerHTML = '';
+
+            data.forEach(category => {
+                const card = document.createElement('div');
+                card.className = 'category-card';
+                card.setAttribute('data-category-id', category.id);
+                
+                card.addEventListener('dragover', handleDragOver);
+                card.addEventListener('dragleave', handleDragLeave);
+                card.addEventListener('drop', handleDrop);
+
+                card.innerHTML = `
+                    <div class="category-header">
+                        <div class="category-title">
+                            <!-- 카테고리 드래그 핸들 -->
+                            <span class="category-drag-handle" draggable="true" 
+                                  ondragstart="handleCategoryDragStart(event, '${category.id}')"
+                                  ondragend="handleCategoryDragEnd(event)" title="카테고리 이동">
+                                ${ICON_DRAG}
+                            </span>
+                            <span>${category.icon}</span> ${category.title}
+                        </div>
+                        <div class="category-actions">
+                            <button class="icon-btn add" onclick="openBookmarkModal('${category.id}')" title="북마크 추가">${ICON_ADD}</button>
+                            <button class="icon-btn edit" onclick="openCategoryModal('${category.id}')" title="카테고리 수정">${ICON_EDIT}</button>
+                            <button class="icon-btn delete" onclick="deleteCategory('${category.id}')" title="카테고리 삭제">${ICON_DELETE}</button>
+                        </div>
+                    </div>
+                    <div class="item-grid" id="grid-${category.id}">
+                        ${category.items.map(item => `
+                            <a href="${item.url}" target="_blank" class="bookmark-item search-target" 
+                                 data-id="${item.id}" 
+                                 data-parent-id="${category.id}"
+                                 data-title="${item.title.toLowerCase()}">
+                                
+                                <span class="drag-handle" draggable="true" 
+                                      ondragstart="handleDragStart(event, '${item.id}', '${category.id}')"
+                                      ondragend="handleDragEnd(event)"
+                                      onclick="event.preventDefault();" title="드래그하여 이동">
+                                    ${ICON_DRAG}
+                                </span>
+
+                                <span class="bookmark-icon">${item.icon}</span>
+                                <span class="bookmark-title">${item.title}</span>
+                                
+                                <div class="bookmark-actions" onclick="event.preventDefault(); event.stopPropagation();">
+                                    <button type="button" class="icon-btn edit" style="padding:6px;" onclick="openBookmarkModal('${category.id}', '${item.id}')">${ICON_EDIT}</button>
+                                    <button type="button" class="icon-btn delete" style="padding:6px;" onclick="deleteBookmark('${category.id}', '${item.id}')">${ICON_DELETE}</button>
+                                </div>
+                            </a>
+                        `).join('')}
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+
+            searchBookmarks();
+        }
+
+        function searchBookmarks() {
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            const cards = document.querySelectorAll('.category-card');
+            let totalVisibleItems = 0;
+
+            cards.forEach(card => {
+                const items = card.querySelectorAll('.bookmark-item');
+                let cardHasVisibleItems = false;
+
+                items.forEach(item => {
+                    const title = item.getAttribute('data-title');
+                    if(title.includes(query)) {
+                        item.style.display = 'flex';
+                        cardHasVisibleItems = true;
+                        totalVisibleItems++;
+                    } else {
+                        item.style.display = 'none';
+                    }
+                });
+
+                if (query !== "" && !cardHasVisibleItems) {
+                    card.style.display = 'none';
+                } else {
+                    card.style.display = 'block';
+                }
+            });
+
+            document.getElementById('noResults').style.display = 
+                (query !== "" && totalVisibleItems === 0) ? 'block' : 'none';
+        }
+
+        /* --- Drag & Drop 전역 상태 변수 --- */
+        let draggedItemId = null;
+        let sourceCategoryId = null;
+        let draggedCategoryId = null; // 카테고리 드래그를 위한 변수 추가
+
+        /* --- 카테고리 드래그 앤 드롭 로직 --- */
+        function handleCategoryDragStart(e, categoryId) {
+            e.stopPropagation(); // 중복 드래그 방지
+            draggedCategoryId = categoryId;
+            draggedItemId = null;
+            sourceCategoryId = null;
+            
+            const card = e.target.closest('.category-card');
+            if (card) {
+                e.dataTransfer.setDragImage(card, 20, 20); // 카드 전체를 드래그 이미지로 사용
+                setTimeout(() => card.classList.add('dragging'), 0);
+            }
+            e.dataTransfer.setData('text/plain', categoryId);
+        }
+
+        function handleCategoryDragEnd(e) {
+            const card = e.target.closest('.category-card');
+            if (card) card.classList.remove('dragging');
+            document.querySelectorAll('.category-card').forEach(c => c.classList.remove('drag-over'));
+            draggedCategoryId = null;
+        }
+
+        /* --- 북마크 아이템 드래그 앤 드롭 로직 --- */
+        function handleDragStart(e, itemId, categoryId) {
+            e.stopPropagation();
+            draggedItemId = itemId;
+            sourceCategoryId = categoryId;
+            draggedCategoryId = null; // 초기화
+            
+            const item = e.target.closest('.bookmark-item');
+            if (item) {
+                setTimeout(() => item.classList.add('dragging'), 0);
+            }
+            e.dataTransfer.setData('text/plain', itemId); 
+        }
+
+        function handleDragEnd(e) {
+            const item = document.querySelector('.dragging');
+            if(item) item.classList.remove('dragging');
+            document.querySelectorAll('.category-card').forEach(c => c.classList.remove('drag-over'));
+            draggedItemId = null;
+            sourceCategoryId = null;
+        }
+
+        /* --- 공통 드롭 이벤트 처리 --- */
+        function handleDragOver(e) {
+            e.preventDefault(); 
+            const card = e.target.closest('.category-card');
+            if(card) {
+                // 자기 자신(카테고리) 위로 드래그하는 경우 스타일 무시
+                if (draggedCategoryId === card.getAttribute('data-category-id')) return;
+                card.classList.add('drag-over');
+            }
+        }
+
+        function handleDragLeave(e) {
+            const card = e.target.closest('.category-card');
+            if(card) card.classList.remove('drag-over');
+        }
+
+        async function handleDrop(e) {
+            e.preventDefault();
+            const targetCard = e.target.closest('.category-card');
+            if (!targetCard) return;
+            
+            targetCard.classList.remove('drag-over');
+            const targetCategoryId = targetCard.getAttribute('data-category-id');
+
+            // 1. 카테고리 위치 이동 처리
+            if (draggedCategoryId && targetCategoryId && draggedCategoryId !== targetCategoryId) {
+                const sourceIndex = data.findIndex(c => c.id === draggedCategoryId);
+                const targetIndex = data.findIndex(c => c.id === targetCategoryId);
+                
+                if (sourceIndex > -1 && targetIndex > -1) {
+                    const [movedCategory] = data.splice(sourceIndex, 1);
+                    // 목표 위치로 카테고리 이동 (재정렬)
+                    data.splice(targetIndex, 0, movedCategory);
+                    
+                    await saveDB(data);
+                    renderDashboard();
+                }
+                draggedCategoryId = null;
+                return;
+            }
+
+            // 2. 북마크 이동 처리
+            if (sourceCategoryId && targetCategoryId && draggedItemId) {
+                const sourceCat = data.find(c => c.id === sourceCategoryId);
+                const targetCat = data.find(c => c.id === targetCategoryId);
+                
+                const itemIndex = sourceCat.items.findIndex(i => i.id === draggedItemId);
+                if (itemIndex > -1) {
+                    const [item] = sourceCat.items.splice(itemIndex, 1);
+                    targetCat.items.push(item);
+                    
+                    await saveDB(data);
+                    renderDashboard();
+                }
+                draggedItemId = null;
+                sourceCategoryId = null;
+            }
+        }
+
+        function closeModals() {
+            document.getElementById('overlay').classList.remove('active');
+            document.getElementById('categoryModal').classList.remove('active');
+            document.getElementById('bookmarkModal').classList.remove('active');
+        }
+
+        function generateId() {
+            return Math.random().toString(36).substr(2, 9);
+        }
+
+        function openCategoryModal(categoryId = null) {
+            document.getElementById('categoryId').value = categoryId || '';
+            document.getElementById('categoryModalTitle').innerText = categoryId ? '카테고리 수정' : '카테고리 추가';
+            
+            if (categoryId) {
+                const cat = data.find(c => c.id === categoryId);
+                document.getElementById('categoryIcon').value = cat.icon;
+                document.getElementById('categoryName').value = cat.title;
+            } else {
+                document.getElementById('categoryIcon').value = '';
+                document.getElementById('categoryName').value = '';
+            }
+            
+            document.getElementById('overlay').classList.add('active');
+            document.getElementById('categoryModal').classList.add('active');
+            document.getElementById('categoryName').focus();
+        }
+
+        async function saveCategory() {
+            const id = document.getElementById('categoryId').value;
+            const icon = document.getElementById('categoryIcon').value || '📁';
+            const title = document.getElementById('categoryName').value || '새 카테고리';
+
+            if (id) {
+                const cat = data.find(c => c.id === id);
+                cat.icon = icon;
+                cat.title = title;
+            } else {
+                data.push({ id: 'c_' + generateId(), title, icon, items: [] });
+            }
+            
+            await saveDB(data);
+            closeModals();
+            renderDashboard();
+        }
+
+        async function deleteCategory(categoryId) {
+            if(confirm('이 카테고리와 내부의 모든 북마크를 삭제하시겠습니까?')) {
+                data = data.filter(c => c.id !== categoryId);
+                await saveDB(data);
+                renderDashboard();
+            }
+        }
+
+        function openBookmarkModal(categoryId, bookmarkId = null) {
+            document.getElementById('parentCategoryId').value = categoryId;
+            document.getElementById('bookmarkId').value = bookmarkId || '';
+            document.getElementById('bookmarkModalTitle').innerText = bookmarkId ? '북마크 수정' : '북마크 추가';
+            
+            if (bookmarkId) {
+                const cat = data.find(c => c.id === categoryId);
+                const bookmark = cat.items.find(b => b.id === bookmarkId);
+                document.getElementById('bookmarkIcon').value = bookmark.icon;
+                document.getElementById('bookmarkName').value = bookmark.title;
+                document.getElementById('bookmarkUrl').value = bookmark.url;
+            } else {
+                document.getElementById('bookmarkIcon').value = '';
+                document.getElementById('bookmarkName').value = '';
+                document.getElementById('bookmarkUrl').value = 'https://';
+            }
+            
+            document.getElementById('overlay').classList.add('active');
+            document.getElementById('bookmarkModal').classList.add('active');
+            document.getElementById('bookmarkName').focus();
+        }
+
+        async function saveBookmark() {
+            const catId = document.getElementById('parentCategoryId').value;
+            const bId = document.getElementById('bookmarkId').value;
+            const icon = document.getElementById('bookmarkIcon').value || '🔗';
+            const title = document.getElementById('bookmarkName').value || '새 북마크';
+            const url = document.getElementById('bookmarkUrl').value || '#';
+
+            const cat = data.find(c => c.id === catId);
+
+            if (bId) {
+                const bookmark = cat.items.find(b => b.id === bId);
+                bookmark.icon = icon;
+                bookmark.title = title;
+                bookmark.url = url;
+            } else {
+                cat.items.push({ id: 'b_' + generateId(), title, url, icon });
+            }
+            
+            await saveDB(data);
+            closeModals();
+            renderDashboard();
+        }
+
+        async function deleteBookmark(categoryId, bookmarkId) {
+            if(confirm('이 북마크를 삭제하시겠습니까?')) {
+                const cat = data.find(c => c.id === categoryId);
+                cat.items = cat.items.filter(b => b.id !== bookmarkId);
+                await saveDB(data);
+                renderDashboard();
+            }
+        }
+    </script>
+</body>
+</html>
