@@ -318,7 +318,7 @@ window.MathJax = {
             </div>
             <div class="form-group">
                 <label>인사말 / 서론 (마크다운 사용 가능)</label>
-                <textarea id="introText" placeholder="예: 안녕하세요! 오늘은 다가오는 6G 시대와 이를 이끌어갈 AI 네트워크 기술에 대한 소식을 전해드립니다."></textarea>
+                <textarea id="introText" placeholder="예: 안녕하세요! 오늘은 다가오는 6G 시대와 이를 이끌어갈 AI 네트워크 기술에 단 소식을 전해드립니다."></textarea>
             </div>
         </div>
 
@@ -1800,15 +1800,44 @@ window.MathJax = {
         toastTimeout = setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 2500); 
     }
     
-    function handleSave() { 
+    function handleSave(isAuto = false) { 
+        // 1. 현재 포커스와 스크롤 위치 기억하기
+        const activeEl = document.activeElement;
+        const scrollContainer = document.getElementById('mainContent');
+        const scrollPos = scrollContainer ? scrollContainer.scrollTop : 0;
+        let selStart = null, selEnd = null;
+        
+        // 입력 창인 경우 커서 위치(드래그 영역)까지 기억
+        if (activeEl && (activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'INPUT')) {
+            try {
+                selStart = activeEl.selectionStart;
+                selEnd = activeEl.selectionEnd;
+            } catch (e) { }
+        }
+
         const data = gatherFormData(); 
         if (!data) return false; 
+        
         const tx = db.transaction("posts", "readwrite"); 
         const store = tx.objectStore("posts"); 
         if (data.id === null) delete data.id; 
+        
         const req = store.put(data); 
         req.onsuccess = (e) => { 
-            currentEditId = e.target.result; loadTimeline(); showToast("💾 저장이 완료되었습니다."); 
+            currentEditId = e.target.result; 
+            loadTimeline(); 
+            showToast("💾 저장이 완료되었습니다."); 
+            
+            // 2. 저장 완료 후 포커스와 스크롤 위치 즉시 복원
+            requestAnimationFrame(() => {
+                if (scrollContainer) scrollContainer.scrollTop = scrollPos;
+                if (activeEl && typeof activeEl.focus === 'function') {
+                    activeEl.focus();
+                    if (selStart !== null && selEnd !== null) {
+                        try { activeEl.setSelectionRange(selStart, selEnd); } catch (err) {}
+                    }
+                }
+            });
         }; 
         return true; 
     }
