@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>글씨교정 템플릿</title>
+<!-- 펜촉 아이콘을 위한 Font Awesome 추가 -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+    :root {
+        --line-gray: #bbb;
+        --line-guide: #e0e0e0;
+        --box-size: 19mm; /* 1칸당 크기 (정사각형 유지) */
+    }
+    
+    * { box-sizing: border-box; }
+    
+    body {
+        margin: 0; 
+        background: #e9ecef;
+        display: flex; 
+        flex-direction: column;
+        align-items: center;
+        font-family: 'Noto Sans KR', sans-serif;
+    }
+
+    /* === 상단 헤더 및 컨트롤 영역 (화면에만 보임) === */
+    .print-nav {
+        width: 100%;
+        padding: 15px 30px;
+        background: #fff;
+        display: flex;
+        justify-content: space-between; /* 좌우 양끝 배치 */
+        align-items: center;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        border-bottom: 1px solid #ddd;
+        margin-bottom: 20px;
+    }
+    
+    /* 헤더 타이틀 스타일 */
+    .brand {
+        font-size: 22px;
+        font-weight: 800;
+        color: #2c3e50;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .nav-controls {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+    }
+    
+    .options-group {
+        display: flex;
+        gap: 10px;
+    }
+
+    .option-btn {
+        padding: 10px 20px;
+        font-size: 15px;
+        font-weight: bold;
+        cursor: pointer;
+        background: #f1f3f5;
+        color: #495057;
+        border: 1px solid #ced4da;
+        border-radius: 5px;
+        transition: 0.2s;
+    }
+
+    .option-btn:hover { background: #e9ecef; }
+    
+    .option-btn.active {
+        background: #4dabf7;
+        color: #fff;
+        border-color: #339af0;
+    }
+
+    .print-btn {
+        padding: 10px 30px;
+        font-size: 15px;
+        font-weight: bold;
+        cursor: pointer;
+        background: #2c3e50;
+        color: #fff;
+        border: none;
+        border-radius: 5px;
+        transition: 0.2s;
+    }
+    .print-btn:hover {
+        background: #1a252f;
+    }
+
+    /* === A4 종이 영역 === */
+    .paper-container {
+        width: 210mm; 
+        height: 297mm; /* A4 정확한 높이 설정 */
+        background: #ffffff;
+        box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        display: flex; 
+        flex-direction: column;
+        align-items: center;
+        justify-content: center; /* 세로 중앙 정렬로 잘림 완벽 방지 */
+    }
+
+    /* 격자 전체 래퍼 (Javascript로 가로 크기 자동 조정) */
+    .grid-wrapper {
+        display: flex;
+        flex-direction: column;
+        gap: 3mm; /* 줄 간격 */
+    }
+
+    /* === 행(Row) 및 깍두기 칸 스타일 === */
+    .practice-row {
+        display: flex;
+        width: 100%; 
+        height: var(--box-size);
+        border: 1px solid var(--line-gray);
+    }
+    .grid-box {
+        flex: 1; 
+        height: 100%;
+        border-right: 1px solid var(--line-gray);
+        position: relative;
+    }
+    .grid-box:last-child { border-right: none; }
+
+    /* 십자 가이드 점선 */
+    .grid-box::before {
+        content: ''; position: absolute; top: 50%; left: 0; right: 0;
+        border-top: 1px dashed var(--line-guide); z-index: 1;
+    }
+    .grid-box::after {
+        content: ''; position: absolute; top: 0; bottom: 0; left: 50%;
+        border-left: 1px dashed var(--line-guide); z-index: 1;
+    }
+
+    /* === 인쇄 최적화 === */
+    @page {
+        size: A4;
+        margin: 0; 
+    }
+    
+    @media print {
+        body { background: #fff; }
+        .print-nav { display: none !important; }
+        .paper-container { 
+            box-shadow: none; 
+            margin: 0; 
+            width: 210mm;
+            height: 297mm;
+        }
+    }
+</style>
+</head>
+<body>
+
+<!-- 상단 헤더 및 네비게이션 -->
+<div class="print-nav">
+    <!-- 헤더 타이틀 추가됨 -->
+    <div class="brand">
+        <i class="fas fa-pen-nib"></i> 글씨교정 템플릿
+    </div>
+    
+    <div class="nav-controls">
+        <div class="options-group">
+            <button id="btn-8x13" class="option-btn" onclick="generateGrid(8, 13)">8칸 × 13줄</button>
+            <button id="btn-10x13" class="option-btn" onclick="generateGrid(10, 13)">10칸 × 13줄</button>
+        </div>
+        <button class="print-btn" onclick="window.print()">🖨️ 인쇄하기</button>
+    </div>
+</div>
+
+<!-- A4 출력 영역 -->
+<div class="paper-container" id="paper">
+    <div class="grid-wrapper" id="grid-container"></div>
+</div>
+
+<script>
+    const container = document.getElementById('grid-container');
+    const btn8 = document.getElementById('btn-8x13');
+    const btn10 = document.getElementById('btn-10x13');
+    
+    function generateGrid(columns, rows) {
+        // 버튼 활성화 상태 변경
+        if(columns === 8) {
+            btn8.classList.add('active');
+            btn10.classList.remove('active');
+        } else {
+            btn10.classList.add('active');
+            btn8.classList.remove('active');
+        }
+
+        // 기존 격자 초기화
+        container.innerHTML = '';
+        
+        // 전체 가로 길이 동적 설정 (칸 수 × 19mm)
+        container.style.width = (columns * 19) + 'mm'; 
+
+        // 지정된 칸과 줄 생성
+        for(let i = 0; i < rows; i++) {
+            const row = document.createElement('div');
+            row.className = 'practice-row';
+            
+            for(let k = 0; k < columns; k++) {
+                const box = document.createElement('div');
+                box.className = 'grid-box';
+                row.appendChild(box);
+            }
+            container.appendChild(row);
+        }
+    }
+
+    // 처음 로딩 시 기본적으로 8x13 양식 생성
+    generateGrid(8, 13);
+</script>
+
+</body>
+</html>

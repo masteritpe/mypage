@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>악필교정 워크북</title>
+<title>글씨교정</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700&family=Nanum+Pen+Script&family=Poor+Story&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -18,7 +18,7 @@
         --line-guide: #e0e0e0;
         --line-base-red: #ff8a80;
         
-        /* 크기 설정 */
+        /* 크기 설정 (기본 한글 모드용) */
         --row-height: 70px; 
         
         /* 폰트 */
@@ -71,6 +71,12 @@
         margin-bottom: 15px; display: flex;
     }
 
+    /* 영어 모드 전용 행 스타일 (가독성을 위해 4선 높이를 줄이고 간격을 벌림) */
+    .practice-row.mode-eng {
+        height: 55px;
+        margin-bottom: 35px;
+    }
+
     /* --- [한글 깍두기 모드] --- */
     .mode-kor .bg-layer {
         position: absolute; top: 0; left: 0; width: 100%; height: 100%;
@@ -87,8 +93,12 @@
         color: #111;
         font-family: var(--font-print); /* 기본 폰트 */
         z-index: 1;
+        transition: color 0.2s; /* 글자 색상 전환 애니메이션 */
     }
     .mode-kor .grid-box:last-child { border-right: none; }
+    
+    /* 플레이스홀더용 클래스 추가 */
+    .mode-kor .grid-box.is-placeholder { color: #ccc; }
 
     /* 십자 가이드 점선 */
     .mode-kor .grid-box::before {
@@ -125,15 +135,20 @@
         padding-left: 35px;   /* 첫 커서 위치 */
         font-size: 40px;
     }
+    
+    /* 한글 모드일 때 브라우저 기본 placeholder 숨김 (격자에서 렌더링하기 때문) */
+    .mode-kor .text-input::placeholder {
+        color: transparent; 
+    }
 
     /* [영어 모드 입력창] - 기존 방식 유지 (연속 쓰기) */
     .mode-eng .text-input {
         color: #111;
         font-family: var(--font-eng);
-        font-size: 36px;
+        font-size: 34px; /* 조정된 행 높이에 맞춰 약간 축소 */
         letter-spacing: 2px;
         padding-left: 10px;
-        padding-top: 10px;
+        padding-top: 5px; /* 기준선 정렬을 위해 여백 조정 */
         line-height: normal;
     }
 
@@ -147,11 +162,50 @@
     .practice-row:hover .del-btn { display: block; }
     .del-btn:hover { color: #f44336; }
 
+    /* === 인쇄 모드 전용 스타일 === */
     @media print {
+        @page {
+            size: A4 portrait;
+            margin: 15mm; /* 인쇄용 기본 여백 설정 */
+        }
+        html, body {
+            height: auto; 
+            min-height: auto; /* 불필요한 빈 페이지 방지 */
+            margin: 0;
+            padding: 0;
+            background: #fff;
+        }
         header, .del-btn, .tip-box { display: none !important; }
-        .paper-container { box-shadow: none; margin: 0; padding: 15mm; border: none; width: 100%; }
-        /* 인쇄 시 placeholder 숨김 */
+        
+        .paper-container { 
+            box-shadow: none; 
+            margin: 0; 
+            padding: 0; /* 이중 여백 방지 */ 
+            border: none; 
+            width: 100%; 
+            min-height: auto; 
+            height: auto;
+        }
+        
+        .practice-row {
+            margin-bottom: 12px !important; /* 한글 모드 12줄 맞춤 강제 */
+            page-break-inside: avoid; /* 줄 중간에서 잘리지 않도록 방지 */
+        }
+        
+        /* 인쇄 시 영어 4선 모드 확실한 간격 확보 강제 */
+        .practice-row.mode-eng {
+            margin-bottom: 28px !important; /* 4선지끼리 다닥다닥 붙지 않도록 넓은 여백 강제 적용 */
+        }
+        
+        /* 마지막 줄의 하단 여백을 없애서 다음 페이지로 넘어가는 현상 방지 */
+        .practice-row:last-child {
+            margin-bottom: 0 !important;
+        }
+
+        /* 인쇄 시 input의 placeholder 숨김 */
         .text-input::placeholder { color: transparent; }
+        /* 인쇄 시 격자 안의 가이드(플레이스홀더) 글씨 숨김 */
+        .is-placeholder { color: transparent !important; }
     }
 </style>
 </head>
@@ -186,13 +240,15 @@
     const tipMsg = document.getElementById('tip-msg');
 
     window.onload = () => {
-        addRows(9);
-        // 초기 예시 입력 (렌더링 함수 호출 필요)
+        // 기본 인쇄 시 최적화를 위해 12줄로 생성
+        addRows(12);
+        
+        // 초기 예시 입력을 value가 아닌 placeholder로 설정하여 가이드라인으로 활용
         setTimeout(() => {
             const inputs = document.querySelectorAll('.text-input');
-            if(inputs[0]) { inputs[0].value = "가갸거겨고교구규그기"; handleInput(inputs[0]); }
-            if(inputs[1]) { inputs[1].value = "안녕하세요반갑습니다"; handleInput(inputs[1]); }
-            if(inputs[2]) { inputs[2].value = "악필교정할수있습니다"; handleInput(inputs[2]); }
+            if(inputs[0]) { inputs[0].placeholder = "가갸거겨고교구규그기"; handleInput(inputs[0]); }
+            if(inputs[1]) { inputs[1].placeholder = "안녕하세요반갑습니다"; handleInput(inputs[1]); }
+            if(inputs[2]) { inputs[2].placeholder = "악필교정할수있습니다"; handleInput(inputs[2]); }
         }, 100);
     };
 
@@ -212,7 +268,8 @@
 
         const rows = document.querySelectorAll('.practice-row');
         rows.forEach(row => row.remove());
-        addRows(9);
+        // 모드 변경 시에도 12줄로 초기화
+        addRows(12);
     }
 
     function addRows(count = 1) {
@@ -241,18 +298,32 @@
         }
     }
 
-    // 핵심 로직: 입력값을 각 칸(Grid Box)에 분배
+    // 핵심 로직: 입력값 및 플레이스홀더를 각 칸(Grid Box)에 분배
     function handleInput(input) {
-        // 한글 모드가 아니면 실행 안 함 (영어는 그냥 입력창 사용)
         if(currentMode !== 'kor') return;
 
         const row = input.parentElement;
         const boxes = row.querySelectorAll('.grid-box');
         const text = input.value;
+        const placeholder = input.placeholder || '';
 
-        // 모든 박스 초기화 후 글자 하나씩 넣기
+        // 박스를 순회하며 텍스트 렌더링
         boxes.forEach((box, index) => {
-            box.textContent = text[index] || ''; // 글자가 없으면 빈칸
+            if (text[index]) {
+                // 사용자가 직접 입력한 글자
+                box.textContent = text[index];
+                box.style.color = '#111';
+                box.classList.remove('is-placeholder');
+            } else if (placeholder[index]) {
+                // 입력 글자는 없고 플레이스홀더 텍스트가 있는 경우
+                box.textContent = placeholder[index];
+                box.style.color = ''; // inline color 제거 후 CSS 클래스로 제어
+                box.classList.add('is-placeholder');
+            } else {
+                // 아무것도 없는 경우
+                box.textContent = '';
+                box.classList.remove('is-placeholder');
+            }
         });
     }
 
@@ -275,7 +346,7 @@
             const inputs = document.querySelectorAll('.text-input');
             inputs.forEach(input => {
                 input.value = '';
-                handleInput(input); // 지운 내용 반영
+                handleInput(input); // 지운 내용 및 플레이스홀더 반영
             });
         }
     }
