@@ -22,7 +22,6 @@
         * { box-sizing: border-box; margin: 0; padding: 0; }
         
         body {
-            /* 브라우저/OS 기본 시스템 폰트를 최우선으로 적용하여 가장 선명하게 렌더링 */
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
             background: var(--bg-body);
             color: var(--text-main);
@@ -45,9 +44,56 @@
             z-index: 100;
         }
         
-        .brand { font-size: 20px; font-weight: 700; color: #0F172A; display: flex; align-items: center; gap: 8px; }
+        .brand { font-size: 20px; font-weight: 700; color: #0F172A; display: flex; align-items: center; gap: 8px; z-index: 2; }
         
-        .header-actions { display: flex; align-items: center; gap: 16px; }
+        .header-actions { display: flex; align-items: center; gap: 16px; z-index: 2; }
+
+        /* 타임박싱 현재/다음 태스크 표시 */
+        .current-task-display {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-main);
+            background: #F8FAFC;
+            padding: 6px 16px;
+            border-radius: 20px;
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow-sm);
+            white-space: nowrap;
+            max-width: 40%;
+            overflow: hidden;
+            z-index: 1;
+            transition: all 0.3s ease;
+        }
+        .current-task-display .task-label {
+            background: var(--brand-primary);
+            color: #fff;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .current-task-display .task-label.upcoming {
+            background: #F59E0B; /* 다가오는 일정 주황색 */
+        }
+        .current-task-display .task-text {
+            text-overflow: ellipsis;
+            overflow: hidden;
+        }
+        .current-task-empty {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 14px;
+            color: var(--text-muted);
+            font-weight: 500;
+            z-index: 1;
+        }
 
         /* Search Input */
         .search-container { position: relative; width: 280px; }
@@ -100,7 +146,6 @@
             border-bottom: 1px dashed var(--border-color);
         }
         
-        /* 카테고리 드래그 핸들 (추가됨) */
         .category-drag-handle {
             cursor: grab; color: #CBD5E1; display: inline-flex; align-items: center; transition: color 0.2s;
         }
@@ -112,7 +157,6 @@
         .category-actions { display: flex; gap: 6px; opacity: 0; transition: opacity 0.2s; }
         .category-card:hover .category-actions { opacity: 1; }
         
-        /* 아이콘 버튼 스타일 */
         .icon-btn {
             background: transparent; border: none; cursor: pointer;
             padding: 6px; border-radius: 8px; 
@@ -145,7 +189,6 @@
             text-decoration: none; color: inherit;
         }
         
-        /* 북마크 드래그 핸들 */
         .drag-handle {
             cursor: grab; color: #CBD5E1; opacity: 0; display: flex; align-items: center; transition: opacity 0.2s; margin-left: -6px;
         }
@@ -195,6 +238,12 @@
 
     <header class="top-bar">
         <div class="brand">🔖 대시보드</div>
+        
+        <!-- 현재 및 다가오는 타임박스 태스크 표시 영역 -->
+        <div id="currentTaskDisplay" class="current-task-empty">
+            <!-- JS를 통해 타임박스 정보가 표출됩니다 -->
+        </div>
+
         <div class="header-actions">
             <div class="search-container">
                 <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -272,7 +321,7 @@
 
         const defaultData = [
             { id: 'c1', title: '업무용', icon: '📚', items: [
-                { id: 'b1', title: 'Study Planner', url: 'pass/studyplanner.html', icon: '🗓️' }
+                { id: 'b1', title: 'Study Planner', url: 'pass/studyplanner.html', icon: '🗓️️' }
             ]},
             { id: 'c2', title: '학습용', icon: '📋', items: [
                 { id: 'b2', title: 'Reading 마스터', url: 'tool/reading.html', icon: '📒' }
@@ -328,6 +377,91 @@
             });
         }
 
+        // 🟢 TimeBoxDB 데이터 연동 (현재 일정 확인 및 다음 일정 탐색 기능 추가)
+        function updateCurrentTimeBoxTask() {
+            const request = indexedDB.open("TimeBoxDB", 1);
+            
+            request.onerror = () => console.log("TimeBoxDB 접근 실패");
+            
+            request.onsuccess = (e) => {
+                const db = e.target.result;
+                
+                if (!db.objectStoreNames.contains("documents")) return;
+                
+                const tx = db.transaction(["documents"], "readonly");
+                const store = tx.objectStore("documents");
+                const index = store.index("date");
+                
+                const offset = new Date().getTimezoneOffset() * 60000;
+                const today = new Date(Date.now() - offset).toISOString().split("T")[0];
+                
+                const getReq = index.get(today);
+                getReq.onsuccess = () => {
+                    const data = getReq.result;
+                    const displayEl = document.getElementById("currentTaskDisplay");
+                    
+                    if (data && data.timebox) {
+                        const now = new Date();
+                        const hour = now.getHours();
+                        const minutes = now.getMinutes();
+                        const currentSlot = minutes < 30 ? "0" : "30";
+                        const currentTimeKey = `${hour}_${currentSlot}`;
+                        
+                        const currentTask = data.timebox[currentTimeKey];
+                        
+                        if (currentTask && currentTask.trim() !== "") {
+                            // 1. 현재 진행 중인 일정이 있는 경우
+                            const nextSlot = currentSlot === "0" ? "30" : "00";
+                            const nextHour = currentSlot === "0" ? hour : hour + 1;
+                            const timeString = `${hour}:${currentSlot.padStart(2, '0')} ~ ${nextHour}:${nextSlot}`;
+                            
+                            displayEl.className = "current-task-display";
+                            displayEl.innerHTML = `
+                                <span class="task-label">⏳ ${timeString} 진행중</span>
+                                <span class="task-text" title="${currentTask}">${currentTask}</span>
+                            `;
+                        } else {
+                            // 2. 현재 일정이 비어있다면, 다가오는 '다음' 일정을 탐색
+                            let nextTask = null;
+                            let nextTimeKey = null;
+                            
+                            let startHour = hour;
+                            let startSlot = currentSlot === "0" ? 30 : 0;
+                            if (startSlot === 0) startHour++;
+                            
+                            for (let h = startHour; h <= 23; h++) {
+                                const slots = (h === startHour && startSlot === 30) ? [30] : [0, 30];
+                                for (let s of slots) {
+                                    const tk = `${h}_${s}`;
+                                    if (data.timebox[tk] && data.timebox[tk].trim() !== "") {
+                                        nextTask = data.timebox[tk];
+                                        nextTimeKey = { h, s };
+                                        break; // 가장 가까운 일정 찾음
+                                    }
+                                }
+                                if (nextTask) break;
+                            }
+                            
+                            if (nextTask) {
+                                const sStr = nextTimeKey.s === 0 ? "00" : "30";
+                                displayEl.className = "current-task-display";
+                                displayEl.innerHTML = `
+                                    <span class="task-label upcoming">🔜 ${nextTimeKey.h}:${sStr} 예정</span>
+                                    <span class="task-text" title="${nextTask}">${nextTask}</span>
+                                `;
+                            } else {
+                                displayEl.className = "current-task-empty";
+                                displayEl.innerHTML = `오늘 남은 타임박스 일정이 없습니다.`;
+                            }
+                        }
+                    } else {
+                        displayEl.className = "current-task-empty";
+                        displayEl.innerHTML = `오늘 남은 타임박스 일정이 없습니다.`;
+                    }
+                };
+            };
+        }
+
         window.onload = async function() {
             try {
                 data = await initDB();
@@ -336,6 +470,10 @@
                 data = JSON.parse(JSON.stringify(defaultData)); 
             }
             renderDashboard();
+
+            // 최초 로드 및 1분 주기로 TimeBox 데이터 갱신
+            updateCurrentTimeBoxTask();
+            setInterval(updateCurrentTimeBoxTask, 60000);
         };
 
         function renderDashboard() {
@@ -354,7 +492,6 @@
                 card.innerHTML = `
                     <div class="category-header">
                         <div class="category-title">
-                            <!-- 카테고리 드래그 핸들 -->
                             <span class="category-drag-handle" draggable="true" 
                                   ondragstart="handleCategoryDragStart(event, '${category.id}')"
                                   ondragend="handleCategoryDragEnd(event)" title="카테고리 이동">
@@ -430,21 +567,19 @@
                 (query !== "" && totalVisibleItems === 0) ? 'block' : 'none';
         }
 
-        /* --- Drag & Drop 전역 상태 변수 --- */
         let draggedItemId = null;
         let sourceCategoryId = null;
-        let draggedCategoryId = null; // 카테고리 드래그를 위한 변수 추가
+        let draggedCategoryId = null; 
 
-        /* --- 카테고리 드래그 앤 드롭 로직 --- */
         function handleCategoryDragStart(e, categoryId) {
-            e.stopPropagation(); // 중복 드래그 방지
+            e.stopPropagation(); 
             draggedCategoryId = categoryId;
             draggedItemId = null;
             sourceCategoryId = null;
             
             const card = e.target.closest('.category-card');
             if (card) {
-                e.dataTransfer.setDragImage(card, 20, 20); // 카드 전체를 드래그 이미지로 사용
+                e.dataTransfer.setDragImage(card, 20, 20); 
                 setTimeout(() => card.classList.add('dragging'), 0);
             }
             e.dataTransfer.setData('text/plain', categoryId);
@@ -457,12 +592,11 @@
             draggedCategoryId = null;
         }
 
-        /* --- 북마크 아이템 드래그 앤 드롭 로직 --- */
         function handleDragStart(e, itemId, categoryId) {
             e.stopPropagation();
             draggedItemId = itemId;
             sourceCategoryId = categoryId;
-            draggedCategoryId = null; // 초기화
+            draggedCategoryId = null; 
             
             const item = e.target.closest('.bookmark-item');
             if (item) {
@@ -479,12 +613,10 @@
             sourceCategoryId = null;
         }
 
-        /* --- 공통 드롭 이벤트 처리 --- */
         function handleDragOver(e) {
             e.preventDefault(); 
             const card = e.target.closest('.category-card');
             if(card) {
-                // 자기 자신(카테고리) 위로 드래그하는 경우 스타일 무시
                 if (draggedCategoryId === card.getAttribute('data-category-id')) return;
                 card.classList.add('drag-over');
             }
@@ -503,14 +635,12 @@
             targetCard.classList.remove('drag-over');
             const targetCategoryId = targetCard.getAttribute('data-category-id');
 
-            // 1. 카테고리 위치 이동 처리
             if (draggedCategoryId && targetCategoryId && draggedCategoryId !== targetCategoryId) {
                 const sourceIndex = data.findIndex(c => c.id === draggedCategoryId);
                 const targetIndex = data.findIndex(c => c.id === targetCategoryId);
                 
                 if (sourceIndex > -1 && targetIndex > -1) {
                     const [movedCategory] = data.splice(sourceIndex, 1);
-                    // 목표 위치로 카테고리 이동 (재정렬)
                     data.splice(targetIndex, 0, movedCategory);
                     
                     await saveDB(data);
@@ -520,7 +650,6 @@
                 return;
             }
 
-            // 2. 북마크 이동 처리
             if (sourceCategoryId && targetCategoryId && draggedItemId) {
                 const sourceCat = data.find(c => c.id === sourceCategoryId);
                 const targetCat = data.find(c => c.id === targetCategoryId);
