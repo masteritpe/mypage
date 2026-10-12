@@ -27,6 +27,7 @@
         --border-color: rgba(0, 0, 0, 0.06);
         --toolbar-h: 64px; 
         --sidebar-w: 320px;
+        --memo-w: 400px; /* 초기 메모 패널 너비 */
         
         --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04);
         --shadow-md: 0 8px 16px rgba(0, 0, 0, 0.06);
@@ -211,6 +212,59 @@
     }
 
     @keyframes fadeIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* === Resizer / Splitter === */
+    .resizer {
+        width: 6px; 
+        background-color: var(--border-color); 
+        cursor: col-resize; 
+        transition: background-color 0.2s; 
+        z-index: 60;
+    }
+    .resizer:hover, .resizer.dragging {
+        background-color: var(--primary);
+    }
+    .resizer.hidden {
+        display: none;
+    }
+
+    /* === Memo Panel === */
+    .memo-panel {
+        width: var(--memo-w); background: #ffffff; display: flex; flex-direction: column; z-index: 50; box-shadow: -2px 0 12px rgba(0,0,0,0.02); flex-shrink: 0;
+    }
+    .memo-panel.hidden { display: none; }
+    .memo-header { padding: 20px; border-bottom: 1px solid var(--border-color); background: #fafafa; font-weight: 800; font-size: 16px; color: var(--text-main); display: flex; justify-content: space-between; align-items: center; }
+    .memo-content { flex: 1; padding: 20px; overflow-y: auto; background: #fafafa; }
+    #memo-textarea { 
+        width: 100%; height: 100%; resize: none; border: 1px solid rgba(0,0,0,0.1); border-radius: 12px; padding: 14px; font-family: inherit; font-size: 16px; line-height: 1.6; color: var(--text-main); background: #ffffff; transition: border-color 0.2s, box-shadow 0.2s; box-shadow: var(--shadow-sm); 
+    }
+    #memo-textarea:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 4px rgba(67, 56, 202, 0.1); }
+
+    /* === 몰입 모드 작동 시계 === */
+    #presenter-clock {
+        position: fixed;
+        /* 📌 상단 겹침 방지를 위해 위치를 좌측 하단으로 이동 */
+        bottom: 20px;
+        left: 20px;
+        color: rgba(255, 255, 255, 0.9);
+        font-family: inherit;
+        font-weight: 800;
+        font-size: 18px;
+        z-index: 9999;
+        display: none; /* 기본적으로 숨김 */
+        background: rgba(0, 0, 0, 0.5);
+        padding: 8px 16px;
+        border-radius: 12px;
+        backdrop-filter: blur(8px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    
+    /* 몰입모드 및 전체화면에서 항상 시계 표시 */
+    body.immersion-mode #presenter-clock,
+    :fullscreen #presenter-clock,
+    :-webkit-full-screen #presenter-clock {
+        display: block !important; 
+    }
 </style>
 </head>
 <body>
@@ -235,7 +289,7 @@
         </div>
 
         <div class="page-info">
-            <input type="number" id="page-num-input" value="0" min="1" title="이동할 페이지 입력 후 Enter" />
+            <input type="number" id="page-num-input" value="0" min="1" title="이동할 페이지 입력 후 Enter" onfocus="this.select()" onclick="this.select()" />
             <span style="color:var(--text-muted); margin: 0 4px;">/</span> 
             <span id="page-count">0</span>
         </div>
@@ -245,6 +299,7 @@
             <button class="btn" onclick="app.zoomIn()" title="확대 (Ctrl +)"><i class="fas fa-plus"></i></button>
             <button class="btn" onclick="app.toggleImmersionMode()" title="몰입 모드 (Ctrl+M)"><i class="fas fa-tv"></i></button>
             <button class="btn" onclick="app.toggleFullScreen()" title="전체화면 (Ctrl+H)"><i class="fas fa-expand"></i></button>
+            <button class="btn" onclick="app.toggleMemo()" title="메모 (단축키 Alt+M)"><i class="fas fa-sticky-note"></i></button>
         </div>
 
         <div class="btn-group">
@@ -265,14 +320,14 @@
                 </div>
             </div>
             <button class="btn" id="tool-eraser" onclick="app.setTool('eraser')" title="부분 지우개 (단축키 3)"><i class="fas fa-eraser"></i></button>
-            <button class="btn" id="tool-laser" onclick="app.setTool('laser')" title="레이저 포인터 (단축키 9)"><i class="fas fa-bullseye" style="color: #ef4444;"></i></button>
-        </div>
-
-        <div class="btn-group">
+            
             <button class="btn" id="tool-text" onclick="app.setTool('text')" title="텍스트 이동 및 삽입 (단축키 4)"><i class="fas fa-font"></i></button>
+            <button class="btn" id="tool-strike" onclick="app.setTool('strikethrough')" title="취소선 (단축키 9)"><i class="fas fa-strikethrough"></i></button>
+            
             <button class="btn" id="tool-keyword" onclick="app.setTool('keyword')" title="강조 키워드 (단축키 0)"><i class="fas fa-key" style="color:#ef4444;"></i></button>
             <button class="btn" id="tool-important" onclick="app.setTool('sticker-important')" ondblclick="app.applyLastSticker('sticker-important')" title="'중요!' 뱃지 (단축키 5 | 더블클릭: 이전 위치 바로적용)"><i class="fas fa-star" style="color:#e11d48;"></i></button>
             <button class="btn" id="tool-memorize" onclick="app.setTool('sticker-memorize')" ondblclick="app.applyLastSticker('sticker-memorize')" title="'암기!!' 뱃지 (단축키 6 | 더블클릭: 이전 위치 바로적용)"><i class="fas fa-bookmark" style="color:#4338ca;"></i></button>
+            <button class="btn" id="tool-laser" onclick="app.setTool('laser')" title="레이저 포인터 (단축키 L)"><i class="fas fa-bullseye" style="color: #ef4444;"></i></button>
         </div>
 
         <div class="btn-group">
@@ -320,7 +375,10 @@
         </div>
     </aside>
 
-    <main>
+    <main id="main-content">
+        <!-- 현재 작동 시간(시계) -->
+        <div id="presenter-clock">00:00</div>
+        
         <div id="empty-state">
             <i class="far fa-file-pdf"></i>
             <h2>프리젠테이션할 PDF를 여러 개 열어보세요</h2>
@@ -334,6 +392,24 @@
             <div id="laser-dot" style="display:none; position:absolute; width:12px; height:12px; background:#ef4444; border-radius:50%; box-shadow:0 0 12px 4px rgba(239, 68, 68, 0.5); pointer-events:none; z-index:9999; transform:translate(-50%, -50%);"></div>
         </div>
     </main>
+
+    <!-- 메모 크기 조절 리사이저 -->
+    <div id="memo-resizer" class="resizer hidden"></div>
+
+    <aside id="memo-panel" class="memo-panel hidden">
+        <div class="memo-header">
+            <span>개인 메모</span>
+            <div style="display: flex; gap: 4px; align-items: center;">
+                <button class="btn" onmousedown="event.preventDefault();" onclick="app.prevPage()" style="padding:0 8px; margin:0; height: 28px;" title="이전 페이지 (Alt+왼쪽 화살표)"><i class="fas fa-chevron-left"></i></button>
+                <button class="btn" onmousedown="event.preventDefault();" onclick="app.nextPage()" style="padding:0 8px; margin:0; height: 28px;" title="다음 페이지 (Alt+오른쪽 화살표)"><i class="fas fa-chevron-right"></i></button>
+                <div style="width: 1px; height: 14px; background: var(--border-color); margin: 0 4px;"></div>
+                <button class="btn" onclick="app.toggleMemo()" style="padding:0 8px; margin:0; height: 28px;" title="닫기 (Alt+M)"><i class="fas fa-times"></i></button>
+            </div>
+        </div>
+        <div class="memo-content">
+            <textarea id="memo-textarea" placeholder="중요한 내용을 기록하세요... (Alt+좌/우 방향키로 화면 이동 가능)" oninput="app.saveMemo(this.value)" spellcheck="false"></textarea>
+        </div>
+    </aside>
 </div>
 
 <div id="toast">Message</div>
@@ -434,8 +510,81 @@ const app = {
             }
         });
 
+        // 리사이저 설정
+        this.setupResizer();
+
+        // 24H:60M 형태 시계 시작
+        this.startClock();
+
+        // 기존 저장된 메모 내용 및 패널 크기 로드
+        const memoTextarea = document.getElementById('memo-textarea');
+        if (memoTextarea) {
+            memoTextarea.value = localStorage.getItem('presenter_memo') || '';
+            
+            // 메모 텍스트에디터에서 Alt + 방향키로 페이지 이동 허용
+            memoTextarea.addEventListener('keydown', (e) => {
+                if (e.altKey && e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    app.prevPage();
+                } else if (e.altKey && e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    app.nextPage();
+                }
+            });
+        }
+        
+        const savedMemoW = localStorage.getItem('presenter_memo_w');
+        if (savedMemoW) {
+            document.documentElement.style.setProperty('--memo-w', savedMemoW);
+        }
+
         this.setTool('cursor'); 
         this.renderOutlineList();
+    },
+
+    startClock() {
+        const clockEl = document.getElementById('presenter-clock');
+        const updateTime = () => {
+            const now = new Date();
+            const hh = String(now.getHours()).padStart(2, '0');
+            const mm = String(now.getMinutes()).padStart(2, '0');
+            clockEl.textContent = `${hh}:${mm}`;
+        };
+        updateTime();
+        setInterval(updateTime, 1000);
+    },
+
+    setupResizer() {
+        let isResizing = false;
+        const resizer = document.getElementById('memo-resizer');
+
+        resizer.addEventListener('mousedown', (e) => {
+            isResizing = true;
+            document.body.style.cursor = 'col-resize';
+            resizer.classList.add('dragging');
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isResizing) return;
+            // 오른쪽 기준 너비 계산 (전체 윈도우 너비 - 마우스 X 위치)
+            let newWidth = window.innerWidth - e.clientX;
+            
+            // 최소/최대 너비 제한
+            if (newWidth < 200) newWidth = 200;
+            if (newWidth > 800) newWidth = 800;
+            
+            document.documentElement.style.setProperty('--memo-w', `${newWidth}px`);
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (isResizing) {
+                isResizing = false;
+                document.body.style.cursor = '';
+                resizer.classList.remove('dragging');
+                // 조정된 너비 저장
+                localStorage.setItem('presenter_memo_w', document.documentElement.style.getPropertyValue('--memo-w'));
+            }
+        });
     },
 
     async loadDocData() {
@@ -775,6 +924,20 @@ const app = {
     toggleFullScreen() { if (!document.fullscreenElement) document.documentElement.requestFullscreen(); else if (document.exitFullscreen) document.exitFullscreen(); },
     toggleSidebar() { document.getElementById('sidebar').classList.toggle('hidden'); },
 
+    toggleMemo() {
+        const memoPanel = document.getElementById('memo-panel');
+        const resizer = document.getElementById('memo-resizer');
+        memoPanel.classList.toggle('hidden');
+        resizer.classList.toggle('hidden');
+        if (!memoPanel.classList.contains('hidden')) {
+             setTimeout(() => document.getElementById('memo-textarea').focus(), 50);
+        }
+    },
+
+    saveMemo(text) {
+        localStorage.setItem('presenter_memo', text);
+    },
+
     toggleImmersionMode() {
         const isActive = document.body.classList.toggle('immersion-mode');
         if (isActive) {
@@ -840,6 +1003,7 @@ const app = {
         if(tool === 'highlight') document.getElementById('tool-hi').classList.add('active');
         if(tool === 'eraser') document.getElementById('tool-eraser').classList.add('active');
         if(tool === 'text') document.getElementById('tool-text').classList.add('active');
+        if(tool === 'strikethrough') document.getElementById('tool-strike').classList.add('active');
         if(tool === 'keyword') document.getElementById('tool-keyword').classList.add('active');
         if(tool === 'laser') document.getElementById('tool-laser').classList.add('active');
         if(tool === 'sticker-important') document.getElementById('tool-important').classList.add('active');
@@ -849,13 +1013,13 @@ const app = {
         const overlayLayer = document.getElementById('overlay-layer');
         const textLayer = document.getElementById('text-layer');
 
-        if (['pen', 'highlight', 'eraser'].includes(tool)) { overlayLayer.classList.add('drawing-mode'); this.drawCanvas.style.cursor = 'crosshair'; this.drawCanvas.style.pointerEvents = 'auto'; textLayer.style.pointerEvents = 'none'; laserDot.style.display = 'none'; } 
+        if (['pen', 'highlight', 'eraser', 'strikethrough'].includes(tool)) { overlayLayer.classList.add('drawing-mode'); this.drawCanvas.style.cursor = 'crosshair'; this.drawCanvas.style.pointerEvents = 'auto'; textLayer.style.pointerEvents = 'none'; laserDot.style.display = 'none'; } 
         else if (tool === 'text' || tool === 'keyword') { overlayLayer.classList.remove('drawing-mode'); this.drawCanvas.style.cursor = 'text'; this.drawCanvas.style.pointerEvents = 'auto'; textLayer.style.pointerEvents = 'none'; laserDot.style.display = 'none'; } 
         else if (tool.startsWith('sticker-')) { overlayLayer.classList.remove('drawing-mode'); this.drawCanvas.style.cursor = 'crosshair'; this.drawCanvas.style.pointerEvents = 'auto'; textLayer.style.pointerEvents = 'none'; laserDot.style.display = 'none'; }
         else if (tool === 'laser') { overlayLayer.classList.remove('drawing-mode'); this.drawCanvas.style.cursor = 'none'; this.drawCanvas.style.pointerEvents = 'auto'; textLayer.style.pointerEvents = 'none'; laserDot.style.display = 'block'; } 
         else { overlayLayer.classList.remove('drawing-mode'); this.drawCanvas.style.cursor = 'default'; this.drawCanvas.style.pointerEvents = 'none'; textLayer.style.pointerEvents = 'auto'; laserDot.style.display = 'none'; }
 
-        const msgs = { 'cursor': "선택/이동 (상단 검색창 지원)", 'pen': "부드러운 펜", 'highlight': "형광펜", 'eraser': "부분 지우개", 'text': "텍스트 입력/이동 모드", 'keyword': "강조 키워드 입력 모드", 'laser': "레이저 포인터 모드", 'sticker-important': "클릭하여 '중요!' 뱃지 부착", 'sticker-memorize': "클릭하여 '암기!!' 뱃지 부착" };
+        const msgs = { 'cursor': "선택/이동 (상단 검색창 지원)", 'pen': "부드러운 펜", 'highlight': "형광펜", 'eraser': "부분 지우개", 'text': "텍스트 입력/이동 모드", 'strikethrough': "취소선 모드 (드래그하여 선 긋기)", 'keyword': "강조 키워드 입력 모드", 'laser': "레이저 포인터 모드", 'sticker-important': "클릭하여 '중요!' 뱃지 부착", 'sticker-memorize': "클릭하여 '암기!!' 뱃지 부착" };
         if(msgs[tool]) this.showToast(`${msgs[tool]} 모드`);
     },
 
@@ -916,13 +1080,22 @@ const app = {
         } else if (this.currentTool === 'eraser') {
             this.drawCtx.globalCompositeOperation = 'destination-out'; this.drawCtx.lineCap = 'round'; this.drawCtx.lineWidth = 40 * outputScale; this.drawCtx.strokeStyle = 'rgba(0,0,0,1)'; 
             this.drawCtx.lineTo(currentPos.x, currentPos.y); this.drawCtx.stroke(); this.drawCtx.beginPath(); this.drawCtx.moveTo(currentPos.x, currentPos.y);
+        } else if (this.currentTool === 'strikethrough') {
+            this.drawCtx.globalCompositeOperation = 'source-over';
+            this.drawCtx.lineCap = 'square';
+            this.drawCtx.lineWidth = 2 * outputScale;
+            this.drawCtx.strokeStyle = '#ef4444'; 
+            this.drawCtx.lineTo(currentPos.x, currentPos.y);
+            this.drawCtx.stroke();
+            this.drawCtx.beginPath();
+            this.drawCtx.moveTo(currentPos.x, currentPos.y);
         }
     },
 
     stopDraw() { 
         if (!this.isDrawing) return;
         this.isDrawing = false; 
-        if (this.currentTool === 'pen' || this.currentTool === 'eraser') { this.drawCtx.lineTo(this.lastPos.x, this.lastPos.y); this.drawCtx.stroke(); }
+        if (['pen', 'eraser', 'strikethrough'].includes(this.currentTool)) { this.drawCtx.lineTo(this.lastPos.x, this.lastPos.y); this.drawCtx.stroke(); }
         this.drawCtx.beginPath(); this.savePageData(this.pageNum); 
     },
 
@@ -1169,6 +1342,13 @@ const app = {
     },
 
     handleKey(e) {
+        // 개인 메모 토글 (Alt + M)
+        if (e.altKey && (e.key.toLowerCase() === 'm' || e.code === 'KeyM')) {
+            e.preventDefault();
+            this.toggleMemo();
+            return;
+        }
+
         if (e.ctrlKey && (e.key.toLowerCase() === 'm' || e.code === 'KeyM')) {
             e.preventDefault();
             this.toggleImmersionMode();
@@ -1319,6 +1499,7 @@ const app = {
         if (e.key === '2') { e.preventDefault(); this.setTool('highlight'); }
         if (e.key === '3') { e.preventDefault(); this.setTool('eraser'); } 
         if (e.key === '4') { e.preventDefault(); this.setTool('text'); }
+        if (e.key === '9') { e.preventDefault(); this.setTool('strikethrough'); }
         if (e.key === '0' && !e.ctrlKey && !e.altKey && !e.shiftKey) { e.preventDefault(); this.setTool('keyword'); }
         if (e.code === 'Digit5') { e.preventDefault(); if (e.shiftKey) this.applyLastSticker('sticker-important'); else this.setTool('sticker-important'); }
         if (e.code === 'Digit6') { e.preventDefault(); if (e.shiftKey) this.applyLastSticker('sticker-memorize'); else this.setTool('sticker-memorize'); }
@@ -1339,7 +1520,7 @@ const app = {
             }
         }
         if (e.code === 'Digit8' || e.key === '8') { e.preventDefault(); this.clearPage(); }
-        if (e.code === 'Digit9' || e.key === '9') { e.preventDefault(); this.setTool('laser'); }
+        if (e.key.toLowerCase() === 'l') { e.preventDefault(); this.setTool('laser'); }
     },
     
     showToast(msg) {

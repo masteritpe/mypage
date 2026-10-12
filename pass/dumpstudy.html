@@ -2198,8 +2198,44 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   function toPlainForExport(html) {
       if (!html) return '';
-      let s = String(html).replace(/<br\s*\/?>/gi, '\n').replace(/<\/div>/gi, '\n').replace(/<\/p>/gi, '\n');
-      s = s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/(^|\n)\s*\*\s/g, '$1- ').replace(/<[^>]+>/g, '').trim();
+      // 1. 블록 요소 및 리스트(li) 태그를 줄바꿈으로 변환 (기존 누락된 li 태그 추가)
+      let s = String(html)
+          .replace(/<br\s*\/?>/gi, '\n')
+          .replace(/<\/div>/gi, '\n')
+          .replace(/<\/p>/gi, '\n')
+          .replace(/<\/li>/gi, '\n') // 리스트 항목 종료 시 줄바꿈
+          .replace(/<\/h[1-6]>/gi, '\n\n');
+      
+      // 2. HTML 태그 제거 및 특수문자 변환
+      s = s.replace(/&lt;/g, '<')
+           .replace(/&gt;/g, '>')
+           .replace(/&nbsp;/g, ' ') 
+           .replace(/(^|\n)\s*\*\s/g, '$1- ')
+           .replace(/<[^>]+>/g, '')
+           .trim();
+
+      // 3. 브레인스케이프/Anki 내보내기 시 가독성을 위한 섹션별 명시적 줄바꿈 추가
+      // '정답:' 앞뒤 구분
+      s = s.replace(/([^\n])\s*(정답:)/g, '$1\n\n$2 ');
+      
+      // '정답 및 풀이' 앞뒤 구분 (키워드 다음 줄로 내용이 이어지도록)
+      s = s.replace(/([^\n])\s*(정답 및 풀이)/g, '$1\n\n$2');
+      s = s.replace(/(정답 및 풀이)\s*/g, '$1\n');
+      
+      // '정답인 이유' 앞 구분
+      s = s.replace(/([^\n])\s*(정답인 이유)/g, '$1\n$2');
+      
+      // '오답 분석' 앞뒤 구분
+      s = s.replace(/([^\n])\s*(오답\s*분석:?)/g, '$1\n\n$2');
+      s = s.replace(/(오답\s*분석:?)\s*/g, '$1\n');
+      
+      // '핵심 해법' 앞뒤 구분 ([] 괄호 형태 통일)
+      s = s.replace(/([^\n])\s*\[?(핵심\s*해법)\]?/g, '$1\n\n[$2]');
+      s = s.replace(/\[?(핵심\s*해법)\]?\s*/g, '[$1]\n');
+
+      // 4. 과도하게 중복된 줄바꿈(3개 이상)을 2개로 축소하여 깔끔하게 정리
+      s = s.replace(/\n{3,}/g, '\n\n').trim();
+      
       return s;
   }
 
