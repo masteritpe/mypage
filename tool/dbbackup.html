@@ -65,6 +65,12 @@
     .btn-primary:hover { background: #4338ca; }
     .btn-icon { border: none; background: transparent; cursor: pointer; color: #9ca3af; font-size: 18px; transition:0.2s; padding: 6px; border-radius: 6px;}
     .btn-icon:hover { color: var(--accent); background: #f3f4f6; }
+    
+    .btn:disabled { 
+        opacity: 0.5; 
+        cursor: not-allowed; 
+        pointer-events: none; 
+    }
 
     /* === 3. Main Layout === */
     main { flex: 1; display: flex; height: calc(100vh - 64px); overflow: hidden; }
@@ -151,7 +157,7 @@
 
     /* === Modals === */
     .modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(2px); z-index: 2500; display: none; align-items: center; justify-content: center; }
-    .modal-box { background: #fff; width: 480px; padding: 32px; border-radius: 16px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); display: flex; flex-direction: column; gap: 20px; }
+    .modal-box { background: #fff; width: 480px; padding: 32px; border-radius: 16px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); display: flex; flex-direction: column; gap: 20px; max-height: 90vh; }
     
     .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
     .modal-header h3 { margin: 0; font-size: 18px; font-weight: 800; color: var(--text-main); display: flex; align-items: center; gap: 10px; }
@@ -211,6 +217,12 @@
       <i class="fas fa-file-import" style="color:#f59e0b;"></i> 데이터 복구
       <input type="file" id="restoreFileInput" accept=".json" style="display:none" multiple onchange="handleRestoreFiles(this)">
     </label>
+    
+    <!-- 스토어 초기화 버튼 -->
+    <button class="btn" onclick="openInitStoreModal()" style="margin-left: 8px;">
+      <i class="fas fa-hammer" style="color:var(--accent);"></i> 스토어 초기화
+    </button>
+    
     <div style="width:1px; height:24px; background:#e5e7eb; margin:0 8px;"></div>
     <button class="btn btn-primary" onclick="openAddModal()"><i class="fas fa-plus"></i> 새 스케줄</button>
   </div>
@@ -335,6 +347,46 @@
         <div class="modal-footer">
             <button class="btn" onclick="closeModal()">취소</button>
             <button class="btn btn-primary" onclick="addNewJob()"><i class="fas fa-save"></i> 저장</button>
+        </div>
+    </div>
+</div>
+
+<!-- 스토어 초기화 모달 -->
+<div id="initStoreModal" class="modal-overlay">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h3><i class="fas fa-hammer" style="color:var(--accent)"></i> 스토어 수동 초기화</h3>
+            <button type="button" class="btn-icon" onclick="closeInitStoreModal()"><i class="fas fa-times"></i></button>
+        </div>
+        
+        <p style="font-size:13px; color:var(--gray); margin:0;">복구하려는 백업 파일을 선택하면, 생성할 스토어(테이블) 목록을 추출합니다.</p>
+        
+        <div class="form-group">
+            <label class="form-label">백업 파일 선택 (구조 분석용, 다중선택 가능)</label>
+            <!-- 🌟 multiple 속성 추가하여 파일 다중 선택 허용 -->
+            <input type="file" id="initStoreFileInput" accept=".json" class="form-control" multiple onchange="handleInitStoreFile(this)">
+        </div>
+        
+        <div class="form-group" id="initStoreListArea" style="display:none;">
+            <label class="form-label">초기화 대상 DB 목록</label>
+            
+            <div style="display:flex; gap:8px; margin-bottom: 8px;">
+                <button type="button" class="btn" style="height: 30px; font-size: 12px; padding: 0 10px;" onclick="setInitStoreCheckboxes(true)">
+                    <i class="fas fa-check-square"></i> 전체 선택
+                </button>
+                <button type="button" class="btn" style="height: 30px; font-size: 12px; padding: 0 10px;" onclick="setInitStoreCheckboxes(false)">
+                    <i class="far fa-square"></i> 전체 해제
+                </button>
+            </div>
+            
+            <div style="border: 1px solid var(--border); border-radius: 6px; padding: 12px; max-height: 200px; overflow-y: auto; background: #f9fafb;">
+                <div id="initStoreCheckboxes" style="display:flex; flex-direction:column; gap:8px;"></div>
+            </div>
+        </div>
+        
+        <div class="modal-footer">
+            <button type="button" class="btn" onclick="closeInitStoreModal()">취소</button>
+            <button type="button" class="btn btn-primary" id="btnExecuteInit" onclick="executeInitStores()" disabled><i class="fas fa-play"></i> 선택 DB 초기화</button>
         </div>
     </div>
 </div>
@@ -778,6 +830,144 @@
             alert("복구 중 에러 발생: " + err.message);
         } finally {
             input.value = '';
+        }
+    }
+
+    // --- 🌟 스토어 수동 초기화 로직 (다중 파일 & 다중 DB 지원) ---
+    let initStoreData = {}; // { "DB이름": Set(["store1", "store2"]) }
+
+    function openInitStoreModal() {
+        document.getElementById('initStoreModal').style.display = 'flex';
+        document.getElementById('initStoreFileInput').value = '';
+        document.getElementById('initStoreListArea').style.display = 'none';
+        document.getElementById('btnExecuteInit').disabled = true;
+        initStoreData = {};
+    }
+
+    function closeInitStoreModal() {
+        document.getElementById('initStoreModal').style.display = 'none';
+    }
+
+    async function handleInitStoreFile(input) {
+        if (!input.files || input.files.length === 0) return;
+        
+        initStoreData = {};
+        const container = document.getElementById('initStoreCheckboxes');
+        container.innerHTML = '';
+        
+        try {
+            // 다중 파일을 순회하며 모든 DB 및 스토어 정보를 합산
+            for (let file of input.files) {
+                const textData = await file.text();
+                const json = JSON.parse(textData);
+                if (!json.database || !json.stores) continue; 
+                
+                const dbName = json.database;
+                if (!initStoreData[dbName]) {
+                    initStoreData[dbName] = new Set();
+                }
+                
+                // 해당 파일에 명시된 스토어 취합
+                Object.keys(json.stores).forEach(store => {
+                    initStoreData[dbName].add(store);
+                });
+            }
+            
+            const dbNames = Object.keys(initStoreData);
+            if (dbNames.length === 0) throw new Error("유효한 백업 파일이 없습니다.");
+            
+            // 추출된 DB들을 체크박스 리스트로 생성
+            dbNames.forEach(dbName => {
+                const label = document.createElement('label');
+                label.style.display = 'flex';
+                label.style.alignItems = 'center';
+                label.style.gap = '8px';
+                label.style.cursor = 'pointer';
+                label.style.fontSize = '14px';
+                label.style.color = '#374151';
+                
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.className = 'init-store-cb';
+                cb.value = dbName;
+                cb.checked = true;
+                cb.style.width = '16px';
+                cb.style.height = '16px';
+                cb.style.cursor = 'pointer';
+                
+                const storeCount = initStoreData[dbName].size;
+                const span = document.createElement('span');
+                span.innerHTML = `<b>${dbName}</b> (스토어 ${storeCount}개)`;
+                
+                label.appendChild(cb);
+                label.appendChild(span);
+                container.appendChild(label);
+            });
+            
+            document.getElementById('initStoreListArea').style.display = 'block';
+            document.getElementById('btnExecuteInit').disabled = false;
+        } catch(e) {
+            alert("파일 분석 실패: " + e.message);
+            input.value = '';
+        }
+    }
+
+    function setInitStoreCheckboxes(checkedStatus) {
+        const cbs = document.querySelectorAll('.init-store-cb');
+        cbs.forEach(cb => cb.checked = checkedStatus);
+    }
+
+    async function executeInitStores() {
+        const cbs = document.querySelectorAll('.init-store-cb:checked');
+        const selectedDBs = Array.from(cbs).map(cb => cb.value);
+        
+        if (selectedDBs.length === 0) return alert("초기화할 DB를 1개 이상 선택하세요.");
+        
+        if (!confirm(`경고: 선택한 ${selectedDBs.length}개의 DB를 완전히 삭제한 후 초기 상태(v1)로 재생성합니다.\n계속하시겠습니까?`)) {
+            return;
+        }
+        
+        showProgress('스토어 초기화', '선택한 DB 삭제 및 구조 생성 중...');
+        
+        try {
+            // 순차적으로 다중 DB 작업 수행
+            for (const dbName of selectedDBs) {
+                document.getElementById('progressDesc').innerText = `'${dbName}' DB 초기화 중...`;
+                
+                // 1. 기존 DB 완전히 삭제
+                await new Promise((res, rej) => {
+                    const deleteReq = indexedDB.deleteDatabase(dbName);
+                    deleteReq.onsuccess = () => res();
+                    deleteReq.onerror = () => rej(new Error(`'${dbName}' DB 삭제에 실패했습니다.`));
+                    deleteReq.onblocked = () => rej(new Error(`다른 탭에서 '${dbName}' DB를 사용 중이어서 삭제할 수 없습니다. 열려있는 다른 탭을 닫아주세요.`));
+                });
+                
+                // 2. DB 초기 버전(v1)으로 재생성 및 취합된 모든 스토어 일괄 추가
+                const upgradeReq = indexedDB.open(dbName, 1);
+                await new Promise((res, rej) => {
+                    upgradeReq.onupgradeneeded = e => {
+                        const db = e.target.result;
+                        const storesToCreate = Array.from(initStoreData[dbName]);
+                        storesToCreate.forEach(storeName => {
+                            if (!db.objectStoreNames.contains(storeName)) {
+                                db.createObjectStore(storeName, { autoIncrement: true });
+                            }
+                        });
+                    };
+                    upgradeReq.onsuccess = e => {
+                        e.target.result.close();
+                        res();
+                    };
+                    upgradeReq.onerror = () => rej(new Error(`'${dbName}' 스토어 생성 실패`));
+                });
+            }
+            
+            hideProgress();
+            showToast("선택한 DB의 초기화 및 스토어 생성이 완료되었습니다.");
+            closeInitStoreModal();
+        } catch (e) {
+            hideProgress();
+            alert("오류 발생: " + e.message);
         }
     }
 
