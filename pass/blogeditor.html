@@ -1849,6 +1849,221 @@ window.MathJax = {
         return true; 
     }
 
+    function normalizeMarkdownTables(content) {
+        if (!content) return '';
+        const rawLines = content.split('\n');
+        const newLines = [];
+        let inTable = false;
+        let currentRow = '';
+        let tableColCount = 0;
+
+        const isDelimiterRow = (line) => {
+            const trimmed = line.trim();
+            return /^\|?(?:\s*:?-{1,}:?\s*\|)+\s*:?-{1,}:?\s*\|?$/.test(trimmed);
+        };
+
+        const isBlockElement = (line) => {
+            const trimmed = line.trim();
+            if (/^#{1,6}\s/.test(trimmed)) return true;
+            if (/^(?:---|\*\*\*|___)$/.test(trimmed) && !trimmed.includes('|')) return true;
+            if (/^(?:```|~~~|%%%CODE_BLOCK_|%%%INLINE_CODE_)/.test(trimmed)) return true;
+            if (/^>/.test(trimmed)) return true;
+            if (/^\*\*\[(?:리드|개념|상세설명|정의|핵심|두음|분류|인증기준|주요 확인사항|결함사례|참조|개요|인사이트|예상문제)/.test(trimmed)) return true;
+            if (/^<div/i.test(trimmed)) return true;
+            return false;
+        };
+
+        const countPipes = (line) => {
+            let count = 0;
+            let escaped = false;
+            for (let i = 0; i < line.length; i++) {
+                if (line[i] === '\\') {
+                    escaped = !escaped;
+                } else if (line[i] === '|' && !escaped) {
+                    count++;
+                } else {
+                    escaped = false;
+                }
+            }
+            return count;
+        };
+
+        const isRowComplete = (rowStr, colCount) => {
+            if (!rowStr) return false;
+            const trimmed = rowStr.trim();
+            if (!trimmed.endsWith('|')) return false;
+            if (colCount <= 0) return true;
+            const pipes = countPipes(trimmed);
+            return pipes >= colCount + 1;
+        };
+
+        const mergeCellContent = (existing, addition) => {
+            let add = addition.trim();
+            let cur = existing.trimEnd();
+
+            if (cur.endsWith('<br>') && add.startsWith('<br>')) {
+                add = add.substring(4).trimStart();
+            } else if (!cur.endsWith('<br>') && !add.startsWith('<br>') && !add.startsWith('|')) {
+                if (!cur.endsWith('|')) {
+                    cur += '<br>';
+                }
+            }
+
+            if (cur.endsWith(' ') || add.startsWith(' ') || add.startsWith('|') || cur.endsWith('<br>')) {
+                return cur + (add.startsWith('|') && !cur.endsWith(' ') ? ' ' : '') + add;
+            } else {
+                return cur + ' ' + add;
+            }
+        };
+
+        const cleanRow = (row) => {
+            let trimmed = row.trim();
+            if (!trimmed.startsWith('|')) trimmed = '| ' + trimmed;
+            trimmed = trimmed.replace(/<br\s*\/?>\s*\|/gi, ' |');
+            if (!trimmed.endsWith('|')) trimmed = trimmed + ' |';
+            return trimmed;
+        };
+
+        for (let i = 0; i < rawLines.length; i++) {
+            const line = rawLines[i].trimEnd();
+            const trimmed = line.trim();
+
+            if (inTable) {
+                if (isBlockElement(line)) {
+                    if (currentRow) {
+                        newLines.push(cleanRow(currentRow));
+                        currentRow = '';
+                    }
+                    newLines.push('');
+                    inTable = false;
+                    tableColCount = 0;
+                    newLines.push(line);
+                    continue;
+                }
+
+                if (trimmed === '') {
+                    let nextIdx = i + 1;
+                    while (nextIdx < rawLines.length && rawLines[nextIdx].trim() === '') {
+                        nextIdx++;
+                    }
+
+                    if (nextIdx >= rawLines.length) {
+                        if (currentRow) {
+                            newLines.push(cleanRow(currentRow));
+                            currentRow = '';
+                        }
+                        inTable = false;
+                        tableColCount = 0;
+                        newLines.push('');
+                        continue;
+                    }
+
+                    const nextLine = rawLines[nextIdx].trim();
+                    if (isBlockElement(nextLine)) {
+                        if (currentRow) {
+                            newLines.push(cleanRow(currentRow));
+                            currentRow = '';
+                        }
+                        newLines.push('');
+                        inTable = false;
+                        tableColCount = 0;
+                        continue;
+                    }
+
+                    const nextIsTableStart = nextLine.startsWith('|');
+                    const nextHasPipe = nextLine.includes('|');
+                    const nextIsBr = nextLine.startsWith('<br>') || nextLine.startsWith('</br>');
+
+                    if (nextIsTableStart) {
+                        if (currentRow) {
+                            newLines.push(cleanRow(currentRow));
+                            currentRow = '';
+                        }
+                        continue;
+                    } else if (nextHasPipe || nextIsBr || !isRowComplete(currentRow, tableColCount)) {
+                        continue;
+                    } else {
+                        if (currentRow) {
+                            newLines.push(cleanRow(currentRow));
+                            currentRow = '';
+                        }
+                        newLines.push('');
+                        inTable = false;
+                        tableColCount = 0;
+                        continue;
+                    }
+                }
+
+                if (trimmed.startsWith('|')) {
+                    if (isDelimiterRow(trimmed)) {
+                        if (currentRow) {
+                            newLines.push(cleanRow(currentRow));
+                        }
+                        currentRow = trimmed;
+                        const segments = trimmed.split('|').map(s => s.trim()).filter(Boolean);
+                        tableColCount = segments.length;
+                        newLines.push(currentRow);
+                        currentRow = '';
+                        continue;
+                    }
+
+                    if (currentRow === '') {
+                        currentRow = line;
+                    } else {
+                        newLines.push(cleanRow(currentRow));
+                        currentRow = line;
+                    }
+                } else {
+                    if (currentRow !== '') {
+                        currentRow = mergeCellContent(currentRow, line);
+                    } else {
+                        newLines.push(line);
+                    }
+                }
+            } else {
+                if (trimmed.startsWith('|')) {
+                    let nextIdx = i + 1;
+                    while (nextIdx < rawLines.length && rawLines[nextIdx].trim() === '') {
+                        nextIdx++;
+                    }
+
+                    let nextIsDelim = false;
+                    if (nextIdx < rawLines.length) {
+                        nextIsDelim = isDelimiterRow(rawLines[nextIdx]);
+                    }
+
+                    if (nextIsDelim || isDelimiterRow(trimmed)) {
+                        if (newLines.length > 0 && newLines[newLines.length - 1].trim() !== '') {
+                            newLines.push('');
+                        }
+                        inTable = true;
+                        currentRow = line;
+                        tableColCount = 0;
+                    } else {
+                        if (trimmed.includes('|')) {
+                            if (newLines.length > 0 && newLines[newLines.length - 1].trim() !== '') {
+                                newLines.push('');
+                            }
+                            inTable = true;
+                            currentRow = line;
+                        } else {
+                            newLines.push(line);
+                        }
+                    }
+                } else {
+                    newLines.push(line);
+                }
+            }
+        }
+
+        if (currentRow) {
+            newLines.push(cleanRow(currentRow));
+            if (inTable) newLines.push('');
+        }
+
+        return newLines.join('\n');
+    }
+
     function generateMarkdownParts(data, isPreview = false) {
         const convertArrows = (str) => {
             if (!str) return ''; return str.replace(/->/g, '→').replace(/<-/g, '←');
@@ -1904,7 +2119,7 @@ window.MathJax = {
 
         if (data.quoteKo) header += `<div class="quote-card">\n    <div class="quote-header">💬 오늘의 한 줄</div>\n    <p class="quote-ko">"${escapeHtml(data.quoteKo)}"</p>\n</div>\n\n`;
         
-        if (data.introText) header += `${extractBase64Images(protectMath(data.introText))}\n\n`;
+        if (data.introText) header += `${extractBase64Images(protectMath(normalizeMarkdownTables(data.introText)))}\n\n`;
         
         let articlesMd = [];
         
@@ -1986,51 +2201,7 @@ window.MathJax = {
                     return `**[두음/키워드]**\n<div class="dueum-box"><p>${formattedKw}</p></div>`;
                 });
 
-                let rawLines = processedContent.split('\n');
-                let newLines = [];
-                let currentRow = "";
-                let inTable = false;
-
-                for (let i = 0; i < rawLines.length; i++) {
-                    let line = rawLines[i].trimEnd();
-                    let isTableStart = line.trimStart().startsWith('|');
-
-                    if (inTable) {
-                        if (isTableStart) {
-                            newLines.push(currentRow);
-                            currentRow = line;
-                        } else {
-                            if (line !== "") {
-                                let addStr = line.trimStart();
-                                if (currentRow.endsWith('<br>') && addStr.startsWith('<br>')) {
-                                    addStr = addStr.substring(4); 
-                                }
-                                currentRow += (currentRow.endsWith(' ') ? "" : " ") + addStr;
-                            } else {
-                                newLines.push(currentRow);
-                                newLines.push("");
-                                currentRow = "";
-                                inTable = false;
-                            }
-                        }
-                    } else {
-                        if (isTableStart) {
-                            if (newLines.length > 0 && newLines[newLines.length - 1].trim() !== "") {
-                                newLines.push("");
-                            }
-                            inTable = true;
-                            currentRow = line;
-                        } else {
-                            newLines.push(line);
-                        }
-                    }
-                }
-                
-                if (currentRow !== "") {
-                    newLines.push(currentRow);
-                    if (inTable) newLines.push("");
-                }
-                processedContent = newLines.join('\n');
+                processedContent = normalizeMarkdownTables(processedContent);
 
                 let lines = processedContent.split('\n');
                 lines = lines.map((line, index, arr) => {
