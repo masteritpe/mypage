@@ -43,6 +43,8 @@
 
     code, pre {
         font-family: var(--font-code);
+        white-space: pre-wrap !important;
+        tab-size: 4;
     }
 
     /* 2. 오프라인 상태 감지 배너 CSS */
@@ -245,7 +247,23 @@
     /* === Quill Editor UI Overrides === */
     .ql-container.ql-snow { border: 1px solid #e5e7eb !important; border-radius: 8px !important; font-family: var(--font-ui) !important; background: #fff; transition: 0.2s; }
     .ql-container.ql-snow:focus-within { border-color: var(--accent) !important; box-shadow: 0 0 0 3px var(--accent-light); }
-    .ql-editor { font-size: var(--editor-font-size) !important; line-height: 1.7; color: #1f2937; letter-spacing: 0.2px; word-break: keep-all; padding: 16px !important; }
+    
+    /* [수정] 복사/붙여넣기 시 브라우저 렌더링 단계에서 공백이 증발하지 않도록 클립보드 컨테이너 속성 추가 */
+    .ql-clipboard { 
+        white-space: pre-wrap !important; 
+        tab-size: 4; 
+    }
+
+    .ql-editor { 
+        font-size: var(--editor-font-size) !important; 
+        line-height: 1.7; 
+        color: #1f2937; 
+        letter-spacing: 0.2px; 
+        word-break: keep-all; 
+        padding: 16px !important; 
+        white-space: pre-wrap !important; 
+        tab-size: 4; 
+    }
     
     /* 에디터 높이 조정 */
     .ql-editor.q-editor { min-height: 150px; }
@@ -488,6 +506,36 @@
         pointer-events: none;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     }
+
+    /* === 타임박싱 현재/다음 태스크 표시 (몰입모드 전용) === */
+    #dumpCurrentTaskDisplay {
+        display: none; /* 기본 숨김 */
+        align-items: center; gap: 8px; font-size: 13px; font-weight: 600;
+        color: #1f2937; background: #f8fafc; padding: 4px 14px;
+        border-radius: 20px; border: 1px solid #e5e7eb;
+        white-space: nowrap; max-width: 250px; overflow: hidden;
+        margin-left: 20px; transition: all 0.3s ease;
+    }
+    
+    /* 몰입모드 계열이 활성화되면 표시 */
+    body.immersive-mode #dumpCurrentTaskDisplay,
+    body.immersive-split-mode #dumpCurrentTaskDisplay {
+        display: flex;
+    }
+
+    #dumpCurrentTaskDisplay .task-label {
+        background: #8b5cf6; color: #fff; padding: 3px 8px;
+        border-radius: 12px; font-size: 11px; font-weight: 700;
+    }
+    #dumpCurrentTaskDisplay .task-label.upcoming {
+        background: #f59e0b;
+    }
+    #dumpCurrentTaskDisplay .task-text {
+        text-overflow: ellipsis; overflow: hidden;
+    }
+    #dumpCurrentTaskDisplay.current-task-empty {
+        background: transparent; border: none; color: #6b7280; font-weight: 500;
+    }
   </style>
 </head>
 <body>
@@ -626,6 +674,11 @@
                 <input type="text" id="inpNumber" class="paper-input-lg" placeholder="001" spellcheck="false">
             </div>
 
+            <!-- 🟢 추가된 타임박스 일정 표시 영역 -->
+            <div id="dumpCurrentTaskDisplay" class="current-task-empty">
+                <!-- JS를 통해 타임박스 정보가 표출됩니다 -->
+            </div>
+
             <button id="btnStatusToggle" type="button" data-status="미체크">
                 <i class="far fa-circle"></i> 미체크
             </button>
@@ -723,8 +776,8 @@
             <li><b>글자 확대/축소:</b> Ctrl + ➕ / ➖</li>
             <li><b>이미지 크게 보기:</b> 에디터 또는 첨부파일 내 이미지 <b>더블클릭</b></li>
             <li><b>에디터 굵게:</b> Ctrl + B</li>
-            <li><b>빨강+밑줄:</b> Alt + Z</li>
-            <li><b>굵게+주황 배경:</b> Alt + X</li>
+            <li><b>빨강+밑줄:</b> 단축키 (Alt+Z)</li>
+            <li><b>굵게+주황 배경:</b> 단축키 (Alt+X)</li>
             <li><b>에디터 서식:</b> 취소선(Ctrl+0) | 밑줄(Alt+4) | 빨강(Alt+1) | 파랑(Alt+2) | 초록(Alt+3)</li>
             <li><b>컬러 형광펜:</b> 주황(1) 파랑(2) 노랑(3) 녹색(4) 분홍(5) 갈색(6) 회색(7) <span style="font-size:11px;color:gray;">*Ctrl과 함께</span></li>
             <li><b>이미지 강조(테두리):</b> 에디터 내 이미지 클릭 시 나타나는 플로팅 메뉴 사용</li>
@@ -1085,6 +1138,31 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.querySelector('#editor-question .ql-editor').classList.add('q-editor');
     document.querySelector('#editor-solution .ql-editor').classList.add('s-editor');
     document.querySelector('#editor-keypoint .ql-editor').classList.add('k-editor');
+
+    // =========================================================================
+    // [업데이트] 클립보드 붙여넣기 시 공백/탭 증발 방지용 Custom Matcher 추가
+    // =========================================================================
+    const Delta = Quill.import('delta');
+    const preserveSpaceMatcher = function(node, delta) {
+        let text = node.data;
+        if (!text) return delta;
+        
+        // 탭을 공백 4개로 치환
+        text = text.replace(/\t/g, '\u00a0\u00a0\u00a0\u00a0');
+        // 연속된 공백 및 줄 맨 앞의 공백을 지워지지 않는 특수 공백(&nbsp;)으로 치환
+        text = text.replace(/^[ ]+/g, match => '\u00a0'.repeat(match.length));
+        text = text.replace(/[ ]{2,}/g, match => '\u00a0'.repeat(match.length));
+
+        if (delta && delta.ops && delta.ops.length > 0) {
+            return new Delta().insert(text, delta.ops[0].attributes);
+        }
+        return new Delta().insert(text);
+    };
+
+    quillQ.clipboard.addMatcher(Node.TEXT_NODE, preserveSpaceMatcher);
+    quillS.clipboard.addMatcher(Node.TEXT_NODE, preserveSpaceMatcher);
+    quillK.clipboard.addMatcher(Node.TEXT_NODE, preserveSpaceMatcher);
+
   } else {
     const errorMsg = "<div style='color:red; padding:20px;'>오프라인 라이브러리(Quill)를 찾을 수 없어 에디터를 로드하지 못했습니다.</div>";
     document.getElementById('editor-question').innerHTML = errorMsg;
@@ -2283,6 +2361,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       const blob = new Blob([content], { type: mimeType });
       const a_tag = document.createElement('a'); 
       a_tag.href = URL.createObjectURL(blob); 
+      // 3중 조건 구문 에러 수정 완료
       a_tag.download = `${filename}_${type === 'anki' ? 'Anki' : 'Brainscape'}.${extension}`;      
       a_tag.click();
       
@@ -2700,6 +2779,8 @@ document.addEventListener("DOMContentLoaded", async () => {
           return;
       }
       
+      const scriptTag = "<script>setTimeout(() => { window.print(); window.close(); }, 500);</scr" + "ipt>";
+      
       const printWin = window.open('', '', 'width=1000,height=900');
       printWin.document.write(`
           <html>
@@ -2729,12 +2810,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           <body>
               <h2 style="text-align:center; border-bottom:3px solid #333; padding-bottom:12px; margin-bottom:24px; font-weight:900;">언더라인 핵심 리스트</h2>
               ${content}
-              <script>
-                  setTimeout(() => {
-                      window.print();
-                      window.close();
-                  }, 500);
-              <\/script>
+              ${scriptTag}
           </body>
           </html>
       `);
@@ -2842,6 +2918,8 @@ document.addEventListener("DOMContentLoaded", async () => {
           return;
       }
 
+      const scriptTag = "<script>setTimeout(() => { window.print(); window.close(); }, 500);</scr" + "ipt>";
+
       const printWin = window.open('', '', 'width=900,height=900');
       printWin.document.write(`
           <html>
@@ -2869,17 +2947,102 @@ document.addEventListener("DOMContentLoaded", async () => {
           <body>
               <h2 style="text-align:center; border-bottom:3px solid #1f2937; padding-bottom:12px; margin-bottom:24px; font-weight:900;">🔥 핵심 요약 암기장 🔥</h2>
               ${content}
-              <script>
-                  setTimeout(() => {
-                      window.print();
-                      window.close();
-                  }, 500);
-              <\/script>
+              ${scriptTag}
           </body>
           </html>
       `);
       printWin.document.close();
   };
+
+  // 🟢 TimeBoxDB 데이터 연동 (대시보드의 타임박스 일정 가져오기)
+  function updateDumpTimeBoxTask() {
+      const request = indexedDB.open("TimeBoxDB", 1);
+      
+      request.onerror = () => console.log("TimeBoxDB 접근 실패");
+      
+      request.onsuccess = (e) => {
+          const db = e.target.result;
+          
+          if (!db.objectStoreNames.contains("documents")) return;
+          
+          const tx = db.transaction(["documents"], "readonly");
+          const store = tx.objectStore("documents");
+          const index = store.index("date");
+          
+          const offset = new Date().getTimezoneOffset() * 60000;
+          const today = new Date(Date.now() - offset).toISOString().split("T")[0];
+          
+          const getReq = index.get(today);
+          getReq.onsuccess = () => {
+              const data = getReq.result;
+              const displayEl = document.getElementById("dumpCurrentTaskDisplay");
+              if(!displayEl) return;
+              
+              if (data && data.timebox) {
+                  const now = new Date();
+                  const hour = now.getHours();
+                  const minutes = now.getMinutes();
+                  const currentSlot = minutes < 30 ? "0" : "30";
+                  const currentTimeKey = `${hour}_${currentSlot}`;
+                  
+                  const currentTask = data.timebox[currentTimeKey];
+                  
+                  if (currentTask && currentTask.trim() !== "") {
+                      // 1. 현재 진행 중인 일정이 있는 경우
+                      const nextSlot = currentSlot === "0" ? "30" : "00";
+                      const nextHour = currentSlot === "0" ? hour : hour + 1;
+                      const timeString = `${hour}:${currentSlot.padStart(2, '0')} ~ ${nextHour}:${nextSlot}`;
+                      
+                      displayEl.classList.remove("current-task-empty");
+                      displayEl.innerHTML = `
+                          <span class="task-label">⏳ ${timeString}</span>
+                          <span class="task-text" title="${currentTask}">${currentTask}</span>
+                      `;
+                  } else {
+                      // 2. 현재 일정이 비어있다면, 다가오는 '다음' 일정을 탐색
+                      let nextTask = null;
+                      let nextTimeKey = null;
+                      
+                      let startHour = hour;
+                      let startSlot = currentSlot === "0" ? 30 : 0;
+                      if (startSlot === 0) startHour++;
+                      
+                      for (let h = startHour; h <= 23; h++) {
+                          const slots = (h === startHour && startSlot === 30) ? [30] : [0, 30];
+                          for (let s of slots) {
+                              const tk = `${h}_${s}`;
+                              if (data.timebox[tk] && data.timebox[tk].trim() !== "") {
+                                  nextTask = data.timebox[tk];
+                                  nextTimeKey = { h, s };
+                                  break;
+                              }
+                          }
+                          if (nextTask) break;
+                      }
+                      
+                      if (nextTask) {
+                          const sStr = nextTimeKey.s === 0 ? "00" : "30";
+                          displayEl.classList.remove("current-task-empty");
+                          displayEl.innerHTML = `
+                              <span class="task-label upcoming">🔜 ${nextTimeKey.h}:${sStr}</span>
+                              <span class="task-text" title="${nextTask}">${nextTask}</span>
+                          `;
+                      } else {
+                          displayEl.classList.add("current-task-empty");
+                          displayEl.innerHTML = `남은 타임박스 없음`;
+                      }
+                  }
+              } else {
+                  displayEl.classList.add("current-task-empty");
+                  displayEl.innerHTML = `남은 타임박스 없음`;
+              }
+          };
+      };
+  }
+
+  // 초기 로드 및 1분 주기로 갱신 실행
+  updateDumpTimeBoxTask();
+  setInterval(updateDumpTimeBoxTask, 60000);
 
 });
   
