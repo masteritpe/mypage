@@ -910,7 +910,7 @@
     }
 
     /* ----------------------------------------------------
-       DB Class (IndexedDB Wrapper)
+       🔥 강력한 복구 기능을 포함한 DB Class
        ---------------------------------------------------- */
     class DrillDB {
         constructor() {
@@ -949,30 +949,58 @@
                 tx.onerror = (e) => reject(e);
             });
         }
+        
+        // 💡 과거 DB 스키마 구조 완벽 호환 업데이트
         async update(item) {
              return new Promise((resolve, reject) => {
                 const tx = this.db.transaction('questions', 'readwrite');
                 const store = tx.objectStore('questions');
-                const req = store.put(item);
+                
+                let req;
+                // 구버전 스키마(out-of-line key)와 신버전(inline key) 구조에 맞춰 안전하게 덮어쓰기
+                if (store.keyPath) {
+                    req = store.put(item);
+                } else {
+                    const id = Number(item.id);
+                    req = store.put(item, id);
+                }
+                
                 req.onsuccess = () => resolve();
                 req.onerror = (e) => reject(e);
             });
         }
+        
+        // 💡 타입 오류 방지를 위한 안전한 삭제
         async delete(id) {
             return new Promise((resolve, reject) => {
                 const tx = this.db.transaction('questions', 'readwrite');
                 const store = tx.objectStore('questions');
-                const req = store.delete(id);
+                const req = store.delete(Number(id));
                 req.onsuccess = () => resolve();
                 req.onerror = (e) => reject(e);
             });
         }
+        
+        // 💡 [핵심] 과거 버그로 누락된 ID(Key)를 강제 추적하여 복원
         async getAll() {
             return new Promise((resolve, reject) => {
                 const tx = this.db.transaction('questions', 'readonly');
                 const store = tx.objectStore('questions');
-                const req = store.getAll();
-                req.onsuccess = () => resolve(req.result);
+                
+                // 단순 getAll() 대신 커서를 사용하여 숨겨진 DB 키값을 데이터에 강제 주입
+                const req = store.openCursor();
+                const results = [];
+                req.onsuccess = (e) => {
+                    const cursor = e.target.result;
+                    if (cursor) {
+                        const item = cursor.value;
+                        if (!item.id) item.id = cursor.key; // 누락된 ID 즉시 복구!
+                        results.push(item);
+                        cursor.continue();
+                    } else {
+                        resolve(results);
+                    }
+                };
                 req.onerror = (e) => reject(e);
             });
         }
@@ -1363,7 +1391,8 @@
     }
 
     /* === Data Handlers === */
-    function handleExcelUpload(input) {
+    // 💡 엑셀 업로드 시 중복 방지 (순수 텍스트 정규화 비교)
+    async function handleExcelUpload(input) {
         const file = input.files[0];
         if(!file) return;
 
@@ -1378,18 +1407,61 @@
                 
                 if(rawData.length === 0) { alert("데이터가 없습니다."); return; }
 
-                const newItems = rawData.map(item => ({
-                    round: cleanStr(item['라운드'] || item['Round'] || 'ETC'),
-                    domain: cleanStr(item['도메인'] || item['Domain'] || ''),
-                    number: parseInt(item['번호'] || item['Number'] || 99999),
-                    topic: cleanStr(item['토픽'] || item['Topic'] || 'No Topic'),
-                    def: cleanStr(item['정의'] || item['Definition'] || ''),
-                    keys: cleanStr(item['키워드'] || item['Keywords'] || '')
-                }));
+                const existingData = await db.getAll();
+                let addedCount = 0;
+                let updatedCount = 0;
 
-                await db.addBulk(newItems);
+                // 완벽한 중복 방지를 위한 텍스트 정규화 헬퍼 함수
+                const getPureText = (str) => {
+                    if(!str) return "";
+                    return String(str)
+                        .replace(/<[^>]*>?/gm, '') 
+                        .replace(/\[이미지 제외됨\]/gi, '') 
+                        .replace(/\s+/g, '') 
+                        .trim();
+                };
+
+                for (const item of rawData) {
+                    const round = cleanStr(item['라운드'] || item['Round'] || 'ETC');
+                    const topic = cleanStr(item['토픽'] || item['Topic'] || 'No Topic');
+                    const pureTopic = getPureText(topic);
+                    
+                    const existingItem = existingData.find(q => 
+                        String(q.round) === String(round) && 
+                        getPureText(q.topic) === pureTopic
+                    );
+
+                    const newItem = {
+                        round: round,
+                        domain: cleanStr(item['도메인'] || item['Domain'] || ''),
+                        number: parseInt(item['번호'] || item['Number'] || 99999),
+                        topic: topic,
+                        def: cleanStr(item['정의'] || item['Definition'] || ''),
+                        keys: cleanStr(item['키워드'] || item['Keywords'] || '')
+                    };
+
+                    if (existingItem) {
+                        if (existingItem.topic.includes('<img') && !newItem.topic.includes('<img')) {
+                            newItem.topic = existingItem.topic;
+                        }
+                        if (existingItem.def.includes('<img') && !newItem.def.includes('<img')) {
+                            newItem.def = existingItem.def; 
+                        }
+                        if (existingItem.keys.includes('<img') && !newItem.keys.includes('<img')) {
+                            newItem.keys = existingItem.keys; 
+                        }
+                        
+                        newItem.id = existingItem.id; // DB 클래스가 이를 식별하여 안전하게 덮어씀
+                        await db.update(newItem);
+                        updatedCount++;
+                    } else {
+                        await db.addBulk([newItem]);
+                        addedCount++;
+                    }
+                }
+
                 await loadDataFromDB();
-                alert(`성공적으로 ${newItems.length}개의 항목을 추가했습니다.`);
+                alert(`엑셀 데이터 처리 완료!\n추가된 항목: ${addedCount}개 / 업데이트된 항목: ${updatedCount}개`);
 
             } catch (err) {
                 alert("오류 발생: " + err.message);
@@ -1482,7 +1554,7 @@
         if(confirm(`선택된 라운드(ROUND: ${roundListStr})의 모든 데이터를 삭제하시겠습니까?`)) {
             const itemsToDelete = allQuestions.filter(q => activeRounds.has(String(q.round)));
             for(const item of itemsToDelete) {
-                await db.delete(item.id);
+                if(item.id) await db.delete(item.id);
             }
             await loadDataFromDB();
             resetPlayList();
@@ -1563,7 +1635,6 @@
             let plainTopic = item.topic.replace(/<[^>]*>?/gm, '').trim();
             if (!plainTopic) plainTopic = '(제목 없음)';
 
-            // 두음 강조 텍스트 추출 로직 분리 및 분리 표시 적용
             const allHTML = (item.topic || '') + ' ' + (item.def || '') + ' ' + (item.keys || '');
             
             const regexNavy = /<span[^>]*style="[^"]*background-color:\s*(?:#0d3a9e|rgb\(13,\s*58,\s*158\))[^>]*>(.*?)<\/span>/gi;
@@ -1582,7 +1653,6 @@
             }
             
             let acronymHtml = '';
-            // 남색 표시 후 초록 표시
             if (acronymTextNavy) {
                 acronymHtml += `<div class="topic-acronym" title="두음 강조 단어(남색)">${acronymTextNavy}</div>`;
             }
@@ -1593,13 +1663,6 @@
             const div = document.createElement('div');
             div.className = 'topic-list-item';
             
-            div.onclick = (e) => {
-                if (e.target.closest('.btn-delete-topic')) return; 
-                currentIndex = item.originalIndex; 
-                renderCard();
-                closeTopicListModal();
-            };
-
             div.innerHTML = `
                 <div class="topic-info">
                     <span class="topic-round">ROUND ${item.round}${numberText}${domainText}</span>
@@ -1608,27 +1671,52 @@
                 <div style="display:flex; align-items:center; gap:10px;">
                     ${acronymHtml}
                     <div class="topic-actions" style="margin:0;">
-                        <button class="btn-delete-topic" onclick="deleteSingleTopic(${item.id})" title="토픽 삭제">
+                        <button class="btn-delete-topic" title="토픽 삭제">
                             <i class="fas fa-trash-alt"></i>
                         </button>
                     </div>
                 </div>
             `;
+            
+            div.addEventListener('click', (e) => {
+                if (e.target.closest('.btn-delete-topic')) return; 
+                currentIndex = item.originalIndex; 
+                renderCard();
+                closeTopicListModal();
+            });
+
+            const deleteBtn = div.querySelector('.btn-delete-topic');
+            deleteBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                // 원본 ID를 그대로 전달 (DataError 원천 차단)
+                deleteSingleTopic(item.id);
+            });
+
             container.appendChild(div);
         });
     }
 
     async function deleteSingleTopic(id) {
+        if (!id) { 
+            alert("유효하지 않은 데이터입니다. (데이터 ID 누락)"); 
+            return; 
+        }
         if (confirm("이 토픽을 삭제하시겠습니까?\n삭제된 데이터는 복원할 수 없습니다.")) {
-            await db.delete(id);
-            await loadDataFromDB(); 
-            renderTopicList(); 
-            
-            if (playList.length > 0) {
-                if (currentIndex >= playList.length) currentIndex = playList.length - 1;
-                renderCard();
+            try {
+                await db.delete(id);
+                await loadDataFromDB(); 
+                renderTopicList(); 
+                
+                if (playList.length > 0) {
+                    if (currentIndex >= playList.length) currentIndex = playList.length - 1;
+                    renderCard();
+                } else {
+                    renderCard(); 
+                }
+                showToast("토픽이 삭제되었습니다.");
+            } catch (e) {
+                alert("삭제 중 오류가 발생했습니다: " + e);
             }
-            showToast("토픽이 삭제되었습니다.");
         }
     }
 
@@ -1830,7 +1918,6 @@
         renderCard();
     }
 
-    // 💡 preserveScroll 인수를 추가하여 선택적으로 스크롤 리셋 제어
     function renderCard(preserveScroll = false) {
         if(isEditMode) toggleEditMode();
 
@@ -1875,7 +1962,6 @@
             document.getElementById('card-back').classList.add('show');
         }
 
-        // 💡 preserveScroll이 false 일 때만 카드의 스크롤을 맨 위로 초기화
         if (!preserveScroll) {
             document.getElementById('card-back').scrollTop = 0;
         }
