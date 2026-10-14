@@ -253,8 +253,9 @@ window.MathJax = {
                     <option value="fiver">📘 5R</option>
                     <option value="drill">📝 Drill</option>
                     <option value="technote">📑 technote</option>
-                    <option value="analysis">📊 분석노트</option> <!-- 추가된 분석노트 항목 -->
+                    <option value="analysis">📊 분석노트</option>
                     <option value="chat">💬 Chat</option>
+                    <option value="dump">🚛 Dump Study</option>                  
                     <option value="ideablock">💡 Idea Block</option>
                     <option value="ismsp">🛡️ ISMS-P</option>
                     <option value="link">🔗 Link</option>
@@ -712,8 +713,9 @@ window.MathJax = {
         else if (type === 'fiver') handle5RImport(event);
         else if (type === 'drill') handleDrillImport(event);
         else if (type === 'technote') handleTechnoteImport(event);
-        else if (type === 'analysis') handleAnalysisImport(event); // 추가된 분석노트 처리
+        else if (type === 'analysis') handleAnalysisImport(event);
         else if (type === 'chat') handleChatImport(event);
+        else if (type === 'dump') handleDumpImport(event);      
         else if (type === 'ideablock') handleIdeaBlockImport(event);
         else if (type === 'ismsp') handleIsmspImport(event);
         else if (type === 'link') handleLinkImport(event);
@@ -1153,6 +1155,63 @@ window.MathJax = {
         };
         reader.readAsText(file);
     }
+  
+  // 추가된 Dump Study Import 함수
+  function handleDumpImport(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const fileNameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+          try {
+              let jsonArr = JSON.parse(e.target.result);
+              if (!Array.isArray(jsonArr)) throw new Error("배열 형태의 데이터가 아닙니다.");
+
+              const today = new Date().toISOString().split('T')[0];
+              document.getElementById('issueDate').value = today;
+              document.getElementById('postTitle').value = fileNameWithoutExt;
+
+              // 카테고리, 태그 Dump 지정
+              setCategoryAndTag('Dump', 'Dump');
+              document.getElementById('articlesContainer').innerHTML = ''; 
+              articleCount = 0;
+
+              if (jsonArr.length > 0) {
+                  for (let index = 0; index < jsonArr.length; index++) {
+                      const item = jsonArr[index];
+                      // 첨부된 JSON 포맷에 맞춘 제목 구성 (예: [DOP-C02-02] No.063)
+                      const title = `[${item.dumpName || 'Dump'}] No.${item.number || (index + 1)}`;
+                      let content = '';
+
+                      // 이미지 내장 처리 및 HTML -> MD 변환
+                      let rawQuestion = await processEmbeddedImages(item.question || '', `DUMP_${index+1}_Q`);
+                      let rawSolution = await processEmbeddedImages(item.solution || '', `DUMP_${index+1}_S`);
+                      let rawKeypoint = await processEmbeddedImages(item.keypoint || '', `DUMP_${index+1}_K`);
+
+                      let qMd = convertHtmlToMd(rawQuestion).trim();
+                      let sMd = convertHtmlToMd(rawSolution).trim();
+                      let kMd = convertHtmlToMd(rawKeypoint).trim();
+
+                      if (qMd) content += `**[문제]**\n\n${qMd}\n\n`;
+                      if (sMd) content += `**[정답 및 해설]**\n\n${sMd}\n\n`;
+                      if (kMd) content += `**[핵심 포인트]**\n\n${kMd}\n\n`;
+
+                      addArticle({ title: title, content: content.trim(), visualType: 'none' });
+                  }
+              } else { 
+                  addArticle(); 
+              }
+              showToast("✅ Dump Study 데이터를 성공적으로 불러왔습니다.");
+              jsonArr = null;
+          } catch (error) { 
+              alert("JSON 파일 파싱 중 오류가 발생했습니다. 포맷을 확인해주세요."); 
+          }
+          e.target.result = null;
+          event.target.value = '';
+      };
+      reader.readAsText(file);
+  }  
 
     function handleLinkImport(event) {
         const file = event.target.files[0];
