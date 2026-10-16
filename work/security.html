@@ -165,13 +165,13 @@ body.locked-mode .status-select { pointer-events: none; appearance: none; }
     @page { size: landscape; margin: 10mm; }
     html, body { display: block !important; height: auto !important; min-height: 0 !important; overflow: visible !important; background: #fff !important; margin: 0 !important; padding: 0 !important; }
     
-    /* 기본 인쇄 모드일 때 (취약점 작성의 특수 인쇄가 아닐 때) */
+    /* 기본 인쇄 모드일 때 (겹침 현상 방지를 위해 max-height: none 추가) */
     body:not(.printing-custom-vuln) .workspace, 
     body:not(.printing-custom-vuln) .main-content, 
     body:not(.printing-custom-vuln) .tab-pane, 
     body:not(.printing-custom-vuln) .paper-sheet, 
     body:not(.printing-custom-vuln) .data-table-wrapper, 
-    body:not(.printing-custom-vuln) .sub-tab-content { display: block !important; height: auto !important; min-height: 0 !important; overflow: visible !important; position: static !important; padding: 0 !important; margin: 0 !important; border: none !important; box-shadow: none !important; }
+    body:not(.printing-custom-vuln) .sub-tab-content { display: block !important; height: auto !important; max-height: none !important; min-height: 0 !important; overflow: visible !important; position: static !important; padding: 0 !important; margin: 0 !important; border: none !important; box-shadow: none !important; }
     
     body:not(.printing-custom-vuln) header, 
     body:not(.printing-custom-vuln) .sidebar, 
@@ -196,6 +196,10 @@ body.locked-mode .status-select { pointer-events: none; appearance: none; }
     .print-header p { font-size: 10pt !important; color: #555; }
     table { page-break-inside: auto; margin-bottom: 0 !important; width: 100% !important; border-collapse: collapse !important; }
     tr { page-break-inside: avoid; page-break-after: auto; }
+    
+    /* 요약 섹션 분할 방지 및 간격 조절 */
+    #summary-section { page-break-inside: avoid; margin-top: 30px !important; }
+
     thead { display: table-header-group; }
     .data-table { font-size: 9pt !important; border: 1px solid #000 !important; table-layout: auto !important; }
     .data-table th, .data-table td { border: 1px solid #000 !important; padding: 6px; text-align: center; resize: none; word-wrap: break-word; white-space: pre-wrap !important; line-height: 1.5; }
@@ -888,7 +892,7 @@ body.locked-mode .status-select { pointer-events: none; appearance: none; }
     }
 
     async function clearData(type) {
-        const confirmMsg = '정말로 해당 데이터를 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.';
+        const confirmMsg = '정말로 해당 데이터를 삭제하시겠습니까?\n이 작업은 되돌릴 수 세없습니다.';
         if (!confirm(confirmMsg)) return;
 
         if (type === 'vuln') {
@@ -1777,7 +1781,7 @@ body.locked-mode .status-select { pointer-events: none; appearance: none; }
         const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `보안연락처_통합_${dateStr}.xlsx`; a.click();
     }
 
-    // === 기존 취약점 조사(분석) 탭 로직 ===
+    // === 기존 취약점 조사(분석) 탭 로직 (2중 헤더 수정 반영됨) ===
     let currentVulnData = [];
 
     async function loadVulnFromBuffer(arrayBuffer, fileName) { 
@@ -1807,24 +1811,70 @@ body.locked-mode .status-select { pointer-events: none; appearance: none; }
     
     function parseSingleSheet(sheet) {
         let stats = { totalSystems: 0, totalUnresolved: 0, totalResolved: 0, allItems: [] };
-        const headerRow = sheet.getRow(2); 
+        
+        // 2중 헤더 체계 반영 (1행과 2행 모두 참조)
+        const headerRow1 = sheet.getRow(1);
+        const headerRow2 = sheet.getRow(2); 
         let vulnColumns = []; 
         let colInfo = { sys: 3, detail: 4, partner: 5, eng: 6, os: 7 };
 
-        headerRow.eachCell((cell, colNumber) => {
-            const val = stripHTML(getCellValue(cell)).replace(/\s+/g, '');
-            if(val.includes("조치일") || val.includes("예정일")) {
-                vulnColumns.push({ vulnName: getCellValue(headerRow.getCell(colNumber - 1)) || `취약점`, colIdx: colNumber - 1, dateColIdx: colNumber });
+        // 1. 기본 정보(고정 컬럼) 인덱스 찾기 
+        // 병합된 셀의 경우 1행이나 2행 중 한 곳에 텍스트가 있으므로 둘 다 확인합니다.
+        for (let i = 1; i <= 15; i++) {
+            const val1 = stripHTML(getCellValue(headerRow1.getCell(i))).replace(/\s+/g, '');
+            const val2 = stripHTML(getCellValue(headerRow2.getCell(i))).replace(/\s+/g, '');
+            const val = val1 || val2;
+            
+            if(val.includes("정보보호시스템") || val === "시스템") colInfo.sys = i;
+            else if(val.includes("세부내역")) colInfo.detail = i;
+            else if(val.includes("협력사")) colInfo.partner = i;
+            else if(val.includes("엔지니어")) colInfo.eng = i;
+            else if(val.includes("OS")) colInfo.os = i;
+        }
+
+        // 2. 취약점 (CVE) 컬럼 찾기 (2중 헤더 및 단일 헤더 호환)
+        let currentCveName = '';
+        const maxCols = sheet.columnCount || 50; // 셀 범위 유연하게 확인
+        
+        for (let i = 1; i <= maxCols; i++) {
+            const val1Raw = getCellValue(headerRow1.getCell(i));
+            const val1 = stripHTML(val1Raw).trim();
+            const val2 = stripHTML(getCellValue(headerRow2.getCell(i))).replace(/\s+/g, '');
+
+            // 1행에 값이 있으면 현재 CVE 이름 갱신 (병합 셀 처리용)
+            if (val1 && val1 !== '') {
+                currentCveName = val1Raw; 
             }
-            if(val.includes("정보보호시스템") || val === "시스템") colInfo.sys = colNumber;
-            else if(val.includes("세부내역")) colInfo.detail = colNumber;
-            else if(val.includes("협력사")) colInfo.partner = colNumber;
-            else if(val.includes("엔지니어")) colInfo.eng = colNumber;
-            else if(val.includes("OS")) colInfo.os = colNumber;
-        });
+
+            // [신규 양식 - 2중 헤더] 2행에 '상태' 텍스트가 있는 경우
+            if (val2.includes("상태")) {
+                let dateColIdx = i + 1; // 상태 우측에 조치일이 위치함
+                const nextVal2 = stripHTML(getCellValue(headerRow2.getCell(i + 1))).replace(/\s+/g, '');
+                if (nextVal2.includes("조치일") || nextVal2.includes("예정일")) {
+                    dateColIdx = i + 1;
+                }
+                
+                vulnColumns.push({
+                    vulnName: currentCveName || `취약점_${i}`,
+                    colIdx: i, // '상태' 값이 들어가는 열 인덱스
+                    dateColIdx: dateColIdx
+                });
+            } 
+            // [기존 양식 - 단일 헤더] 2행에 '조치일'만 바로 나오는 경우 하위 호환 유지
+            else if (val2.includes("조치일") || val2.includes("예정일")) {
+                const alreadyAdded = vulnColumns.some(v => v.dateColIdx === i);
+                if (!alreadyAdded) {
+                    vulnColumns.push({
+                        vulnName: getCellValue(headerRow2.getCell(i - 1)) || `취약점`,
+                        colIdx: i - 1,
+                        dateColIdx: i
+                    });
+                }
+            }
+        }
 
         sheet.eachRow((row, rowNumber) => {
-            if(rowNumber < 3) return; 
+            if(rowNumber < 3) return; // 1, 2행은 헤더이므로 데이터는 3행부터 파싱
             const sysName = getCellValueHTML(row.getCell(colInfo.sys)) || getCellValueHTML(row.getCell(3)) || getCellValueHTML(row.getCell(2)); 
             
             const plainSys = stripHTML(sysName).trim();
