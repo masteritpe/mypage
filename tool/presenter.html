@@ -182,6 +182,15 @@
     .draggable-sticker.important { background: #e11d48; } 
     .draggable-sticker.memorize { background: #4338ca; } 
 
+    /* 필수! 마킹 요소 절대 위치 및 투과 설정 */
+    .text-mark-item { 
+        position: absolute; 
+        pointer-events: none; 
+        z-index: 5; 
+        transform-origin: left top; 
+        mix-blend-mode: multiply; 
+    }
+
     .canvas-text-input { position: absolute; pointer-events: auto; z-index: 1000; background: rgba(255, 255, 255, 0.98); border: 2px solid var(--primary); color: var(--text-main); font-family: 'Pretendard', sans-serif; font-weight: 800; border-radius: 8px; box-shadow: var(--shadow-md); transform: translate(-50%, -50%); min-width: 160px; text-align: center; padding: 6px 12px; }
     .canvas-text-input:focus { outline: none; box-shadow: 0 0 0 4px rgba(67, 56, 202, 0.15); }
     .canvas-keyword-input { position: absolute; pointer-events: auto; z-index: 1000; background: transparent; border: 3px solid #ef4444; color: #ef4444; font-family: 'Pretendard', sans-serif; font-weight: 800; border-radius: 8px; box-shadow: var(--shadow-md); transform: translate(-50%, -50%); min-width: 160px; text-align: center; padding: 4px 12px; }
@@ -265,6 +274,25 @@
     :-webkit-full-screen #presenter-clock {
         display: block !important; 
     }
+
+    /* === Modals === */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(2px); z-index: 2500; display: none; align-items: center; justify-content: center; }
+    .modal-box { background: #fff; width: 800px; max-height: 90vh; padding: 32px; border-radius: 16px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+    .summary-item { margin-bottom: 24px; padding: 16px; background-color: #fff; border: 2px solid #e5e7eb; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    .summary-badge { font-size: 14px; font-weight: 900; color: #fff; background: #4f46e5; padding: 4px 10px; border-radius: 6px; box-shadow: 0 2px 4px rgba(79,70,229,0.3); display: inline-block; cursor: pointer; transition: all 0.2s ease; }
+    .summary-badge:hover { background: #3730a3; transform: translateY(-2px); box-shadow: 0 4px 8px rgba(79,70,229,0.4); }
+
+    /* === 가림판(암기 확인) 모드 - 사용자의 마킹/스티커/드로잉까지 전부 숨김 === */
+    #canvas-wrapper.blind-mode #pdf-render,
+    #canvas-wrapper.blind-mode #text-layer,
+    #canvas-wrapper.blind-mode #draw-layer,
+    #canvas-wrapper.blind-mode #overlay-layer {
+        opacity: 0 !important;
+        pointer-events: none !important;
+    }
+    #canvas-wrapper.blind-mode {
+        background-color: #ffffff !important;
+    }
 </style>
 </head>
 <body>
@@ -275,6 +303,9 @@
             <i class="fas fa-bars" style="color: var(--text-main); font-size: 16px;"></i>
         </button>
         <i class="fas fa-layer-group"></i> Presenter
+        <button class="btn" style="padding: 0 4px; background: transparent; box-shadow: none; margin-left: 4px;" onclick="app.showShortcutModal()" title="단축키 안내">
+            <i class="fas fa-keyboard" style="color: var(--text-muted); font-size: 16px;"></i>
+        </button>
     </div>
     
     <div class="controls">
@@ -299,24 +330,35 @@
             <button class="btn" onclick="app.zoomIn()" title="확대 (Ctrl +)"><i class="fas fa-plus"></i></button>
             <button class="btn" onclick="app.toggleImmersionMode()" title="몰입 모드 (Ctrl+M)"><i class="fas fa-tv"></i></button>
             <button class="btn" onclick="app.toggleFullScreen()" title="전체화면 (Ctrl+H)"><i class="fas fa-expand"></i></button>
+            <button class="btn" onclick="app.openSummaryModal()" title="요약 보기"><i class="fas fa-list-alt"></i></button>
             <button class="btn" onclick="app.toggleMemo()" title="메모 (단축키 Alt+M)"><i class="fas fa-sticky-note"></i></button>
         </div>
 
         <div class="btn-group">
             <button class="btn active" id="tool-cursor" onclick="app.setTool('cursor')" title="선택/이동 (단축키 V 또는 ESC)"><i class="fas fa-mouse-pointer"></i></button>
-            <button class="btn" id="tool-pen" onclick="app.setTool('pen')" title="펜 (단축키 1)"><i class="fas fa-pen"></i></button>
+            <div class="tool-dropdown-wrapper">
+                <button class="btn" id="tool-pen" onclick="app.setTool('pen')" title="펜 (단축키 1 | 마우스 호버로 색상 변경)">
+                    <i class="fas fa-pen"></i><i class="fas fa-chevron-down" style="font-size: 8px; margin-left: 2px; opacity: 0.5;"></i>
+                </button>
+                <div class="color-palette">
+                    <div class="color-swatch color-swatch-pen active" data-color="#ef4444" style="background: #ef4444;" onclick="app.setPenColor('#ef4444', '빨강')" title="빨강"></div>
+                    <div class="color-swatch color-swatch-pen" data-color="#3b82f6" style="background: #3b82f6;" onclick="app.setPenColor('#3b82f6', '파랑')" title="파랑"></div>
+                    <div class="color-swatch color-swatch-pen" data-color="#10b981" style="background: #10b981;" onclick="app.setPenColor('#10b981', '초록')" title="초록"></div>
+                    <div class="color-swatch color-swatch-pen" data-color="#000000" style="background: #000000;" onclick="app.setPenColor('#000000', '검정')" title="검정"></div>
+                </div>
+            </div>
             <div class="tool-dropdown-wrapper">
                 <button class="btn" id="tool-hi" onclick="app.setTool('highlight')" title="형광펜 (단축키 2 | 마우스 호버로 색상 변경)">
                     <i class="fas fa-highlighter"></i><i class="fas fa-chevron-down" style="font-size: 8px; margin-left: 2px; opacity: 0.5;"></i>
                 </button>
                 <div class="color-palette">
-                    <div class="color-swatch" data-color="rgba(253, 186, 116, 0.6)" style="background: rgb(253, 186, 116);" onclick="app.setHighlightColor('rgba(253, 186, 116, 0.6)', '연한 주황색')" title="연한 주황색 (Ctrl+1)"></div>
-                    <div class="color-swatch" data-color="rgba(147, 197, 253, 0.6)" style="background: rgb(147, 197, 253);" onclick="app.setHighlightColor('rgba(147, 197, 253, 0.6)', '연한 파란색')" title="연한 파란색 (Ctrl+2)"></div>
-                    <div class="color-swatch active" data-color="rgba(253, 224, 71, 0.6)" style="background: rgb(253, 224, 71);" onclick="app.setHighlightColor('rgba(253, 224, 71, 0.6)', '연한 노란색')" title="연한 노란색 (Ctrl+3)"></div>
-                    <div class="color-swatch" data-color="rgba(134, 239, 172, 0.6)" style="background: rgb(134, 239, 172);" onclick="app.setHighlightColor('rgba(134, 239, 172, 0.6)', '연한 녹색')" title="연한 녹색 (Ctrl+4)"></div>
-                    <div class="color-swatch" data-color="rgba(249, 168, 212, 0.6)" style="background: rgb(249, 168, 212);" onclick="app.setHighlightColor('rgba(249, 168, 212, 0.6)', '연한 분홍색')" title="연한 분홍색 (Ctrl+5)"></div>
-                    <div class="color-swatch" data-color="rgba(214, 163, 108, 0.6)" style="background: rgb(214, 163, 108);" onclick="app.setHighlightColor('rgba(214, 163, 108, 0.6)', '연한 갈색')" title="연한 갈색 (Ctrl+6)"></div>
-                    <div class="color-swatch" data-color="rgba(203, 213, 225, 0.6)" style="background: rgb(203, 213, 225);" onclick="app.setHighlightColor('rgba(203, 213, 225, 0.6)', '연한 회색')" title="연한 회색 (Ctrl+7)"></div>
+                    <div class="color-swatch color-swatch-hi" data-color="rgba(253, 186, 116, 0.6)" style="background: rgb(253, 186, 116);" onclick="app.setHighlightColor('rgba(253, 186, 116, 0.6)', '연한 주황색')" title="연한 주황색 (Ctrl+1)"></div>
+                    <div class="color-swatch color-swatch-hi" data-color="rgba(147, 197, 253, 0.6)" style="background: rgb(147, 197, 253);" onclick="app.setHighlightColor('rgba(147, 197, 253, 0.6)', '연한 파란색')" title="연한 파란색 (Ctrl+2)"></div>
+                    <div class="color-swatch color-swatch-hi active" data-color="rgba(253, 224, 71, 0.6)" style="background: rgb(253, 224, 71);" onclick="app.setHighlightColor('rgba(253, 224, 71, 0.6)', '연한 노란색')" title="연한 노란색 (Ctrl+3)"></div>
+                    <div class="color-swatch color-swatch-hi" data-color="rgba(134, 239, 172, 0.6)" style="background: rgb(134, 239, 172);" onclick="app.setHighlightColor('rgba(134, 239, 172, 0.6)', '연한 녹색')" title="연한 녹색 (Ctrl+4)"></div>
+                    <div class="color-swatch color-swatch-hi" data-color="rgba(249, 168, 212, 0.6)" style="background: rgb(249, 168, 212);" onclick="app.setHighlightColor('rgba(249, 168, 212, 0.6)', '연한 분홍색')" title="연한 분홍색 (Ctrl+5)"></div>
+                    <div class="color-swatch color-swatch-hi" data-color="rgba(214, 163, 108, 0.6)" style="background: rgb(214, 163, 108);" onclick="app.setHighlightColor('rgba(214, 163, 108, 0.6)', '연한 갈색')" title="연한 갈색 (Ctrl+6)"></div>
+                    <div class="color-swatch color-swatch-hi" data-color="rgba(203, 213, 225, 0.6)" style="background: rgb(203, 213, 225);" onclick="app.setHighlightColor('rgba(203, 213, 225, 0.6)', '연한 회색')" title="연한 회색 (Ctrl+7)"></div>
                 </div>
             </div>
             <button class="btn" id="tool-eraser" onclick="app.setTool('eraser')" title="부분 지우개 (단축키 3)"><i class="fas fa-eraser"></i></button>
@@ -324,14 +366,14 @@
             <button class="btn" id="tool-text" onclick="app.setTool('text')" title="텍스트 이동 및 삽입 (단축키 4)"><i class="fas fa-font"></i></button>
             <button class="btn" id="tool-strike" onclick="app.setTool('strikethrough')" title="취소선 (단축키 9)"><i class="fas fa-strikethrough"></i></button>
             
-            <button class="btn" id="tool-keyword" onclick="app.setTool('keyword')" title="강조 키워드 (단축키 0)"><i class="fas fa-key" style="color:#ef4444;"></i></button>
-            <button class="btn" id="tool-important" onclick="app.setTool('sticker-important')" ondblclick="app.applyLastSticker('sticker-important')" title="'중요!' 뱃지 (단축키 5 | 더블클릭: 이전 위치 바로적용)"><i class="fas fa-star" style="color:#e11d48;"></i></button>
-            <button class="btn" id="tool-memorize" onclick="app.setTool('sticker-memorize')" ondblclick="app.applyLastSticker('sticker-memorize')" title="'암기!!' 뱃지 (단축키 6 | 더블클릭: 이전 위치 바로적용)"><i class="fas fa-bookmark" style="color:#4338ca;"></i></button>
+            <button class="btn" onclick="app.toggleSideSummary('keyword')" title="강조 키워드 점검 패널 (점검용 클릭 | 툴 활성화: 단축키 0)"><i class="fas fa-key" style="color:#ef4444;"></i></button>
+            <button class="btn" onclick="app.toggleSideSummary('sticker-important')" title="'중요!' 뱃지 점검 패널 (점검용 클릭 | 툴 활성화: 단축키 5 | 이전위치 복사: 55)"><i class="fas fa-star" style="color:#e11d48;"></i></button>
+            <button class="btn" onclick="app.toggleSideSummary('sticker-memorize')" title="'암기!!' 뱃지 점검 패널 (점검용 클릭 | 툴 활성화: 단축키 6 | 이전위치 복사: 66)"><i class="fas fa-bookmark" style="color:#4338ca;"></i></button>
             <button class="btn" id="tool-laser" onclick="app.setTool('laser')" title="레이저 포인터 (단축키 L)"><i class="fas fa-bullseye" style="color: #ef4444;"></i></button>
         </div>
 
         <div class="btn-group">
-            <button class="btn" onclick="app.clearPage()" title="현재 페이지 전체 지우기 (단축키 8)"><i class="fas fa-trash" style="color:var(--danger);"></i></button>
+            <button class="btn" onclick="app.clearPage()" title="현재 페이지 필기/스티커 지우기 (단축키 8 / 전체 지우기 ALT+C)"><i class="fas fa-trash" style="color:var(--danger);"></i></button>
         </div>
 
         <div class="btn-group">
@@ -396,6 +438,19 @@
     <!-- 메모 크기 조절 리사이저 -->
     <div id="memo-resizer" class="resizer hidden"></div>
 
+    <!-- 우측 점검 패널 (키워드, 뱃지) -->
+    <aside id="side-summary-panel" class="memo-panel hidden">
+        <div class="memo-header">
+            <span id="side-summary-title">점검 패널</span>
+            <div style="display: flex; gap: 4px; align-items: center;">
+                <button class="btn" onclick="app.closeSideSummary()" style="padding:0 8px; margin:0; height: 28px;" title="닫기"><i class="fas fa-times"></i></button>
+            </div>
+        </div>
+        <div class="memo-content" id="side-summary-content" style="padding: 0;">
+            <!-- 요약 내용이 렌더링됩니다 -->
+        </div>
+    </aside>
+
     <aside id="memo-panel" class="memo-panel hidden">
         <div class="memo-header">
             <span>개인 메모</span>
@@ -410,6 +465,44 @@
             <textarea id="memo-textarea" placeholder="중요한 내용을 기록하세요... (Alt+좌/우 방향키로 화면 이동 가능)" oninput="app.saveMemo(this.value)" spellcheck="false"></textarea>
         </div>
     </aside>
+</div>
+
+<!-- 요약 모달 -->
+<div id="summary-modal" class="modal-overlay" onclick="this.style.display='none'">
+    <div class="modal-box" onclick="event.stopPropagation()">
+        <div style="display:flex; justify-content:space-between; margin-bottom:20px; flex-shrink: 0;">
+            <h3 style="margin:0; font-size:18px;"><i class="fas fa-bolt" style="color:#ef4444"></i> PDF 핵심 요약</h3>
+            <div style="display: flex; gap: 8px;">
+                <button class="btn btn-primary" style="background-color: var(--primary); color: white; border: none;" onclick="app.printSummary()"><i class="fas fa-print"></i> 출력</button>
+                <button class="btn" style="padding: 0 10px;" onclick="document.getElementById('summary-modal').style.display='none'"><i class="fas fa-times"></i></button>
+            </div>
+        </div>
+        <div id="summary-content" style="overflow-y: auto; flex: 1; padding-right: 10px; font-size: 15px;">
+            <!-- 요약 내용이 렌더링됩니다 -->
+        </div>
+    </div>
+</div>
+
+<!-- 단축키 안내 모달 -->
+<div id="shortcut-modal" class="modal-overlay" onclick="this.style.display='none'">
+    <div class="modal-box" onclick="event.stopPropagation()" style="width: 550px;">
+        <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
+            <h3 style="margin:0; font-size:18px;"><i class="fas fa-keyboard" style="color:var(--primary)"></i> 단축키 안내</h3>
+            <button class="btn" style="padding: 0 10px;" onclick="document.getElementById('shortcut-modal').style.display='none'"><i class="fas fa-times"></i></button>
+        </div>
+        <ul style="font-size: 14.5px; color: var(--text-main); padding-left: 20px; line-height: 2.2; margin: 0;">
+            <li><b>ALT + D</b> : 가림판 모드 토글 (모든 내용과 필기를 백지로 변경하여 암기 점검)</li>
+            <li><b>ALT + Z</b> : 빨간색 굵은 밑줄 긋기 및 요약 추가</li>
+            <li><b>ALT + A</b> : <span style="color:#ef4444;">현재 펜 색상</span> 밑줄 긋기 및 요약 추가</li>
+            <li><b>ALT + S</b> : <span style="color:#3b82f6;">현재 형광펜 색상</span> 강조 칠하기 및 요약 추가</li>
+            <li><b>ALT + X</b> : 선택 영역 밑줄/형광펜 <span style="color:#10b981; font-weight:bold;">지우기</span> 및 요약 제외</li>
+            <li><b>ALT + C</b> : 펜 드로잉과 스티커 초기화 (마킹/요약/메모는 보존됨)</li>
+            <li><b>55 / 66</b> : (입력 모드 없이 300ms 내 연속 입력) 이전 위치에 중요/암기 뱃지 즉시 부착</li>
+            <li><b>ALT + M</b> : 개인 메모 패널 열기/닫기</li>
+            <li><b>CTRL + H</b> : 전체 화면 토글</li>
+            <li><b>CTRL + M</b> : 몰입 모드 토글</li>
+        </ul>
+    </div>
 </div>
 
 <div id="toast">Message</div>
@@ -430,9 +523,11 @@ const app = {
     drawCtx: document.getElementById('draw-layer').getContext('2d'),
     
     isDrawing: false, currentTool: 'cursor', lastPos: { x: 0, y: 0 },
-    currentHighlightColor: 'rgba(253, 224, 71, 0.6)', currentTextInput: null,
+    currentHighlightColor: 'rgba(253, 224, 71, 0.6)', currentPenColor: '#ef4444', currentTextInput: null,
 
-    outlines: {}, currentSearchQuery: '',
+    lastKey5Time: 0, lastKey6Time: 0, currentSummaryType: null,
+
+    outlines: {}, underlines: {}, currentSearchQuery: '',
     lastStickerPos: { 'sticker-important': null, 'sticker-memorize': null },
     currentPageLinks: [],
 
@@ -447,7 +542,7 @@ const app = {
 
     async initDB() {
         return new Promise((resolve, reject) => {
-            const request = indexedDB.open('PDFPresenterProDB', 1);
+            const request = indexedDB.open('PDFPresenterDB', 1);
             request.onupgradeneeded = (e) => {
                 const db = e.target.result;
                 if (!db.objectStoreNames.contains('docs')) db.createObjectStore('docs', { keyPath: 'id' });
@@ -512,31 +607,19 @@ const app = {
 
         // 리사이저 설정
         this.setupResizer();
-
-        // 24H:60M 형태 시계 시작
         this.startClock();
 
-        // 기존 저장된 메모 내용 및 패널 크기 로드
         const memoTextarea = document.getElementById('memo-textarea');
         if (memoTextarea) {
             memoTextarea.value = localStorage.getItem('presenter_memo') || '';
-            
-            // 메모 텍스트에디터에서 Alt + 방향키로 페이지 이동 허용
             memoTextarea.addEventListener('keydown', (e) => {
-                if (e.altKey && e.key === 'ArrowLeft') {
-                    e.preventDefault();
-                    app.prevPage();
-                } else if (e.altKey && e.key === 'ArrowRight') {
-                    e.preventDefault();
-                    app.nextPage();
-                }
+                if (e.altKey && e.key === 'ArrowLeft') { e.preventDefault(); app.prevPage(); } 
+                else if (e.altKey && e.key === 'ArrowRight') { e.preventDefault(); app.nextPage(); }
             });
         }
         
         const savedMemoW = localStorage.getItem('presenter_memo_w');
-        if (savedMemoW) {
-            document.documentElement.style.setProperty('--memo-w', savedMemoW);
-        }
+        if (savedMemoW) document.documentElement.style.setProperty('--memo-w', savedMemoW);
 
         this.setTool('cursor'); 
         this.renderOutlineList();
@@ -557,33 +640,16 @@ const app = {
     setupResizer() {
         let isResizing = false;
         const resizer = document.getElementById('memo-resizer');
-
-        resizer.addEventListener('mousedown', (e) => {
-            isResizing = true;
-            document.body.style.cursor = 'col-resize';
-            resizer.classList.add('dragging');
-        });
-
+        resizer.addEventListener('mousedown', (e) => { isResizing = true; document.body.style.cursor = 'col-resize'; resizer.classList.add('dragging'); });
         document.addEventListener('mousemove', (e) => {
             if (!isResizing) return;
-            // 오른쪽 기준 너비 계산 (전체 윈도우 너비 - 마우스 X 위치)
             let newWidth = window.innerWidth - e.clientX;
-            
-            // 최소/최대 너비 제한
             if (newWidth < 200) newWidth = 200;
             if (newWidth > 800) newWidth = 800;
-            
             document.documentElement.style.setProperty('--memo-w', `${newWidth}px`);
         });
-
         document.addEventListener('mouseup', () => {
-            if (isResizing) {
-                isResizing = false;
-                document.body.style.cursor = '';
-                resizer.classList.remove('dragging');
-                // 조정된 너비 저장
-                localStorage.setItem('presenter_memo_w', document.documentElement.style.getPropertyValue('--memo-w'));
-            }
+            if (isResizing) { isResizing = false; document.body.style.cursor = ''; resizer.classList.remove('dragging'); localStorage.setItem('presenter_memo_w', document.documentElement.style.getPropertyValue('--memo-w')); }
         });
     },
 
@@ -595,9 +661,11 @@ const app = {
                 const data = e.target.result;
                 if (data) {
                     this.outlines = data.outlines || {};
+                    this.underlines = data.underlines || {};
                     this.lastStickerPos = data.lastStickerPos || { 'sticker-important': null, 'sticker-memorize': null };
                 } else {
                     this.outlines = {};
+                    this.underlines = {};
                     this.lastStickerPos = { 'sticker-important': null, 'sticker-memorize': null };
                 }
                 resolve();
@@ -609,13 +677,25 @@ const app = {
     saveDocData() {
         if (!this.db || !this.fileId) return;
         const tx = this.db.transaction('docs', 'readwrite');
-        tx.objectStore('docs').put({ id: this.fileId, outlines: this.outlines, lastStickerPos: this.lastStickerPos });
+        tx.objectStore('docs').put({ id: this.fileId, outlines: this.outlines, underlines: this.underlines, lastStickerPos: this.lastStickerPos });
     },
 
     savePageData(pageNum) {
         if (!this.db || !this.fileId) return;
         const drawData = this.drawCanvas.toDataURL('image/png');
-        const overlays = Array.from(document.querySelectorAll(`.draggable-item[data-page="${pageNum}"]`)).map(el => {
+        const overlays = Array.from(document.querySelectorAll(`.draggable-item[data-page="${pageNum}"], .text-mark-item[data-page="${pageNum}"]`)).map(el => {
+            if (el.classList.contains('text-mark-item')) {
+                return {
+                    isMark: true,
+                    markType: el.dataset.markType,
+                    color: el.dataset.color,
+                    baseX: el.dataset.baseX,
+                    baseY: el.dataset.baseY,
+                    baseW: el.dataset.baseW,
+                    baseH: el.dataset.baseH,
+                    text: el.dataset.text
+                };
+            }
             let type = 'text';
             if (el.classList.contains('important')) type = 'sticker-important';
             else if (el.classList.contains('memorize')) type = 'sticker-memorize';
@@ -635,8 +715,7 @@ const app = {
 
         const docReq = this.db.transaction('docs', 'readonly').objectStore('docs').get(this.fileId);
         docReq.onsuccess = (e) => {
-            const docData = e.target.result || { id: this.fileId, outlines: this.outlines, lastStickerPos: this.lastStickerPos };
-            
+            const docData = e.target.result || { id: this.fileId, outlines: this.outlines, underlines: this.underlines, lastStickerPos: this.lastStickerPos };
             const pagesData = [];
             const tx = this.db.transaction('pages', 'readonly');
             const store = tx.objectStore('pages');
@@ -664,16 +743,13 @@ const app = {
         const file = e.target.files[0];
         if (!file) return;
         e.target.value = ''; 
-        
         if (!this.fileId || !this.db) return this.showToast("먼저 PDF 문서를 열어주세요.");
 
         const reader = new FileReader();
         reader.onload = async (ev) => {
             try {
                 const data = JSON.parse(ev.target.result);
-                if (data.fileId !== this.fileId) {
-                    if(!confirm("현재 열린 문서와 백업 파일의 대상이 다를 수 있습니다. 계속 복원하시겠습니까?")) return;
-                }
+                if (data.fileId !== this.fileId) { if(!confirm("현재 열린 문서와 백업 파일의 대상이 다를 수 있습니다. 계속 복원하시겠습니까?")) return; }
                 
                 const docTx = this.db.transaction('docs', 'readwrite');
                 data.doc.id = this.fileId; 
@@ -681,21 +757,14 @@ const app = {
 
                 const pageTx = this.db.transaction('pages', 'readwrite');
                 const pageStore = pageTx.objectStore('pages');
-                data.pages.forEach(p => {
-                    p.docId = this.fileId; 
-                    p.id = `${this.fileId}_${p.page}`; 
-                    pageStore.put(p);
-                });
+                data.pages.forEach(p => { p.docId = this.fileId; p.id = `${this.fileId}_${p.page}`; pageStore.put(p); });
 
                 pageTx.oncomplete = async () => {
                     await this.loadDocData();
                     await this.renderPage(this.pageNum);
                     this.showToast("필기 데이터가 성공적으로 복원되었습니다!");
                 };
-            } catch (err) {
-                this.showToast("백업 파일을 읽는 중 오류가 발생했습니다.");
-                console.error(err);
-            }
+            } catch (err) { this.showToast("백업 파일을 읽는 중 오류가 발생했습니다."); console.error(err); }
         };
         reader.readAsText(file);
     },
@@ -704,47 +773,33 @@ const app = {
         const files = Array.from(e.target.files);
         if (files.length === 0) return;
         e.target.blur(); 
-        
         this.showToast(`${files.length}개의 PDF를 로딩 중...`);
 
         document.getElementById('empty-state').style.display = 'none';
         document.getElementById('canvas-wrapper').style.display = 'block';
-
         let firstNewFileId = null;
 
         for (const file of files) {
             const fId = file.name + '_' + file.size;
             if (this.loadedDocs[fId]) continue;
-
             try {
                 const arrayBuffer = await file.arrayBuffer();
-                
                 const pdfJsBytes = new Uint8Array(arrayBuffer.slice(0));
                 const pdfLibBytes = new Uint8Array(arrayBuffer.slice(0));
-
                 const doc = await pdfjsLib.getDocument(pdfJsBytes).promise;
                 
                 this.loadedDocs[fId] = { doc: doc, name: file.name, numPages: doc.numPages, bytes: pdfLibBytes };
                 this.docSearchTexts[fId] = [];
-                
                 if (!firstNewFileId) firstNewFileId = fId;
-
                 this.extractTextForDocInBackground(fId, doc);
-                
             } catch (err) { console.warn('로드 실패: ' + file.name, err); }
         }
 
         this.updateDocSelector();
-
-        if (firstNewFileId) {
-            await this.switchDoc(firstNewFileId);
-            this.showToast(`로딩 및 스캔 완료!`);
-        } else {
-            this.showToast(`이미 열려있는 문서들입니다.`);
-        }
+        if (firstNewFileId) { await this.switchDoc(firstNewFileId); this.showToast(`로딩 및 스캔 완료!`); } 
+        else { this.showToast(`이미 열려있는 문서들입니다.`); }
         
-        this.docSearchResults = [];
-        this.docSearchIndex = -1;
+        this.docSearchResults = []; this.docSearchIndex = -1;
         document.getElementById('doc-search-input').value = '';
         document.getElementById('doc-search-result').style.display = 'none';
     },
@@ -752,11 +807,9 @@ const app = {
     updateDocSelector() {
         const selector = document.getElementById('doc-selector');
         selector.innerHTML = '';
-        
         for (const [id, data] of Object.entries(this.loadedDocs)) {
             const opt = document.createElement('option');
-            opt.value = id;
-            opt.textContent = data.name;
+            opt.value = id; opt.textContent = data.name;
             selector.appendChild(opt);
         }
         if(this.fileId) selector.value = this.fileId;
@@ -764,16 +817,12 @@ const app = {
 
     async switchDoc(targetFileId, pageNumToMove = 1) {
         if (!this.loadedDocs[targetFileId]) return;
-        
         this.commitText();
         this.fileId = targetFileId;
         this.pdfDoc = this.loadedDocs[targetFileId].doc;
-        
         document.getElementById('doc-selector').value = targetFileId;
         document.getElementById('page-count').textContent = this.pdfDoc.numPages;
-        
         await this.loadDocData();
-        
         this.pageNum = pageNumToMove;
         this.renderPage(this.pageNum);
     },
@@ -794,20 +843,12 @@ const app = {
         const query = inputStr.toLowerCase();
         const resLabel = document.getElementById('doc-search-result');
 
-        if (!query) {
-            this.docSearchResults = [];
-            this.docSearchIndex = -1;
-            resLabel.style.display = 'none';
-            return;
-        }
-
+        if (!query) { this.docSearchResults = []; this.docSearchIndex = -1; resLabel.style.display = 'none'; return; }
         this.docSearchResults = [];
         
         for (const [fId, pageTexts] of Object.entries(this.docSearchTexts)) {
             for (let i = 1; i < pageTexts.length; i++) {
-                if (pageTexts[i] && pageTexts[i].includes(query)) {
-                    this.docSearchResults.push({ fileId: fId, pageNum: i });
-                }
+                if (pageTexts[i] && pageTexts[i].includes(query)) this.docSearchResults.push({ fileId: fId, pageNum: i });
             }
         }
 
@@ -816,28 +857,20 @@ const app = {
             this.docSearchIndex = 0;
             this.updateSearchLabel();
             this.jumpToSearchResult(this.docSearchIndex); 
-            
-            setTimeout(() => { this.showToast(`전체 열린 문서에서 총 ${this.docSearchResults.length}곳 발견! 화면 안에서 찾으려면 Ctrl+F`); }, 1000);
+            setTimeout(() => { this.showToast(`전체 열린 문서에서 총 ${this.docSearchResults.length}곳 발견!`); }, 1000);
         } else {
             resLabel.textContent = '0/0';
             this.showToast('어느 문서에도 해당 검색어가 없습니다.');
         }
     },
 
-    updateSearchLabel() {
-        document.getElementById('doc-search-result').textContent = `${this.docSearchIndex + 1}/${this.docSearchResults.length}`;
-    },
+    updateSearchLabel() { document.getElementById('doc-search-result').textContent = `${this.docSearchIndex + 1}/${this.docSearchResults.length}`; },
 
     async jumpToSearchResult(index) {
         const res = this.docSearchResults[index];
         if (!res) return;
-
-        if (this.fileId !== res.fileId) {
-            await this.switchDoc(res.fileId, res.pageNum);
-            this.showToast(`[${this.loadedDocs[res.fileId].name}] 문서로 자동 이동됨`);
-        } else {
-            this.goToPage(res.pageNum);
-        }
+        if (this.fileId !== res.fileId) { await this.switchDoc(res.fileId, res.pageNum); this.showToast(`[${this.loadedDocs[res.fileId].name}] 문서로 자동 이동됨`); } 
+        else { this.goToPage(res.pageNum); }
     },
 
     nextSearchResult() {
@@ -924,34 +957,116 @@ const app = {
     toggleFullScreen() { if (!document.fullscreenElement) document.documentElement.requestFullscreen(); else if (document.exitFullscreen) document.exitFullscreen(); },
     toggleSidebar() { document.getElementById('sidebar').classList.toggle('hidden'); },
 
+    toggleSideSummary(type) {
+        const panel = document.getElementById('side-summary-panel');
+        const memoPanel = document.getElementById('memo-panel');
+        const resizer = document.getElementById('memo-resizer');
+
+        if (!panel.classList.contains('hidden') && this.currentSummaryType === type) { this.closeSideSummary(); return; }
+
+        memoPanel.classList.add('hidden'); panel.classList.remove('hidden'); resizer.classList.remove('hidden');
+        this.currentSummaryType = type;
+        this.loadSideSummaryData(type);
+    },
+
+    closeSideSummary() {
+        const panel = document.getElementById('side-summary-panel');
+        const resizer = document.getElementById('memo-resizer');
+        panel.classList.add('hidden');
+        if (document.getElementById('memo-panel').classList.contains('hidden')) resizer.classList.add('hidden');
+        this.currentSummaryType = null;
+    },
+
+    async loadSideSummaryData(type) {
+        if (!this.db || !this.fileId) return;
+        const tx = this.db.transaction('pages', 'readonly');
+        const store = tx.objectStore('pages');
+        const cursorReq = store.openCursor();
+        const results = {};
+
+        cursorReq.onsuccess = (e) => {
+            const cursor = e.target.result;
+            if (cursor) {
+                if (cursor.value.docId === this.fileId && cursor.value.overlays) {
+                    const matched = cursor.value.overlays.filter(ov => ov.type === type);
+                    if (matched.length > 0) results[cursor.value.page] = matched;
+                }
+                cursor.continue();
+            } else { this.renderSideSummaryList(type, results); }
+        };
+    },
+
+    renderSideSummaryList(type, results) {
+        const container = document.getElementById('side-summary-content');
+        container.innerHTML = '';
+        let count = 0;
+        const keys = Object.keys(results).map(Number).sort((a,b) => a-b);
+
+        const titleMap = {
+            'keyword': '<i class="fas fa-key" style="color:#ef4444;"></i> 강조 키워드 점검',
+            'sticker-important': '<i class="fas fa-star" style="color:#e11d48;"></i> 중요 뱃지 점검',
+            'sticker-memorize': '<i class="fas fa-bookmark" style="color:#4338ca;"></i> 암기 뱃지 점검'
+        };
+        document.getElementById('side-summary-title').innerHTML = titleMap[type] || '점검 패널';
+
+        keys.forEach(page => {
+            const items = results[page];
+            if (items && items.length > 0) {
+                count++;
+                const pageDiv = document.createElement('div');
+                pageDiv.style.borderBottom = '1px solid var(--border-color)';
+                
+                let html = `
+                    <div style="padding: 12px 16px; background: #fafafa; cursor: pointer; display: flex; align-items: center; justify-content: space-between;" onclick="app.goToPage(${page})">
+                        <span style="font-size: 13px; font-weight: 800; color: var(--primary);">Page ${page}</span>
+                        <span style="font-size: 11px; color: var(--text-muted);">${items.length}개</span>
+                    </div>
+                    <div style="padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 8px;">
+                `;
+                
+                items.forEach(item => {
+                    let escText = item.text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                    if (type === 'keyword') html += `<span style="font-size: 13px; font-weight: 700; color: #ef4444; border: 2px solid #ef4444; padding: 2px 8px; border-radius: 6px; cursor: pointer; display:inline-block;" onclick="app.goToPage(${page})">${escText}</span>`;
+                    else if (type === 'sticker-important') html += `<span style="font-size: 12px; font-weight: 800; color: white; background: #e11d48; padding: 4px 10px; border-radius: 12px; cursor: pointer; display:inline-block;" onclick="app.goToPage(${page})">${escText}</span>`;
+                    else if (type === 'sticker-memorize') html += `<span style="font-size: 12px; font-weight: 800; color: white; background: #4338ca; padding: 4px 10px; border-radius: 12px; cursor: pointer; display:inline-block;" onclick="app.goToPage(${page})">${escText}</span>`;
+                });
+                
+                html += `</div>`;
+                pageDiv.innerHTML = html;
+                container.appendChild(pageDiv);
+            }
+        });
+
+        if (count === 0) container.innerHTML = `<div style="text-align:center; padding:40px 20px; color:var(--text-muted); font-size:14px; font-weight: 500;">해당 항목이 없습니다.</div>`;
+    },
+
+    toggleBlindMode() {
+        const wrapper = document.getElementById('canvas-wrapper');
+        const isActive = wrapper.classList.toggle('blind-mode');
+        this.showToast(isActive ? "가림판 모드 ON (모든 내용 숨김)" : "가림판 모드 OFF");
+    },
+
     toggleMemo() {
         const memoPanel = document.getElementById('memo-panel');
         const resizer = document.getElementById('memo-resizer');
+        if (!document.getElementById('side-summary-panel').classList.contains('hidden')) this.closeSideSummary();
         memoPanel.classList.toggle('hidden');
-        resizer.classList.toggle('hidden');
-        if (!memoPanel.classList.contains('hidden')) {
-             setTimeout(() => document.getElementById('memo-textarea').focus(), 50);
-        }
+        if (!memoPanel.classList.contains('hidden')) { resizer.classList.remove('hidden'); setTimeout(() => document.getElementById('memo-textarea').focus(), 50); } 
+        else { resizer.classList.add('hidden'); }
     },
 
-    saveMemo(text) {
-        localStorage.setItem('presenter_memo', text);
-    },
+    saveMemo(text) { localStorage.setItem('presenter_memo', text); },
 
     toggleImmersionMode() {
         const isActive = document.body.classList.toggle('immersion-mode');
-        if (isActive) {
-            if (!document.fullscreenElement) document.documentElement.requestFullscreen();
-        } else {
-            if (document.fullscreenElement) document.exitFullscreen();
-        }
+        if (isActive) { if (!document.fullscreenElement) document.documentElement.requestFullscreen(); } 
+        else { if (document.fullscreenElement) document.exitFullscreen(); }
         this.showToast(isActive ? "몰입 모드 ON (해제: Ctrl+M 또는 ESC)" : "몰입 모드 OFF");
     },
 
     saveOutline(text) {
         if (!this.pdfDoc) return;
-        if (text.trim() === '') delete this.outlines[this.pageNum];
-        else this.outlines[this.pageNum] = text;
+        if (text.trim() === '') delete this.outlines[this.pageNum]; else this.outlines[this.pageNum] = text;
         this.renderOutlineList(); this.saveDocData();
     },
 
@@ -1004,29 +1119,32 @@ const app = {
         if(tool === 'eraser') document.getElementById('tool-eraser').classList.add('active');
         if(tool === 'text') document.getElementById('tool-text').classList.add('active');
         if(tool === 'strikethrough') document.getElementById('tool-strike').classList.add('active');
-        if(tool === 'keyword') document.getElementById('tool-keyword').classList.add('active');
         if(tool === 'laser') document.getElementById('tool-laser').classList.add('active');
-        if(tool === 'sticker-important') document.getElementById('tool-important').classList.add('active');
-        if(tool === 'sticker-memorize') document.getElementById('tool-memorize').classList.add('active');
         
         const laserDot = document.getElementById('laser-dot');
         const overlayLayer = document.getElementById('overlay-layer');
         const textLayer = document.getElementById('text-layer');
 
-        if (['pen', 'highlight', 'eraser', 'strikethrough'].includes(tool)) { overlayLayer.classList.add('drawing-mode'); this.drawCanvas.style.cursor = 'crosshair'; this.drawCanvas.style.pointerEvents = 'auto'; textLayer.style.pointerEvents = 'none'; laserDot.style.display = 'none'; } 
-        else if (tool === 'text' || tool === 'keyword') { overlayLayer.classList.remove('drawing-mode'); this.drawCanvas.style.cursor = 'text'; this.drawCanvas.style.pointerEvents = 'auto'; textLayer.style.pointerEvents = 'none'; laserDot.style.display = 'none'; } 
-        else if (tool.startsWith('sticker-')) { overlayLayer.classList.remove('drawing-mode'); this.drawCanvas.style.cursor = 'crosshair'; this.drawCanvas.style.pointerEvents = 'auto'; textLayer.style.pointerEvents = 'none'; laserDot.style.display = 'none'; }
-        else if (tool === 'laser') { overlayLayer.classList.remove('drawing-mode'); this.drawCanvas.style.cursor = 'none'; this.drawCanvas.style.pointerEvents = 'auto'; textLayer.style.pointerEvents = 'none'; laserDot.style.display = 'block'; } 
-        else { overlayLayer.classList.remove('drawing-mode'); this.drawCanvas.style.cursor = 'default'; this.drawCanvas.style.pointerEvents = 'none'; textLayer.style.pointerEvents = 'auto'; laserDot.style.display = 'none'; }
+        if (['pen', 'highlight', 'eraser', 'strikethrough'].includes(tool)) { overlayLayer.classList.add('drawing-mode'); this.drawCanvas.style.pointerEvents = 'auto'; this.drawCanvas.style.cursor = 'crosshair'; textLayer.style.pointerEvents = 'none'; laserDot.style.display = 'none'; } 
+        else if (tool === 'text' || tool === 'keyword') { overlayLayer.classList.remove('drawing-mode'); this.drawCanvas.style.pointerEvents = 'auto'; this.drawCanvas.style.cursor = 'text'; textLayer.style.pointerEvents = 'none'; laserDot.style.display = 'none'; } 
+        else if (tool.startsWith('sticker-')) { overlayLayer.classList.remove('drawing-mode'); this.drawCanvas.style.pointerEvents = 'auto'; this.drawCanvas.style.cursor = 'crosshair'; textLayer.style.pointerEvents = 'none'; laserDot.style.display = 'none'; }
+        else if (tool === 'laser') { overlayLayer.classList.remove('drawing-mode'); this.drawCanvas.style.pointerEvents = 'auto'; this.drawCanvas.style.cursor = 'none'; textLayer.style.pointerEvents = 'none'; laserDot.style.display = 'block'; } 
+        else { overlayLayer.classList.remove('drawing-mode'); this.drawCanvas.style.pointerEvents = 'none'; this.drawCanvas.style.cursor = 'default'; textLayer.style.pointerEvents = 'auto'; laserDot.style.display = 'none'; }
 
-        const msgs = { 'cursor': "선택/이동 (상단 검색창 지원)", 'pen': "부드러운 펜", 'highlight': "형광펜", 'eraser': "부분 지우개", 'text': "텍스트 입력/이동 모드", 'strikethrough': "취소선 모드 (드래그하여 선 긋기)", 'keyword': "강조 키워드 입력 모드", 'laser': "레이저 포인터 모드", 'sticker-important': "클릭하여 '중요!' 뱃지 부착", 'sticker-memorize': "클릭하여 '암기!!' 뱃지 부착" };
-        if(msgs[tool]) this.showToast(`${msgs[tool]} 모드`);
+        const msgs = { 'cursor': "선택/이동 모드 (드래그하여 단축키 마킹 활용)", 'pen': "부드러운 펜", 'highlight': "형광펜", 'eraser': "부분 지우개", 'text': "텍스트 입력/이동 모드", 'strikethrough': "취소선 모드 (드래그하여 선 긋기)", 'keyword': "강조 키워드 입력 모드 (원하는 위치 클릭)", 'laser': "레이저 포인터 모드", 'sticker-important': "클릭하여 '중요!' 뱃지 부착", 'sticker-memorize': "클릭하여 '암기!!' 뱃지 부착" };
+        if(msgs[tool]) this.showToast(`${msgs[tool]} 켜짐`);
     },
 
     setHighlightColor(colorHex, colorName) {
         this.currentHighlightColor = colorHex; this.setTool('highlight');
-        document.querySelectorAll('.color-swatch').forEach(swatch => { if (swatch.dataset.color === colorHex) swatch.classList.add('active'); else swatch.classList.remove('active'); });
+        document.querySelectorAll('.color-swatch-hi').forEach(swatch => { if (swatch.dataset.color === colorHex) swatch.classList.add('active'); else swatch.classList.remove('active'); });
         if(colorName) this.showToast(`형광펜: ${colorName}`);
+    },
+    
+    setPenColor(colorHex, colorName) {
+        this.currentPenColor = colorHex; this.setTool('pen');
+        document.querySelectorAll('.color-swatch-pen').forEach(swatch => { if (swatch.dataset.color === colorHex) swatch.classList.add('active'); else swatch.classList.remove('active'); });
+        if(colorName) this.showToast(`펜 색상: ${colorName}`);
     },
 
     getMousePos(e) { const rect = this.canvas.getBoundingClientRect(); return { x: e.clientX - rect.left, y: e.clientY - rect.top }; },
@@ -1074,21 +1192,15 @@ const app = {
             this.drawCtx.globalCompositeOperation = 'multiply'; this.drawCtx.lineCap = 'butt'; this.drawCtx.lineWidth = 16 * outputScale; this.drawCtx.strokeStyle = this.currentHighlightColor;
             this.drawCtx.lineTo(currentPos.x, currentPos.y); this.drawCtx.stroke(); this.drawCtx.beginPath(); this.drawCtx.moveTo(currentPos.x, currentPos.y);
         } else if (this.currentTool === 'pen') {
-            this.drawCtx.globalCompositeOperation = 'source-over'; this.drawCtx.lineCap = 'round'; this.drawCtx.lineWidth = 2.5 * outputScale; this.drawCtx.strokeStyle = '#ef4444'; 
+            this.drawCtx.globalCompositeOperation = 'source-over'; this.drawCtx.lineCap = 'round'; this.drawCtx.lineWidth = 2.5 * outputScale; this.drawCtx.strokeStyle = this.currentPenColor; 
             const midPoint = { x: (this.lastPos.x + currentPos.x) / 2, y: (this.lastPos.y + currentPos.y) / 2 };
-            this.drawCtx.quadraticCurveTo(this.lastPos.x, this.lastPos.y, midPoint.x, midPoint.y); this.drawCtx.stroke(); this.drawCtx.beginPath(); this.moveTo(midPoint.x, midPoint.y); this.lastPos = currentPos;
+            this.drawCtx.quadraticCurveTo(this.lastPos.x, this.lastPos.y, midPoint.x, midPoint.y); this.drawCtx.stroke(); this.drawCtx.beginPath(); this.drawCtx.moveTo(midPoint.x, midPoint.y); this.lastPos = currentPos;
         } else if (this.currentTool === 'eraser') {
             this.drawCtx.globalCompositeOperation = 'destination-out'; this.drawCtx.lineCap = 'round'; this.drawCtx.lineWidth = 40 * outputScale; this.drawCtx.strokeStyle = 'rgba(0,0,0,1)'; 
             this.drawCtx.lineTo(currentPos.x, currentPos.y); this.drawCtx.stroke(); this.drawCtx.beginPath(); this.drawCtx.moveTo(currentPos.x, currentPos.y);
         } else if (this.currentTool === 'strikethrough') {
-            this.drawCtx.globalCompositeOperation = 'source-over';
-            this.drawCtx.lineCap = 'square';
-            this.drawCtx.lineWidth = 2 * outputScale;
-            this.drawCtx.strokeStyle = '#ef4444'; 
-            this.drawCtx.lineTo(currentPos.x, currentPos.y);
-            this.drawCtx.stroke();
-            this.drawCtx.beginPath();
-            this.drawCtx.moveTo(currentPos.x, currentPos.y);
+            this.drawCtx.globalCompositeOperation = 'source-over'; this.drawCtx.lineCap = 'square'; this.drawCtx.lineWidth = 2 * outputScale; this.drawCtx.strokeStyle = '#ef4444'; 
+            this.drawCtx.lineTo(currentPos.x, currentPos.y); this.drawCtx.stroke(); this.drawCtx.beginPath(); this.drawCtx.moveTo(currentPos.x, currentPos.y);
         }
     },
 
@@ -1144,11 +1256,15 @@ const app = {
             el.dataset.page = this.pageNum; el.dataset.baseX = input.dataset.baseX; el.dataset.baseY = input.dataset.baseY; if (input.dataset.baseSize) el.dataset.baseSize = input.dataset.baseSize;
             el.style.fontWeight = input.style.fontWeight; el.style.fontStyle = input.style.fontStyle; el.style.textDecoration = input.style.textDecoration; el.style.color = input.style.color; el.style.backgroundColor = input.style.backgroundColor;
             
-            if (isKeyword) { el.style.borderWidth = input.style.borderWidth; el.style.borderStyle = input.style.borderStyle; el.style.borderColor = input.style.borderColor; } 
+            if (isKeyword) { 
+                el.style.borderWidth = input.style.borderWidth; el.style.borderStyle = input.style.borderStyle; el.style.borderColor = input.style.borderColor; 
+                if (!this.underlines[this.pageNum]) this.underlines[this.pageNum] = [];
+                if (!this.underlines[this.pageNum].includes(text)) { this.underlines[this.pageNum].push(text); this.saveDocData(); }
+            } 
             else if (input.style.backgroundColor && input.style.backgroundColor !== 'transparent' && input.style.backgroundColor !== 'rgba(0, 0, 0, 0)') { el.style.padding = '2px 6px'; el.style.borderRadius = '6px'; }
 
             document.getElementById('overlay-layer').appendChild(el); this.makeDraggable(el); this.updateElementStyle(el);
-            this.showToast(isKeyword ? "키워드 부착 완료" : "텍스트 부착 완료"); this.savePageData(this.pageNum); 
+            this.showToast(isKeyword ? "키워드 부착 및 요약 추가 완료" : "텍스트 부착 완료"); this.savePageData(this.pageNum); 
         }
         input.remove(); if (this.currentTool === 'text' || this.currentTool === 'keyword') this.setTool('cursor');
     },
@@ -1171,6 +1287,22 @@ const app = {
         this.addSticker(pos, type, true);
     },
 
+    addMarkDOM(markType, color, baseX, baseY, baseW, baseH, text, save = true) {
+        const el = document.createElement('div');
+        el.className = 'text-mark-item';
+        el.dataset.page = this.pageNum; el.dataset.markType = markType; el.dataset.color = color; el.dataset.baseX = baseX; el.dataset.baseY = baseY; el.dataset.baseW = baseW; el.dataset.baseH = baseH;
+        if (text) el.dataset.text = text;
+
+        this.updateElementStyle(el);
+        document.getElementById('overlay-layer').appendChild(el);
+
+        if (save && text && text.trim() !== '') {
+            if (!this.underlines[this.pageNum]) this.underlines[this.pageNum] = [];
+            if (!this.underlines[this.pageNum].includes(text)) { this.underlines[this.pageNum].push(text); this.saveDocData(); }
+        }
+        if (save) this.savePageData(this.pageNum);
+    },
+
     makeDraggable(el) {
         const startDrag = (e) => {
             e.stopPropagation(); const isTouch = e.type === 'touchstart'; const startX = isTouch ? e.touches[0].clientX : e.clientX; const startY = isTouch ? e.touches[0].clientY : e.clientY; const initialLeft = parseFloat(el.style.left) || 0; const initialTop = parseFloat(el.style.top) || 0;
@@ -1185,6 +1317,8 @@ const app = {
     },
 
     recreateOverlay(pageNum, ov) {
+        if (ov.isMark) { this.addMarkDOM(ov.markType, ov.color, ov.baseX, ov.baseY, ov.baseW, ov.baseH, ov.text, false); return; }
+        
         const el = document.createElement('div'); el.dataset.page = pageNum; el.dataset.baseX = ov.baseX; el.dataset.baseY = ov.baseY; if (ov.baseSize) el.dataset.baseSize = ov.baseSize; el.title = "드래그하여 이동 (더블클릭 삭제)";
         
         if (ov.type === 'text' || ov.type === 'keyword') {
@@ -1196,6 +1330,15 @@ const app = {
     },
 
     updateElementStyle(el) {
+        if (el.classList.contains('text-mark-item')) {
+            const markType = el.dataset.markType; const color = el.dataset.color; const x = parseFloat(el.dataset.baseX) * this.scale; const y = parseFloat(el.dataset.baseY) * this.scale; const w = parseFloat(el.dataset.baseW) * this.scale; const h = parseFloat(el.dataset.baseH) * this.scale;
+            el.style.left = x + 'px'; el.style.top = y + 'px'; el.style.width = w + 'px';
+            if (markType === 'highlight') { el.style.height = h + 'px'; el.style.backgroundColor = color; } 
+            else if (markType === 'thick') { el.style.height = '0px'; el.style.borderBottom = `${Math.max(2, 3 * (this.scale/1.5))}px solid ${color}`; } 
+            else if (markType === 'thin') { el.style.height = '0px'; el.style.borderBottom = `${Math.max(1, 1.5 * (this.scale/1.5))}px solid ${color}`; }
+            return;
+        }
+
         el.style.left = (parseFloat(el.dataset.baseX) * this.scale) + 'px'; el.style.top = (parseFloat(el.dataset.baseY) * this.scale) + 'px';
         const isSticker = el.classList.contains('draggable-sticker'); const isKeyword = el.classList.contains('draggable-keyword');
         let baseSize = isSticker ? 14 : (isKeyword ? 24 : 18); if (el.dataset.baseSize) { baseSize = parseFloat(el.dataset.baseSize); }
@@ -1205,7 +1348,7 @@ const app = {
     },
 
     async restoreDrawing(pageNum) {
-        this.drawCtx.clearRect(0, 0, this.drawCanvas.width, this.drawCanvas.height); document.querySelectorAll('.draggable-item').forEach(el => el.remove());
+        this.drawCtx.clearRect(0, 0, this.drawCanvas.width, this.drawCanvas.height); document.querySelectorAll('.draggable-item, .text-mark-item').forEach(el => el.remove());
         if (!this.fileId || !this.db) return;
 
         return new Promise((resolve) => {
@@ -1221,7 +1364,13 @@ const app = {
         });
     },
     
-    clearPage() { this.drawCtx.clearRect(0, 0, this.drawCanvas.width, this.drawCanvas.height); document.querySelectorAll('.draggable-item').forEach(el => el.remove()); this.savePageData(this.pageNum); this.showToast("현재 페이지 전체 지우기 완료"); },
+    clearPage() { 
+        this.drawCtx.clearRect(0, 0, this.drawCanvas.width, this.drawCanvas.height); 
+        document.querySelectorAll(`.draggable-item[data-page="${this.pageNum}"]`).forEach(el => el.remove()); 
+        // DO NOT delete this.underlines, DO NOT remove .text-mark-item
+        this.savePageData(this.pageNum); 
+        this.showToast("드로잉 및 스티커 초기화 완료 (마킹 및 요약은 보존됨)"); 
+    },
 
     async downloadPDF() {
         if (!this.pdfDoc || !this.fileId) return this.showToast("열려있는 PDF가 없습니다.");
@@ -1235,7 +1384,6 @@ const app = {
         
         const originalPage = this.pageNum; 
         const originalScale = this.scale;
-        
         const exportScale = 3.0; 
         this.scale = exportScale; 
         
@@ -1246,13 +1394,10 @@ const app = {
             if (this.db) {
                 pageData = await new Promise(r => {
                     const req = this.db.transaction('pages', 'readonly').objectStore('pages').get(`${this.fileId}_${i}`);
-                    req.onsuccess = e => r(e.target.result);
-                    req.onerror = () => r(null);
+                    req.onsuccess = e => r(e.target.result); req.onerror = () => r(null);
                 });
             }
-
             if (!pageData) continue; 
-
             hasAnyModifications = true;
             this.showToast(`수정된 페이지 병합 중... (${i}/${this.pdfDoc.numPages})`);
             
@@ -1260,50 +1405,40 @@ const app = {
             const page = await this.pdfDoc.getPage(i); 
             const viewport = page.getViewport({ scale: this.scale });
             
-            this.drawCanvas.width = Math.floor(viewport.width); 
-            this.drawCanvas.height = Math.floor(viewport.height);
+            this.drawCanvas.width = Math.floor(viewport.width); this.drawCanvas.height = Math.floor(viewport.height);
             this.drawCtx.clearRect(0, 0, this.drawCanvas.width, this.drawCanvas.height);
             
             await this.restoreDrawing(i); 
 
             const ctx = this.drawCtx;
-            const items = document.querySelectorAll(`.draggable-item[data-page="${i}"]`);
+            const items = document.querySelectorAll(`.draggable-item[data-page="${i}"], .text-mark-item[data-page="${i}"]`);
             
             items.forEach(el => {
-                const x = parseFloat(el.dataset.baseX) * exportScale;
-                const y = parseFloat(el.dataset.baseY) * exportScale;
-                const style = window.getComputedStyle(el);
+                if (el.classList.contains('text-mark-item')) {
+                    const markType = el.dataset.markType; const color = el.dataset.color;
+                    const x = parseFloat(el.dataset.baseX) * exportScale; const y = parseFloat(el.dataset.baseY) * exportScale; const w = parseFloat(el.dataset.baseW) * exportScale; const h = parseFloat(el.dataset.baseH) * exportScale;
+                    ctx.save();
+                    if (markType === 'highlight') { ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = color; ctx.fillRect(x, y, w, h); } 
+                    else { ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = color; ctx.lineCap = markType === 'thick' ? 'round' : 'square'; ctx.lineWidth = markType === 'thick' ? 2.5 * exportScale : 1 * exportScale; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + w, y); ctx.stroke(); }
+                    ctx.restore(); return;
+                }
+
+                const x = parseFloat(el.dataset.baseX) * exportScale; const y = parseFloat(el.dataset.baseY) * exportScale; const style = window.getComputedStyle(el);
+                ctx.save(); ctx.translate(x, y);
                 
-                ctx.save(); 
-                ctx.translate(x, y);
+                const isSticker = el.classList.contains('draggable-sticker'); const isKeyword = el.classList.contains('draggable-keyword');
+                let baseSize = isSticker ? 14 : (isKeyword ? 24 : 18); if (el.dataset.baseSize) baseSize = parseFloat(el.dataset.baseSize);
+                const fontSize = baseSize * exportScale; ctx.font = `${style.fontStyle} ${style.fontWeight} ${fontSize}px ${style.fontFamily}`;
                 
-                const isSticker = el.classList.contains('draggable-sticker'); 
-                const isKeyword = el.classList.contains('draggable-keyword');
-                let baseSize = isSticker ? 14 : (isKeyword ? 24 : 18); 
-                if (el.dataset.baseSize) baseSize = parseFloat(el.dataset.baseSize);
-                
-                const fontSize = baseSize * exportScale;
-                ctx.font = `${style.fontStyle} ${style.fontWeight} ${fontSize}px ${style.fontFamily}`;
-                
-                const textWidth = ctx.measureText(el.innerText).width; 
-                const bgColor = style.backgroundColor; 
-                
+                const textWidth = ctx.measureText(el.innerText).width; const bgColor = style.backgroundColor; 
                 if (isKeyword || (bgColor && bgColor !== 'rgba(0, 0, 0, 0)' && bgColor !== 'transparent')) {
-                    const padX = (isSticker ? 14 : (isKeyword ? 12 : 4)) * exportScale; 
-                    const padY = (isSticker ? 7 : (isKeyword ? 4 : 0)) * exportScale; 
-                    const radius = (isSticker ? 16 : (isKeyword ? 8 : 6)) * exportScale;
-                    const borderWidth = 3 * exportScale;
-                    
-                    ctx.beginPath(); 
-                    ctx.roundRect(-textWidth / 2 - padX, -fontSize * 0.5 - padY, textWidth + padX * 2, fontSize + padY * 2, radius);
+                    const padX = (isSticker ? 14 : (isKeyword ? 12 : 4)) * exportScale; const padY = (isSticker ? 7 : (isKeyword ? 4 : 0)) * exportScale; const radius = (isSticker ? 16 : (isKeyword ? 8 : 6)) * exportScale; const borderWidth = 3 * exportScale;
+                    ctx.beginPath(); ctx.roundRect(-textWidth / 2 - padX, -fontSize * 0.5 - padY, textWidth + padX * 2, fontSize + padY * 2, radius);
                     if (bgColor && bgColor !== 'rgba(0, 0, 0, 0)' && bgColor !== 'transparent') { ctx.fillStyle = bgColor; ctx.fill(); }
                     if (isKeyword) { ctx.strokeStyle = style.color || '#ef4444'; ctx.lineWidth = borderWidth; ctx.stroke(); }
                 }
                 
-                ctx.fillStyle = style.color; 
-                ctx.textAlign = 'center'; 
-                ctx.textBaseline = 'middle'; 
-                ctx.fillText(el.innerText, 0, 0);
+                ctx.fillStyle = style.color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(el.innerText, 0, 0);
                 if (style.textDecorationLine && style.textDecorationLine.includes('underline')) { ctx.beginPath(); ctx.moveTo(-textWidth / 2, fontSize * 0.4); ctx.lineTo(textWidth / 2, fontSize * 0.4); ctx.lineWidth = fontSize * 0.08; ctx.strokeStyle = style.color; ctx.stroke(); }
                 if (style.textDecorationLine && style.textDecorationLine.includes('line-through')) { ctx.beginPath(); ctx.moveTo(-textWidth / 2, 0); ctx.lineTo(textWidth / 2, 0); ctx.lineWidth = fontSize * 0.08; ctx.strokeStyle = style.color; ctx.stroke(); }
                 ctx.restore();
@@ -1312,182 +1447,190 @@ const app = {
             const annoDataUrl = this.drawCanvas.toDataURL('image/png');
             const pngImage = await pdfDocLib.embedPng(annoDataUrl);
             const pdfPage = pages[i - 1];
-            
-            pdfPage.drawImage(pngImage, {
-                x: 0,
-                y: 0,
-                width: pdfPage.getWidth(),
-                height: pdfPage.getHeight(),
-            });
+            pdfPage.drawImage(pngImage, { x: 0, y: 0, width: pdfPage.getWidth(), height: pdfPage.getHeight(), });
         }
         
         const pdfBytes = await pdfDocLib.save();
         const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
+        const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = '(수정) ' + this.loadedDocs[this.fileId].name; link.click();
         
-        const originalFileName = this.loadedDocs[this.fileId].name;
-        link.download = '(수정) ' + originalFileName;
-        link.click();
-        
-        this.scale = originalScale; 
-        this.pageNum = originalPage;
-        await this.renderPage(this.pageNum); 
-        
-        if (hasAnyModifications) {
-            this.showToast("수정된 페이지만 병합하여 초고속 저장이 완료되었습니다!");
-        } else {
-            this.showToast("수정사항이 없어 원본 그대로 저장되었습니다.");
-        }
+        this.scale = originalScale; this.pageNum = originalPage; await this.renderPage(this.pageNum); 
+        this.showToast(hasAnyModifications ? "수정된 페이지만 병합하여 초고속 저장이 완료되었습니다!" : "수정사항이 없어 원본 그대로 저장되었습니다.");
+    },
+
+    openSummaryModal() {
+        const container = document.getElementById('summary-content');
+        container.innerHTML = ""; let count = 0;
+        const keys = Object.keys(this.underlines).map(Number).sort((a,b) => a-b);
+        keys.forEach(page => {
+            const lines = this.underlines[page];
+            if (lines && lines.length > 0) {
+                count++;
+                const itemDiv = document.createElement('div'); itemDiv.className = 'summary-item';
+                let html = `
+                    <div style="margin-bottom: 12px; display: flex; align-items: center;">
+                        <span class="summary-badge" onclick="app.goToPage(${page}); document.getElementById('summary-modal').style.display='none';" title="${page}페이지로 이동">Page ${page}</span>
+                    </div>
+                    <div style="background: #fffbeb; border-left: 5px solid #f59e0b; padding: 12px; border-radius: 0 6px 6px 0;">
+                        <div style="color: #b45309; font-weight: 900; margin-bottom: 6px; font-size: 13px;">[요약 내용]</div>
+                        <div style="color: #1f2937; font-size: 16px; font-weight: 700; line-height: 1.6;">
+                            ${lines.map(line => `<div style="margin-bottom:4px;">• ${line}</div>`).join('')}
+                        </div>
+                    </div>`;
+                itemDiv.innerHTML = html; container.appendChild(itemDiv);
+            }
+        });
+        if (count === 0) container.innerHTML = "<div style='text-align:center; padding:40px; color:#9ca3af; font-size:15px; font-weight:bold;'>요약된 밑줄 내용이 없습니다.</div>";
+        document.getElementById('summary-modal').style.display = 'flex';
+    },
+
+    printSummary() {
+        const content = document.getElementById('summary-content').innerHTML;
+        if(content.includes('요약된 밑줄 내용이 없습니다.')) { this.showToast("출력할 요약이 없습니다."); return; }
+        const scriptTag = "<script>setTimeout(() => { window.print(); window.close(); }, 500);</scr" + "ipt>";
+        const printWin = window.open('', '', 'width=900,height=900');
+        printWin.document.write(`
+            <html>
+            <head>
+                <title>PDF 밑줄 요약 출력</title>
+                <style>
+                    body { font-family: 'Pretendard', sans-serif; line-height: 1.6; padding: 20px; color: #333; background: #fff; }
+                    .summary-item { margin-bottom: 24px; padding: 16px; border: 2px solid #e5e7eb; border-radius: 8px; page-break-inside: avoid; }
+                    @media print {
+                        body { padding: 0; }
+                        .summary-item { border: 1px solid #ccc !important; box-shadow: none !important; }
+                        .summary-badge { background: transparent !important; color: #4f46e5 !important; border: 2px solid #4f46e5 !important; box-shadow: none !important; font-weight: bold; padding: 4px 10px; border-radius: 6px; display: inline-block; }
+                        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+                        @page { margin: 15mm; }
+                    }
+                </style>
+            </head>
+            <body><h2 style="text-align:center; border-bottom:3px solid #1f2937; padding-bottom:12px; margin-bottom:24px; font-weight:900;">🔥 PDF 밑줄 요약 🔥</h2>${content}${scriptTag}</body>
+            </html>
+        `);
+        printWin.document.close();
+    },
+
+    handleMarkShortcut(e, markType, color) {
+        e.preventDefault();
+        const selection = window.getSelection();
+        if (selection.rangeCount > 0 && !selection.isCollapsed) {
+            const text = selection.toString().trim(); 
+            const range = selection.getRangeAt(0); 
+            const rects = range.getClientRects(); 
+            const canvasRect = this.canvas.getBoundingClientRect(); 
+            let highlighted = false; 
+            let mergedLines = [];
+            
+            for (let i = 0; i < rects.length; i++) {
+                const rect = rects[i];
+              
+				// 브라우저 다중 선택 시 발생하는 얇은 유령 영역(통상 8~10px)만 완벽 차단
+                // (좌측 여백 제한을 없애서 좌측에 붙은 정상 텍스트의 마킹 기능 복구)
+                if (rect.width < 10) continue;
+              
+                if (rect.right > canvasRect.left && rect.left < canvasRect.right && rect.bottom > canvasRect.top && rect.top < canvasRect.bottom) {
+                    let isMerged = false;
+                    for (let j = 0; j < mergedLines.length; j++) {
+                        let line = mergedLines[j];
+                        if (Math.abs(line.top - rect.top) < 10) { 
+                            line.left = Math.min(line.left, rect.left); 
+                            line.right = Math.max(line.right, rect.right); 
+                            line.bottom = Math.max(line.bottom, rect.bottom); 
+                            line.top = Math.min(line.top, rect.top); 
+                            isMerged = true; 
+                            break; 
+                        }
+                    }
+                    if (!isMerged) { mergedLines.push({ left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom }); }
+                }
+            }
+            
+            if (mergedLines.length > 0) {
+                for (let i = 0; i < mergedLines.length; i++) {
+                    const line = mergedLines[i];
+                    
+                    const w = line.right - line.left; 
+                    const h = line.bottom - line.top;
+                    const x = line.left - canvasRect.left; 
+                    const y = line.top - canvasRect.top;
+
+                    const baseW = w / this.scale; 
+                    const baseH = h / this.scale; 
+                    const baseX = x / this.scale; 
+                    let baseY = y / this.scale;
+
+                    if (markType === 'thick' || markType === 'thin') {
+                        // 텍스트 밑줄의 Y 좌표를 아래쪽 라인 근처로 세밀하게 조정
+                        baseY = (line.bottom - (line.bottom - line.top) * 0.15 - canvasRect.top) / this.scale;
+                    }
+                    this.addMarkDOM(markType, color, baseX, baseY, baseW, baseH, text); 
+                    highlighted = true;
+                }
+            }
+            if (highlighted) { selection.removeAllRanges(); this.showToast("마킹 및 요약 추가 완료"); }
+        } else { this.showToast("마킹할 텍스트를 먼저 드래그하세요."); }
     },
 
     handleKey(e) {
-        // 개인 메모 토글 (Alt + M)
-        if (e.altKey && (e.key.toLowerCase() === 'm' || e.code === 'KeyM')) {
-            e.preventDefault();
-            this.toggleMemo();
-            return;
-        }
-
-        if (e.ctrlKey && (e.key.toLowerCase() === 'm' || e.code === 'KeyM')) {
-            e.preventDefault();
-            this.toggleImmersionMode();
-            return;
-        }
-
-        if (e.ctrlKey && (e.key.toLowerCase() === 'h' || e.code === 'KeyH')) { 
-            e.preventDefault(); 
-            this.toggleFullScreen(); 
-            return; 
-        }
+        if (e.altKey && (e.key.toLowerCase() === 'm' || e.code === 'KeyM')) { e.preventDefault(); this.toggleMemo(); return; }
         
-        if (e.target.tagName.toLowerCase() === 'input' || e.target.tagName.toLowerCase() === 'textarea') { 
-            if (e.key === 'Escape') { e.preventDefault(); e.target.blur(); this.commitText(); } 
-            return; 
+        if (e.altKey && (e.key.toLowerCase() === 'd' || e.code === 'KeyD')) { e.preventDefault(); this.toggleBlindMode(); return; }
+
+        if (e.altKey && (e.key.toLowerCase() === 'z' || e.code === 'KeyZ')) { this.handleMarkShortcut(e, 'thick', '#ef4444'); return; }
+        if (e.altKey && (e.key.toLowerCase() === 'a' || e.code === 'KeyA')) { this.handleMarkShortcut(e, 'thin', this.currentPenColor); return; }
+        if (e.altKey && (e.key.toLowerCase() === 's' || e.code === 'KeyS')) { this.handleMarkShortcut(e, 'highlight', this.currentHighlightColor); return; }
+
+        if (e.altKey && (e.key.toLowerCase() === 'x' || e.code === 'KeyX')) {
+            e.preventDefault();
+            const selection = window.getSelection();
+            if (selection.rangeCount > 0 && !selection.isCollapsed) {
+                const range = selection.getRangeAt(0); const rects = range.getClientRects(); const marks = document.querySelectorAll(`.text-mark-item[data-page="${this.pageNum}"]`);
+                let removedTexts = new Set(); let erased = false;
+                
+                marks.forEach(mark => {
+                    const markRect = mark.getBoundingClientRect();
+                    for (let i = 0; i < rects.length; i++) {
+                        const r = rects[i];
+                        if (!(r.right < markRect.left || r.left > markRect.right || r.bottom < markRect.top || r.top > markRect.bottom)) {
+                            if (mark.dataset.text) removedTexts.add(mark.dataset.text);
+                            mark.remove(); erased = true; break;
+                        }
+                    }
+                });
+
+                if (erased) {
+                    selection.removeAllRanges(); this.savePageData(this.pageNum);
+                    if (this.underlines[this.pageNum]) {
+                        removedTexts.forEach(text => { this.underlines[this.pageNum] = this.underlines[this.pageNum].filter(item => item !== text); });
+                        this.saveDocData();
+                    }
+                    this.showToast("선택 영역 마킹 삭제 및 요약 제외 완료");
+                } else { this.showToast("지울 마킹(DOM) 영역이 교차하지 않습니다."); }
+            } else { this.showToast("지울 마킹 텍스트를 드래그하여 선택해주세요."); }
+            return;
         }
+
+        if (e.altKey && (e.key.toLowerCase() === 'c' || e.code === 'KeyC')) { e.preventDefault(); this.clearPage(); return; }
+        if (e.ctrlKey && (e.key.toLowerCase() === 'm' || e.code === 'KeyM')) { e.preventDefault(); this.toggleImmersionMode(); return; }
+        if (e.ctrlKey && (e.key.toLowerCase() === 'h' || e.code === 'KeyH')) { e.preventDefault(); this.toggleFullScreen(); return; }
+        
+        if (e.target.tagName.toLowerCase() === 'input' || e.target.tagName.toLowerCase() === 'textarea') { if (e.key === 'Escape') { e.preventDefault(); e.target.blur(); this.commitText(); } return; }
         
         const scrollAmount = 250; 
         if (e.key === 'AudioVolumeUp' || e.key === 'VolumeUp' || e.key === 'ArrowUp') { e.preventDefault(); document.querySelector('main').scrollBy({ top: -scrollAmount, behavior: 'smooth' }); return; }
         if (e.key === 'AudioVolumeDown' || e.key === 'VolumeDown' || e.key === 'ArrowDown') { e.preventDefault(); document.querySelector('main').scrollBy({ top: scrollAmount, behavior: 'smooth' }); return; }
 
-        if (e.key === 'Escape' || e.key.toLowerCase() === 'v' || e.code === 'KeyV') { 
-            if (e.key !== 'Escape') e.preventDefault(); 
-            this.setTool('cursor'); 
-            return; 
-        }
+        if (e.key === 'Escape' || e.key.toLowerCase() === 'v' || e.code === 'KeyV') { if (e.key !== 'Escape') e.preventDefault(); this.setTool('cursor'); return; }
 
-        if (e.ctrlKey && (e.code === 'Equal' || e.code === 'NumpadAdd' || e.key === '+' || e.key === '=')) { 
-            e.preventDefault(); 
-            this.zoomIn(); 
-            return; 
-        }
-        if (e.ctrlKey && (e.code === 'Minus' || e.code === 'NumpadSubtract' || e.key === '-' || e.key === '_')) { 
-            e.preventDefault(); 
-            this.zoomOut(); 
-            return; 
-        }
-        if (e.ctrlKey && (e.code === 'Digit0' || e.code === 'Numpad0' || e.key === '0')) { 
-            e.preventDefault(); 
-            if(this.pdfDoc) {
-                this.scale = 1.0; 
-                this.renderPage(this.pageNum); 
-                this.showToast("Zoom: 100% (원본 크기)");
-            }
-            return; 
-        }
+        if (e.ctrlKey && (e.code === 'Equal' || e.code === 'NumpadAdd' || e.key === '+' || e.key === '=')) { e.preventDefault(); this.zoomIn(); return; }
+        if (e.ctrlKey && (e.code === 'Minus' || e.code === 'NumpadSubtract' || e.key === '-' || e.key === '_')) { e.preventDefault(); this.zoomOut(); return; }
+        if (e.ctrlKey && (e.code === 'Digit0' || e.code === 'Numpad0' || e.key === '0')) { e.preventDefault(); if(this.pdfDoc) { this.scale = 1.0; this.renderPage(this.pageNum); this.showToast("Zoom: 100% (원본 크기)"); } return; }
 
         if (e.ctrlKey && e.key >= '1' && e.key <= '7') {
             e.preventDefault(); 
             const colors = { '1': {c: 'rgba(253, 186, 116, 0.6)', n: '연한 주황색'}, '2': {c: 'rgba(147, 197, 253, 0.6)', n: '연한 파란색'}, '3': {c: 'rgba(253, 224, 71, 0.6)', n: '연한 노란색'}, '4': {c: 'rgba(134, 239, 172, 0.6)', n: '연한 녹색'}, '5': {c: 'rgba(249, 168, 212, 0.6)', n: '연한 분홍색'}, '6': {c: 'rgba(214, 163, 108, 0.6)', n: '연한 갈색'}, '7': {c: 'rgba(203, 213, 225, 0.6)', n: '연한 회색'} };
             this.setHighlightColor(colors[e.key].c, colors[e.key].n); return;
-        }
-
-        if (e.altKey && e.key === '1') {
-            e.preventDefault();
-            const selection = window.getSelection();
-            
-            if (selection.rangeCount > 0 && !selection.isCollapsed) {
-                const range = selection.getRangeAt(0);
-                const rects = range.getClientRects();
-                const canvasRect = this.canvas.getBoundingClientRect();
-                const outputScale = this.getOutputScale();
-                
-                let highlighted = false;
-                let mergedLines = []; 
-                
-                for (let i = 0; i < rects.length; i++) {
-                    const rect = rects[i];
-                    if (rect.right > canvasRect.left && rect.left < canvasRect.right &&
-                        rect.bottom > canvasRect.top && rect.top < canvasRect.bottom) {
-                        
-                        let isMerged = false;
-                        for (let j = 0; j < mergedLines.length; j++) {
-                            let line = mergedLines[j];
-                            if (Math.abs(line.top - rect.top) < 10) {
-                                line.left = Math.min(line.left, rect.left);
-                                line.right = Math.max(line.right, rect.right);
-                                line.bottom = Math.max(line.bottom, rect.bottom);
-                                line.top = Math.min(line.top, rect.top);
-                                isMerged = true;
-                                break;
-                            }
-                        }
-                        
-                        if (!isMerged) {
-                            mergedLines.push({
-                                left: rect.left,
-                                right: rect.right,
-                                top: rect.top,
-                                bottom: rect.bottom
-                            });
-                        }
-                    }
-                }
-                
-                if (mergedLines.length > 0) {
-                    const firstLine = mergedLines[0];
-                    const checkX = Math.floor(((firstLine.left + firstLine.right) / 2 - canvasRect.left) * outputScale);
-                    const checkY = Math.floor(((firstLine.top + firstLine.bottom) / 2 - canvasRect.top) * outputScale);
-                    
-                    let isEraseMode = false;
-                    try {
-                        const pixel = this.drawCtx.getImageData(checkX, checkY, 1, 1).data;
-                        if (pixel[3] > 0) {
-                            isEraseMode = true;
-                        }
-                    } catch (err) {
-                        console.warn("픽셀 데이터를 읽을 수 없습니다.", err);
-                    }
-
-                    if (isEraseMode) {
-                        this.drawCtx.globalCompositeOperation = 'destination-out';
-                        this.drawCtx.fillStyle = 'rgba(0,0,0,1)';
-                    } else {
-                        this.drawCtx.globalCompositeOperation = 'multiply';
-                        this.drawCtx.fillStyle = this.currentHighlightColor;
-                    }
-
-                    for (let i = 0; i < mergedLines.length; i++) {
-                        const line = mergedLines[i];
-                        const x = (line.left - canvasRect.left) * outputScale;
-                        const y = (line.top - canvasRect.top) * outputScale;
-                        const w = (line.right - line.left) * outputScale;
-                        const h = (line.bottom - line.top) * outputScale;
-                        
-                        this.drawCtx.fillRect(x, y, w, h);
-                        highlighted = true;
-                    }
-                }
-                
-                if (highlighted) {
-                    selection.removeAllRanges(); 
-                    this.savePageData(this.pageNum);
-                    this.showToast(this.drawCtx.globalCompositeOperation === 'destination-out' ? "하이라이트 해제 완료" : "선택 텍스트 하이라이트 완료");
-                }
-            } else {
-                this.showToast("하이라이트할 텍스트를 먼저 선택해주세요.");
-            }
-            return;
         }
 
         if (!this.pdfDoc) return;
@@ -1501,23 +1644,21 @@ const app = {
         if (e.key === '4') { e.preventDefault(); this.setTool('text'); }
         if (e.key === '9') { e.preventDefault(); this.setTool('strikethrough'); }
         if (e.key === '0' && !e.ctrlKey && !e.altKey && !e.shiftKey) { e.preventDefault(); this.setTool('keyword'); }
-        if (e.code === 'Digit5') { e.preventDefault(); if (e.shiftKey) this.applyLastSticker('sticker-important'); else this.setTool('sticker-important'); }
-        if (e.code === 'Digit6') { e.preventDefault(); if (e.shiftKey) this.applyLastSticker('sticker-memorize'); else this.setTool('sticker-memorize'); }
+        if (e.code === 'Digit5') { 
+            e.preventDefault(); const now = Date.now();
+            if (now - this.lastKey5Time < 300) { this.applyLastSticker('sticker-important'); this.lastKey5Time = 0; } 
+            else { this.setTool('sticker-important'); this.lastKey5Time = now; }
+        }
+        if (e.code === 'Digit6') { 
+            e.preventDefault(); const now = Date.now();
+            if (now - this.lastKey6Time < 300) { this.applyLastSticker('sticker-memorize'); this.lastKey6Time = 0; } 
+            else { this.setTool('sticker-memorize'); this.lastKey6Time = now; }
+        }
         
         if (e.code === 'Digit7' || e.key === '7') {
-            e.preventDefault(); 
-            const sidebar = document.getElementById('sidebar');
-            const isFullScreen = document.fullscreenElement != null || document.body.classList.contains('immersion-mode');
-            
-            if (isFullScreen) {
-                sidebar.classList.toggle('fullscreen-overlay');
-                if (sidebar.classList.contains('fullscreen-overlay')) {
-                    setTimeout(() => document.getElementById('outline-textarea').focus(), 50);
-                }
-            } else {
-                if (sidebar.classList.contains('hidden')) this.toggleSidebar();
-                setTimeout(() => document.getElementById('outline-textarea').focus(), 50);
-            }
+            e.preventDefault(); const sidebar = document.getElementById('sidebar'); const isFullScreen = document.fullscreenElement != null || document.body.classList.contains('immersion-mode');
+            if (isFullScreen) { sidebar.classList.toggle('fullscreen-overlay'); if (sidebar.classList.contains('fullscreen-overlay')) setTimeout(() => document.getElementById('outline-textarea').focus(), 50); } 
+            else { if (sidebar.classList.contains('hidden')) this.toggleSidebar(); setTimeout(() => document.getElementById('outline-textarea').focus(), 50); }
         }
         if (e.code === 'Digit8' || e.key === '8') { e.preventDefault(); this.clearPage(); }
         if (e.key.toLowerCase() === 'l') { e.preventDefault(); this.setTool('laser'); }
@@ -1529,20 +1670,13 @@ const app = {
     }
 };
 
-// 🔥 프리젠터에서 복사(Ctrl+C) 시 아이디어 블록 클립보드로 자동 전송
 document.addEventListener('copy', (e) => {
     const selection = window.getSelection();
     if (!selection.isCollapsed) {
         let copiedText = selection.toString().replace(/\s+/g, ' ').trim(); 
         if (copiedText) {
             let clipItems = JSON.parse(localStorage.getItem('idea_clip_items')) || ["핵심 키워드 도출", "원인 분석", "결과 피드백"];
-            if (!clipItems.includes(copiedText)) {
-                clipItems.push(copiedText);
-                localStorage.setItem('idea_clip_items', JSON.stringify(clipItems));
-                // app.showToast("아이디어 블록에 텍스트가 전송되었습니다! 🚀");
-            } else {
-                // app.showToast("복사 완료 (이미 아이디어 블록에 있습니다)");
-            }
+            if (!clipItems.includes(copiedText)) { clipItems.push(copiedText); localStorage.setItem('idea_clip_items', JSON.stringify(clipItems)); } 
         }
     }
 });
