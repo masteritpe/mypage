@@ -2722,7 +2722,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
   };
 
-  // === 언더라인 리스트업 및 출력 ===
+// === 언더라인 리스트업 및 출력 ===
   window.openListupModal = function() {
       const list = getFilteredSortedList();
       const container = $("listup-content");
@@ -2736,11 +2736,23 @@ document.addEventListener("DOMContentLoaded", async () => {
           const underlines = tempDiv.querySelectorAll('u, span[style*="underline"]');
           if (underlines.length > 0) {
               count++;
-              const answers = Array.from(underlines).map(el => el.textContent).filter(text => text.trim() !== "");
+              
+              // [수정된 부분] 문제의 언더라인 대신, 핵심 해법(keypoint)에서 언더라인 추출
+              const kpDiv = document.createElement('div');
+              kpDiv.innerHTML = t.keypoint || "";
+              const kpUnderlines = kpDiv.querySelectorAll('u, span[style*="underline"]');
+              
+              let answers = [];
+              if (kpUnderlines.length > 0) {
+                  answers = Array.from(kpUnderlines).map(el => el.textContent.trim()).filter(text => text !== "");
+              } else {
+                  // 핵심 해법에 언더라인이 없을 경우 전체 텍스트 표출 (폴백)
+                  const kpText = kpDiv.textContent.trim();
+                  answers = [kpText ? kpText : "등록된 핵심 해법이 없습니다."];
+              }
               
               const itemDiv = document.createElement('div');
               itemDiv.className = 'listup-item';
-              // 하단 여백 및 테두리 조정 (가독성 개선)
               itemDiv.style.marginBottom = '24px';
               itemDiv.style.paddingBottom = '16px';
               itemDiv.style.borderBottom = '1px solid #e5e7eb';
@@ -2748,20 +2760,20 @@ document.addEventListener("DOMContentLoaded", async () => {
               const qDiv = document.createElement('div');
               qDiv.className = 'listup-q';
               qDiv.style.marginBottom = '12px';
-              // 글자 색상 약간 진하게
               qDiv.style.color = '#1f2937'; 
               qDiv.innerHTML = `<span style="color:var(--accent); font-weight:bold; margin-right:8px; font-size:16px;">[${t.chapter || '-'}-${t.number || '0'}]</span> ${t.question}`;
               
               const aDiv = document.createElement('div');
               aDiv.className = 'listup-a';
-              // 답안 영역 디자인 개선: 연한 노란색 배경에 주황색 텍스트
               aDiv.style.backgroundColor = '#fffbeb';
               aDiv.style.borderLeft = '4px solid #f59e0b';
               aDiv.style.padding = '10px 14px';
               aDiv.style.borderRadius = '0 6px 6px 0';
               aDiv.style.color = '#d97706';
               aDiv.style.fontWeight = 'bold';
-              aDiv.innerHTML = `<span style="color:#92400e; margin-right:8px; font-size:13px;">답:</span> ${answers.join(', ')}`;
+              
+              // 텍스트 라벨을 '답:' 에서 '핵심 해법:' 으로 변경
+              aDiv.innerHTML = `<span style="color:#92400e; margin-right:8px; font-size:13px;">핵심 해법:</span> ${answers.join(', ')}`;
               
               itemDiv.appendChild(qDiv);
               itemDiv.appendChild(aDiv);
@@ -2834,21 +2846,21 @@ document.addEventListener("DOMContentLoaded", async () => {
               const uls = block.querySelectorAll('u, span[style*="underline"]');
               if(uls.length > 0) {
                   // 동일 문단(보기 등) 내의 밑줄 친 텍스트들은 공백으로 이어붙임
-                  const text = Array.from(uls).map(u => u.textContent.trim()).filter(Boolean).join(' ');
+                  const text = Array.from(uls).map(u => u.textContent.trim()).filter(Boolean).join(' / ');
                   if(text) results.push(text);
               }
           });
       } else {
           const uls = div.querySelectorAll('u, span[style*="underline"]');
           if(uls.length > 0) {
-              const text = Array.from(uls).map(u => u.textContent.trim()).filter(Boolean).join(' ');
+              const text = Array.from(uls).map(u => u.textContent.trim()).filter(Boolean).join(' / ');
               if(text) results.push(text);
           }
       }
       return results;
   }
 
-  // === 요약 리스트 및 출력 (가시성 및 추출방식 변경) ===
+// === 요약 리스트 및 출력 (각 에디터의 언더라인만 엄격하게 추출) ===
   window.openSummaryModal = function() {
       const list = getFilteredSortedList();
       const container = $("summary-content");
@@ -2856,12 +2868,17 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       let count = 0;
       list.forEach(t => {
-          // 문제 에디터에서 밑줄 내용 추출
+          // 1. 문제 (Question) 에디터에서 언더라인만 추출
           const qLines = getUnderlinedTextArray(t.question);
-          // 해설/참조 에디터에서 밑줄 내용 추출
-          const sLines = getUnderlinedTextArray((t.solution || "") + " " + (t.keypoint || ""));
+          
+          // 2. 답 (Solution) 에디터에서 언더라인만 추출
+          const sLines = getUnderlinedTextArray(t.solution);
 
-          if (qLines.length > 0 || sLines.length > 0) {
+          // 3. 핵심 해법 (Key Point) 에디터에서 언더라인만 추출
+          const kLines = getUnderlinedTextArray(t.keypoint);
+
+          // 셋 중 하나라도 언더라인 친 내용이 있으면 렌더링
+          if (qLines.length > 0 || sLines.length > 0 || kLines.length > 0) {
               count++;
 
               const itemDiv = document.createElement('div');
@@ -2881,6 +2898,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                   </div>
               `;
 
+              // [문제] 블록 (언더라인 친 내용만)
               if (qLines.length > 0) {
                   html += `
                       <div style="margin-bottom: 12px; background: #fef2f2; border-left: 5px solid #ef4444; padding: 12px; border-radius: 0 6px 6px 0;">
@@ -2892,12 +2910,25 @@ document.addEventListener("DOMContentLoaded", async () => {
                   `;
               }
 
+              // [답] 블록 (언더라인 친 내용만)
               if (sLines.length > 0) {
                   html += `
-                      <div style="background: #f0fdf4; border-left: 5px solid #10b981; padding: 12px; border-radius: 0 6px 6px 0;">
+                      <div style="margin-bottom: 12px; background: #f0fdf4; border-left: 5px solid #10b981; padding: 12px; border-radius: 0 6px 6px 0;">
                           <div style="color: #047857; font-weight: 900; margin-bottom: 6px; font-size: 13px;">[답]</div>
                           <div style="color: #1f2937; font-size: 16px; font-weight: 700; line-height: 1.6;">
                               ${sLines.map(line => `<div style="margin-bottom:4px;">• ${line}</div>`).join('')}
+                          </div>
+                      </div>
+                  `;
+              }
+
+              // [핵심 해법] 블록 (언더라인 친 내용만)
+              if (kLines.length > 0) {
+                  html += `
+                      <div style="background: #fffbeb; border-left: 5px solid #f59e0b; padding: 12px; border-radius: 0 6px 6px 0;">
+                          <div style="color: #b45309; font-weight: 900; margin-bottom: 6px; font-size: 13px;">[핵심 해법]</div>
+                          <div style="color: #1f2937; font-size: 16px; font-weight: 700; line-height: 1.6;">
+                              ${kLines.map(line => `<div style="margin-bottom:4px;">• ${line}</div>`).join('')}
                           </div>
                       </div>
                   `;
@@ -2914,7 +2945,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       $("summary-modal").style.display = 'flex';
   };
-
+  
   window.printSummary = function() {
       const content = $("summary-content").innerHTML;
       if(content.includes('언더라인(<u>)이 포함된 문제가 없습니다.')) {
