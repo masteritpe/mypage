@@ -412,6 +412,8 @@
     .icons-failed i.ph-folder-open::before { content: "📂" !important; }
     .icons-failed i.ph-eye::before { content: "👁️" !important; }
     .icons-failed i.ph-browsers::before { content: "🌐" !important; }
+    .icons-failed i.ph-magic-wand::before { content: "🪄" !important; }
+    .icons-failed i.ph-squares-four::before { content: "🎛️" !important; }
 
     /* PDF 출력용 스타일 */
     @media print {
@@ -600,23 +602,31 @@
       <div class="top-bar">
         <input type="text" id="docTitle" class="title-input" placeholder="제목을 입력하세요" spellcheck="false">
         <div class="actions">
-          <button class="btn btn-outline" onclick="openTopicListModal()" title="현재 문서의 전체 문항 리스트 보기"><i class="ph ph-list-dashes"></i></button>
-          <button class="btn btn-outline" onclick="openSettings()" title="환경설정"><i class="ph ph-gear"></i></button>
-          <button class="btn btn-outline" onclick="openR5Modal()" title="5R (중요도) 관리"><i class="ph ph-tag"></i></button>
+          <button class="btn btn-outline" id="btn-topic-list" onclick="openTopicListModal()" title="현재 문서의 전체 문항 리스트 보기"><i class="ph ph-list-dashes"></i></button>
+          <button class="btn btn-outline" id="btn-settings" onclick="openSettings()" title="환경설정"><i class="ph ph-gear"></i></button>
+          <button class="btn btn-outline" id="btn-r5" onclick="openR5Modal()" title="5R (중요도) 관리"><i class="ph ph-tag"></i></button>
+          
           <div class="divider"></div>
           <input type="file" id="importInput" accept=".json" style="display: none;" onchange="importJSON(event)">
-          <button class="btn btn-outline" onclick="document.getElementById('importInput').click()"><i class="ph ph-upload-simple"></i> 복원</button>
-          <button class="btn btn-outline" onclick="exportJSON()"><i class="ph ph-download-simple"></i> 백업</button>
+          <button class="btn btn-outline" id="btn-import" onclick="document.getElementById('importInput').click()"><i class="ph ph-upload-simple"></i> 복원</button>
+          <button class="btn btn-outline" id="btn-export" onclick="exportJSON()"><i class="ph ph-download-simple"></i> 백업</button>
           <div class="divider"></div>
-          <button class="btn btn-primary" onclick="saveCurrentNote()"><i class="ph ph-floppy-disk"></i> 저장</button>
+          <button class="btn btn-primary" id="btn-save" onclick="saveCurrentNote()"><i class="ph ph-floppy-disk"></i> 저장</button>
           <input type="file" id="bulkInput" accept=".json" style="display: none;" onchange="importBulkJSON(event)">
-          <button class="btn btn-outline" onclick="document.getElementById('bulkInput').click()"><i class="ph ph-files"></i> Bulk</button>
-          <button class="btn btn-outline" onclick="prepareAndPrint()"><i class="ph ph-printer"></i> PDF</button>
+          <button class="btn btn-outline" id="btn-bulk" onclick="document.getElementById('bulkInput').click()"><i class="ph ph-files"></i> Bulk</button>
           
-          <button class="btn btn-outline" onclick="executeExport('anki')" title="Anki txt 추출 (시즌 기준)"><i class="ph ph-cards"></i> Anki</button>
-          <button class="btn btn-outline" onclick="executeExport('brainscape')" title="Brainscape csv 추출 (시즌 기준)"><i class="ph ph-file-csv"></i> Brainscape</button>
+          <!-- 요약 버튼 (PDF 왼쪽) -->
+          <button class="btn btn-outline" id="btn-summary" onclick="openSummaryModal()" title="핵심 요약" style="color: #4338ca; border-color: #c7d2fe; background: #eef2ff;"><i class="ph ph-magic-wand"></i></button>
           
-          <button class="btn btn-outline" onclick="deleteCurrentNote()" style="color: #DC2626; border-color: #FCA5A5;"><i class="ph ph-trash"></i></button>
+          <button class="btn btn-outline" id="btn-pdf" onclick="prepareAndPrint()"><i class="ph ph-printer"></i> PDF</button>
+          
+          <button class="btn btn-outline" id="btn-anki" onclick="executeExport('anki')" title="Anki txt 추출 (시즌 기준)"><i class="ph ph-cards"></i> Anki</button>
+          <button class="btn btn-outline" id="btn-brainscape" onclick="executeExport('brainscape')" title="Brainscape csv 추출 (시즌 기준)"><i class="ph ph-file-csv"></i> Brainscape</button>
+          
+          <!-- 툴바 설정 버튼 (삭제 왼쪽) -->
+          <button class="btn btn-outline" id="btn-toolbar-settings" onclick="openToolbarSettings()" title="툴바 버튼 설정"><i class="ph ph-squares-four"></i></button>
+          
+          <button class="btn btn-outline" id="btn-delete" onclick="deleteCurrentNote()" style="color: #DC2626; border-color: #FCA5A5;"><i class="ph ph-trash"></i></button>
         </div>
       </div>
 
@@ -663,6 +673,47 @@
             </div>
           </div>
           <div id="r5ModalListContainer" style="flex: 1; overflow-y: auto; padding: 16px 24px; background: var(--bg-body);">
+          </div>
+        </div>
+      </div>
+
+      <!-- 핵심 요약 모달 -->
+      <div id="summaryModal" class="modal-overlay" onclick="if(event.target===this) closeSummaryModal()">
+        <div class="modal-content" style="width: 800px; max-width: 90%; max-height: 85vh; display: flex; flex-direction: column; padding: 0;">
+          <div class="modal-header" style="padding: 20px 24px; margin-bottom: 0;">
+            <div class="modal-title"><i class="ph ph-magic-wand" style="font-size: 20px; color: #4338ca;"></i> 핵심 요약 (강조/두음 추출)</div>
+            <button class="btn" style="padding: 4px; border: none; background: transparent;" onclick="closeSummaryModal()"><i class="ph ph-x" style="font-size: 18px;"></i></button>
+          </div>
+          <div style="padding: 16px 24px; border-bottom: 1px solid var(--border-base); background: var(--bg-body); display: flex; gap: 8px; align-items: center;">
+            <select id="summaryNoteSelect" class="search-box" style="width: 200px; background: var(--bg-surface);" onchange="renderSummaryContent()">
+              <option value="current">현재 문서</option>
+              <option value="all">전체 (시즌 필터 적용)</option>
+            </select>
+            <div style="flex: 1;"></div>
+            <button class="btn btn-outline" onclick="copySummaryToClipboard()" style="background: var(--bg-surface);"><i class="ph ph-copy"></i> 복사</button>
+            <button class="btn btn-outline" onclick="printSummary()" style="background: var(--bg-surface);"><i class="ph ph-printer"></i> 출력</button>
+          </div>
+          <div id="summaryContent" style="flex: 1; overflow-y: auto; padding: 24px; background: #fff; line-height: 1.6; font-size: 14px;">
+            <!-- 요약 내용 -->
+          </div>
+        </div>
+      </div>
+
+      <!-- 툴바 설정 모달 (새로 추가) -->
+      <div id="toolbarSettingsModal" class="modal-overlay" onclick="if(event.target===this) closeToolbarSettings()">
+        <div class="modal-content">
+          <div class="modal-header">
+            <div class="modal-title"><i class="ph-fill ph-squares-four"></i> 툴바 버튼 설정</div>
+            <button class="btn" style="padding: 4px; border: none; background: transparent;" onclick="closeToolbarSettings()"><i class="ph ph-x" style="font-size: 18px;"></i></button>
+          </div>
+          <div style="margin-bottom: 24px;">
+            <div id="toolbar-settings-list" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 13px;">
+              <!-- JS에서 동적 렌더링 -->
+            </div>
+            <div style="margin-top:12px; color:var(--text-muted); font-size:12px;">체크한 기능만 상단 바에 표시됩니다. (설정 자동 저장)</div>
+          </div>
+          <div style="display: flex; justify-content: flex-end; gap: 8px;">
+            <button class="btn btn-outline" onclick="closeToolbarSettings()">닫기</button>
           </div>
         </div>
       </div>
@@ -908,7 +959,8 @@
 
     async function initAppCore() {
       await initDB(); 
-      
+      setupToolbarSettings(); // 툴바 환경설정 적용
+
       const urlParams = new URLSearchParams(window.location.search);
       const uid = urlParams.get('uid');
 
@@ -1596,6 +1648,8 @@
         closeImageViewer(); 
         closeTopicListModal();
         closeR5Modal(); 
+        closeToolbarSettings();
+        closeSummaryModal();
         let isImageEditing = false;
         document.querySelectorAll('.ql-container').forEach(container => {
           const overlays = Array.from(container.children).filter(el => !el.classList.length);
@@ -2877,6 +2931,200 @@
         }
       };
     }
+    
+    // ==========================================
+    // 1. 환경설정 - 툴바 버튼 커스텀 로직
+    // ==========================================
+    const toolbarButtonsConfig = [
+        { id: 'btn-topic-list', name: '전체 문항 리스트' },
+        { id: 'btn-settings', name: '환경설정' },
+        { id: 'btn-r5', name: '5R 관리' },
+        { id: 'btn-import', name: '복원(Import)' },
+        { id: 'btn-export', name: '백업(Export)' },
+        { id: 'btn-save', name: '저장(Save)' },
+        { id: 'btn-bulk', name: 'Bulk 입력' },
+        { id: 'btn-summary', name: '핵심 요약' },
+        { id: 'btn-pdf', name: 'PDF 출력' },
+        { id: 'btn-anki', name: 'Anki 추출' },
+        { id: 'btn-brainscape', name: 'Brainscape 추출' },
+        { id: 'btn-toolbar-settings', name: '툴바 설정' },
+        { id: 'btn-delete', name: '문서 삭제' }
+    ];
+
+    function setupToolbarSettings() {
+        const defaultState = toolbarButtonsConfig.reduce((acc, curr) => { acc[curr.id] = true; return acc; }, {});
+        const savedState = JSON.parse(localStorage.getItem('keynote_toolbar_settings')) || defaultState;
+        
+        const listEl = document.getElementById('toolbar-settings-list');
+        if(listEl) listEl.innerHTML = '';
+        
+        toolbarButtonsConfig.forEach(btnInfo => {
+            const isVisible = savedState[btnInfo.id] !== false;
+            const el = document.getElementById(btnInfo.id);
+            if (el) el.style.display = isVisible ? '' : 'none';
+            
+            if (listEl) {
+                const lbl = document.createElement('label');
+                lbl.style.cssText = 'display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--text-main);';
+                const chk = document.createElement('input');
+                chk.type = 'checkbox';
+                chk.checked = isVisible;
+                
+                chk.onchange = (e) => {
+                    const checked = e.target.checked;
+                    savedState[btnInfo.id] = checked;
+                    localStorage.setItem('keynote_toolbar_settings', JSON.stringify(savedState));
+                    if (el) el.style.display = checked ? '' : 'none';
+                };
+                
+                lbl.appendChild(chk);
+                lbl.appendChild(document.createTextNode(btnInfo.name));
+                listEl.appendChild(lbl);
+            }
+        });
+    }
+
+    function openToolbarSettings() { document.getElementById('toolbarSettingsModal').style.display = 'flex'; }
+    function closeToolbarSettings() { document.getElementById('toolbarSettingsModal').style.display = 'none'; }
+
+    // ==========================================
+    // 2. 핵심 요약 - 추출 및 UI 로직
+    // ==========================================
+    function openSummaryModal() {
+        document.getElementById('summaryModal').style.display = 'flex';
+        renderSummaryContent();
+    }
+
+    function closeSummaryModal() {
+        document.getElementById('summaryModal').style.display = 'none';
+    }
+
+    function extractHighlightsFromKeynote(html) {
+        if (!html) return '';
+        const temp = document.createElement('div');
+        temp.innerHTML = html;
+        
+        let highlights = [];
+        
+        // 볼드체 강조 추출
+        temp.querySelectorAll('strong, b').forEach(el => {
+            if(el.textContent.trim()) highlights.push(el.textContent.trim());
+        });
+
+        // 컬러/배경색 형광펜 및 두음 추출
+        temp.querySelectorAll('span').forEach(el => {
+            const bg = (el.style.backgroundColor || el.style.background || '').toLowerCase();
+            const color = (el.style.color || '').toLowerCase();
+            
+            const isBgHighlight = bg && bg !== 'transparent' && bg !== 'rgba(0, 0, 0, 0)';
+            const isColorHighlight = color && color !== 'rgb(32, 33, 36)' && color !== '#202124' && color !== 'inherit';
+            
+            if (isBgHighlight || isColorHighlight) {
+                if(el.textContent.trim()) highlights.push(el.textContent.trim());
+            }
+        });
+
+        // 중복 제거 후 반환
+        return Array.from(new Set(highlights)).join(' / ');
+    }
+
+    function renderSummaryContent() {
+        const container = document.getElementById('summaryContent');
+        const mode = document.getElementById('summaryNoteSelect').value;
+        container.innerHTML = '<div style="text-align:center; padding: 40px; color: var(--text-muted);">요약 추출 중...</div>';
+        
+        deactivateCurrentEditor();
+
+        const renderData = (notes) => {
+            let html = '';
+            notes.forEach(note => {
+                let noteHtml = '';
+                if (note.items && note.items.length > 0) {
+                    note.items.forEach((item, index) => {
+                        const probHl = extractHighlightsFromKeynote(item.problem);
+                        const leadHl = extractHighlightsFromKeynote(item.lead);
+                        const concHl = extractHighlightsFromKeynote(item.concept);
+                        const solHl = extractHighlightsFromKeynote(item.solution);
+                        
+                        if (probHl || leadHl || concHl || solHl) {
+                            const title = (item.problem || '').replace(/<[^>]+>/g, '').trim() || '(문제 제목 없음)';
+                            noteHtml += `<div style="margin-bottom: 16px;">`;
+                            noteHtml += `<h4 style="margin: 0 0 8px 0; color: #111827; font-size: 15px;">Q${index + 1}. ${title}</h4>`;
+                            noteHtml += `<ul style="margin: 0; padding-left: 20px; color: #374151; font-size: 14px;">`;
+                            if (probHl) noteHtml += `<li><b>[문제]</b> ${probHl}</li>`;
+                            if (leadHl) noteHtml += `<li><b>[리드]</b> ${leadHl}</li>`;
+                            if (concHl) noteHtml += `<li><b>[개념]</b> ${concHl}</li>`;
+                            if (solHl) noteHtml += `<li><b>[풀이]</b> ${solHl}</li>`;
+                            noteHtml += `</ul></div>`;
+                        }
+                    });
+                }
+                if (noteHtml) {
+                    html += `<h3 style="color: var(--primary); border-bottom: 2px solid var(--border-base); padding-bottom: 6px; margin-top: 24px; margin-bottom: 16px;"><i class="ph-fill ph-folder-open" style="color: #3B82F6;"></i> ${note.title || '제목 없음 키노트'}</h3>`;
+                    html += noteHtml;
+                }
+            });
+            
+            if (!html) {
+                container.innerHTML = '<div style="text-align:center; padding: 40px; color: var(--text-muted);">현재 문서에 강조 표시(형광펜, 볼드, 색상 등)가 적용된 내용이 없습니다.</div>';
+            } else {
+                container.innerHTML = html;
+            }
+        };
+
+        if (mode === 'current') {
+            const currentNote = { title: document.getElementById('docTitle').value, items: currentNoteData.items };
+            renderData([currentNote]);
+        } else {
+            const transaction = db.transaction(['notes'], 'readonly');
+            const request = transaction.objectStore('notes').openCursor();
+            let allNotes = [];
+            request.onsuccess = (e) => {
+                const cursor = e.target.result;
+                if (cursor) {
+                    const note = cursor.value;
+                    if (matchesSeasonFilter(note.title)) allNotes.push(note);
+                    cursor.continue();
+                } else {
+                    allNotes.sort((a, b) => a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' }));
+                    renderData(allNotes);
+                }
+            };
+        }
+    }
+
+    function copySummaryToClipboard() {
+        const content = document.getElementById('summaryContent').innerText;
+        if(!content.trim() || content.includes('추출된 강조 표시')) return showToast('복사할 내용이 없습니다.', 'ph-warning-circle');
+        navigator.clipboard.writeText(content).then(() => showToast('요약 내용이 복사되었습니다.', 'ph-copy'));
+    }
+
+    function printSummary() {
+        const content = document.getElementById('summaryContent').innerHTML;
+        if(!content.trim() || content.includes('추출된 강조 표시') || content.includes('내용이 없습니다')) return showToast('출력할 내용이 없습니다.', 'ph-warning-circle');
+        
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(`
+            <html>
+            <head>
+                <title>핵심 요약 출력</title>
+                <style>
+                    body { font-family: 'Pretendard', sans-serif; padding: 20px; color: #111827; line-height: 1.6; }
+                    h3 { color: #111827; border-bottom: 2px solid #E5E7EB; padding-bottom: 6px; margin-top: 24px; margin-bottom: 16px; }
+                    h4 { margin: 0 0 8px 0; color: #111827; font-size: 15px; }
+                    ul { margin: 0; padding-left: 20px; color: #374151; font-size: 14px; }
+                    li { margin-bottom: 4px; }
+                    @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+                </style>
+            </head>
+            <body>${content}</body>
+            </html>
+        `);
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => { printWindow.print(); printWindow.close(); }, 250);
+    }
+
 // [송신 페이지] 실시간 클립보드 동기화 스크립트
 document.addEventListener('copy', function() {
     // 1. 사용자가 드래그한 텍스트 가져오기
