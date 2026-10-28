@@ -209,6 +209,9 @@
       </div>
       
       <div class="play-actions">
+        <!-- 재생/다운로드 진행상황 표시 텍스트 추가 -->
+        <span id="progressText" style="font-size: 13px; color: var(--text-muted); font-weight: 600; font-variant-numeric: tabular-nums; margin-right: 8px;"></span>
+        
         <button class="btn-outline btn" id="btnExport" onclick="exportWav()" style="width: 48px; height: 48px; border-radius: 50%; padding: 0;" title="고음질 WAV 파일로 다운로드(Gemini API)"><i class="ph-bold ph-download-simple" id="downloadIcon" style="font-size: 20px;"></i></button>
         <button class="btn-play-large" onclick="playTTS()"><i class="ph-fill ph-play" id="playIcon"></i></button>
         <button class="btn-outline btn" onclick="stopTTS()" style="width: 48px; height: 48px; border-radius: 50%;"><i class="ph-bold ph-stop" style="font-size: 20px;"></i></button>
@@ -230,6 +233,11 @@
     let isCustomPaused = false;
     let stopRequested = false;
 
+    // 진행상황 타이머 관리를 위한 변수
+    let progressTimer = null;
+    let isProgressPaused = false;
+    let currentElapsedMs = 0;
+
     // 기본 제공: 자기 최면 스크립트
     const defaultITScript = {
       id: 'sc_default_it_exam',
@@ -239,6 +247,62 @@
       date: new Date().toISOString()
     };
 
+    // --- 진행상황(타이머) 관리 유틸리티 ---
+    function formatTime(ms) {
+      if (isNaN(ms) || ms < 0) ms = 0;
+      const totalSec = Math.floor(ms / 1000);
+      const m = Math.floor(totalSec / 60).toString().padStart(2, '0');
+      const s = (totalSec % 60).toString().padStart(2, '0');
+      return `${m}:${s}`;
+    }
+
+    function estimateTotalTime(text, rate) {
+        const parts = text.split(/\[(\d+)초\s*휴식\]/);
+        let chars = 0;
+        let pauses = 0;
+        for (let i = 0; i < parts.length; i++) {
+            if (i % 2 === 0) {
+                chars += parts[i].replace(/\s+/g, '').length; // 공백 제외 글자수
+            } else {
+                pauses += parseInt(parts[i], 10);
+            }
+        }
+        // 한국어 평균 낭독 속도 (rate 1.0 기준 초당 약 4.5글자)
+        const textTimeSec = chars / (4.5 * rate);
+        return (textTimeSec + pauses) * 1000;
+    }
+
+    function startProgress(totalEstMs, isDownload = false) {
+      clearInterval(progressTimer);
+      currentElapsedMs = 0;
+      const el = document.getElementById('progressText');
+      
+      const updateText = () => {
+          if (isDownload) {
+              el.textContent = `${formatTime(currentElapsedMs)} / 변환 중`;
+          } else {
+              // 실제 재생시간이 예상시간을 넘더라도 시각적으로 총 시간을 연장해서 보여줌
+              const dispTotal = Math.max(currentElapsedMs, totalEstMs);
+              el.textContent = `${formatTime(currentElapsedMs)} / ${formatTime(dispTotal)}`;
+          }
+      };
+      
+      updateText();
+      
+      progressTimer = setInterval(() => {
+        if (!isProgressPaused) {
+          currentElapsedMs += 100;
+          updateText();
+        }
+      }, 100);
+    }
+
+    function stopProgress() {
+      clearInterval(progressTimer);
+      document.getElementById('progressText').textContent = '';
+    }
+    // ------------------------------------
+
     // 토스트 메시지 렌더링 함수 추가
     let toastTimeout;
     function showToast(message) {
@@ -247,7 +311,6 @@
       toast.classList.add('show');
       
       clearTimeout(toastTimeout);
-      // 1초 노출 후 숨김
       toastTimeout = setTimeout(() => {
         toast.classList.remove('show');
       }, 1000); 
@@ -274,7 +337,7 @@
       document.getElementById('restoreFile').click();
     }
 
-    // JSON 복구 로직 (있으면 업데이트, 없으면 추가)
+    // JSON 복구 로직
     async function restoreJSON(event) {
       const file = event.target.files[0];
       if (!file) return;
@@ -288,7 +351,6 @@
           const tx = db.transaction('scripts', 'readwrite');
           const store = tx.objectStore('scripts');
 
-          // put 메서드는 동일한 키(id)가 존재하면 업데이트, 없으면 새로 추가합니다.
           scripts.forEach(script => {
             store.put(script);
           });
@@ -296,7 +358,7 @@
           tx.oncomplete = () => {
             renderScriptList();
             showToast('데이터가 성공적으로 복구되었습니다.');
-            event.target.value = ''; // 입력값 초기화
+            event.target.value = ''; 
           };
 
           tx.onerror = () => { throw new Error("DB 저장 중 오류 발생"); };
@@ -309,7 +371,7 @@
       reader.readAsText(file);
     }
 
-    // IndexedDB 초기화 및 기본 스크립트 주입
+    // IndexedDB 초기화
     const initDB = () => {
       return new Promise((resolve) => {
         const request = indexedDB.open('MindScriptDB', 1);
@@ -374,11 +436,14 @@
           if (synth.speaking && !synth.paused) {
               synth.pause();
               isCustomPaused = true;
+              isProgressPaused = true;
           } else if (synth.paused) {
               synth.resume();
               isCustomPaused = false;
+              isProgressPaused = false;
           } else {
               isCustomPaused = !isCustomPaused;
+              isProgressPaused = isCustomPaused;
           }
           document.getElementById('playIcon').className = isCustomPaused || synth.paused ? 'ph-fill ph-play' : 'ph-fill ph-pause';
           return;
@@ -390,6 +455,7 @@
       stopRequested = false;
       isPlayingSeq = true;
       isCustomPaused = false;
+      isProgressPaused = false;
       document.getElementById('playIcon').className = 'ph-fill ph-pause';
 
       const voiceSelect = document.getElementById('voiceSelect');
@@ -397,6 +463,9 @@
       const voice = selectedVoiceName ? synth.getVoices().find(v => v.name === selectedVoiceName) : null;
       const rate = document.getElementById('rate').value;
       const pitch = document.getElementById('pitch').value;
+
+      // 예상 재생 시간 계산 후 타이머 렌더링 시작
+      startProgress(estimateTotalTime(text, rate), false);
 
       const parts = text.split(/\[(\d+)초\s*휴식\]/);
 
@@ -441,15 +510,19 @@
       isPlayingSeq = false;
       stopRequested = false;
       isCustomPaused = false;
+      isProgressPaused = false;
       document.getElementById('playIcon').className = 'ph-fill ph-play';
+      stopProgress();
     }
 
     function stopTTS() { 
       stopRequested = true;
       isPlayingSeq = false;
       isCustomPaused = false;
+      isProgressPaused = false;
       synth.cancel(); 
       document.getElementById('playIcon').className = 'ph-fill ph-play';
+      stopProgress();
     }
 
     async function exportWav() {
@@ -471,6 +544,9 @@
       try {
         icon.className = 'ph-bold ph-spinner ph-spin';
         btnExport.disabled = true;
+
+        // 다운로드 진행상황 타이머 시작 (총 소요 시간 예측이 불가하여 경과 시간만 표시)
+        startProgress(0, true);
 
         const parts = text.split(/\[(\d+)초\s*휴식\]/);
         let combinedPcm = new Uint8Array(0);
@@ -548,6 +624,7 @@
       } finally {
         icon.className = 'ph-bold ph-download-simple';
         btnExport.disabled = false;
+        stopProgress(); // 다운로드 타이머 종료
       }
     }
 
@@ -609,7 +686,6 @@
       currentScriptId = script.id;
       renderScriptList();
       
-      // 저장 성공 토스트 메시지
       showToast('성공적으로 저장되었습니다.');
     }
 
@@ -647,7 +723,6 @@
       renderScriptList();
       document.getElementById('scriptContent').focus();
       
-      // 신규 생성 토스트 메시지
       showToast('새 스크립트가 생성되었습니다.');
     }
 
@@ -657,7 +732,6 @@
       db.transaction('scripts', 'readwrite').objectStore('scripts').delete(currentScriptId);
       createNewScript();
       
-      // 삭제 완료 토스트 메시지
       showToast('삭제되었습니다.');
     }
 
