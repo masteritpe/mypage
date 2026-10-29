@@ -155,6 +155,18 @@
         .btn-circle.emini-btn { border-color: var(--primary); color: var(--primary); }
         .btn-circle.emini-btn:hover { background: var(--primary); color: #FFF; }
 
+        /* --- 추가: 노드 접기(숨김) 스타일 --- */
+        .node-box.minimized {
+            min-height: auto !important;
+            height: auto !important;
+            padding: 14px 24px !important;
+        }
+        .node-box.minimized .node-memo,
+        .node-box.minimized .node-tags,
+        .node-box.minimized .node-resizer {
+            display: none !important;
+        }
+
         /* 모달 및 팝오버 */
         .toast { visibility: hidden; background-color: #111827; color: #fff; text-align: center; border-radius: 12px; padding: 14px 28px; position: fixed; z-index: 10000; left: 50%; bottom: 20px; transform: translateX(-50%); font-size: 16px; font-weight: 600; opacity: 0; transition: opacity 0.3s, bottom 0.3s; box-shadow: 0 10px 25px rgba(0,0,0,0.2); display: flex; align-items: center; gap: 8px; }
         .toast.show { visibility: visible; opacity: 1; bottom: 50px; }
@@ -1237,7 +1249,7 @@
             const checkDesc = cleanHtmlContent(node.description);
             const hasDoc = (checkDesc !== '') || (node.attachments && node.attachments.length > 0);
             
-            box.className = `node-box ${hasChildren ? 'has-children' : ''} ${node.isCollapsed ? 'collapsed' : ''} ${hasDoc ? 'has-document' : ''} ${activeNodeId === node.id ? 'active-node' : ''}`;
+            box.className = `node-box ${hasChildren ? 'has-children' : ''} ${node.isCollapsed ? 'collapsed' : ''} ${hasDoc ? 'has-document' : ''} ${activeNodeId === node.id ? 'active-node' : ''} ${node.isMinimized ? 'minimized' : ''}`;
             box.dataset.id = node.id;
             
             if (node.width) {
@@ -1401,10 +1413,41 @@
             const actions = document.createElement('div'); actions.className = 'action-buttons';
             const editDocBtn = document.createElement('button'); editDocBtn.className = 'btn-circle emini-btn'; editDocBtn.innerHTML = '<i class="ph-fill ph-file-text"></i>'; editDocBtn.title = "상세 문서 편집 (Emini)";
             editDocBtn.onclick = () => openNodeEditor(node.id); actions.appendChild(editDocBtn);
+            
             const addF = document.createElement('button'); addF.className = 'btn-circle'; addF.innerHTML = '<i class="ph ph-folder-plus"></i>'; addF.title = "하위 폴더 트리 생성"; addF.onclick = () => addChildToNode(node.id, 'folder');
             const addL = document.createElement('button'); addL.className = 'btn-circle'; addL.innerHTML = '<i class="ph ph-link"></i>'; addL.title = "하위 링크 트리 생성 (Insert)"; addL.onclick = () => addChildToNode(node.id, 'link');
             actions.appendChild(addF); actions.appendChild(addL);
+            
             const addImg = document.createElement('button'); addImg.className = 'btn-circle'; addImg.innerHTML = '<i class="ph ph-image"></i>'; addImg.title = "이미지 삽입"; addImg.onclick = () => triggerImageUpload(node.id); actions.appendChild(addImg);
+            
+            // --- 1) 추가된 기능: 관계연결 삭제 버튼 ---
+            const unlinkBtn = document.createElement('button'); unlinkBtn.className = 'btn-circle'; unlinkBtn.innerHTML = '<i class="ph ph-link-break"></i>'; unlinkBtn.title = "관계 연결 초기화";
+            unlinkBtn.onclick = (e) => { 
+                e.stopPropagation();
+                const hasLinks = mapLinks.some(l => l.source === node.id || l.target === node.id);
+                if (!hasLinks) {
+                    showToast('삭제할 관계 연결이 없습니다.');
+                    return;
+                }
+                if (confirm('이 노드에 연결된 모든 관계선을 삭제하시겠습니까?')) {
+                    mapLinks = mapLinks.filter(l => l.source !== node.id && l.target !== node.id);
+                    renderAll(); autoSave();
+                    showToast('관계 연결이 초기화되었습니다.');
+                }
+            }; 
+            actions.appendChild(unlinkBtn);
+
+            // --- 2) 추가된 기능: 노드 접기(숨김) 버튼 ---
+            const minimizeBtn = document.createElement('button'); minimizeBtn.className = 'btn-circle'; 
+            minimizeBtn.innerHTML = node.isMinimized ? '<i class="ph ph-eye"></i>' : '<i class="ph ph-eye-slash"></i>'; 
+            minimizeBtn.title = "노드 숨김/펼치기 토글";
+            minimizeBtn.onclick = (e) => { 
+                e.stopPropagation(); 
+                node.isMinimized = !node.isMinimized; 
+                renderAll(); autoSave(); 
+            }; 
+            actions.appendChild(minimizeBtn);
+
             const del = document.createElement('button'); del.className = 'btn-circle'; del.innerHTML = '<i class="ph ph-trash" style="color:#EF4444"></i>'; del.title = "노드 삭제 (Delete)";
             del.onclick = () => { deleteNodeHandler(node.id); }; actions.appendChild(del);
             box.appendChild(actions);
