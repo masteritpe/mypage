@@ -825,9 +825,12 @@ body.locked-mode .status-select { pointer-events: none; appearance: none; }
             cell.contentEditable = isLocked ? "false" : "true";
         });
         
-        document.querySelectorAll('.data-table-wrapper input, .data-table-wrapper select').forEach(inp => {
+		document.querySelectorAll('.data-table-wrapper input, .data-table-wrapper select').forEach(inp => {
             inp.disabled = isLocked;
         });
+        
+        // <-- 이 부분 추가 (잠금 상태 변경 후 Pass 상태인 행 재처리)
+        document.querySelectorAll('#schedule-tbody tr').forEach(tr => applyPassStyle(tr));
     }
 
     function toggleLock() {
@@ -1548,12 +1551,27 @@ body.locked-mode .status-select { pointer-events: none; appearance: none; }
                             <tr>
             `;
 
-            for (let i = 0; i < baseColsCount; i++) {
+			for (let i = 0; i < baseColsCount; i++) {
                 pageHtml += `<th rowspan="2" style="border:1px solid #000; padding:6px; background:#f1f5f9; -webkit-print-color-adjust: exact;">${theadMain.cells[i].innerHTML}</th>`;
             }
+            
+            // ================== 수정된 부분 시작 ==================
             for (let i = cveStartIndex; i < cveEndIndex; i++) {
-                pageHtml += `<th colspan="2" style="border:1px solid #000; padding:6px; background:#f1f5f9; -webkit-print-color-adjust: exact;">${theadMain.cells[baseColsCount + i].innerText}</th>`;
+                const th = theadMain.cells[baseColsCount + i];
+                const cveDiv = th.querySelector('.cve-name');
+                const cvssSel = th.querySelector('.cvss-select');
+                
+                // CVE 이름과 선택된 CVSS 값만 추출
+                const cveText = cveDiv ? cveDiv.innerText.trim() : th.innerText.trim();
+                const cvssText = cvssSel ? cvssSel.value : 'None';
+                
+                // 출력용 포맷 지정 (CVE이름 아래에 [위험도] 표시)
+                const headerContent = cveDiv ? `${cveText}<br>[${cvssText}]` : cveText;
+                
+                pageHtml += `<th colspan="2" style="border:1px solid #000; padding:6px; background:#f1f5f9; -webkit-print-color-adjust: exact;">${headerContent}</th>`;
             }
+            // ================== 수정된 부분 끝 ==================
+            
             pageHtml += `</tr><tr>`;
             
             for (let i = cveStartIndex; i < cveEndIndex; i++) {
@@ -2390,7 +2408,11 @@ body.locked-mode .status-select { pointer-events: none; appearance: none; }
         if (e.target.closest('#contact-partner-tbody') || e.target.closest('#contact-manager-tbody')) saveContactData();
         if (e.target.closest('#request-tbody')) saveRequestData();
         if (e.target.closest('#ssr-tbody')) saveSsrData();
-        if (e.target.closest('#schedule-tbody')) saveCurrentScheduleToDB();
+		if (e.target.closest('#schedule-tbody')) {
+            saveCurrentScheduleToDB();
+            const tr = e.target.closest('tr');
+            if (tr) applyPassStyle(tr); // <-- 이 부분 추가
+        }
         if (e.target.closest('#vuln-create-table')) saveVulnCreateData(); 
         if (e.target.closest('#monthly-tbody')) saveMonthlyData(); 
     });
@@ -2690,7 +2712,7 @@ body.locked-mode .status-select { pointer-events: none; appearance: none; }
         };
     }
 
-    function updateScheduleSummary() { 
+	function updateScheduleSummary() { 
         const rows = document.getElementById('schedule-tbody').querySelectorAll('tr');
         const dataMap = {}; const datesSet = new Set();
         rows.forEach(tr => {
@@ -2698,7 +2720,8 @@ body.locked-mode .status-select { pointer-events: none; appearance: none; }
             if(tds.length >= 9) {
                 const eng = tds[4].innerText.trim(); const date = tds[5].innerText.trim();
                 const timeInput = tds[6].querySelector('input'); const time = timeInput ? timeInput.value.trim() : tds[6].innerText.trim();
-                if (date) { datesSet.add(date); if (!dataMap[date]) dataMap[date] = {}; if (!dataMap[date][time]) dataMap[date][time] = new Set(); if (eng) eng.split(',').map(e => e.trim()).forEach(e => { if(e) dataMap[date][time].add(e); }); }
+                // 수정된 부분: date가 존재하고, 대소문자 구분 없이 'pass'가 아닐 경우에만 집계
+                if (date && date.toLowerCase() !== 'pass') { datesSet.add(date); if (!dataMap[date]) dataMap[date] = {}; if (!dataMap[date][time]) dataMap[date][time] = new Set(); if (eng) eng.split(',').map(e => e.trim()).forEach(e => { if(e) dataMap[date][time].add(e); }); }
             }
         });
         const dates = Array.from(datesSet).sort(); const times = ['10시', '14시', '16시'];
@@ -2716,8 +2739,41 @@ body.locked-mode .status-select { pointer-events: none; appearance: none; }
             td.style.padding = [6,7].includes(i) ? "0" : ""; tr.appendChild(td);
         }
         const delTd = document.createElement('td'); delTd.className = 'no-print btn-edit-only'; delTd.style.textAlign = 'center'; delTd.innerHTML = `<button class="btn btn-danger" style="height:28px; padding:0 8px; font-size:13px;" onclick="this.closest('tr').remove(); updateScheduleSummary(); forceSaveAll(false);"><i class="fas fa-trash"></i></button>`; tr.appendChild(delTd);
-        document.getElementById('schedule-tbody').appendChild(tr); updateScheduleSummary(); forceSaveAll(false);
+        document.getElementById('schedule-tbody').appendChild(tr);
+		applyPassStyle(tr); // <-- 이 부분 추가        
+        updateScheduleSummary(); forceSaveAll(false);
         applyLockState();
+    }
+  
+      // 일정 항목 'Pass' 입력 시 스타일 및 시간 선택 비활성화 적용 함수
+    function applyPassStyle(tr) {
+        const tds = tr.querySelectorAll('td');
+        if (tds.length < 9) return;
+
+        const dateCell = tds[5];
+        const timeInput = tds[6].querySelector('input');
+        const isPass = dateCell.innerText.trim().toLowerCase() === 'pass';
+
+        if (isPass) {
+            tr.style.backgroundColor = '#e2e8f0'; // 라인 회색 변경
+            tds.forEach(td => {
+                if(td.classList.contains('editable-cell')) td.style.backgroundColor = 'transparent'; 
+            });
+            if (timeInput) {
+                timeInput.value = ''; // 시간 초기화 (불필요하므로)
+                timeInput.disabled = true;
+                timeInput.style.pointerEvents = 'none';
+            }
+        } else {
+            tr.style.backgroundColor = '';
+            tds.forEach(td => {
+                if(td.classList.contains('editable-cell')) td.style.backgroundColor = '';
+            });
+            if (timeInput) {
+                timeInput.disabled = isLocked; // 잠금 상태에 따름
+                timeInput.style.pointerEvents = 'auto';
+            }
+        }
     }
     
     document.getElementById('excel-upload-schedule').addEventListener('change', async function(e) {
@@ -2859,17 +2915,18 @@ body.locked-mode .status-select { pointer-events: none; appearance: none; }
             stripHTML(r.time), stripHTML(r.month), stripHTML(r.note)
         ]);
 
-        if (exportAll) {
-            const allSheets = await getAllFromDB('schedules');
-            allSheets.forEach(s => {
-                const newWs = newWb.addWorksheet(s.sheetName); const mainData = extractTableArray(s.rows);
-                const dMap = {}; const dSet = new Set();
-                mainData.forEach(r => { const eng = r[4]; const date = r[5]; const time = r[6]; if (date) { dSet.add(date); if (!dMap[date]) dMap[date] = {}; if (!dMap[date][time]) dMap[date][time] = new Set(); if (eng) eng.split(',').map(e => e.trim()).forEach(e => { if(e) dMap[date][time].add(e); }); } });
-                const dArr = Array.from(dSet).sort(); const tArr = ['10시', '14시', '16시'];
-                let sHead = ['시간']; dArr.forEach(d => sHead.push(d)); let sRows = [];
-                if (dArr.length > 0) tArr.forEach(t => { let sR = [t]; dArr.forEach(d => sR.push(dMap[d] && dMap[d][t] ? Array.from(dMap[d][t]).join(', ') : '')); sRows.push(sR); });
-                writeScheduleDataToWorksheet(newWs, mainData, { header: sHead, rows: sRows });
-            });
+		if (exportAll) {
+                const allSheets = await getAllFromDB('schedules');
+                allSheets.forEach(s => {
+                    const newWs = newWb.addWorksheet(s.sheetName); const mainData = extractTableArray(s.rows);
+                    const dMap = {}; const dSet = new Set();
+                    // 수정된 부분: date가 존재하고, 대소문자 구분 없이 'pass'가 아닐 경우에만 집계
+                    mainData.forEach(r => { const eng = r[4]; const date = r[5]; const time = r[6]; if (date && date.toLowerCase() !== 'pass') { dSet.add(date); if (!dMap[date]) dMap[date] = {}; if (!dMap[date][time]) dMap[date][time] = new Set(); if (eng) eng.split(',').map(e => e.trim()).forEach(e => { if(e) dMap[date][time].add(e); }); } });
+                    const dArr = Array.from(dSet).sort(); const tArr = ['10시', '14시', '16시'];
+                    let sHead = ['시간']; dArr.forEach(d => sHead.push(d)); let sRows = [];
+                    if (dArr.length > 0) tArr.forEach(t => { let sR = [t]; dArr.forEach(d => sR.push(dMap[d] && dMap[d][t] ? Array.from(dMap[d][t]).join(', ') : '')); sRows.push(sR); });
+                    writeScheduleDataToWorksheet(newWs, mainData, { header: sHead, rows: sRows });
+                });
         } else {
             const sName = currentEditingSheetName || '유지보수일정'; const newWs = newWb.addWorksheet(sName);
             const currentSheetData = await getFromDB('schedules', sName); const mainData = currentSheetData ? extractTableArray(currentSheetData.rows) : [];
