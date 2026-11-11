@@ -403,7 +403,7 @@ body.locked-mode .status-select { pointer-events: none; appearance: none; }
             </div>
         </div>
 
-        <!-- 3. 취약점 분석 탭 (구 취약점 조사) -->
+        <!-- 3. 취약점 분석 탭 -->
         <div id="tab-vuln" class="tab-pane">
             <div class="page-header">
                 <h1 class="page-title"><i class="fas fa-bug"></i> 취약점 분석</h1>
@@ -422,6 +422,10 @@ body.locked-mode .status-select { pointer-events: none; appearance: none; }
                         <span style="font-weight: 600; font-size: 14px;">정보보호시스템:</span>
                         <select id="analysis-system-filter" class="input-modern" style="width: 180px; cursor: pointer;" onchange="renderVulnTable()"><option value="all">전체</option></select>
                     </div>
+					<div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-weight: 600; font-size: 14px;">협력사:</span>
+                        <select id="analysis-partner-filter" class="input-modern" style="width: 120px; cursor: pointer;" onchange="renderVulnTable()"><option value="all">전체</option></select>
+                    </div>                  
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <span style="font-weight: 600; font-size: 14px;">취약점(CVE):</span>
                         <select id="analysis-cve-filter" class="input-modern" style="width: 180px; cursor: pointer;" onchange="renderVulnTable()"><option value="all">전체</option></select>
@@ -544,7 +548,7 @@ body.locked-mode .status-select { pointer-events: none; appearance: none; }
                             <option value="ALL">전체 시스템 보기</option>
                         </select>
                         <!-- 점검월 필터 추가 -->
-                        <span style="font-weight: 600; font-size: 14px; margin-left: 10px;">점검월 필터:</span>
+                        <span style="font-weight: 600; font-size: 14px; margin-left: 10px;">점검월:</span>
                         <select id="monthly-month-filter" class="input-modern" style="width: 150px; cursor: pointer;" onchange="filterMonthlyTable()">
                             <option value="ALL">전체</option>
                         </select>
@@ -2079,29 +2083,41 @@ body.locked-mode .status-select { pointer-events: none; appearance: none; }
     
 	function updateAnalysisFilters() {
         const sysFilter = document.getElementById('analysis-system-filter');
+        const partnerFilter = document.getElementById('analysis-partner-filter'); // 협력사 추가
         const cveFilter = document.getElementById('analysis-cve-filter');
-        const cvssFilter = document.getElementById('analysis-cvss-filter'); // 추가
+        const cvssFilter = document.getElementById('analysis-cvss-filter');
 
         const currentSys = sysFilter.value;
+        const currentPartner = partnerFilter ? partnerFilter.value : 'all'; // 협력사 추가
         const currentCve = cveFilter.value;
-        const currentCvss = cvssFilter ? cvssFilter.value : 'all'; // 추가
+        const currentCvss = cvssFilter ? cvssFilter.value : 'all'; 
         
         const sysSet = new Set();
+        const partnerSet = new Set(); // 협력사 추가
         const cveSet = new Set();
-        const cvssSet = new Set(); // 추가
+        const cvssSet = new Set(); 
         
         currentVulnData.forEach(item => {
             sysSet.add(item.system);
+            if (item.partner) partnerSet.add(item.partner); // 협력사 데이터 수집
             cveSet.add(item.vuln);
-            if (item.cvss) cvssSet.add(item.cvss); // 추가
+            if (item.cvss) cvssSet.add(item.cvss);
         });
         
-		sysFilter.innerHTML = '<option value="all">전체</option>';
-        // .sort()를 제거하여 엑셀 데이터 입력 순서 유지
+        sysFilter.innerHTML = '<option value="all">전체</option>';
         Array.from(sysSet).forEach(sys => {
             const op = document.createElement('option'); op.value = sys; op.textContent = sys; sysFilter.appendChild(op);
         });
         sysFilter.value = sysSet.has(currentSys) ? currentSys : 'all';
+
+        // 협력사 필터 옵션 렌더링
+        if (partnerFilter) {
+            partnerFilter.innerHTML = '<option value="all">전체</option>';
+            Array.from(partnerSet).sort().forEach(partner => {
+                const op = document.createElement('option'); op.value = partner; op.textContent = partner; partnerFilter.appendChild(op);
+            });
+            partnerFilter.value = partnerSet.has(currentPartner) ? currentPartner : 'all';
+        }
         
         cveFilter.innerHTML = '<option value="all">전체</option>';
         Array.from(cveSet).sort().forEach(cve => {
@@ -2109,7 +2125,6 @@ body.locked-mode .status-select { pointer-events: none; appearance: none; }
         });
         cveFilter.value = cveSet.has(currentCve) ? currentCve : 'all';
 
-        // CVSS 옵션 렌더링 추가 (위험도 순으로 정렬)
         if (cvssFilter) {
             cvssFilter.innerHTML = '<option value="all">전체</option>';
             const cvssOrder = ['Critical', 'High', 'Medium', 'Low', 'None'];
@@ -2124,17 +2139,19 @@ body.locked-mode .status-select { pointer-events: none; appearance: none; }
         }
     }
     
-	function updateAnalysisStats() {
+    function updateAnalysisStats() {
         let total = 0, unresolved = 0, resolved = 0;
         
         const sysFilterVal = document.getElementById('analysis-system-filter').value;
+        const partnerFilterVal = document.getElementById('analysis-partner-filter') ? document.getElementById('analysis-partner-filter').value : 'all'; // 협력사 추가
         const cveFilterVal = document.getElementById('analysis-cve-filter').value;
-        const cvssFilterVal = document.getElementById('analysis-cvss-filter') ? document.getElementById('analysis-cvss-filter').value : 'all'; // 추가
+        const cvssFilterVal = document.getElementById('analysis-cvss-filter') ? document.getElementById('analysis-cvss-filter').value : 'all';
 
         currentVulnData.forEach(item => {
             if (sysFilterVal !== 'all' && item.system !== sysFilterVal) return;
+            if (partnerFilterVal !== 'all' && item.partner !== partnerFilterVal) return; // 협력사 조건 검사 추가
             if (cveFilterVal !== 'all' && item.vuln !== cveFilterVal) return;
-            if (cvssFilterVal !== 'all' && item.cvss !== cvssFilterVal) return; // 추가
+            if (cvssFilterVal !== 'all' && item.cvss !== cvssFilterVal) return;
             
             total++;
             if (item.itemType === 'unresolved') unresolved++;
@@ -2161,15 +2178,17 @@ body.locked-mode .status-select { pointer-events: none; appearance: none; }
         tbody.innerHTML = '';
         
         const sysFilterVal = document.getElementById('analysis-system-filter').value;
+        const partnerFilterVal = document.getElementById('analysis-partner-filter') ? document.getElementById('analysis-partner-filter').value : 'all'; // 협력사 추가
         const cveFilterVal = document.getElementById('analysis-cve-filter').value;
-        const cvssFilterVal = document.getElementById('analysis-cvss-filter') ? document.getElementById('analysis-cvss-filter').value : 'all'; // 추가
+        const cvssFilterVal = document.getElementById('analysis-cvss-filter') ? document.getElementById('analysis-cvss-filter').value : 'all';
         
         updateAnalysisStats(); 
 
         let filteredItems = currentVulnData.filter(item => {
             if (sysFilterVal !== 'all' && item.system !== sysFilterVal) return false;
+            if (partnerFilterVal !== 'all' && item.partner !== partnerFilterVal) return false; // 협력사 조건 검사 추가
             if (cveFilterVal !== 'all' && item.vuln !== cveFilterVal) return false;
-            if (cvssFilterVal !== 'all' && item.cvss !== cvssFilterVal) return false; // 추가
+            if (cvssFilterVal !== 'all' && item.cvss !== cvssFilterVal) return false;
             
             if (filterType === 'unresolved' && item.itemType !== 'unresolved') return false;
             if (filterType === 'resolved' && item.itemType !== 'resolved') return false;
