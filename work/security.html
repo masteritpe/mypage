@@ -538,10 +538,15 @@ body.locked-mode .status-select { pointer-events: none; appearance: none; }
             
             <div class="paper-sheet">
                 <div class="search-bar no-print" style="background: #f8fafc; padding: 16px; border-radius: 8px; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
-                    <div style="display: flex; gap: 10px; align-items: center;">
+					<div style="display: flex; gap: 10px; align-items: center;">
                         <span style="font-weight: 600; font-size: 14px;">정보보호시스템 조회:</span>
                         <select id="monthly-system-filter" class="input-modern" style="width: 250px; cursor: pointer;" onchange="filterMonthlyTable()">
                             <option value="ALL">전체 시스템 보기</option>
+                        </select>
+                        <!-- 점검월 필터 추가 -->
+                        <span style="font-weight: 600; font-size: 14px; margin-left: 10px;">점검월 필터:</span>
+                        <select id="monthly-month-filter" class="input-modern" style="width: 150px; cursor: pointer;" onchange="filterMonthlyTable()">
+                            <option value="ALL">전체</option>
                         </select>
                     </div>
                     <div style="display: flex; gap: 10px; align-items: center;">
@@ -2091,8 +2096,9 @@ body.locked-mode .status-select { pointer-events: none; appearance: none; }
             if (item.cvss) cvssSet.add(item.cvss); // 추가
         });
         
-        sysFilter.innerHTML = '<option value="all">전체</option>';
-        Array.from(sysSet).sort().forEach(sys => {
+		sysFilter.innerHTML = '<option value="all">전체</option>';
+        // .sort()를 제거하여 엑셀 데이터 입력 순서 유지
+        Array.from(sysSet).forEach(sys => {
             const op = document.createElement('option'); op.value = sys; op.textContent = sys; sysFilter.appendChild(op);
         });
         sysFilter.value = sysSet.has(currentSys) ? currentSys : 'all';
@@ -3174,17 +3180,21 @@ body.locked-mode .status-select { pointer-events: none; appearance: none; }
         saveMonthlyData();
     }
 
-    function updateMonthlyFilterOptions() {
+	function updateMonthlyFilterOptions() {
         const rows = document.getElementById('monthly-tbody').querySelectorAll('tr');
         const sysSet = new Set(); 
+        const monthSet = new Set(); // 점검월 Set 추가
+
         rows.forEach(tr => {
             const sysName = stripHTML(tr.cells[0].innerHTML).trim();
+            const monthName = stripHTML(tr.cells[1].innerHTML).trim(); // 점검월 추출
             if(sysName) sysSet.add(sysName);
+            if(monthName) monthSet.add(monthName);
         });
         
+        // 1. 정보보호시스템 필터 업데이트
         const filter = document.getElementById('monthly-system-filter');
         const currentVal = filter.value;
-        
         filter.innerHTML = '<option value="ALL">전체 시스템 보기</option>';
         
         Array.from(sysSet).forEach(sys => {
@@ -3192,18 +3202,37 @@ body.locked-mode .status-select { pointer-events: none; appearance: none; }
             op.value = sys; op.textContent = sys;
             filter.appendChild(op);
         });
-        
         if(sysSet.has(currentVal)) filter.value = currentVal;
         else filter.value = "ALL";
+
+        // 2. 점검월 필터 업데이트
+        const monthFilter = document.getElementById('monthly-month-filter');
+        const currentMonthVal = monthFilter.value;
+        monthFilter.innerHTML = '<option value="ALL">전체</option>';
+        
+        Array.from(monthSet).forEach(m => {
+            const op = document.createElement('option');
+            op.value = m; op.textContent = m;
+            monthFilter.appendChild(op);
+        });
+        if(monthSet.has(currentMonthVal)) monthFilter.value = currentMonthVal;
+        else monthFilter.value = "ALL";
     }
 
     function filterMonthlyTable() {
-        const filterVal = document.getElementById('monthly-system-filter').value;
+        const sysFilterVal = document.getElementById('monthly-system-filter').value;
+        const monthFilterVal = document.getElementById('monthly-month-filter').value;
         const rows = document.getElementById('monthly-tbody').querySelectorAll('tr');
         
         rows.forEach(tr => {
             const sysName = stripHTML(tr.cells[0].innerHTML).trim();
-            if(filterVal === "ALL" || sysName === filterVal) {
+            const monthName = stripHTML(tr.cells[1].innerHTML).trim();
+            
+            // 시스템 조건과 점검월 조건을 각각 만족하는지 확인
+            const sysMatch = (sysFilterVal === "ALL" || sysName === sysFilterVal);
+            const monthMatch = (monthFilterVal === "ALL" || monthName === monthFilterVal);
+
+            if(sysMatch && monthMatch) {
                 tr.style.display = '';
             } else {
                 tr.style.display = 'none';
