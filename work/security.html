@@ -171,7 +171,11 @@ body.locked-mode .status-select { pointer-events: none; appearance: none; }
 
 /* === 전체 출력용 완벽 보완 CSS (Print) === */
 .print-header { display: none; }
-#vuln-create-print-container, #monthly-print-container { display: none; } 
+#vuln-create-print-container, #monthly-print-container, #monthly-check-print-container { display: none; }
+  
+/* 월별 체크 사항 출력용 CSS */
+body.printing-monthly-check > *:not(#monthly-check-print-container) { display: none !important; }
+body.printing-monthly-check #monthly-check-print-container { display: block !important; width: 100%; }  
 
 @media print {
     @page { size: landscape; margin: 10mm; }
@@ -254,6 +258,7 @@ body.locked-mode .status-select { pointer-events: none; appearance: none; }
         <div class="nav-item" data-target="tab-vuln"><i class="fas fa-bug"></i> 취약점 분석</div>
         <div class="nav-item" data-target="tab-schedule"><i class="fas fa-calendar-alt"></i> 일정관리</div>
         <div class="nav-item" data-target="tab-monthly-manage"><i class="fas fa-calendar-check"></i> 월별 관리 사항</div>
+		<div class="nav-item" data-target="tab-monthly-check"><i class="fas fa-check-square"></i> 월별 체크 사항</div>      
         <div class="nav-item" data-target="tab-request"><i class="fas fa-tasks"></i> ShellCop 이슈 현황관리</div>
         <div class="nav-item" data-target="tab-ssr"><i class="fas fa-list-check"></i> SSR 이슈관리</div>
     </aside>
@@ -603,6 +608,79 @@ body.locked-mode .status-select { pointer-events: none; appearance: none; }
             </div>
         </div>
 
+        <!-- 5-1. 월별 체크 사항 탭 -->
+        <div id="tab-monthly-check" class="tab-pane">
+            <div class="page-header">
+                <h1 class="page-title"><i class="fas fa-check-square"></i> 월별 체크 사항</h1>
+                <div style="display: flex; gap: 10px;">
+                    <input type="file" id="excel-upload-monthly-check" accept=".xlsx, .xls" style="display: none;">
+                    <button class="btn btn-danger btn-edit-only" onclick="clearMonthlyCheckData()"><i class="fas fa-trash-alt"></i> 데이터 초기화</button>
+                    <button class="btn btn-secondary" onclick="downloadMonthlyCheckTemplate()"><i class="fas fa-download"></i> 양식 다운로드</button>
+                    <button class="btn btn-secondary btn-edit-only" onclick="document.getElementById('excel-upload-monthly-check').click()"><i class="fas fa-upload"></i> 데이터 로드</button>
+                    <button class="btn btn-accent" onclick="exportMonthlyCheckExcel()"><i class="fas fa-file-excel"></i> 엑셀 저장</button>
+                    <button class="btn btn-secondary" onclick="printMonthlyCheck()"><i class="fas fa-print"></i> 출력</button>
+                </div>
+            </div>
+
+            <div class="paper-sheet">
+                <div class="search-bar no-print" style="background: #f8fafc; padding: 16px; border-radius: 8px; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <span style="font-weight: 600; font-size: 14px;">정보보호시스템 조회:</span>
+                        <select id="monthly-check-system-filter" class="input-modern" style="width: 250px; cursor: pointer;" onchange="filterMonthlyCheckTable()">
+                            <option value="ALL">전체 시스템 보기</option>
+                        </select>
+                        <span style="font-weight: 600; font-size: 14px; margin-left: 10px;">점검월:</span>
+                        <select id="monthly-check-month-filter" class="input-modern" style="width: 150px; cursor: pointer;" onchange="filterMonthlyCheckTable()">
+                            <option value="ALL">전체</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <button class="btn btn-secondary btn-edit-only" onclick="addMonthlyCheckRow()" style="height: 40px;"><i class="fas fa-plus"></i> 새 체크 내역 추가</button>
+                    </div>
+                </div>
+
+                <div id="print-area-monthly-check">
+                    <div class="print-header">
+                        <h1>월별 체크 사항 이력</h1>
+                        <p id="print-subtitle-monthly-check">정보보호시스템 별 점검 현황 (O, X 체크)</p>
+                    </div>
+
+                    <div class="data-table-wrapper" style="overflow-x: auto;">
+                        <table class="data-table" id="monthly-check-table">
+                            <thead>
+                                <tr>
+                                    <th rowspan="2" style="min-width: 150px;">정보보호시스템</th>
+                                    <th rowspan="2" style="min-width: 100px;">점검월</th>
+                                    <th colspan="3" style="background:#e0f2fe;">기본정보</th>
+                                    <th colspan="10" style="background:#fef08a;">월별 점검 세부 항목 (O, X)</th>
+                                    <th rowspan="2" style="min-width: 150px;">전달사항</th>
+                                    <th rowspan="2" style="width: 60px;" class="no-print">관리</th>
+                                </tr>
+                                <tr>
+                                    <th style="background:#e0f2fe; min-width: 120px;">세부내역</th>
+                                    <th style="background:#e0f2fe; min-width: 100px;">협력사</th>
+                                    <th style="background:#e0f2fe; min-width: 100px;">엔지니어</th>
+
+                                    <th style="background:#fef08a; min-width: 150px;">체크항목 1 내용</th>
+                                    <th style="background:#fef08a; min-width: 70px;">결과</th>
+                                    <th style="background:#fef08a; min-width: 150px;">체크항목 2 내용</th>
+                                    <th style="background:#fef08a; min-width: 70px;">결과</th>
+                                    <th style="background:#fef08a; min-width: 150px;">체크항목 3 내용</th>
+                                    <th style="background:#fef08a; min-width: 70px;">결과</th>
+                                    <th style="background:#fef08a; min-width: 150px;">체크항목 4 내용</th>
+                                    <th style="background:#fef08a; min-width: 70px;">결과</th>
+                                    <th style="background:#fef08a; min-width: 150px;">체크항목 5 내용</th>
+                                    <th style="background:#fef08a; min-width: 70px;">결과</th>
+                                </tr>
+                            </thead>
+                            <tbody id="monthly-check-tbody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>      
+      
         <!-- 6. 이슈 현황관리 탭 -->
         <div id="tab-request" class="tab-pane">
             <div class="page-header">
@@ -2467,6 +2545,7 @@ body.locked-mode .status-select { pointer-events: none; appearance: none; }
         }
         if (e.target.closest('#vuln-create-table')) saveVulnCreateData(); 
         if (e.target.closest('#monthly-tbody')) saveMonthlyData(); 
+		if (e.target.closest('#monthly-check-tbody')) saveMonthlyCheckData(); // <== 이 줄을 추가하세요.      
     });
 
     async function loadDataFromDB() {
@@ -2549,6 +2628,18 @@ body.locked-mode .status-select { pointer-events: none; appearance: none; }
         updateMonthlyFilterOptions();
         // ===============================
 
+        // === 월별 체크 사항 데이터 로드 ===
+        const monthly_check_res = await getFromDB('tables', 'monthly_check');
+        document.getElementById('monthly-check-tbody').innerHTML = '';
+        if (monthly_check_res && monthly_check_res.data.length > 0) {
+            monthly_check_res.data.forEach(d => addMonthlyCheckRow(d));
+        } else {
+            // 기본 샘플 데이터 추가
+            addMonthlyCheckRow(['서버 개인정보 검색', '2026년 10월', 'Server-i', '소만사', '홍길동', '계정 권한 리뷰', 'O', '불필요 포트 점검', 'O', '백업 상태 점검', 'X', '보안 로그 검토', 'O', '최신 패치 적용', 'O', '특이사항 없음']);
+        }
+        updateMonthlyCheckFilterOptions();
+        // ===============================      
+      
         const s_all = await getAllFromDB('schedules');
         s_all.sort((a, b) => a.sheetName.localeCompare(b.sheetName, undefined, {numeric: true, sensitivity: 'base'}));
         
@@ -3480,6 +3571,288 @@ body.locked-mode .status-select { pointer-events: none; appearance: none; }
         
         setTimeout(() => { document.body.classList.remove('printing-monthly-manage'); }, 100);
     }
+  
+    async function forceSaveAll(notify = true) {
+        saveContactData(); 
+        saveRequestData(); 
+        saveSsrData(); 
+        await saveVulnCreateData(); 
+        await saveCurrentScheduleToDB();
+        saveMonthlyData(); 
+        saveMonthlyCheckData(); // <== 이 줄을 추가하세요.
+        if(notify) showToast('모든 데이터가 브라우저(로컬)에 저장되었습니다.');
+    }  
+      // ==========================================
+      // === 월별 체크 사항 전용 스크립트 기능 시작 ===
+      // ==========================================
+
+      function saveMonthlyCheckData() {
+          const rows = document.getElementById('monthly-check-tbody').querySelectorAll('tr');
+          const data = Array.from(rows).map(tr => {
+              const tds = tr.querySelectorAll('td');
+              if(tds.length >= 17) {
+                  return Array.from(tds).slice(0, 16).map((td, index) => {
+                      if ([6, 8, 10, 12, 14].includes(index)) { // O, X 선택 셀
+                          const sel = td.querySelector('select');
+                          return sel ? sel.value : td.innerHTML.trim();
+                      }
+                      return td.innerHTML.trim();
+                  });
+              }
+              return null;
+          }).filter(Boolean);
+          saveToDB('tables', { id: 'monthly_check', data: data });
+          updateMonthlyCheckFilterOptions();
+      }
+
+      function addMonthlyCheckRow(data = Array(16).fill('')) {
+          const tbody = document.getElementById('monthly-check-tbody');
+          const tr = document.createElement('tr');
+
+          for(let i=0; i<16; i++) {
+              const td = document.createElement('td');
+              if ([6, 8, 10, 12, 14].includes(i)) { // 결과값 드롭다운
+                  const val = data[i] || '';
+                  td.style.padding = '0';
+                  td.innerHTML = `<select class="status-select ${val === 'X' ? 'unresolved' : ''}" onchange="changeCheckColor(this)">
+                      <option value="" ${val === '' ? 'selected' : ''}></option>
+                      <option value="O" ${val === 'O' ? 'selected' : ''}>O</option>
+                      <option value="X" ${val === 'X' ? 'selected' : ''}>X</option>
+                  </select>`;
+              } else { // 텍스트 입력 영역
+                  td.className = 'editable-cell'; 
+                  td.contentEditable = "true"; 
+                  td.setAttribute('spellcheck', 'false');
+                  td.innerHTML = data[i] || '';
+              }
+              tr.appendChild(td);
+          }
+
+          const delTd = document.createElement('td'); 
+          delTd.className = 'no-print btn-edit-only';
+          delTd.style.textAlign = 'center';
+          delTd.innerHTML = `<button class="btn btn-danger" style="height:28px; padding:0 8px; font-size:13px;" onclick="this.closest('tr').remove(); saveMonthlyCheckData();"><i class="fas fa-trash"></i></button>`;
+          tr.appendChild(delTd);
+
+          tbody.appendChild(tr);
+          applyLockState();
+          saveMonthlyCheckData();
+      }
+
+      function changeCheckColor(selectElement) {
+          if (selectElement.value === 'X') {
+              selectElement.classList.add('unresolved'); // 기존 미조치 주황색 스타일 재활용
+          } else {
+              selectElement.classList.remove('unresolved');
+          }
+          saveMonthlyCheckData(); // 상태 변경 시 즉시 저장
+      }
+
+      function updateMonthlyCheckFilterOptions() {
+          const rows = document.getElementById('monthly-check-tbody').querySelectorAll('tr');
+          const sysSet = new Set(); 
+          const monthSet = new Set();
+
+          rows.forEach(tr => {
+              const sysName = stripHTML(tr.cells[0].innerHTML).trim();
+              const monthName = stripHTML(tr.cells[1].innerHTML).trim();
+              if(sysName) sysSet.add(sysName);
+              if(monthName) monthSet.add(monthName);
+          });
+
+          const filter = document.getElementById('monthly-check-system-filter');
+          const currentVal = filter.value;
+          filter.innerHTML = '<option value="ALL">전체 시스템 보기</option>';
+          Array.from(sysSet).forEach(sys => {
+              const op = document.createElement('option');
+              op.value = sys; op.textContent = sys; filter.appendChild(op);
+          });
+          filter.value = sysSet.has(currentVal) ? currentVal : "ALL";
+
+          const monthFilter = document.getElementById('monthly-check-month-filter');
+          const currentMonthVal = monthFilter.value;
+          monthFilter.innerHTML = '<option value="ALL">전체</option>';
+          Array.from(monthSet).forEach(m => {
+              const op = document.createElement('option');
+              op.value = m; op.textContent = m; monthFilter.appendChild(op);
+          });
+          monthFilter.value = monthSet.has(currentMonthVal) ? currentMonthVal : "ALL";
+      }
+
+      function filterMonthlyCheckTable() {
+          const sysFilterVal = document.getElementById('monthly-check-system-filter').value;
+          const monthFilterVal = document.getElementById('monthly-check-month-filter').value;
+          const rows = document.getElementById('monthly-check-tbody').querySelectorAll('tr');
+
+          rows.forEach(tr => {
+              const sysName = stripHTML(tr.cells[0].innerHTML).trim();
+              const monthName = stripHTML(tr.cells[1].innerHTML).trim();
+
+              const sysMatch = (sysFilterVal === "ALL" || sysName === sysFilterVal);
+              const monthMatch = (monthFilterVal === "ALL" || monthName === monthFilterVal);
+
+              tr.style.display = (sysMatch && monthMatch) ? '' : 'none';
+          });
+      }
+
+      async function clearMonthlyCheckData() {
+          if(!confirm('정말로 월별 체크 사항 데이터를 초기화하시겠습니까?')) return;
+          const tx = db.transaction('tables', 'readwrite');
+          const store = tx.objectStore('tables');
+          store.delete('monthly_check');
+          tx.oncomplete = () => {
+              document.getElementById('monthly-check-tbody').innerHTML = '';
+              addMonthlyCheckRow();
+              showToast('월별 체크 사항 데이터가 초기화되었습니다.');
+          };
+      }
+
+      async function downloadMonthlyCheckTemplate() {
+          const wb = new ExcelJS.Workbook(); const ws = wb.addWorksheet('월별체크사항');
+          ws.columns = [
+              { width: 25 }, { width: 15 }, { width: 20 }, { width: 15 }, { width: 15 }, 
+              { width: 30 }, { width: 10 }, { width: 30 }, { width: 10 }, { width: 30 }, { width: 10 }, 
+              { width: 30 }, { width: 10 }, { width: 30 }, { width: 10 }, { width: 20 }
+          ];
+
+          ws.addRow(['정보보호시스템', '점검월', '세부내역', '협력사', '엔지니어', '체크항목1_내용', '결과1', '체크항목2_내용', '결과2', '체크항목3_내용', '결과3', '체크항목4_내용', '결과4', '체크항목5_내용', '결과5', '전달사항']);
+
+          ws.getRow(1).eachCell((c) => { 
+              c.fill={type:'pattern', pattern:'solid', fgColor:{argb:'FF70AD47'}}; 
+              c.font={color:{argb:'FFFFFFFF'}, bold:true}; c.alignment={horizontal:'center'}; 
+              c.border={top:{style:'thin'},left:{style:'thin'},bottom:{style:'thin'},right:{style:'thin'}}; 
+          });
+
+          ws.addRow(['서버 개인정보 검색', '2026년 10월', 'Server-i', '소만사', '홍길동', '계정 권한 리뷰', 'O', '불필요 포트 점검', 'O', '백업 상태 점검', 'X', '보안 로그 검토', 'O', '최신 패치 적용', 'O', '특이사항 없음']);
+
+          const blob = new Blob([await wb.xlsx.writeBuffer()], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+          const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = '월별체크사항_양식.xlsx'; a.click();
+      }
+
+      document.getElementById('excel-upload-monthly-check').addEventListener('change', async function(e) {
+          const file = e.target.files[0]; if (!file) return;
+          const reader = new FileReader();
+          reader.onload = async (event) => {
+              const wb = new ExcelJS.Workbook(); await wb.xlsx.load(event.target.result); 
+              const ws = wb.worksheets[0]; 
+              const tbody = document.getElementById('monthly-check-tbody'); tbody.innerHTML = '';
+
+              ws.eachRow((row, rNumber) => {
+                  if(rNumber > 1) { 
+                      let rData = [];
+                      for(let i=1; i<=16; i++) { rData.push(getCellValueHTML(row.getCell(i)) || ''); }
+                      if (rData.join('').trim() !== '') addMonthlyCheckRow(rData);
+                  }
+              });
+
+              if(tbody.children.length === 0) addMonthlyCheckRow(); 
+              saveMonthlyCheckData(); 
+              showToast('월별 체크 사항 엑셀이 로드되었습니다.');
+          }; 
+          reader.readAsArrayBuffer(file); e.target.value = '';
+      });
+
+      async function exportMonthlyCheckExcel() {
+          saveMonthlyCheckData(); 
+          const wb = new ExcelJS.Workbook(); const ws = wb.addWorksheet('월별체크사항');
+
+          ws.addRow(['정보보호시스템', '점검월', '세부내역', '협력사', '엔지니어', '체크항목1_내용', '결과1', '체크항목2_내용', '결과2', '체크항목3_내용', '결과3', '체크항목4_내용', '결과4', '체크항목5_내용', '결과5', '전달사항']);
+
+          ws.getRow(1).eachCell((c) => { 
+              c.fill={type:'pattern', pattern:'solid', fgColor:{argb:'FF70AD47'}}; 
+              c.font={color:{argb:'FFFFFFFF'}, bold:true}; c.alignment={horizontal:'center'}; 
+              c.border={top:{style:'thin'},left:{style:'thin'},bottom:{style:'thin'},right:{style:'thin'}}; 
+          });
+
+          document.getElementById('monthly-check-tbody').querySelectorAll('tr').forEach(tr => {
+              const tds = tr.querySelectorAll('td'); 
+              if(tds.length >= 17) {
+                  let rData = [];
+                  for(let i=0; i<16; i++) {
+                      if ([6, 8, 10, 12, 14].includes(i)) {
+                          const sel = tds[i].querySelector('select');
+                          rData.push(sel ? sel.value : tds[i].innerText.trim());
+                      } else {
+                          rData.push(tds[i].innerText.trim());
+                      }
+                  }
+                  ws.addRow(rData);
+              }
+          });
+
+          const dateStr = new Date().toISOString().slice(0,10).replace(/-/g, ''); 
+          const blob = new Blob([await wb.xlsx.writeBuffer()], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }); 
+          const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `월별체크사항_${dateStr}.xlsx`; a.click();
+      }
+
+      function printMonthlyCheck() {
+          let printDiv = document.getElementById('monthly-check-print-container');
+          if (!printDiv) {
+              printDiv = document.createElement('div');
+              printDiv.id = 'monthly-check-print-container';
+              document.body.appendChild(printDiv);
+          }
+          printDiv.innerHTML = '';
+
+          const tbodyRows = document.getElementById('monthly-check-tbody').rows;
+          let html = `
+          <div class="print-page" style="width: 100%; margin-bottom: 20px;">
+              <div class="print-header" style="text-align:center; margin-bottom:15px;">
+                  <h1 style="font-size:18pt; margin-bottom:5px;">월별 체크 사항 이력</h1>
+                  <p style="font-size:10pt; color:#555;">정보보호시스템 별 점검 및 조치 결과 현황</p>
+              </div>
+              <table class="data-table" style="width: 100%; border-collapse: collapse; font-size: 8pt; border: 1px solid #000; table-layout: auto;">
+                  <thead>
+                      <tr>
+                          <th rowspan="2" style="border:1px solid #000; padding:4px; background:#f1f5f9; -webkit-print-color-adjust:exact;">시스템</th>
+                          <th rowspan="2" style="border:1px solid #000; padding:4px; background:#f1f5f9; -webkit-print-color-adjust:exact;">점검월</th>
+                          <th colspan="3" style="border:1px solid #000; padding:4px; background:#e0f2fe; -webkit-print-color-adjust:exact;">기본정보</th>
+                          <th colspan="10" style="border:1px solid #000; padding:4px; background:#fef08a; -webkit-print-color-adjust:exact;">월별 체크 사항</th>
+                          <th rowspan="2" style="border:1px solid #000; padding:4px; background:#f1f5f9; -webkit-print-color-adjust:exact;">비고</th>
+                      </tr>
+                      <tr>
+                          <th style="border:1px solid #000; padding:4px; background:#e0f2fe; -webkit-print-color-adjust:exact;">내역</th>
+                          <th style="border:1px solid #000; padding:4px; background:#e0f2fe; -webkit-print-color-adjust:exact;">협력사</th>
+                          <th style="border:1px solid #000; padding:4px; background:#e0f2fe; -webkit-print-color-adjust:exact;">엔지니어</th>
+                          <th style="border:1px solid #000; padding:4px; background:#fef08a; -webkit-print-color-adjust:exact;">체크1</th>
+                          <th style="border:1px solid #000; padding:4px; background:#fef08a; -webkit-print-color-adjust:exact;">결과</th>
+                          <th style="border:1px solid #000; padding:4px; background:#fef08a; -webkit-print-color-adjust:exact;">체크2</th>
+                          <th style="border:1px solid #000; padding:4px; background:#fef08a; -webkit-print-color-adjust:exact;">결과</th>
+                          <th style="border:1px solid #000; padding:4px; background:#fef08a; -webkit-print-color-adjust:exact;">체크3</th>
+                          <th style="border:1px solid #000; padding:4px; background:#fef08a; -webkit-print-color-adjust:exact;">결과</th>
+                          <th style="border:1px solid #000; padding:4px; background:#fef08a; -webkit-print-color-adjust:exact;">체크4</th>
+                          <th style="border:1px solid #000; padding:4px; background:#fef08a; -webkit-print-color-adjust:exact;">결과</th>
+                          <th style="border:1px solid #000; padding:4px; background:#fef08a; -webkit-print-color-adjust:exact;">체크5</th>
+                          <th style="border:1px solid #000; padding:4px; background:#fef08a; -webkit-print-color-adjust:exact;">결과</th>
+                      </tr>
+                  </thead>
+                  <tbody>
+          `;
+
+          Array.from(tbodyRows).forEach(tr => {
+              if (tr.style.display === 'none') return;
+              html += `<tr>`;
+              for (let i = 0; i <= 15; i++) {
+                  let text = tr.cells[i].innerText;
+                  if([6,8,10,12,14].includes(i)) {
+                      let sel = tr.cells[i].querySelector('select');
+                      text = sel ? sel.value : text;
+                  }
+                  html += `<td style="border:1px solid #000; padding:4px; text-align:center;">${text}</td>`;
+              }
+              html += `</tr>`;
+          });
+          html += `</tbody></table></div>`;
+
+          printDiv.innerHTML = html;
+
+          document.body.classList.add('printing-monthly-check');
+          window.print();
+          setTimeout(() => { document.body.classList.remove('printing-monthly-check'); }, 100);
+      }
+      // ==========================================
+      // === 월별 체크 사항 전용 스크립트 기능 끝 ===
+      // ==========================================  
 </script>
 </body>
 </html>
