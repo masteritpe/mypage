@@ -3314,10 +3314,8 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
         const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `SSR이슈관리_${dateStr}.xlsx`; a.click();
     }
 
-    // === 월별 관리 사항 스크립트 ===
-
     // ==========================================
-    // === 1. 월별 관리 사항 페이지 로직 시작 ===
+    // === 월별 관리 사항 페이지 로직 시작 ===
     // ==========================================
 
     // (1) 페이지 선택 이벤트
@@ -3328,9 +3326,11 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
         }
     });
 
-    // (2) 데이터 저장 (페이지 단위)
+	// (2) 데이터 저장 (페이지 단위)
     function saveMonthlyData() {
-        if (!currentMonthlyPageName) return;
+        // '전체 페이지 보기' 모드일 때는 데이터 덮어쓰기(저장) 방지
+        if (!currentMonthlyPageName || currentMonthlyPageName === 'ALL') return; 
+        
         const rows = document.getElementById('monthly-tbody').querySelectorAll('tr');
         const data = Array.from(rows).map(tr => {
             const tds = tr.querySelectorAll('td');
@@ -3348,15 +3348,35 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
         currentMonthlyPageName = pageName;
         document.getElementById('monthly-page-selector').value = pageName;
 
-        const res = await getFromDB('tables', 'monthly_page_' + pageName);
+        // '전체 페이지 보기' 시에는 행 추가 버튼 숨김 (조회 전용)
+        const addBtn = document.querySelector('button[onclick="addMonthlyRow()"]');
+        if (addBtn) addBtn.style.display = pageName === 'ALL' ? 'none' : 'inline-flex';
+
         document.getElementById('monthly-tbody').innerHTML = '';
 
-        if (res && res.data && res.data.length > 0) {
-            res.data.forEach(d => addMonthlyRow(d));
+        if (pageName === 'ALL') {
+            const allTables = await getAllFromDB('tables');
+            const pages = allTables.filter(t => t.id && t.id.startsWith('monthly_page_'));
+            let hasData = false;
+            pages.forEach(p => {
+                if (p.data && p.data.length > 0) {
+                    p.data.forEach(d => addMonthlyRow(d));
+                    hasData = true;
+                }
+            });
+            if (!hasData) addMonthlyRow();
         } else {
-            addMonthlyRow(); // 빈 행 1개 기본 생성
+            const res = await getFromDB('tables', 'monthly_page_' + pageName);
+            if (res && res.data && res.data.length > 0) {
+                res.data.forEach(d => addMonthlyRow(d));
+            } else {
+                addMonthlyRow(); // 빈 행 1개 기본 생성
+            }
         }
+        
         updateMonthlyFilterOptions();
+        // 페이지 로드 후 현재 유지되어 있는 시스템 필터에 맞춰 즉시 필터링 적용
+        filterMonthlyTable(); 
         applyLockState();
     }
 
@@ -3385,12 +3405,15 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
         loadMonthlyPageFromDB(pageName);
     }
 
-    // (5) 셀렉트 박스 갱신
+	// (5) 셀렉트 박스 갱신
     async function refreshMonthlyPageSelector(selectVal) {
         const all = await getAllFromDB('tables');
         const pages = all.filter(t => t.id && t.id.startsWith('monthly_page_')).sort((a,b) => a.pageName.localeCompare(b.pageName));
         const sel = document.getElementById('monthly-page-selector'); 
-        sel.innerHTML = '';
+        
+        // 작업 페이지 필터에 전체 선택 추가
+        sel.innerHTML = '<option value="ALL" style="font-weight:bold; color:var(--accent);">전체 페이지 보기</option>';
+        
         pages.forEach(p => { 
             const op = document.createElement('option'); 
             op.value = p.pageName; 
@@ -3762,10 +3785,6 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
       // === 월별 체크 사항 전용 스크립트 기능 시작 ===
       // ==========================================
 
-    // ==========================================
-    // === 2. 월별 체크 사항 페이지 로직 시작 ===
-    // ==========================================
-
     // (1) 페이지 선택 이벤트
     document.getElementById('monthly-check-page-selector').addEventListener('change', async function(e) {
         if(e.target.value) { 
@@ -3774,9 +3793,11 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
         }
     });
 
-    // (2) 데이터 저장 (페이지 단위)
+	// (2) 데이터 저장 (페이지 단위)
     function saveMonthlyCheckData() {
-        if (!currentMonthlyCheckPageName) return;
+        // '전체 페이지 보기' 모드일 때는 데이터 덮어쓰기(저장) 방지
+        if (!currentMonthlyCheckPageName || currentMonthlyCheckPageName === 'ALL') return; 
+        
         const rows = document.getElementById('monthly-check-tbody').querySelectorAll('tr');
         const data = Array.from(rows).map(tr => {
             const tds = tr.querySelectorAll('td');
@@ -3800,15 +3821,35 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
         currentMonthlyCheckPageName = pageName;
         document.getElementById('monthly-check-page-selector').value = pageName;
 
-        const res = await getFromDB('tables', 'monthly_check_page_' + pageName);
+        // '전체 페이지 보기' 시에는 행 추가 버튼 숨김 (조회 전용)
+        const addBtn = document.querySelector('button[onclick="addMonthlyCheckRow()"]');
+        if (addBtn) addBtn.style.display = pageName === 'ALL' ? 'none' : 'inline-flex';
+
         document.getElementById('monthly-check-tbody').innerHTML = '';
 
-        if (res && res.data && res.data.length > 0) {
-            res.data.forEach(d => addMonthlyCheckRow(d));
+        if (pageName === 'ALL') {
+            const allTables = await getAllFromDB('tables');
+            const pages = allTables.filter(t => t.id && t.id.startsWith('monthly_check_page_'));
+            let hasData = false;
+            pages.forEach(p => {
+                if (p.data && p.data.length > 0) {
+                    p.data.forEach(d => addMonthlyCheckRow(d));
+                    hasData = true;
+                }
+            });
+            if (!hasData) addMonthlyCheckRow();
         } else {
-            addMonthlyCheckRow(); // 빈 행 1개 기본 생성
+            const res = await getFromDB('tables', 'monthly_check_page_' + pageName);
+            if (res && res.data && res.data.length > 0) {
+                res.data.forEach(d => addMonthlyCheckRow(d));
+            } else {
+                addMonthlyCheckRow(); // 빈 행 1개 기본 생성
+            }
         }
+        
         updateMonthlyCheckFilterOptions();
+        // 페이지 로드 후 현재 유지되어 있는 시스템 필터에 맞춰 즉시 필터링 적용
+        filterMonthlyCheckTable(); 
         applyLockState();
     }
 
@@ -3837,12 +3878,15 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
         loadMonthlyCheckPageFromDB(pageName);
     }
 
-    // (5) 셀렉트 박스 갱신
+	// (5) 셀렉트 박스 갱신
     async function refreshMonthlyCheckPageSelector(selectVal) {
         const all = await getAllFromDB('tables');
         const pages = all.filter(t => t.id && t.id.startsWith('monthly_check_page_')).sort((a,b) => a.pageName.localeCompare(b.pageName));
         const sel = document.getElementById('monthly-check-page-selector'); 
-        sel.innerHTML = '';
+        
+        // 작업 페이지 필터에 전체 선택 추가
+        sel.innerHTML = '<option value="ALL" style="font-weight:bold; color:var(--accent);">전체 페이지 보기</option>';
+        
         pages.forEach(p => { 
             const op = document.createElement('option'); 
             op.value = p.pageName; 
