@@ -475,13 +475,12 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
         </div>
 
         <!-- 4. 일정관리 탭 -->
-        <div id="tab-schedule" class="tab-pane">
+		<div id="tab-schedule" class="tab-pane">
             <div class="page-header">
                 <h1 class="page-title"><i class="fas fa-calendar-alt"></i> 유지보수 일정관리</h1>
                 <div style="display: flex; gap: 10px;">
                     <input type="file" id="excel-upload-schedule" accept=".xlsx, .xls" style="display: none;">
                     <button class="btn btn-danger btn-edit-only" onclick="clearData('schedule')"><i class="fas fa-trash-alt"></i> 데이터 초기화</button>
-                    <button class="btn btn-secondary btn-edit-only" onclick="openSheetManagerModal()"><i class="fas fa-layer-group"></i> 시트 정리</button>
                     <button class="btn btn-secondary" onclick="downloadScheduleTemplate()"><i class="fas fa-download"></i> 양식 다운로드</button>
                     <button class="btn btn-secondary btn-edit-only" onclick="document.getElementById('excel-upload-schedule').click()"><i class="fas fa-upload"></i> 데이터 로드</button>
                     <button class="btn btn-accent" onclick="exportScheduleExcel(false)"><i class="fas fa-file-excel"></i> 엑셀 저장 (현재)</button>
@@ -496,7 +495,8 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
                     <select id="schedule-sheet-selector" class="input-modern" style="width: 250px; cursor: pointer;"><option value="">새 일정을 작성하거나 엑셀을 로드하세요.</option></select>
                     
                     <button class="btn btn-secondary btn-edit-only" onclick="addNewScheduleSheet()" style="height: 40px; margin-left: 5px;"><i class="fas fa-plus"></i> 새 시트 추가</button>
-                    <span id="schedule-file-name" style="margin-left: 15px; color: var(--accent); font-weight: 600; font-size: 14px;"></span>
+                    <button class="btn btn-secondary btn-edit-only" onclick="openSheetManagerModal()" style="height: 40px; margin-left: 5px;"><i class="fas fa-layer-group"></i> 시트 정리</button>
+                    <span id="schedule-file-name" style="display: none;"></span>
                 </div>
                 
                 <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 10px;"><i class="fas fa-info-circle"></i> 표의 셀을 클릭하여 직접 내용을 수정하거나, 하단의 버튼으로 행을 추가할 수 있습니다.</p>
@@ -809,6 +809,26 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
     </main>
 </div>
 
+<!-- 일정관리 새 시트 추가 모달 -->
+<div class="modal-overlay" id="sheet-create-modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3><i class="fas fa-plus"></i> 새 작업 시트 생성</h3>
+            <div class="modal-close" onclick="closeSheetCreateModal()"><i class="fas fa-times"></i></div>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>새로운 일정 시트의 이름을 입력하세요</label>
+                <input type="text" id="new-sheet-name" placeholder="시트명을 입력하세요">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeSheetCreateModal()">취소</button>
+            <button class="btn btn-primary" onclick="confirmAddNewScheduleSheet()"><i class="fas fa-save"></i> 생성</button>
+        </div>
+    </div>
+</div>  
+  
 <!-- 취약점 작성 새 페이지 모달 -->
 <div class="modal-overlay" id="vuln-page-create-modal">
     <div class="modal-content">
@@ -2789,12 +2809,26 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
         if(e.target.value) { await saveCurrentScheduleToDB(); loadScheduleSheetFromDB(e.target.value); }
     });
 
-    async function addNewScheduleSheet() {
+	async function addNewScheduleSheet() {
         await saveCurrentScheduleToDB(); 
-        const dateStr = new Date().toISOString().slice(5,10).replace('-','');
-        const sheetName = prompt("새로운 일정 시트의 이름을 입력하세요:", `일정_${dateStr}`);
+		// 현재 '월'을 가져옵니다. (getMonth()는 0부터 시작하므로 +1을 해줍니다)
+        const currentMonth = new Date().getMonth() + 1;
+        // 모달 입력창의 기본값을 설정합니다. (예: 11월유지보수일정)
+        document.getElementById('new-sheet-name').value = `${currentMonth}월유지보수일정`;
+        document.getElementById('sheet-create-modal').classList.add('active');
+    }
+
+    function closeSheetCreateModal() {
+        document.getElementById('sheet-create-modal').classList.remove('active');
+    }
+
+    async function confirmAddNewScheduleSheet() {
+        const sheetName = document.getElementById('new-sheet-name').value.trim();
         
-        if (!sheetName) return;
+        if (!sheetName) {
+            alert("시트 이름을 입력해주세요.");
+            return;
+        }
 
         const existing = await getFromDB('schedules', sheetName);
         if (existing) {
@@ -2813,6 +2847,7 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
         selector.value = sheetName;
 
         showToast(`'${sheetName}' 시트가 생성되었습니다.`);
+        closeSheetCreateModal();
         loadScheduleSheetFromDB(sheetName);
     }
 
