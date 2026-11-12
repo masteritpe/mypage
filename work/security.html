@@ -365,10 +365,17 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
             <div class="paper-sheet">
                 <div class="search-bar no-print" style="background: #f8fafc; padding: 16px; border-radius: 8px; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
                     <div style="display: flex; gap: 10px; align-items: center;">
-                        <span style="font-weight: 600; font-size: 14px;">작업 페이지 선택:</span>
+                        <span style="font-weight: 600; font-size: 14px;">정보보호시스템 조회:</span>
+                        <select id="vuln-create-system-filter" class="input-modern" style="width: 200px; cursor: pointer;" onchange="filterVulnCreateTable()">
+                            <option value="ALL">전체 시스템 보기</option>
+                        </select>
+                        <span style="font-weight: 600; font-size: 14px; margin-left: 10px;">작업 페이지 선택:</span>
                         <select id="vuln-page-selector" class="input-modern" style="width: 200px; cursor: pointer;"></select>
                         <button class="btn btn-secondary btn-edit-only" onclick="addNewVulnPage()" style="height: 40px;"><i class="fas fa-plus"></i> 새 페이지</button>
                         <button class="btn btn-secondary btn-edit-only" onclick="openVulnPageManagerModal()" style="height: 40px;"><i class="fas fa-layer-group"></i> 관리</button>
+                        <div style="display:inline-flex; align-items:center; margin-left:15px; font-size:14px; font-weight:600; color:var(--text-sub);">
+                            CVE : <span id="cve-count-display" style="color:var(--accent); font-size:16px; margin-left:5px; margin-right:2px;">0</span> 개
+                        </div>                      
                     </div>
                     <div style="display: flex; gap: 10px; align-items: center;">
                         <span style="font-weight: 600; font-size: 14px; margin-right: 5px;">취약점(CVE) 수동 추가:</span>
@@ -396,6 +403,7 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
                                     <th rowspan="2" style="width: 120px; min-width: 120px;">협력사</th>
                                     <th rowspan="2" style="width: 100px; min-width: 100px;">엔지니어</th>
                                     <th rowspan="2" style="width: 100px; min-width: 100px;">OS</th>
+									<th rowspan="2" class="no-print" style="width: 80px; min-width: 80px;">관리</th>                                  
                                 </tr>
                                 <tr id="vuln-create-thead-sub">
                                 </tr>
@@ -1242,6 +1250,27 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
         }
     }
 
+    // CVE 갯수 업데이트 함수
+    function updateCveCountDisplay() {
+        const display = document.getElementById('cve-count-display');
+        if (display) display.innerText = currentVulnCreateCols;
+    }
+
+    // 라인별 일괄적용 (해당없음) 함수
+    function applyAllNA(btn) {
+        const tr = btn.closest('tr');
+        const selects = tr.querySelectorAll('.status-select');
+        if(selects.length === 0) return;
+
+        selects.forEach(select => {
+            select.value = '해당없음';
+            changeStatusColor(select);
+        });
+        saveVulnCreateData();
+        showToast('해당 라인의 모든 CVE 상태가 [해당없음]으로 일괄 적용되었습니다.');
+    }  
+  
+    // 초기화 시 일괄적용 버튼 td 추가
     function initVulnCreate() {
         const tbody = document.getElementById('vuln-create-tbody');
         tbody.innerHTML = '';
@@ -1253,9 +1282,22 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
                 td.innerHTML = col;
                 tr.appendChild(td);
             });
+
+            // 일괄적용 버튼 추가
+            const btnTd = document.createElement('td');
+            btnTd.className = 'no-print btn-edit-only';
+            btnTd.style.textAlign = 'center';
+            btnTd.innerHTML = `<button class="btn btn-secondary" style="height:28px; padding:0 8px; font-size:12px;" onclick="applyAllNA(this)">일괄</button>`;
+            tr.appendChild(btnTd);
+
             tbody.appendChild(tr);
         });
-        setTimeout(syncTopScrollWidth, 100);
+        setTimeout(() => {
+            syncTopScrollWidth();
+            updateVulnCreateFilterOptions();
+            filterVulnCreateTable();
+            updateCveCountDisplay(); // 갯수 갱신
+        }, 100);
     }
 
     function changeStatusColor(selectElement) {
@@ -1266,12 +1308,14 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
         }
     }
 
+    // 컬럼 추가 시 appendChild 대신 insertBefore를 사용하여 '관리' 컬럼 앞에 삽입
     function addManualVulnColumn(cveName = 'CVE-XXXX-XXXX', scheduledDate = '202X.XX', cvss = 'None') {
         currentVulnCreateCols++;
-        
+        updateCveCountDisplay();
+
         const theadMain = document.getElementById('vuln-create-thead').rows[0];
         const theadSub = document.getElementById('vuln-create-thead-sub');
-        
+
         const thCve = document.createElement('th');
         thCve.colSpan = 2; 
         thCve.style.minWidth = '200px';
@@ -1285,7 +1329,7 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
                 <option value="None" ${cvss==='None'?'selected':''}>None</option>
             </select>
         `;
-        theadMain.appendChild(thCve);
+        theadMain.insertBefore(thCve, theadMain.lastElementChild); // 변경점
 
         const thStatus = document.createElement('th');
         thStatus.style.minWidth = '90px';
@@ -1313,12 +1357,12 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
                     <option value="미관리대상">미관리대상</option>
                 </select>
             `;
-            tr.appendChild(tdStatus);
-            
+            tr.insertBefore(tdStatus, tr.lastElementChild); // 변경점
+
             const tdDate = document.createElement('td');
             tdDate.className = 'editable-cell';
             tdDate.contentEditable = "true";
-            tr.appendChild(tdDate);
+            tr.insertBefore(tdDate, tr.lastElementChild); // 변경점
         });
         applyLockState();
         setTimeout(syncTopScrollWidth, 100);
@@ -1332,16 +1376,17 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
     
     function clearVulnCreate() {
         if(!confirm(`현재 작성 중인 [${currentVulnPageName}] 페이지의 취약점 데이터와 동적 컬럼을 모두 초기화하시겠습니까?`)) return;
-        
+
         const theadMain = document.getElementById('vuln-create-thead').rows[0];
         const theadSub = document.getElementById('vuln-create-thead-sub');
-        
-        while(theadMain.cells.length > 6) {
-            theadMain.deleteCell(-1);
+
+        // 마지막 '관리' 컬럼(index 6)을 남기기 위해 length > 7 조건으로 변경
+        while(theadMain.cells.length > 7) {
+            theadMain.deleteCell(6);
         }
         theadSub.innerHTML = '';
         currentVulnCreateCols = 0;
-        
+
         initVulnCreate();
         saveVulnCreateData();
         showToast("현재 취약점 작성 데이터가 초기화되었습니다.");
@@ -1359,8 +1404,8 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
             
             const theadMain = document.getElementById('vuln-create-thead').rows[0];
             const theadSub = document.getElementById('vuln-create-thead-sub');
-            while(theadMain.cells.length > 6) {
-                theadMain.deleteCell(-1);
+            while(theadMain.cells.length > 7) {
+                theadMain.deleteCell(6);
             }
             theadSub.innerHTML = '';
             currentVulnCreateCols = 0;
@@ -1391,7 +1436,11 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
             });
 
             applyLockState();
-            setTimeout(syncTopScrollWidth, 100);
+            setTimeout(() => {
+                syncTopScrollWidth();
+                updateVulnCreateFilterOptions();
+                filterVulnCreateTable();
+            }, 100);
             saveVulnCreateData();
             showToast('엑셀을 통해 취약점 양식이 로드되었습니다.');
         };
@@ -1409,7 +1458,7 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
 
             const theadMain = document.getElementById('vuln-create-thead').rows[0];
             const theadSub = document.getElementById('vuln-create-thead-sub');
-            while(theadMain.cells.length > 6) { theadMain.deleteCell(-1); }
+            while(theadMain.cells.length > 7) { theadMain.deleteCell(6); }
             theadSub.innerHTML = '';
             currentVulnCreateCols = 0;
             const tbody = document.getElementById('vuln-create-tbody');
@@ -1459,7 +1508,18 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
                         <option value="None" ${col.cvss==='None'?'selected':''}>None</option>
                     </select>
                 `;
-                theadMain.appendChild(thCve);
+                theadMain.insertBefore(thCve, theadMain.lastElementChild);
+
+                // +) 엑셀 업로드 완료 후 tr을 tbody에 넣기 직전에 일괄적용 버튼 추가 (공통)
+                const btnTd = document.createElement('td');
+                btnTd.className = 'no-print btn-edit-only';
+                btnTd.style.textAlign = 'center';
+                btnTd.innerHTML = `<button class="btn btn-secondary" style="height:28px; padding:0 8px; font-size:12px;" onclick="applyAllNA(this)">일괄</button>`;
+                tr.appendChild(btnTd);
+                tbody.appendChild(tr);
+
+                // +) 리스너 종료 직전 CVE 갯수 갱신 함수 호출 추가
+                updateCveCountDisplay();
 
                 const thStatus = document.createElement('th');
                 thStatus.style.minWidth = '90px';
@@ -1515,7 +1575,11 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
             });
 
             applyLockState();
-            setTimeout(syncTopScrollWidth, 100);
+            setTimeout(() => {
+                syncTopScrollWidth();
+                updateVulnCreateFilterOptions();
+                filterVulnCreateTable();
+            }, 100);
             saveVulnCreateData();
             showToast('수정된 취약점 점검표가 업로드되었습니다.');
         };
@@ -1557,7 +1621,7 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
             row2.push('');
         }
         
-        for(let i=6; i<theadMain.cells.length; i++) {
+        for(let i=6; i<theadMain.cells.length - 1; i++) {
             const th = theadMain.cells[i];
             const cveDiv = th.querySelector('.cve-name');
             const cvssSel = th.querySelector('.cvss-select');
@@ -1576,7 +1640,7 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
         ws.addRow(row2);
         
         for(let i=1; i<=6; i++) { ws.mergeCells(1, i, 2, i); }
-        for(let i=6; i<theadMain.cells.length; i++) {
+        for(let i=6; i<theadMain.cells.length - 1; i++) {
             const startCol = 7 + ((i-6)*2);
             ws.mergeCells(1, startCol, 1, startCol+1);
         }
@@ -1587,7 +1651,7 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
             for(let i=0; i<6; i++) rowData.push(tr.cells[i].innerText);
             
             let statusIdx = 6;
-            for(let i=6; i<theadMain.cells.length; i++) {
+            for(let i=6; i<theadMain.cells.length - 1; i++) {
                 const selectEl = tr.cells[statusIdx].querySelector('select');
                 rowData.push(selectEl ? selectEl.value : tr.cells[statusIdx].innerText);
                 rowData.push(tr.cells[statusIdx+1].innerText);
@@ -1756,9 +1820,11 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
                 pageHtml += `<th style="border:1px solid #000; padding:6px; background:#f1f5f9; -webkit-print-color-adjust: exact;">${theadSub.cells[i * 2].innerText}</th>`;
                 pageHtml += `<th style="border:1px solid #000; padding:6px; background:#f1f5f9; -webkit-print-color-adjust: exact;">${theadSub.cells[i * 2 + 1].innerText}</th>`;
             }
-            pageHtml += `</tr></thead><tbody>`;
+			pageHtml += `</tr></thead><tbody>`;
 
             Array.from(tbodyRows).forEach(tr => {
+                if (tr.style.display === 'none') return; // 화면에서 숨겨진(필터링 제외된) 행은 출력 안 함
+                
                 pageHtml += `<tr>`;
                 for (let i = 0; i < baseColsCount; i++) {
                     pageHtml += `<td style="border:1px solid #000; padding:6px; text-align:center;">${tr.cells[i].innerText}</td>`;
@@ -1794,7 +1860,7 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
         const theadSub = document.getElementById('vuln-create-thead-sub');
         const cveCols = [];
         
-        for(let i=6; i<theadMain.cells.length; i++) {
+        for(let i=6; i<theadMain.cells.length - 1; i++) {
             const th = theadMain.cells[i];
             const cveDiv = th.querySelector('.cve-name');
             const cvssSel = th.querySelector('.cvss-select');
@@ -1815,7 +1881,7 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
             
             let statusIdx = 6;
             let statuses = [];
-            for(let i=6; i<theadMain.cells.length; i++) {
+            for(let i=6; i<theadMain.cells.length - 1; i++) {
                 const selectEl = tr.cells[statusIdx].querySelector('select');
                 statuses.push({
                     status: selectEl ? selectEl.value : tr.cells[statusIdx].innerHTML,
@@ -1829,13 +1895,12 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
         await saveToDB('tables', { id: 'vuln_page_' + currentVulnPageName, pageName: currentVulnPageName, cveCols: cveCols, rows: rowDataArray });
     }
 
+    // loadVulnCreateData 내부 데이터 생성 루프 부분 수정
     function loadVulnCreateData(dataObj) {
         const theadMain = document.getElementById('vuln-create-thead').rows[0];
         const theadSub = document.getElementById('vuln-create-thead-sub');
-        
-        while(theadMain.cells.length > 6) {
-            theadMain.deleteCell(-1);
-        }
+
+        while(theadMain.cells.length > 7) { theadMain.deleteCell(6); } // 변경점
         theadSub.innerHTML = '';
         currentVulnCreateCols = 0;
 
@@ -1843,10 +1908,9 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
             initVulnCreate();
             return;
         }
-        
+
         dataObj.cveCols.forEach(colInfo => {
             currentVulnCreateCols++;
-            
             const thCve = document.createElement('th');
             thCve.colSpan = 2; 
             thCve.style.minWidth = '200px';
@@ -1860,7 +1924,7 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
                     <option value="None" ${(!colInfo.cvss || colInfo.cvss==='None')?'selected':''}>None</option>
                 </select>
             `;
-            theadMain.appendChild(thCve);
+            theadMain.insertBefore(thCve, theadMain.lastElementChild); // 변경점
 
             const thStatus = document.createElement('th');
             thStatus.style.minWidth = '90px';
@@ -1886,7 +1950,7 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
                 td.innerHTML = val;
                 tr.appendChild(td);
             });
-            
+
             rd.statuses.forEach(st => {
                 const tdStatus = document.createElement('td');
                 tdStatus.style.padding = '0';
@@ -1901,16 +1965,29 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
                     </select>
                 `;
                 tr.appendChild(tdStatus);
-                
+
                 const tdDate = document.createElement('td');
                 tdDate.className = 'editable-cell';
                 tdDate.contentEditable = "true";
                 tdDate.innerHTML = st.date;
                 tr.appendChild(tdDate);
             });
+
+            // 일괄적용 버튼 추가 (제일 마지막)
+            const btnTd = document.createElement('td');
+            btnTd.className = 'no-print btn-edit-only';
+            btnTd.style.textAlign = 'center';
+            btnTd.innerHTML = `<button class="btn btn-secondary" style="height:28px; padding:0 8px; font-size:12px;" onclick="applyAllNA(this)">일괄</button>`;
+            tr.appendChild(btnTd);
+
             tbody.appendChild(tr);
         });
-        setTimeout(syncTopScrollWidth, 100);
+        setTimeout(() => {
+            syncTopScrollWidth();
+            updateVulnCreateFilterOptions();
+            filterVulnCreateTable();
+            updateCveCountDisplay(); // 갯수 갱신
+        }, 100);
     }
 
     document.getElementById('vuln-page-selector').addEventListener('change', async function(e) {
@@ -2080,7 +2157,38 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
         };
     }
 
-    function saveContactData() {
+    // === 취약점 작성 정보보호시스템 필터 제어 ===
+    function updateVulnCreateFilterOptions() {
+        const rows = document.getElementById('vuln-create-tbody').querySelectorAll('tr');
+        const sysSet = new Set();
+        rows.forEach(tr => { 
+            // cells[1]이 정보보호시스템명
+            const sysName = stripHTML(tr.cells[1].innerHTML).trim(); 
+            if(sysName) sysSet.add(sysName); 
+        });
+
+        const filter = document.getElementById('vuln-create-system-filter'); 
+        if(!filter) return;
+        const currentVal = filter.value;
+        filter.innerHTML = '<option value="ALL">전체 시스템 보기</option>';
+
+        Array.from(sysSet).forEach(sys => { 
+            const op = document.createElement('option'); 
+            op.value = sys; 
+            op.textContent = sys; 
+            filter.appendChild(op); 
+        });
+        filter.value = sysSet.has(currentVal) ? currentVal : "ALL";
+    }
+
+    function filterVulnCreateTable() {
+        const sys = document.getElementById('vuln-create-system-filter').value;
+        document.getElementById('vuln-create-tbody').querySelectorAll('tr').forEach(tr => {
+            tr.style.display = (sys === "ALL" || stripHTML(tr.cells[1].innerHTML).trim() === sys) ? '' : 'none';
+        });
+    }  
+  
+    async function saveContactData() {
         const pRows = document.getElementById('contact-partner-tbody').querySelectorAll('tr');
         const pData = Array.from(pRows).map(tr => {
             const tds = tr.querySelectorAll('td');
@@ -2100,8 +2208,8 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
             bName: document.getElementById('th-manager-b').innerText
         };
 
-        saveToDB('tables', { id: 'contact_partner', data: pData });
-        saveToDB('tables', { id: 'contact_manager', data: mData, meta: metaData });
+        await saveToDB('tables', { id: 'contact_partner', data: pData });
+        await saveToDB('tables', { id: 'contact_manager', data: mData, meta: metaData });
     }
 
     function addContactPartnerRow(data = ['', '', '', '', '', '', '', '', '', '', '']) {
@@ -2440,7 +2548,7 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
         const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `취약점_분석현황_${dateStr}.xlsx`; a.click();
     }
 
-    function saveRequestData() {
+    async function saveRequestData() {
         const rows = document.getElementById('request-tbody').querySelectorAll('tr');
         const data = Array.from(rows).map(tr => {
             const tds = tr.querySelectorAll('td');
@@ -2460,11 +2568,11 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
                 confirmer: tds[11].innerHTML.trim()
             };
         });
-        saveToDB('tables', { id: 'request', data: data });
+        await saveToDB('tables', { id: 'request', data: data });
         updateRequestStats();
     }
 
-    function saveSsrData() {
+    async function saveSsrData() {
         const rows = document.getElementById('ssr-tbody').querySelectorAll('tr');
         const data = Array.from(rows).map(tr => {
             const tds = tr.querySelectorAll('td');
@@ -2481,7 +2589,7 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
                 result: tds[9].innerHTML.trim()
             };
         });
-        saveToDB('tables', { id: 'ssr_request', data: data });
+        await saveToDB('tables', { id: 'ssr_request', data: data });
         updateSsrStats();
     }
 
@@ -2611,16 +2719,6 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
         await saveToDB('schedules', { sheetName: currentEditingSheetName, rows: data });
     }
 
-    async function forceSaveAll(notify = true) {
-        saveContactData(); 
-        saveRequestData(); 
-        saveSsrData(); 
-        await saveVulnCreateData(); 
-        await saveCurrentScheduleToDB();
-        saveMonthlyData(); 
-        if(notify) showToast('모든 데이터가 브라우저(로컬)에 저장되었습니다.');
-    }
-
     document.addEventListener('input', (e) => {
         if (e.target.closest('#contact-partner-tbody') || e.target.closest('#contact-manager-tbody')) saveContactData();
         if (e.target.closest('#request-tbody')) saveRequestData();
@@ -2704,50 +2802,54 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
         }
         updateSsrStats();
 
-// === 월별 관리 사항 데이터 로드 (페이지 기반) ===
-    let monthlyPages = allTables.filter(t => t.id && t.id.startsWith('monthly_page_'));
-    
-    // (기존 단일 데이터 마이그레이션 처리)
-    const oldMonthly = await getFromDB('tables', 'monthly_manage');
-    if (monthlyPages.length === 0 && oldMonthly) {
-        oldMonthly.id = 'monthly_page_기본월';
-        oldMonthly.pageName = '기본월';
-        await saveToDB('tables', oldMonthly);
-        monthlyPages = [oldMonthly];
-        const tx = db.transaction('tables', 'readwrite'); tx.objectStore('tables').delete('monthly_manage');
-    }
+    // === 월별 관리 사항 데이터 로드 (페이지 기반) ===
+        let monthlyPages = allTables.filter(t => t.id && t.id.startsWith('monthly_page_'));
 
-    if (monthlyPages.length === 0) {
-        const defaultPage = { id: 'monthly_page_기본월', pageName: '기본월', data: [] };
-        await saveToDB('tables', defaultPage);
-        monthlyPages.push(defaultPage);
-    }
-    
-    await refreshMonthlyPageSelector();
-    loadMonthlyPageFromDB(document.getElementById('monthly-page-selector').options[0].value);
+        // (기존 단일 데이터 마이그레이션 처리)
+        const oldMonthly = await getFromDB('tables', 'monthly_manage');
+        if (monthlyPages.length === 0 && oldMonthly) {
+            oldMonthly.id = 'monthly_page_기본월';
+            oldMonthly.pageName = '기본월';
+            await saveToDB('tables', oldMonthly);
+            monthlyPages = [oldMonthly];
+            const tx = db.transaction('tables', 'readwrite'); tx.objectStore('tables').delete('monthly_manage');
+        }
+
+        if (monthlyPages.length === 0) {
+            const defaultPage = { id: 'monthly_page_기본월', pageName: '기본월', data: [] };
+            await saveToDB('tables', defaultPage);
+            monthlyPages.push(defaultPage);
+        }
+
+        await refreshMonthlyPageSelector();
+        // [수정된 부분] 초기 로드 시 'ALL'(0번 옵션) 대신 첫 번째 실제 페이지(1번 옵션)를 로드
+        const mSel = document.getElementById('monthly-page-selector');
+        loadMonthlyPageFromDB(mSel.options.length > 1 ? mSel.options[1].value : mSel.options[0].value);
 
 
-    // === 월별 체크 사항 데이터 로드 (페이지 기반) ===
-    let monthlyCheckPages = allTables.filter(t => t.id && t.id.startsWith('monthly_check_page_'));
-    
-    // (기존 단일 데이터 마이그레이션 처리)
-    const oldMonthlyCheck = await getFromDB('tables', 'monthly_check');
-    if (monthlyCheckPages.length === 0 && oldMonthlyCheck) {
-        oldMonthlyCheck.id = 'monthly_check_page_기본월';
-        oldMonthlyCheck.pageName = '기본월';
-        await saveToDB('tables', oldMonthlyCheck);
-        monthlyCheckPages = [oldMonthlyCheck];
-        const tx = db.transaction('tables', 'readwrite'); tx.objectStore('tables').delete('monthly_check');
-    }
+        // === 월별 체크 사항 데이터 로드 (페이지 기반) ===
+        let monthlyCheckPages = allTables.filter(t => t.id && t.id.startsWith('monthly_check_page_'));
 
-    if (monthlyCheckPages.length === 0) {
-        const defaultPage = { id: 'monthly_check_page_기본월', pageName: '기본월', data: [] };
-        await saveToDB('tables', defaultPage);
-        monthlyCheckPages.push(defaultPage);
-    }
-    
-    await refreshMonthlyCheckPageSelector();
-    loadMonthlyCheckPageFromDB(document.getElementById('monthly-check-page-selector').options[0].value); 
+        // (기존 단일 데이터 마이그레이션 처리)
+        const oldMonthlyCheck = await getFromDB('tables', 'monthly_check');
+        if (monthlyCheckPages.length === 0 && oldMonthlyCheck) {
+            oldMonthlyCheck.id = 'monthly_check_page_기본월';
+            oldMonthlyCheck.pageName = '기본월';
+            await saveToDB('tables', oldMonthlyCheck);
+            monthlyCheckPages = [oldMonthlyCheck];
+            const tx = db.transaction('tables', 'readwrite'); tx.objectStore('tables').delete('monthly_check');
+        }
+
+        if (monthlyCheckPages.length === 0) {
+            const defaultPage = { id: 'monthly_check_page_기본월', pageName: '기본월', data: [] };
+            await saveToDB('tables', defaultPage);
+            monthlyCheckPages.push(defaultPage);
+        }
+
+        await refreshMonthlyCheckPageSelector();
+        // [수정된 부분] 초기 로드 시 'ALL'(0번 옵션) 대신 첫 번째 실제 페이지(1번 옵션)를 로드
+        const mcSel = document.getElementById('monthly-check-page-selector');
+        loadMonthlyCheckPageFromDB(mcSel.options.length > 1 ? mcSel.options[1].value : mcSel.options[0].value);
       
         const s_all = await getAllFromDB('schedules');
         s_all.sort((a, b) => a.sheetName.localeCompare(b.sheetName, undefined, {numeric: true, sensitivity: 'base'}));
@@ -2785,13 +2887,17 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
                 item.classList.add('active'); document.getElementById(item.getAttribute('data-target')).classList.add('active');
                 
                 // 취약점 분석 탭 클릭 시 최신 DB 불러오기
+                // DOMContentLoaded 이벤트 내 tab-vuln 클릭 시
                 if (item.getAttribute('data-target') === 'tab-vuln') {
                     await saveVulnCreateData();
                     const analysisSelector = document.getElementById('analysis-page-selector');
                     const currentVal = analysisSelector.value;
                     const allTables = await getAllFromDB('tables');
                     const vulnPages = allTables.filter(t => t.id && t.id.startsWith('vuln_page_'));
-                    
+
+                    // 자연 소팅 적용 (9월, 10월 등 숫자 기반 정렬 추가)
+                    vulnPages.sort((a, b) => a.pageName.localeCompare(b.pageName, undefined, {numeric: true, sensitivity: 'base'}));
+
                     analysisSelector.innerHTML = '<option value="all" style="font-weight:bold; color:var(--accent);">전체 페이지 통합 분석</option>';
                     vulnPages.forEach(p => {
                         const op = document.createElement('option');
@@ -2799,7 +2905,7 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
                         analysisSelector.appendChild(op);
                     });
                     if(Array.from(analysisSelector.options).some(o => o.value === currentVal)) analysisSelector.value = currentVal;
-                    
+
                     loadVulnAnalysisData();
                 }
             });
@@ -3408,16 +3514,14 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
     // (1) 페이지 선택 이벤트
     document.getElementById('monthly-page-selector').addEventListener('change', async function(e) {
         if(e.target.value) { 
-            saveMonthlyData(); 
+            await saveMonthlyData();  // <== await 추가
             loadMonthlyPageFromDB(e.target.value); 
         }
     });
 
 	// (2) 데이터 저장 (페이지 단위)
-    function saveMonthlyData() {
-        // '전체 페이지 보기' 모드일 때는 데이터 덮어쓰기(저장) 방지
+    async function saveMonthlyData() {
         if (!currentMonthlyPageName || currentMonthlyPageName === 'ALL') return; 
-        
         const rows = document.getElementById('monthly-tbody').querySelectorAll('tr');
         const data = Array.from(rows).map(tr => {
             const tds = tr.querySelectorAll('td');
@@ -3426,7 +3530,9 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
             }
             return null;
         }).filter(Boolean);
-        saveToDB('tables', { id: 'monthly_page_' + currentMonthlyPageName, pageName: currentMonthlyPageName, data: data });
+
+        // 비동기 처리 대기 추가
+        await saveToDB('tables', { id: 'monthly_page_' + currentMonthlyPageName, pageName: currentMonthlyPageName, data: data });
         updateMonthlyFilterOptions();
     }
 
@@ -3859,15 +3965,17 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
     }
   
     async function forceSaveAll(notify = true) {
-        saveContactData(); 
-        saveRequestData(); 
-        saveSsrData(); 
+        await saveContactData(); 
+        await saveRequestData(); 
+        await saveSsrData(); 
         await saveVulnCreateData(); 
         await saveCurrentScheduleToDB();
-        saveMonthlyData(); 
-        saveMonthlyCheckData(); // <== 이 줄을 추가하세요.
+        await saveMonthlyData(); 
+        await saveMonthlyCheckData(); 
+
         if(notify) showToast('모든 데이터가 브라우저(로컬)에 저장되었습니다.');
-    }  
+    }
+  
       // ==========================================
       // === 월별 체크 사항 전용 스크립트 기능 시작 ===
       // ==========================================
@@ -3875,16 +3983,14 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
     // (1) 페이지 선택 이벤트
     document.getElementById('monthly-check-page-selector').addEventListener('change', async function(e) {
         if(e.target.value) { 
-            saveMonthlyCheckData(); 
+            await saveMonthlyCheckData(); // <== await 추가
             loadMonthlyCheckPageFromDB(e.target.value); 
         }
     });
 
 	// (2) 데이터 저장 (페이지 단위)
-    function saveMonthlyCheckData() {
-        // '전체 페이지 보기' 모드일 때는 데이터 덮어쓰기(저장) 방지
-        if (!currentMonthlyCheckPageName || currentMonthlyCheckPageName === 'ALL') return; 
-        
+    async function saveMonthlyCheckData() {
+        if (!currentMonthlyCheckPageName || currentMonthlyCheckPageName === 'ALL') return;
         const rows = document.getElementById('monthly-check-tbody').querySelectorAll('tr');
         const data = Array.from(rows).map(tr => {
             const tds = tr.querySelectorAll('td');
@@ -3899,7 +4005,9 @@ body.printing-monthly-check #monthly-check-print-container { display: block !imp
             }
             return null;
         }).filter(Boolean);
-        saveToDB('tables', { id: 'monthly_check_page_' + currentMonthlyCheckPageName, pageName: currentMonthlyCheckPageName, data: data });
+
+        // 비동기 처리 대기 추가
+        await saveToDB('tables', { id: 'monthly_check_page_' + currentMonthlyCheckPageName, pageName: currentMonthlyCheckPageName, data: data });
         updateMonthlyCheckFilterOptions();
     }
 
