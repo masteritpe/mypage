@@ -158,7 +158,6 @@ s { color: #94a3b8; }
 .top-scrollbar-wrapper::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
 .top-scrollbar-wrapper::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
-
 /* CVSS Select Styles */
 .cvss-select { width: 100%; margin-top: 6px; font-size: 12px; padding: 4px; border-radius: 4px; border: 1px solid var(--border); outline: none; font-weight: 600; text-align: center; cursor: pointer; appearance: auto; }
 .cvss-select.cvss-Critical { color: #b91c1c; background: #fef2f2; border-color: #fecaca; }
@@ -168,8 +167,8 @@ s { color: #94a3b8; }
 .cvss-select.cvss-None { color: #4b5563; background: #f9fafb; border-color: #d1d5db; }
 
 body.locked-mode .cvss-select { appearance: none; pointer-events: none; border-color: transparent; }
-/* === 잠금 모드 (View Only) === */
 
+/* === 잠금 모드 (View Only) === */
 body.locked-mode td .badge { pointer-events: none; cursor: default; }
 body.locked-mode .btn-edit-only { display: none !important; }
 body.locked-mode .data-table th.no-print,
@@ -180,13 +179,16 @@ body.locked-mode .status-select { pointer-events: none; appearance: none; }
 
 /* === 전체 출력용 완벽 보완 CSS (Print) === */
 .print-header { display: none; }
-#vuln-create-print-container, #monthly-print-container, #monthly-check-print-container { display: none; }
-  
-/* 월별 체크 사항 출력용 CSS */
-body.printing-monthly-check > *:not(#monthly-check-print-container) { display: none !important; }
-body.printing-monthly-check #monthly-check-print-container { display: block !important; width: 100%; }  
+#vuln-create-print-container, #monthly-print-container, #monthly-check-print-container, #vuln-summary-print-container { display: none; }
 
 @media print {
+    body.printing-vuln-summary > *:not(#vuln-summary-print-container) { display: none !important; }
+    body.printing-vuln-summary #vuln-summary-print-container { display: block !important; width: 100%; }
+  
+    /* 월별 체크 사항 출력용 CSS */
+    body.printing-monthly-check > *:not(#monthly-check-print-container) { display: none !important; }
+    body.printing-monthly-check #monthly-check-print-container { display: block !important; width: 100%; }  
+
     @page { size: landscape; margin: 10mm; }
     html, body { display: block !important; height: auto !important; min-height: 0 !important; overflow: visible !important; background: #fff !important; margin: 0 !important; padding: 0 !important; }
     
@@ -259,6 +261,7 @@ body.offline-mode header .btn i { display: none; }
 .icons-failed .fa-print::before { content: "🖨️"; }
 .icons-failed .fa-times::before { content: "❌"; }
 .icons-failed .fa-check::before { content: "✔️"; }
+.icons-failed .fa-check-circle::before { content: "🟢"; }
 .icons-failed .fa-bars::before { content: "🍔"; }
 .icons-failed .fa-shield-halved::before { content: "🛡️"; }
 .icons-failed .fa-lock::before { content: "🔒"; }
@@ -269,11 +272,11 @@ body.offline-mode header .btn i { display: none; }
 .icons-failed .fa-check-square::before, .icons-failed .fa-list-check::before { content: "✅"; }
 .icons-failed .fa-layer-group::before { content: "📚"; }
 .icons-failed .fa-tasks::before { content: "📋"; }
+.icons-failed .fa-table::before { content: "📋"; }
 .icons-failed .fa-server::before { content: "🖥️"; }
 .icons-failed .fa-exclamation-triangle::before { content: "⚠️"; }
 .icons-failed .fa-info-circle::before { content: "ℹ️"; }
 .icons-failed .fa-file-excel::before { content: "📊"; }  
-  
 </style>
 </head>
 <body>
@@ -305,6 +308,7 @@ body.offline-mode header .btn i { display: none; }
         <div class="nav-item active" data-target="tab-contacts"><i class="fas fa-address-book"></i> 연락처</div>
         <div class="nav-item" data-target="tab-vuln-create"><i class="fas fa-edit"></i> 취약점 작성</div>
         <div class="nav-item" data-target="tab-vuln"><i class="fas fa-bug"></i> 취약점 분석</div>
+		<div class="nav-item" data-target="tab-vuln-summary"><i class="fas fa-table"></i> 취약점 요약</div>      
         <div class="nav-item" data-target="tab-schedule"><i class="fas fa-calendar-alt"></i> 일정관리</div>
         <div class="nav-item" data-target="tab-monthly-manage"><i class="fas fa-calendar-check"></i> 월별 관리 사항</div>
 		<div class="nav-item" data-target="tab-monthly-check"><i class="fas fa-check-square"></i> 월별 체크 사항</div>      
@@ -530,6 +534,53 @@ body.offline-mode header .btn i { display: none; }
                 </div>
             </div>
         </div>
+      
+
+<!-- ▼▼▼ 2. 취약점 요약 탭 화면 추가 ▼▼▼ -->
+		<div id="tab-vuln-summary" class="tab-pane">
+            <div class="page-header">
+                <h1 class="page-title"><i class="fas fa-table"></i> 취약점 요약</h1>
+                <div style="display: flex; gap: 10px;">
+                    <!-- ▼▼▼ 출력 함수 변경 ▼▼▼ -->
+                    <button class="btn btn-secondary" onclick="printVulnSummary()"><i class="fas fa-print"></i> 출력</button>
+                </div>
+            </div>
+            <div class="paper-sheet">
+				<div class="search-bar" style="background: #f8fafc; padding: 16px; border-radius: 8px; display: flex; flex-wrap: wrap; gap: 15px;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-weight: 600; font-size: 14px;">월 선택:</span>
+                        <select id="summary-page-selector" class="input-modern" style="width: 250px; cursor: pointer;" onchange="loadVulnSummaryData()"></select>
+                    </div>
+                    <div style="display: flex; align-items: center; margin-left: auto;">
+                        <span style="font-size: 13px; color: var(--text-sub);"><i class="fas fa-info-circle"></i> 미조치 건 및 조치예정일이 표시됩니다.</span>
+                    </div>
+                </div>
+                
+                <div id="print-area-summary">
+                    <div class="print-header"><h1>보안 취약점 미조치 요약</h1><p id="print-subtitle-summary">데이터를 분석 중입니다...</p></div>
+                    
+                    <div class="top-scrollbar-wrapper no-print" id="vuln-summary-top-scroll" style="overflow-x: auto; width: 100%; margin-bottom: 5px;">
+                        <div id="vuln-summary-top-scroll-content" style="height: 1px;"></div>
+                    </div>
+                    
+                    <div class="data-table-wrapper" id="vuln-summary-table-wrapper" style="overflow-x: auto; max-height: calc(100vh - 250px);">
+                        <table class="data-table" id="vuln-summary-table">
+                            <thead id="vuln-summary-thead">
+                                <tr>
+                                    <th style="width: 50px; min-width: 50px;">번호</th>
+                                    <th style="width: 150px; min-width: 150px;">정보보호시스템</th>
+                                    <th style="width: 150px; min-width: 150px;">세부내역</th>
+                                    <!-- 동적 CVE 컬럼이 여기에 추가됨 -->
+                                </tr>
+                            </thead>
+                            <tbody id="vuln-summary-tbody">
+                                <tr><td colspan="3" style="text-align: center; color: var(--text-muted); padding: 30px;">조회할 월(페이지)을 선택하세요.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>      
 
         <!-- 4. 일정관리 탭 -->
 		<div id="tab-schedule" class="tab-pane">
@@ -1351,6 +1402,12 @@ body.offline-mode header .btn i { display: none; }
         if(monthlyCheckTable && monthlyCheckTopScrollContent) {
             monthlyCheckTopScrollContent.style.width = monthlyCheckTable.offsetWidth + 'px';
         }
+		// 4. 취약점 요약 가로 스크롤 동기화 추가
+        const summaryTopScrollContent = document.getElementById('vuln-summary-top-scroll-content');
+        const summaryTable = document.getElementById('vuln-summary-table');
+        if(summaryTable && summaryTopScrollContent) {
+            summaryTopScrollContent.style.width = summaryTable.offsetWidth + 'px';
+        }      
     }
 
     // CVE 갯수 업데이트 함수
@@ -3020,6 +3077,48 @@ body.offline-mode header .btn i { display: none; }
 
                     loadVulnAnalysisData();
                 }
+              
+				// ▼▼▼ 요약 탭 클릭 시 월별 그룹화 및 데이터 로드 로직 ▼▼▼
+                if (item.getAttribute('data-target') === 'tab-vuln-summary') {
+                    await saveVulnCreateData();
+                    const summarySelector = document.getElementById('summary-page-selector');
+                    const currentVal = summarySelector.value;
+                    const allTables = await getAllFromDB('tables');
+                    const vulnPages = allTables.filter(t => t.id && t.id.startsWith('vuln_page_'));
+
+                    // '월' 단위 그룹화 로직 (예: "10월-1", "10월_2" -> "10월"로 통합)
+                    const monthGroups = {};
+                    vulnPages.forEach(p => {
+                        let match = p.pageName.match(/(.*?월)/); // '월' 앞부분까지 추출
+                        let monthKey = match ? match[1].trim() : p.pageName.split(/[-_]/)[0].trim();
+                        if(!monthGroups[monthKey]) monthGroups[monthKey] = [];
+                        monthGroups[monthKey].push(p);
+                    });
+
+                    const sortedMonths = Object.keys(monthGroups).sort((a, b) => a.localeCompare(b, undefined, {numeric: true, sensitivity: 'base'}));
+
+                    summarySelector.innerHTML = '';
+                    if(sortedMonths.length === 0) {
+                         summarySelector.innerHTML = '<option value="">데이터 없음</option>';
+                    } else {
+                        sortedMonths.forEach(m => {
+                            const op = document.createElement('option');
+                            op.value = m; op.textContent = m;
+                            summarySelector.appendChild(op);
+                        });
+                        
+                        if(Array.from(summarySelector.options).some(o => o.value === currentVal)) {
+                            summarySelector.value = currentVal;
+                        } else {
+                            summarySelector.value = sortedMonths[sortedMonths.length - 1]; 
+                        }
+                    }
+                    
+                    // 추출된 그룹 데이터를 전역으로 저장하여 테이블 그릴 때 사용
+                    window.currentVulnMonthGroups = monthGroups;
+                    loadVulnSummaryData();
+                }
+              
             });
         });
         const subTabs = document.querySelectorAll('.sub-tab'); const subContents = document.querySelectorAll('.sub-tab-content');
@@ -3067,7 +3166,19 @@ body.offline-mode header .btn i { display: none; }
             const roMonthlyCheck = new ResizeObserver(() => { syncTopScrollWidth(); });
             if(monthlyCheckTableEl) roMonthlyCheck.observe(monthlyCheckTableEl);
         }
-
+      
+		// 4. 취약점 요약 스크롤 연동 이벤트
+        const summaryTopScroll = document.getElementById('vuln-summary-top-scroll');
+        const summaryTableWrapper = document.getElementById('vuln-summary-table-wrapper');
+        if(summaryTopScroll && summaryTableWrapper) {
+            summaryTopScroll.addEventListener('scroll', () => { summaryTableWrapper.scrollLeft = summaryTopScroll.scrollLeft; });
+            summaryTableWrapper.addEventListener('scroll', () => { summaryTopScroll.scrollLeft = summaryTableWrapper.scrollLeft; });
+            
+            const summaryTableEl = document.getElementById('vuln-summary-table');
+            const roSummary = new ResizeObserver(() => { syncTopScrollWidth(); });
+            if(summaryTableEl) roSummary.observe(summaryTableEl);
+        }      
+      
         await initDB(); await loadDataFromDB();
         document.getElementById('schedule-tbody').addEventListener('input', updateScheduleSummary);
         document.getElementById('schedule-tbody').addEventListener('change', updateScheduleSummary);
@@ -4516,6 +4627,206 @@ body.offline-mode header .btn i { display: none; }
       // ==========================================
       // === 월별 체크 사항 전용 스크립트 기능 끝 ===
       // ==========================================  
+
+	// ▼▼▼ 취약점 요약 데이터 로드 함수 추가 (스크립트 아무 곳이나 상관없음) ▼▼▼
+	async function loadVulnSummaryData() {
+        const targetMonth = document.getElementById('summary-page-selector').value;
+        const thead = document.getElementById('vuln-summary-thead').rows[0];
+        const tbody = document.getElementById('vuln-summary-tbody');
+        
+        while(thead.cells.length > 3) thead.deleteCell(3);
+        tbody.innerHTML = '';
+        
+        if (!targetMonth || !window.currentVulnMonthGroups || !window.currentVulnMonthGroups[targetMonth]) return;
+        document.getElementById('print-subtitle-summary').textContent = `[${targetMonth}] 미조치 취약점 요약 장표`;
+        
+        const pages = window.currentVulnMonthGroups[targetMonth];
+        
+        // 1. 해당 월에 속한 모든 페이지의 CVE 컬럼 병합 (중복 제거)
+        let mergedCVEs = [];
+        pages.forEach(pageData => {
+            if(pageData.cveCols) {
+                pageData.cveCols.forEach(col => {
+                    if(!mergedCVEs.find(c => c.cve.trim() === col.cve.trim())) {
+                        mergedCVEs.push(col);
+                    }
+                });
+            }
+        });
+
+        if (mergedCVEs.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:30px; font-weight:600; color:var(--text-muted);">해당 월에 등록된 취약점(CVE)이 없습니다.</td></tr>`;
+            return;
+        }
+
+        // 2. 동적 헤더 생성
+        mergedCVEs.forEach(col => {
+            const th = document.createElement('th');
+            th.style.minWidth = '130px';
+            th.style.lineHeight = '1.4';
+            th.innerHTML = `${col.cve}<br><span style="font-size:11px; font-weight:normal; color:var(--text-sub);">[${col.cvss || 'None'}]</span>`;
+            thead.appendChild(th);
+        });
+
+        // 3. 실제 저장된 취약점 데이터 기반으로 시스템 목록 동적 추출
+        let actualSystems = [];
+        pages.forEach(pageData => {
+            if (pageData.rows) {
+                pageData.rows.forEach(r => {
+                    const no = stripHTML(r.base[0] || '').trim();
+                    const sysName = stripHTML(r.base[1] || '').trim();
+                    const sysDetail = stripHTML(r.base[2] || '').trim();
+                    
+                    if (no && !actualSystems.find(s => s.no === no)) {
+                        actualSystems.push({ no, sysName, sysDetail });
+                    }
+                });
+            }
+        });
+        
+        // 데이터가 아예 없을 경우를 대비한 폴백(Fallback)
+        if (actualSystems.length === 0) {
+            actualSystems = FIXED_16_SYSTEMS.map(sys => ({ no: sys[0], sysName: sys[1], sysDetail: sys[2] }));
+        }
+
+        // 번호(No) 기준으로 오름차순 정렬
+        actualSystems.sort((a, b) => {
+            const numA = parseInt(a.no.replace(/[^0-9]/g, ''), 10) || 0;
+            const numB = parseInt(b.no.replace(/[^0-9]/g, ''), 10) || 0;
+            return numA - numB;
+        });
+
+        // 4. 추출된 시스템 데이터를 기반으로 테이블 행(Row) 생성
+        actualSystems.forEach(sys => {
+            const tr = document.createElement('tr');
+            const targetNo = sys.no; 
+            
+            const tdNo = document.createElement('td'); tdNo.innerText = sys.no; tdNo.style.textAlign = 'center'; tr.appendChild(tdNo);
+            const tdSys = document.createElement('td'); tdSys.innerText = sys.sysName; tdSys.style.fontWeight = '600'; tr.appendChild(tdSys);
+            const tdDetail = document.createElement('td'); tdDetail.innerText = sys.sysDetail; tr.appendChild(tdDetail);
+            
+            mergedCVEs.forEach(cveCol => {
+                const td = document.createElement('td');
+                td.style.textAlign = 'center';
+                td.style.verticalAlign = 'middle';
+                
+                let unresolvedFound = false;
+                let actionDate = '';
+
+                // 통합된 페이지들을 순회하며 해당 시스템의 미조치 건 탐색
+                for (let page of pages) {
+                    if (!page.rows) continue;
+                    
+                    const row = page.rows.find(r => stripHTML(r.base[0] || '').trim() === targetNo);
+                    
+                    if (row && page.cveCols) {
+                        const cveIdx = page.cveCols.findIndex(c => c.cve.trim() === cveCol.cve.trim());
+                        if (cveIdx !== -1 && row.statuses && row.statuses[cveIdx]) {
+                            const status = stripHTML(row.statuses[cveIdx].status).trim();
+                            if (status === '미조치') {
+                                unresolvedFound = true;
+                                actionDate = stripHTML(row.statuses[cveIdx].date).replace(/ /g, '').trim();
+                                break; 
+                            }
+                        }
+                    }
+                }
+
+                // 미조치 건이 있을 경우 주황색 배경과 조치(예정)일 렌더링
+                if (unresolvedFound) {
+                    td.innerHTML = actionDate ? `<span style="font-weight:700; color:#c2410c;">${actionDate}</span>` : '';
+                    td.style.backgroundColor = '#fff7ed'; 
+                    td.classList.add('summary-unresolved'); // 출력용 클래스
+                }
+                tr.appendChild(td);
+            });
+            
+            tbody.appendChild(tr);
+        });
+
+        setTimeout(syncTopScrollWidth, 100);
+    }
+  
+	function printVulnSummary() {
+        let printDiv = document.getElementById('vuln-summary-print-container');
+        if (!printDiv) {
+            printDiv = document.createElement('div');
+            printDiv.id = 'vuln-summary-print-container';
+            document.body.appendChild(printDiv);
+        }
+        printDiv.innerHTML = '';
+
+        const theadMain = document.getElementById('vuln-summary-thead').rows[0];
+        const tbodyRows = document.getElementById('vuln-summary-tbody').rows;
+        const targetMonth = document.getElementById('summary-page-selector').value || '전체';
+
+        const baseColsCount = 3; 
+        const totalCveCols = theadMain.cells.length - baseColsCount;
+        
+        if (totalCveCols <= 0) {
+            alert("출력할 취약점(CVE) 데이터가 없습니다.");
+            return;
+        }
+
+        const cvesPerPage = 5; 
+        let pages = Math.ceil(totalCveCols / cvesPerPage);
+        if(pages === 0) pages = 1; 
+
+        for (let p = 0; p < pages; p++) {
+            const cveStartIndex = p * cvesPerPage;
+            const cveEndIndex = Math.min((p + 1) * cvesPerPage, totalCveCols);
+
+            let pageHtml = `
+                <div class="print-page" style="${p < pages - 1 ? 'page-break-after: always;' : ''} width: 100%; margin-bottom: 0;">
+                    <!-- ▼ 여백 및 폰트 축소 (16개 시스템 1장 표시용) -->
+                    <div class="print-header" style="text-align:center; margin-bottom:10px;">
+                        <h1 style="font-size:16pt; margin-bottom:4px;">보안 취약점 미조치 요약</h1>
+                        <p style="font-size:9pt; margin-bottom:0; color:#555;">[${targetMonth}] 정보보호시스템 별 미조치 내역 ${pages > 1 ? `(페이지 ${p+1}/${pages})` : ''}</p>
+                    </div>
+                    <table class="data-table" style="width: 100%; border-collapse: collapse; font-size: 8pt; border: 1px solid #000; table-layout: auto;">
+                        <thead>
+                            <tr>
+            `;
+
+            for (let i = 0; i < baseColsCount; i++) {
+                pageHtml += `<th style="border:1px solid #000; padding:4px; background:#f1f5f9; -webkit-print-color-adjust: exact;">${theadMain.cells[i].innerHTML}</th>`;
+            }
+            
+            for (let i = cveStartIndex; i < cveEndIndex; i++) {
+                pageHtml += `<th style="border:1px solid #000; padding:4px; background:#f1f5f9; -webkit-print-color-adjust: exact;">${theadMain.cells[baseColsCount + i].innerHTML}</th>`;
+            }
+            
+            pageHtml += `</tr></thead><tbody>`;
+
+            Array.from(tbodyRows).forEach(tr => {
+                if (tr.cells.length === 1) return; 
+                
+                pageHtml += `<tr>`;
+                for (let i = 0; i < baseColsCount; i++) {
+                    pageHtml += `<td style="border:1px solid #000; padding:4px; text-align:center;">${tr.cells[i].innerText}</td>`;
+                }
+                for (let i = cveStartIndex; i < cveEndIndex; i++) {
+                    const td = tr.cells[baseColsCount + i];
+                    
+                    let bgStyle = "";
+                    // '미조치' 텍스트가 없으므로 클래스를 기준으로 판단
+                    if (td.classList.contains('summary-unresolved')) {
+                        bgStyle = "background-color:#fff7ed !important; -webkit-print-color-adjust:exact; print-color-adjust:exact;";
+                    }
+                    
+                    pageHtml += `<td style="border:1px solid #000; padding:4px; text-align:center; ${bgStyle}">${td.innerHTML}</td>`;
+                }
+                pageHtml += `</tr>`;
+            });
+
+            pageHtml += `</tbody></table></div>`;
+            printDiv.innerHTML += pageHtml;
+        }
+
+        document.body.classList.add('printing-vuln-summary');
+        window.print();
+        setTimeout(() => { document.body.classList.remove('printing-vuln-summary'); }, 100);
+    }
 </script>
 </body>
 </html>
