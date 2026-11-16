@@ -426,9 +426,9 @@ body.offline-mode header .btn i { display: none; }
                         <select id="vuln-page-selector" class="input-modern" style="width: 200px; cursor: pointer;"></select>
                         <button class="btn btn-secondary btn-edit-only" onclick="addNewVulnPage()" style="height: 40px;"><i class="fas fa-plus"></i> 새 페이지</button>
                         <button class="btn btn-secondary btn-edit-only" onclick="openVulnPageManagerModal()" style="height: 40px;"><i class="fas fa-layer-group"></i> 관리</button>
-                        <div style="display:inline-flex; align-items:center; margin-left:15px; font-size:14px; font-weight:600; color:var(--text-sub);">
-                            CVE : <span id="cve-count-display" style="color:var(--accent); font-size:16px; margin-left:5px; margin-right:2px;">0</span> 개
-                        </div>                      
+						<div style="display:inline-flex; align-items:center; margin-left:15px; font-size:14px; font-weight:600; color:var(--text-sub);">
+                        	CVE : <span id="cve-count-display" style="color:var(--accent); font-size:16px; margin-left:5px; margin-right:2px; cursor:pointer; text-decoration:underline;" onclick="openCveListModal()">0</span> 개
+                    	</div>                     
                     </div>
                     <div style="display: flex; gap: 10px; align-items: center;">
                         <span style="font-weight: 600; font-size: 14px; margin-right: 5px;">취약점(CVE) 수동 추가:</span>
@@ -949,6 +949,24 @@ body.offline-mode header .btn i { display: none; }
     </div>
 </div>  
   
+<!-- CVE 리스트 조회 모달 -->
+<div class="modal-overlay" id="cve-list-modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3><i class="fas fa-list"></i> 등록된 취약점(CVE) 목록</h3>
+            <div class="modal-close" onclick="closeCveListModal()"><i class="fas fa-times"></i></div>
+        </div>
+        <div class="modal-body" style="max-height: 400px; overflow-y: auto;">
+            <ul id="cve-list-content" style="list-style: none; padding: 0; margin: 0;">
+                <!-- CVE 리스트가 여기에 동적으로 추가됩니다 -->
+            </ul>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeCveListModal()">닫기</button>
+        </div>
+    </div>
+</div>
+  
 <!-- 취약점 작성 새 페이지 모달 -->
 <div class="modal-overlay" id="vuln-page-create-modal">
     <div class="modal-content">
@@ -1164,7 +1182,15 @@ body.offline-mode header .btn i { display: none; }
         showToast(isLocked ? '잠금 모드로 전환되었습니다. (조회만 가능)' : '입력 활성 모드로 전환되었습니다.');
     }
 
-    const stripHTML = (str) => String(str).replace(/<[^>]+>/g, '');
+    const stripHTML = (str) => {
+        let s = String(str).replace(/<[^>]+>/g, '');
+        s = s.replace(/ /ig, ' ')
+             .replace(/&/ig, '&')
+             .replace(/</ig, '<')
+             .replace(/>/ig, '>')
+             .replace(/[\u200B-\u200D\uFEFF]/g, ''); // 눈에 보이지 않는 유니코드 제어문자 제거
+        return s.replace(/\s+/g, ' ').trim(); // 연속된 띄어쓰기를 단일 공백으로 통일하고 양끝 여백 제거
+    };
 
     function arrayBufferToBase64(buffer) {
         let binary = '';
@@ -1415,6 +1441,58 @@ body.offline-mode header .btn i { display: none; }
         const display = document.getElementById('cve-count-display');
         if (display) display.innerText = currentVulnCreateCols;
     }
+  
+	// CVE 리스트 모달 열기
+    function openCveListModal() {
+        const theadMain = document.getElementById('vuln-create-thead').rows[0];
+        const listContent = document.getElementById('cve-list-content');
+        listContent.innerHTML = ''; // 초기화
+
+        // 6번 인덱스부터 관리(마지막) 컬럼 전까지 CVE 데이터 추출
+        for (let i = 6; i < theadMain.cells.length - 1; i++) {
+            const th = theadMain.cells[i];
+            const cveDiv = th.querySelector('.cve-name');
+            const cvssSel = th.querySelector('.cvss-select');
+            
+            if (cveDiv) {
+                const cveName = cveDiv.innerText.trim();
+                const cvssVal = cvssSel ? cvssSel.value : 'None';
+                
+                // 리스트 아이템 생성
+                const li = document.createElement('li');
+                li.style.padding = '10px 12px';
+                li.style.borderBottom = '1px solid var(--border)';
+                li.style.display = 'flex';
+                li.style.justifyContent = 'space-between';
+                li.style.alignItems = 'center';
+                
+                // CVSS 뱃지 색상
+                let badgeStyle = '';
+                if(cvssVal === 'Critical') badgeStyle = 'color:#b91c1c; background:#fef2f2; border:1px solid #fecaca;';
+                else if(cvssVal === 'High') badgeStyle = 'color:#1d4ed8; background:#eff6ff; border:1px solid #bfdbfe;';
+                else if(cvssVal === 'Medium') badgeStyle = 'color:#047857; background:#ecfdf5; border:1px solid #a7f3d0;';
+                else if(cvssVal === 'Low') badgeStyle = 'color:#b45309; background:#fffbeb; border:1px solid #fde68a;';
+                else badgeStyle = 'color:#4b5563; background:#f9fafb; border:1px solid #d1d5db;';
+
+                li.innerHTML = `
+                    <span style="font-weight:600; color:var(--text-main); font-size:14px;">${cveName}</span>
+                    <span style="padding:4px 8px; border-radius:4px; font-size:12px; font-weight:700; ${badgeStyle}">${cvssVal}</span>
+                `;
+                listContent.appendChild(li);
+            }
+        }
+
+        if (listContent.children.length === 0) {
+            listContent.innerHTML = '<li style="padding: 20px; text-align: center; color: var(--text-muted);">등록된 CVE가 없습니다.</li>';
+        }
+
+        document.getElementById('cve-list-modal').classList.add('active');
+    }
+
+    // CVE 리스트 모달 닫기
+    function closeCveListModal() {
+        document.getElementById('cve-list-modal').classList.remove('active');
+    }  
 
     // 라인별 일괄적용 (해당없음) 함수
     function applyAllNA(btn) {
@@ -2496,6 +2574,11 @@ body.offline-mode header .btn i { display: none; }
                     }
 
                     if(itemType !== 'none') {
+						// --- 수정된 부분: 해당없음, 미사용 상태일 경우 조치일을 빈칸으로 처리 ---
+                        let actionDate = st.date || '미정';
+                        if (plainStatus.includes("해당없음") || plainStatus.includes("미사용")) {
+                            actionDate = '';
+                        }                      
                         currentVulnData.push({
                             sheetName: page.pageName,
                             system: sysName,
@@ -2619,7 +2702,7 @@ body.offline-mode header .btn i { display: none; }
         tbody.innerHTML = '';
         
         const sysFilterVal = document.getElementById('analysis-system-filter').value;
-        const partnerFilterVal = document.getElementById('analysis-partner-filter') ? document.getElementById('analysis-partner-filter').value : 'all'; // 협력사 추가
+        const partnerFilterVal = document.getElementById('analysis-partner-filter') ? document.getElementById('analysis-partner-filter').value : 'all'; 
         const cveFilterVal = document.getElementById('analysis-cve-filter').value;
         const cvssFilterVal = document.getElementById('analysis-cvss-filter') ? document.getElementById('analysis-cvss-filter').value : 'all';
         
@@ -2627,7 +2710,7 @@ body.offline-mode header .btn i { display: none; }
 
         let filteredItems = currentVulnData.filter(item => {
             if (sysFilterVal !== 'all' && item.system !== sysFilterVal) return false;
-            if (partnerFilterVal !== 'all' && item.partner !== partnerFilterVal) return false; // 협력사 조건 검사 추가
+            if (partnerFilterVal !== 'all' && item.partner !== partnerFilterVal) return false; 
             if (cveFilterVal !== 'all' && item.vuln !== cveFilterVal) return false;
             if (cvssFilterVal !== 'all' && item.cvss !== cvssFilterVal) return false;
             
@@ -2659,6 +2742,17 @@ body.offline-mode header .btn i { display: none; }
                 cvssBadge = `<span style="display:inline-block; padding:2px 8px; border-radius:12px; font-size:11px; font-weight:700; margin-left:6px; ${colorCls}">${item.cvss}</span>`;
             }
             
+            // --- 수정된 부분: 렌더링 시점에 상태를 확인하여 강제로 날짜를 빈칸 처리 ---
+            let displayDate = item.date;
+            let plainDate = stripHTML(displayDate).trim();
+            if (!plainDate) displayDate = '미정'; // 날짜가 비어있으면 일단 '미정' 부여
+            
+            // 하지만 상태가 해당없음/미사용이면 무조건 빈칸으로 덮어씀
+            if (item.status.includes('해당없음') || item.status.includes('미사용')) {
+                displayDate = ''; 
+            }
+            // ---------------------------------------------------------------------
+
             tr.innerHTML = `
                 <td style="text-align:center;">${i+1}</td>
                 <td style="text-align:center; font-weight:600; font-size:13px; color:var(--primary); background:#f8fafc;">${item.sheetName}</td>
@@ -2669,13 +2763,13 @@ body.offline-mode header .btn i { display: none; }
                 <td style="text-align:center;">${item.os}</td>
                 <td style="text-align:left; line-height:1.8;">${item.vuln} ${cvssBadge}</td>
                 <td style="text-align:center;"><span class="badge ${badgeClass}">${item.status}</span></td>
-                <td style="font-weight:600; color:var(--accent); text-align:center;">${item.date}</td>
+                <td style="font-weight:600; color:var(--accent); text-align:center;">${displayDate}</td>
             `;
             tbody.appendChild(tr);
         });
     }
 
-    async function exportVulnExcel() {
+	async function exportVulnExcel() {
         const wb = new ExcelJS.Workbook();
         const ws = wb.addWorksheet('미조치_취약점_현황');
         ws.columns = [
@@ -2711,9 +2805,22 @@ body.offline-mode header .btn i { display: none; }
             }
         });
 
+        // --- 수정된 부분: 필터 값을 가져와 파일명에 반영 ---
+        const sysVal = document.getElementById('analysis-system-filter').value;
+        const partnerVal = document.getElementById('analysis-partner-filter').value;
+        
+        const sysStr = sysVal === 'all' ? '전체시스템' : sysVal;
+        const partnerStr = partnerVal === 'all' ? '전체협력사' : partnerVal;
+
         const dateStr = new Date().toISOString().slice(0,10).replace(/-/g, '');
         const blob = new Blob([await wb.xlsx.writeBuffer()], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `취약점_분석현황_${dateStr}.xlsx`; a.click();
+        const a = document.createElement('a'); 
+        a.href = URL.createObjectURL(blob); 
+        
+        // 동적 파일명 적용
+        a.download = `취약점_분석현황_${sysStr}_${partnerStr}_${dateStr}.xlsx`; 
+        a.click();
+        // ------------------------------------------------
     }
 
     async function saveRequestData() {
