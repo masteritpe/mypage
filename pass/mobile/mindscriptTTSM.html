@@ -191,7 +191,8 @@ input[type=range]::-webkit-slider-thumb {
         <button class="btn-text" onclick="closeDetail()"><i class="ph-bold ph-caret-left"></i> 목록</button>
         <input type="text" id="docTitle" class="detail-title-input" placeholder="새로운 확언 제목" onchange="saveCurrentScript()">
         <div style="display:flex;">
-            <button class="btn-icon" onclick="insertBreakTag()" title="5초 휴식 추가"><i class="ph-bold ph-timer" style="color:var(--text-main)"></i></button>
+            <!-- 멈춤 추가 모달 연결 -->
+            <button class="btn-icon" onclick="openBreakModal()" title="멈춤 추가"><i class="ph-bold ph-timer" style="color:var(--text-main)"></i></button>
             <button class="btn-icon" onclick="saveCurrentScriptAndToast()" title="저장"><i class="ph-bold ph-check" style="color:var(--primary)"></i></button>
             <button class="btn-icon" onclick="deleteCurrentScript()" title="삭제"><i class="ph-bold ph-trash" style="color:var(--danger)"></i></button>
         </div>
@@ -205,6 +206,23 @@ input[type=range]::-webkit-slider-thumb {
             <button class="ctrl-btn small" onclick="openSettings()"><i class="ph-fill ph-sliders-horizontal"></i></button>
             <button class="ctrl-btn main" id="btn-play" onclick="togglePlay()"><i class="ph-fill ph-play"></i></button>
             <button class="ctrl-btn small" onclick="stopTTS()"><i class="ph-fill ph-stop"></i></button>
+        </div>
+    </div>
+</div>
+
+<!-- 멈춤 추가 모달 -->
+<div id="break-modal" class="modal-overlay" onclick="if(event.target === this) closeBreakModal()">
+    <div class="modal-box">
+        <div class="modal-title"><i class="ph-fill ph-timer"></i> 멈춤 추가</div>
+        <div style="padding: 20px;">
+            <div class="setting-group" style="padding: 16px;">
+                <div class="setting-label" style="margin-bottom: 8px;">원하는 멈춤 시간(초)을 입력하세요.</div>
+                <input type="number" id="breakTimeInput" class="setting-select" style="margin-top: 0; box-sizing: border-box;" min="1" placeholder="예: 5" onkeydown="if(event.key==='Enter') confirmBreakModal()">
+            </div>
+            <div style="display: flex; gap: 8px; margin-top: 16px;">
+                <button class="btn-full btn-outline" onclick="closeBreakModal()">취소</button>
+                <button class="btn-full" onclick="confirmBreakModal()">추가</button>
+            </div>
         </div>
     </div>
 </div>
@@ -433,11 +451,12 @@ document.addEventListener('visibilitychange', async () => {
     if (wakeLock !== null && document.visibilityState === 'visible') requestWakeLock();
 });
 
+// 스크립트 기본 태그 '멈춤'으로 유지
 const defaultITScript = {
     id: 'sc_default_it_exam',
     title: '🖋️ 글씨 개선 자기 최면',
-    content: `편안한 자세로 앉거나 누워주세요. 눈을 부드럽게 감습니다.\n[5초 휴식]\n코로 깊게 숨을 들이마시고. 입으로 길게 내뱉습니다.
-다시 한번, 맑은 공기를 머리로 들이마시고. 내쉬는 숨에 마음속의 모든 조급함과 긴장을 밖으로 흘려보냅니다.\n[5초 휴식]\n지금부터 당신의 온몸이 편안하게 이완됩니다.`,
+    content: `편안한 자세로 앉거나 누워주세요. 눈을 부드럽게 감습니다.\n[5초 멈춤]\n코로 깊게 숨을 들이마시고. 입으로 길게 내뱉습니다.
+다시 한번, 맑은 공기를 머리로 들이마시고. 내쉬는 숨에 마음속의 모든 조급함과 긴장을 밖으로 흘려보냅니다.\n[5초 멈춤]\n지금부터 당신의 온몸이 편안하게 이완됩니다.`,
     date: new Date().toISOString()
 };
 
@@ -485,7 +504,7 @@ async function renderList() {
 
 // --- Detail View Logic ---
 function openDetail(script) {
-    stopTTS(); // 모바일 에러를 막기 위해 내부에서 if(synth) 처리됨
+    stopTTS(); 
     currentScriptId = script ? script.id : null;
     document.getElementById('docTitle').value = script ? script.title : '';
     document.getElementById('scriptContent').value = script ? script.content : '';
@@ -503,18 +522,40 @@ function createNewScript() {
     openDetail(null);
 }
 
-function insertBreakTag() {
+// --- 멈춤 추가 모달 관련 ---
+function openBreakModal() {
+    const modal = document.getElementById('break-modal');
+    const input = document.getElementById('breakTimeInput');
+    input.value = '5';
+    modal.style.display = 'flex';
+    setTimeout(() => input.focus(), 100);
+}
+
+function closeBreakModal() {
+    document.getElementById('break-modal').style.display = 'none';
+}
+
+function confirmBreakModal() {
+    const sec = document.getElementById('breakTimeInput').value;
+    if (!sec || sec.trim() === "" || isNaN(sec) || Number(sec) <= 0) {
+        showToast("유효한 시간을 입력해주세요.");
+        document.getElementById('breakTimeInput').focus();
+        return;
+    }
+
     const textarea = document.getElementById('scriptContent');
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
-    const tag = '\n[5초 휴식]\n'; 
+    const tag = `\n[${sec}초 멈춤]\n`; 
     const text = textarea.value;
     
     textarea.value = text.substring(0, start) + tag + text.substring(end);
     textarea.selectionStart = textarea.selectionEnd = start + tag.length;
     textarea.focus();
+    
     saveCurrentScript();
-    showToast('5초 휴식 태그가 삽입되었습니다.');
+    showToast(`${sec}초 멈춤 태그가 삽입되었습니다.`);
+    closeBreakModal();
 }
 
 async function saveCurrentScript() {
@@ -659,7 +700,7 @@ async function togglePlay() {
     const rate = document.getElementById('rate').value;
     const pitch = document.getElementById('pitch').value;
 
-    const parts = text.split(/\[(\d+)초\s*휴식\]/);
+    const parts = text.split(/\[(\d+)초\s*(?:휴식|멈춤)\]/);
 
     for (let i = 0; i < parts.length; i++) {
         if (stopRequested) break;
@@ -691,10 +732,19 @@ async function togglePlay() {
             const seconds = parseInt(parts[i], 10);
             let ms = seconds * 1000;
             let elapsed = 0;
+            let pauseTick = Date.now();
             
+            // 모바일 백그라운드 재생 시 타이머 지연(Drift) 방지용 Date.now() 로직 적용
             while (elapsed < ms) {
                 if (stopRequested) break;
-                if (!isCustomPaused) elapsed += 100;
+                
+                const now = Date.now();
+                const delta = now - pauseTick;
+                pauseTick = now;
+                
+                if (!isCustomPaused) {
+                    elapsed += delta;
+                }
                 await new Promise(r => setTimeout(r, 100));
             }
         }

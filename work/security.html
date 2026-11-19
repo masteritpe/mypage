@@ -88,6 +88,7 @@ s { color: #94a3b8; }
 .status-select { width: 100%; height: 100%; min-height: 36px; border: 1px solid transparent; background: transparent; text-align: center; font-family: inherit; font-size: 14px; outline: none; border-radius: 4px; cursor: pointer; }
 .status-select:focus { border-color: var(--accent); background: #fff; }
 .status-select.unresolved { background-color: #f97316; color: #fff; font-weight: 700; }
+.status-select.checking { background-color: #eab308; color: #fff; font-weight: 700; } /* 영향확인중 노란색 추가 */
 
 /* Form Controls & Buttons */
 .search-bar { display: flex; gap: 10px; margin-bottom: 20px; align-items: center; }
@@ -430,9 +431,11 @@ body.offline-mode header .btn i { display: none; }
                         	CVE : <span id="cve-count-display" style="color:var(--accent); font-size:16px; margin-left:5px; margin-right:2px; cursor:pointer; text-decoration:underline;" onclick="openCveListModal()">0</span> 개
                     	</div>                     
                     </div>
-                    <div style="display: flex; gap: 10px; align-items: center;">
+					<div style="display: flex; gap: 10px; align-items: center;">
                         <span style="font-weight: 600; font-size: 14px; margin-right: 5px;">취약점(CVE) 수동 추가:</span>
                         <button class="btn btn-secondary btn-edit-only" onclick="addManualVulnColumn()" style="height: 40px;"><i class="fas fa-plus"></i> 컬럼 추가</button>
+                        <!-- 입력 완료 숨김 토글 버튼 추가 -->
+                        <button id="btn-toggle-completed" class="btn btn-secondary" onclick="toggleCompletedRows()" style="height: 40px;"><i class="fas fa-eye-slash"></i> 입력 완료 숨기기</button>
                     </div>
                 </div>
                 
@@ -494,7 +497,9 @@ body.offline-mode header .btn i { display: none; }
                     </div>                  
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <span style="font-weight: 600; font-size: 14px;">취약점(CVE):</span>
-                        <select id="analysis-cve-filter" class="input-modern" style="width: 180px; cursor: pointer;" onchange="renderVulnTable()"><option value="all">전체</option></select>
+                        <!-- select 대신 input + datalist 조합 사용 -->
+                        <input type="text" id="analysis-cve-filter" list="cve-filter-list" class="input-modern" style="width: 180px;" placeholder="전체 (검색어 입력)" oninput="renderVulnTable()">
+                        <datalist id="cve-filter-list"></datalist>
                     </div>
 					<div style="display: flex; align-items: center; gap: 10px;">
                         <span style="font-weight: 600; font-size: 14px;">CVSS:</span>
@@ -541,6 +546,8 @@ body.offline-mode header .btn i { display: none; }
             <div class="page-header">
                 <h1 class="page-title"><i class="fas fa-table"></i> 취약점 요약</h1>
                 <div style="display: flex; gap: 10px;">
+                    <!-- 엑셀 결과 저장 버튼 추가 -->
+                    <button class="btn btn-accent" onclick="exportVulnSummaryExcel()"><i class="fas fa-file-excel"></i> 엑셀 결과 저장</button>
                     <!-- ▼▼▼ 출력 함수 변경 ▼▼▼ -->
                     <button class="btn btn-secondary" onclick="printVulnSummary()"><i class="fas fa-print"></i> 출력</button>
                 </div>
@@ -749,6 +756,7 @@ body.offline-mode header .btn i { display: none; }
                   </div>
                   <div style="display: flex; gap: 10px; align-items: center;">
                       <button class="btn btn-secondary btn-edit-only" onclick="addMonthlyCheckRow()" style="height: 40px;"><i class="fas fa-plus"></i> 새 체크 내역 추가</button>
+                      <button id="btn-toggle-monthly-completed" class="btn btn-secondary" onclick="toggleMonthlyCompletedRows()" style="height: 40px;"><i class="fas fa-eye-slash"></i> 입력 완료 숨기기</button>
                   </div>
               </div>
 
@@ -1538,11 +1546,19 @@ body.offline-mode header .btn i { display: none; }
         }, 100);
     }
 
-    function changeStatusColor(selectElement) {
+	function changeStatusColor(selectElement) {
+        // 미조치 처리
         if (selectElement.value === '미조치') {
             selectElement.classList.add('unresolved');
         } else {
             selectElement.classList.remove('unresolved');
+        }
+        
+        // 영향확인중 처리
+        if (selectElement.value === '영향확인중') {
+            selectElement.classList.add('checking');
+        } else {
+            selectElement.classList.remove('checking');
         }
     }
 
@@ -1593,6 +1609,7 @@ body.offline-mode header .btn i { display: none; }
                     <option value="조치완료">조치완료</option>
                     <option value="미조치">미조치</option>
                     <option value="미관리대상">미관리대상</option>
+					<option value="영향확인중">영향확인중</option>                    
                 </select>
             `;
             tr.insertBefore(tdStatus, tr.lastElementChild); // 변경점
@@ -1791,13 +1808,14 @@ body.offline-mode header .btn i { display: none; }
                         const tdStatus = document.createElement('td');
                         tdStatus.style.padding = '0';
                         tdStatus.innerHTML = `
-                            <select class="status-select ${statusVal === '미조치' ? 'unresolved' : ''}" onchange="changeStatusColor(this)">
+							<select class="status-select ${st.status === '미조치' ? 'unresolved' : (st.status === '영향확인중' ? 'checking' : '')}" onchange="changeStatusColor(this)">                           
                                 <option value="" ${!statusVal || statusVal === '' ? 'selected' : ''} disabled hidden></option>
                                 <option value="해당없음" ${statusVal === '해당없음' ? 'selected' : ''}>해당없음</option>
                                 <option value="미사용" ${statusVal === '미사용' ? 'selected' : ''}>미사용</option>
                                 <option value="조치완료" ${statusVal === '조치완료' ? 'selected' : ''}>조치완료</option>
                                 <option value="미조치" ${statusVal === '미조치' ? 'selected' : ''}>미조치</option>
                                 <option value="미관리대상" ${statusVal === '미관리대상' ? 'selected' : ''}>미관리대상</option>
+                                <option value="영향확인중" ${statusVal === '영향확인중' ? 'selected' : ''}>영향확인중</option>                                
                             </select>
                         `;
                         tr.appendChild(tdStatus);
@@ -1913,9 +1931,12 @@ body.offline-mode header .btn i { display: none; }
                 if (rowNumber <= 2) {
                     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF70AD47' } };
                     cell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-                } else {
+				} else {
                     if (cell.value === '미조치') {
                         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF97316' } };
+                        cell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
+                    } else if (cell.value === '영향확인중') {
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEAB308' } };
                         cell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
                     }
                 }
@@ -1988,12 +2009,15 @@ body.offline-mode header .btn i { display: none; }
                     if (rowNumber <= 2) {
                         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF70AD47' } };
                         cell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-                    } else {
-                        if (cell.value === '미조치') {
-                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF97316' } };
-                            cell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-                        }
+					} else {
+                    if (cell.value === '미조치') {
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF97316' } };
+                        cell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
+                    } else if (cell.value === '영향확인중') {
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEAB308' } };
+                        cell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
                     }
+                }
                 });
             });
             ws.columns.forEach(column => { column.width = 15; });
@@ -2083,7 +2107,8 @@ body.offline-mode header .btn i { display: none; }
                     
                     let bgStyle = "";
                     if (statusText === '미조치') bgStyle = "background-color:#f97316 !important; color:#fff !important; font-weight:bold; -webkit-print-color-adjust:exact; print-color-adjust:exact;";
-                    
+                    else if (statusText === '영향확인중') bgStyle = "background-color:#eab308 !important; color:#fff !important; font-weight:bold; -webkit-print-color-adjust:exact; print-color-adjust:exact;";
+                  
                     pageHtml += `<td style="border:1px solid #000; padding:6px; text-align:center; ${bgStyle}">${statusText}</td>`;
                     pageHtml += `<td style="border:1px solid #000; padding:6px; text-align:center;">${td2 ? td2.innerText : ''}</td>`;
                 }
@@ -2201,13 +2226,14 @@ body.offline-mode header .btn i { display: none; }
                 const tdStatus = document.createElement('td');
                 tdStatus.style.padding = '0';
                 tdStatus.innerHTML = `
-                    <select class="status-select ${st.status === '미조치' ? 'unresolved' : ''}" onchange="changeStatusColor(this)">
+					<select class="status-select ${st.status === '미조치' ? 'unresolved' : (st.status === '영향확인중' ? 'checking' : '')}" onchange="changeStatusColor(this)">                    
                         <option value="" ${!st.status || st.status === '' ? 'selected' : ''} disabled hidden></option>
                         <option value="해당없음" ${st.status === '해당없음' ? 'selected' : ''}>해당없음</option>
                         <option value="미사용" ${st.status === '미사용' ? 'selected' : ''}>미사용</option>
                         <option value="조치완료" ${st.status === '조치완료' ? 'selected' : ''}>조치완료</option>
                         <option value="미조치" ${st.status === '미조치' ? 'selected' : ''}>미조치</option>
                         <option value="미관리대상" ${st.status === '미관리대상' ? 'selected' : ''}>미관리대상</option>
+                        <option value="영향확인중" ${st.status === '영향확인중' ? 'selected' : ''}>영향확인중</option>                        
                     </select>
                 `;
                 tr.appendChild(tdStatus);
@@ -2427,12 +2453,57 @@ body.offline-mode header .btn i { display: none; }
         filter.value = sysSet.has(currentVal) ? currentVal : "ALL";
     }
 
+	// (추가) 상태 추적 변수 및 토글 함수
+    let hideCompletedRows = false;
+
+    function toggleCompletedRows() {
+        hideCompletedRows = !hideCompletedRows;
+        const btn = document.getElementById('btn-toggle-completed');
+        
+        if (hideCompletedRows) {
+            btn.innerHTML = '<i class="fas fa-eye"></i> 입력 완료 보이기';
+            btn.classList.remove('btn-secondary');
+            btn.classList.add('btn-accent'); // 활성화 상태 강조
+        } else {
+            btn.innerHTML = '<i class="fas fa-eye-slash"></i> 입력 완료 숨기기';
+            btn.classList.remove('btn-accent');
+            btn.classList.add('btn-secondary');
+        }
+        
+        // 상태 변경 후 즉시 필터 재적용
+        filterVulnCreateTable();
+    }
+
+    // (수정) 기존 필터 함수에 입력 완료 체크 로직 병합
     function filterVulnCreateTable() {
         const sys = document.getElementById('vuln-create-system-filter').value;
         document.getElementById('vuln-create-tbody').querySelectorAll('tr').forEach(tr => {
-            tr.style.display = (sys === "ALL" || stripHTML(tr.cells[1].innerHTML).trim() === sys) ? '' : 'none';
+            // 1. 정보보호시스템 필터 검사
+            let showSys = (sys === "ALL" || stripHTML(tr.cells[1].innerHTML).trim() === sys);
+            
+            // 2. 입력 완료 숨김 필터 검사
+            let showCompleted = true;
+            if (hideCompletedRows) {
+                const selects = tr.querySelectorAll('.status-select');
+                let allFilled = true;
+                
+                // CVE 컬럼이 아직 없거나, 상태 셀 중 하나라도 비어있으면(value === "") 미완료로 간주
+                if (selects.length === 0) {
+                    allFilled = false;
+                } else {
+                    selects.forEach(sel => {
+                        if (!sel.value || sel.value === "") allFilled = false;
+                    });
+                }
+                
+                // 모든 상태가 입력되었다면 숨김 처리
+                if (allFilled) showCompleted = false;
+            }
+
+            // 두 조건을 모두 만족해야 화면에 노출
+            tr.style.display = (showSys && showCompleted) ? '' : 'none';
         });
-    }  
+    }
   
     async function saveContactData() {
         const pRows = document.getElementById('contact-partner-tbody').querySelectorAll('tr');
@@ -2643,11 +2714,15 @@ body.offline-mode header .btn i { display: none; }
             partnerFilter.value = partnerSet.has(currentPartner) ? currentPartner : 'all';
         }
         
-        cveFilter.innerHTML = '<option value="all">전체</option>';
+        const cveFilterList = document.getElementById('cve-filter-list');
+        cveFilterList.innerHTML = ''; // datalist 초기화
         Array.from(cveSet).sort().forEach(cve => {
-            const op = document.createElement('option'); op.value = cve; op.textContent = cve; cveFilter.appendChild(op);
+            const op = document.createElement('option'); 
+            op.value = cve; 
+            cveFilterList.appendChild(op);
         });
-        cveFilter.value = cveSet.has(currentCve) ? currentCve : 'all';
+        // input 창의 값이 비어있으면 '전체'를 의미하도록 처리
+        cveFilter.value = cveSet.has(currentCve) && currentCve !== 'all' ? currentCve : '';
 
         if (cvssFilter) {
             cvssFilter.innerHTML = '<option value="all">전체</option>';
@@ -2668,7 +2743,8 @@ body.offline-mode header .btn i { display: none; }
         
         const sysFilterVal = document.getElementById('analysis-system-filter').value;
         const partnerFilterVal = document.getElementById('analysis-partner-filter') ? document.getElementById('analysis-partner-filter').value : 'all'; // 협력사 추가
-        const cveFilterVal = document.getElementById('analysis-cve-filter').value;
+        let cveFilterVal = document.getElementById('analysis-cve-filter').value.trim();
+        if (cveFilterVal === '') cveFilterVal = 'all';
         const cvssFilterVal = document.getElementById('analysis-cvss-filter') ? document.getElementById('analysis-cvss-filter').value : 'all';
 
         currentVulnData.forEach(item => {
@@ -2703,7 +2779,8 @@ body.offline-mode header .btn i { display: none; }
         
         const sysFilterVal = document.getElementById('analysis-system-filter').value;
         const partnerFilterVal = document.getElementById('analysis-partner-filter') ? document.getElementById('analysis-partner-filter').value : 'all'; 
-        const cveFilterVal = document.getElementById('analysis-cve-filter').value;
+        let cveFilterVal = document.getElementById('analysis-cve-filter').value.trim();
+        if (cveFilterVal === '') cveFilterVal = 'all';
         const cvssFilterVal = document.getElementById('analysis-cvss-filter') ? document.getElementById('analysis-cvss-filter').value : 'all';
         
         updateAnalysisStats(); 
@@ -4560,13 +4637,74 @@ body.offline-mode header .btn i { display: none; }
         applyLockState();
     }
   
-    function filterMonthlyCheckTable() {
-        const sys = document.getElementById('monthly-check-system-filter').value;
-        document.getElementById('monthly-check-tbody').querySelectorAll('tr').forEach(tr => {
-            tr.style.display = (sys === "ALL" || stripHTML(tr.cells[0].innerHTML).trim() === sys) ? '' : 'none';
-        });
-    }
+      // 입력 완료 숨김 상태 추적 변수
+      let hideMonthlyCompletedRows = false;
 
+      function toggleMonthlyCompletedRows() {
+          hideMonthlyCompletedRows = !hideMonthlyCompletedRows;
+          const btn = document.getElementById('btn-toggle-monthly-completed');
+
+          if (hideMonthlyCompletedRows) {
+              btn.innerHTML = '<i class="fas fa-eye"></i> 입력 완료 보이기';
+              btn.classList.remove('btn-secondary');
+              btn.classList.add('btn-accent');
+          } else {
+              btn.innerHTML = '<i class="fas fa-eye-slash"></i> 입력 완료 숨기기';
+              btn.classList.remove('btn-accent');
+              btn.classList.add('btn-secondary');
+          }
+
+          filterMonthlyCheckTable();
+      }
+
+      function filterMonthlyCheckTable() {
+          const sys = document.getElementById('monthly-check-system-filter').value;
+
+          document.getElementById('monthly-check-tbody').querySelectorAll('tr').forEach(tr => {
+              // 1. 정보보호시스템 필터 검사
+              let showSys = (sys === "ALL" || stripHTML(tr.cells[0].innerHTML).trim() === sys);
+
+              // 2. 입력 완료 숨김 필터 검사
+              let showCompleted = true; // 기본적으로 화면에 표시
+
+              if (hideMonthlyCompletedRows) {
+                  let hasAnyContent = false; // 내용이 하나라도 적혀 있는지
+                  let allFilled = true;      // 적혀 있는 내용에 모두 결과가 선택되었는지
+
+                  // 5개의 체크 항목 내용(홀수 인덱스)과 결과(짝수 인덱스) 쌍 검사
+                  const checkIndices = [5, 7, 9, 11, 13];
+
+                  checkIndices.forEach(idx => {
+                      const contentCell = tr.cells[idx];
+                      const statusCell = tr.cells[idx + 1];
+
+                      if (contentCell && statusCell) {
+                          const contentText = stripHTML(contentCell.innerHTML).trim();
+                          const selectEl = statusCell.querySelector('select');
+                          const statusVal = selectEl ? selectEl.value : "";
+
+                          // 입력 칸에 내용이 적혀있는 경우에만 검사
+                          if (contentText !== "") {
+                              hasAnyContent = true;
+                              // 내용은 있는데 결과(O, X, N/A)를 아직 선택하지 않았다면 미완료
+                              if (statusVal === "") {
+                                  allFilled = false;
+                              }
+                          }
+                      }
+                  });
+
+                  // 내용이 적힌 칸이 1개 이상 존재하고, 그 항목들이 모두 체크된 경우에만 '완료'로 판단하여 숨김
+                  if (hasAnyContent && allFilled) {
+                      showCompleted = false;
+                  }
+              }
+
+              // 두 조건을 모두 만족해야 화면에 노출
+              tr.style.display = (showSys && showCompleted) ? '' : 'none';
+          });
+      }
+  
       function changeCheckColor(selectElement) {
           if (selectElement.value === 'X') {
               selectElement.classList.add('unresolved'); // 기존 미조치 주황색 스타일 재활용
@@ -4749,20 +4887,43 @@ body.offline-mode header .btn i { display: none; }
         
         const pages = window.currentVulnMonthGroups[targetMonth];
         
-        // 1. 해당 월에 속한 모든 페이지의 CVE 컬럼 병합 (중복 제거)
-        let mergedCVEs = [];
+        // 1. 해당 월에 속한 모든 페이지의 CVE 추출 (중복 제거)
+        let tempCVEs = [];
         pages.forEach(pageData => {
             if(pageData.cveCols) {
                 pageData.cveCols.forEach(col => {
-                    if(!mergedCVEs.find(c => c.cve.trim() === col.cve.trim())) {
-                        mergedCVEs.push(col);
+                    if(!tempCVEs.find(c => c.cve.trim() === col.cve.trim())) {
+                        tempCVEs.push(col);
                     }
                 });
             }
         });
 
+        // 1-1. 전체 데이터(시스템) 중 '미조치' 상태가 단 1개라도 존재하는 CVE 컬럼만 필터링 (해당 없는 컬럼 숨김)
+        let mergedCVEs = tempCVEs.filter(cveCol => {
+            let hasUnresolved = false;
+            for (let page of pages) {
+                if (!page.rows || !page.cveCols) continue;
+                
+                const cveIdx = page.cveCols.findIndex(c => c.cve.trim() === cveCol.cve.trim());
+                if (cveIdx === -1) continue;
+
+                for (let row of page.rows) {
+                    if (row.statuses && row.statuses[cveIdx]) {
+                        const status = stripHTML(row.statuses[cveIdx].status).trim();
+                        if (status === '미조치') {
+                            hasUnresolved = true;
+                            break;
+                        }
+                    }
+                }
+                if (hasUnresolved) break;
+            }
+            return hasUnresolved;
+        });
+
         if (mergedCVEs.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:30px; font-weight:600; color:var(--text-muted);">해당 월에 등록된 취약점(CVE)이 없습니다.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:30px; font-weight:600; color:var(--text-muted);">해당 월에 미조치된 취약점(CVE)이 없습니다.</td></tr>`;
             return;
         }
 
@@ -4832,7 +4993,7 @@ body.offline-mode header .btn i { display: none; }
                             const status = stripHTML(row.statuses[cveIdx].status).trim();
                             if (status === '미조치') {
                                 unresolvedFound = true;
-                                actionDate = stripHTML(row.statuses[cveIdx].date).replace(/ /g, '').trim();
+                                actionDate = stripHTML(row.statuses[cveIdx].date).replace(/ /g, '').trim();
                                 break; 
                             }
                         }
@@ -4934,6 +5095,81 @@ body.offline-mode header .btn i { display: none; }
         window.print();
         setTimeout(() => { document.body.classList.remove('printing-vuln-summary'); }, 100);
     }
+	// ▼▼▼ 취약점 요약 엑셀 추출 함수 추가 ▼▼▼
+    async function exportVulnSummaryExcel() {
+        const wb = new ExcelJS.Workbook();
+        const targetMonth = document.getElementById('summary-page-selector').value || '전체';
+        const ws = wb.addWorksheet('취약점요약');
+        
+        const theadMain = document.getElementById('vuln-summary-thead').rows[0];
+        const tbodyRows = document.getElementById('vuln-summary-tbody').rows;
+        
+        if (!theadMain || theadMain.cells.length <= 3) {
+            alert("저장할 데이터가 없습니다.");
+            return;
+        }
+
+        // 1. 헤더 구성 (<br> 태그 등을 엑셀 줄바꿈으로 처리)
+        let headerRow = [];
+        for (let i = 0; i < theadMain.cells.length; i++) {
+            let rawText = theadMain.cells[i].innerHTML;
+            let cleanText = rawText.replace(/<br[^>]*>/gi, '\n').replace(/<[^>]+>/g, '').trim();
+            headerRow.push(cleanText);
+        }
+        
+        // 2. 열 너비 설정
+        let cols = [
+            { width: 8 },  // 번호
+            { width: 25 }, // 정보보호시스템
+            { width: 25 }  // 세부내역
+        ];
+        for (let i = 3; i < theadMain.cells.length; i++) {
+            cols.push({ width: 22 }); // 동적 추가되는 CVE 컬럼
+        }
+        ws.columns = cols;
+
+        // 3. 첫 번째 행(헤더) 추가 및 공통 양식 스타일 적용
+        const header = ws.addRow(headerRow);
+        header.eachCell((c) => { 
+            c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF70AD47' } }; 
+            c.font = { color: { argb: 'FFFFFFFF' }, bold: true }; 
+            c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }; 
+            c.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } }; 
+        });
+
+        // 4. 데이터 행 추가
+        Array.from(tbodyRows).forEach(tr => {
+            // '데이터 없음' 안내 행은 스킵
+            if (tr.cells.length === 1) return; 
+            
+            let rowData = [];
+            for (let i = 0; i < tr.cells.length; i++) {
+                rowData.push(tr.cells[i].innerText.trim());
+            }
+            const addedRow = ws.addRow(rowData);
+            
+            // 데이터 셀 스타일 및 미조치(주황색) 배경 처리 적용
+            addedRow.eachCell((c, colNum) => {
+                c.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+                c.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+                
+                // summary-unresolved 클래스가 있는 셀에 화면과 동일한 주황색 톤 적용
+                const originalTd = tr.cells[colNum - 1];
+                if (originalTd && originalTd.classList.contains('summary-unresolved')) {
+                    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF7ED' } };
+                    c.font = { color: { argb: 'FFC2410C' }, bold: true };
+                }
+            });
+        });
+
+        // 5. 파일 저장 처리
+        const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const blob = new Blob([await wb.xlsx.writeBuffer()], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const a = document.createElement('a'); 
+        a.href = URL.createObjectURL(blob); 
+        a.download = `취약점_미조치요약_${targetMonth}_${dateStr}.xlsx`; 
+        a.click();
+    }  
 </script>
 </body>
 </html>
