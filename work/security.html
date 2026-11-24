@@ -278,6 +278,7 @@ body.offline-mode header .btn i { display: none; }
 .icons-failed .fa-exclamation-triangle::before { content: "⚠️"; }
 .icons-failed .fa-info-circle::before { content: "ℹ️"; }
 .icons-failed .fa-file-excel::before { content: "📊"; }  
+.icons-failed .fa-chart-bar::before { content: "📊"; }  
 </style>
 </head>
 <body>
@@ -307,9 +308,11 @@ body.offline-mode header .btn i { display: none; }
     <aside class="sidebar">
         <div class="sidebar-title">Management Menu</div>
         <div class="nav-item active" data-target="tab-contacts"><i class="fas fa-address-book"></i> 연락처</div>
+		<div class="nav-item" data-target="tab-vuln-manage"><i class="fas fa-tasks"></i> 취약점 관리</div>      
         <div class="nav-item" data-target="tab-vuln-create"><i class="fas fa-edit"></i> 취약점 작성</div>
         <div class="nav-item" data-target="tab-vuln"><i class="fas fa-bug"></i> 취약점 분석</div>
-		<div class="nav-item" data-target="tab-vuln-summary"><i class="fas fa-table"></i> 취약점 요약</div>      
+		<div class="nav-item" data-target="tab-vuln-summary"><i class="fas fa-table"></i> 취약점 요약</div> 
+		<div class="nav-item" data-target="tab-vuln-aggregate"><i class="fas fa-chart-bar"></i> 취약점 집계</div>      
         <div class="nav-item" data-target="tab-schedule"><i class="fas fa-calendar-alt"></i> 일정관리</div>
         <div class="nav-item" data-target="tab-monthly-manage"><i class="fas fa-calendar-check"></i> 월별 관리 사항</div>
 		<div class="nav-item" data-target="tab-monthly-check"><i class="fas fa-check-square"></i> 월별 체크 사항</div>      
@@ -398,6 +401,52 @@ body.offline-mode header .btn i { display: none; }
             </div>
         </div>
 
+		<!-- 1-1. 취약점 관리 탭 -->
+        <div id="tab-vuln-manage" class="tab-pane">
+            <div class="page-header">
+                <h1 class="page-title"><i class="fas fa-tasks"></i> 취약점 관리</h1>
+                <div style="display: flex; gap: 10px;">
+                    <input type="file" id="excel-upload-vuln-manage" accept=".xlsx, .xls" style="display: none;">
+                    <button class="btn btn-danger btn-edit-only" onclick="clearData('vuln_manage')"><i class="fas fa-trash-alt"></i> 데이터 초기화</button>
+                    <button class="btn btn-secondary" onclick="downloadVulnManageTemplate()"><i class="fas fa-download"></i> 양식 다운로드</button>
+                    <button class="btn btn-secondary btn-edit-only" onclick="document.getElementById('excel-upload-vuln-manage').click()"><i class="fas fa-upload"></i> 데이터 로드</button>
+                    <button class="btn btn-accent" onclick="exportVulnManageExcel()"><i class="fas fa-file-excel"></i> 엑셀 저장</button>
+                    <button class="btn btn-secondary" onclick="window.print()"><i class="fas fa-print"></i> 출력</button>
+                </div>
+            </div>
+
+            <div class="paper-sheet">
+                <div class="search-bar no-print" style="background: #f8fafc; padding: 16px; border-radius: 8px; justify-content: space-between; align-items: center;">
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <span style="font-weight: 600; font-size: 14px;">검색:</span>
+                        <input type="text" id="vuln-manage-search" class="input-modern" style="width: 320px;" placeholder="관리번호, 취약점 게시명, 취약점 ID, 게시일 검색" oninput="filterVulnManageTable()">
+                    </div>
+                    <button class="btn btn-secondary btn-edit-only" onclick="addVulnManageRow()"><i class="fas fa-plus"></i> 새 행 추가</button>
+                </div>
+
+                <div id="print-area-vuln-manage">
+                    <div class="print-header">
+                        <h1>취약점 관리 목록</h1>
+                        <p>취약점 게시 및 CVE-ID 관리 현황</p>
+                    </div>
+                    <div class="data-table-wrapper">
+                        <table class="data-table" id="vuln-manage-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 10%; min-width: 90px;">관리번호</th>
+                                    <th style="width: 48%; min-width: 320px;">취약점 게시명</th>
+                                    <th style="width: 22%; min-width: 160px;">취약점 ID</th>
+                                    <th style="width: 14%; min-width: 120px;">게시일</th>
+                                    <th style="width: 6%; min-width: 60px;" class="no-print">관리</th>
+                                </tr>
+                            </thead>
+                            <tbody id="vuln-manage-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>      
+      
         <!-- 2. 취약점 작성 탭 (다중 페이지 적용) -->
         <div id="tab-vuln-create" class="tab-pane">
             <div class="page-header">
@@ -589,6 +638,71 @@ body.offline-mode header .btn i { display: none; }
             </div>
         </div>      
 
+		<!-- 취약점 집계 탭 -->
+        <div id="tab-vuln-aggregate" class="tab-pane">
+            <div class="page-header">
+                <h1 class="page-title"><i class="fas fa-chart-bar"></i> 취약점 집계</h1>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-accent" onclick="exportVulnAggregateExcel()"><i class="fas fa-file-excel"></i> 엑셀 저장</button>
+                    <button class="btn btn-secondary" onclick="window.print()"><i class="fas fa-print"></i> 출력</button>
+                </div>
+            </div>
+            <div class="paper-sheet">
+				<div class="search-bar no-print" style="background: #f8fafc; padding: 16px; border-radius: 8px; display: flex; flex-wrap: wrap; gap: 15px; justify-content: space-between; align-items: center;">
+                    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 15px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span style="font-weight: 600; font-size: 14px;">정보보호시스템 선택:</span>
+                            <select id="aggregate-system-filter" class="input-modern" style="width: 220px; cursor: pointer;" onchange="renderVulnAggregateTable()">
+                                <option value="all">전체 시스템</option>
+                            </select>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span style="font-weight: 600; font-size: 14px;">상태:</span>
+                            <select id="aggregate-status-filter" class="input-modern" style="width: 150px; cursor: pointer;" onchange="renderVulnAggregateTable()">
+                                <option value="all">전체 상태</option>
+                            </select>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-weight: 600; font-size: 14px;">게시날짜:</span>
+                            <input type="date" id="aggregate-date-start" class="input-modern" style="width: 150px; cursor: pointer;" onchange="renderVulnAggregateTable()">
+                            <span style="color: var(--text-sub); font-weight: 600;">~</span>
+                            <input type="date" id="aggregate-date-end" class="input-modern" style="width: 150px; cursor: pointer;" onchange="renderVulnAggregateTable()">
+                            <button class="btn btn-secondary" style="height: 40px; padding: 0 12px;" onclick="resetVulnAggregateDateFilter()" title="날짜 필터 초기화"><i class="fas fa-times"></i></button>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-sub);">
+                        <span>조회 건수: <strong id="aggregate-count" style="color: var(--accent);">0</strong>건</span>
+                    </div>
+                </div>
+
+                <div id="print-area-aggregate">
+                    <div class="print-header">
+                        <h1>보안 취약점 집계 현황</h1>
+                        <p id="print-subtitle-aggregate">전체 시스템 취약점 집계</p>
+                    </div>
+                    <div class="data-table-wrapper">
+                        <table class="data-table" id="vuln-aggregate-table">
+                            <thead>
+                                <tr>
+									<th style="width: 13%; min-width: 120px;">정보보호시스템</th>
+                                    <th style="width: 13%; min-width: 120px;">세부내역</th>
+                                    <th style="width: 10%; min-width: 100px;">게시날짜</th>
+                                    <th style="width: 8%; min-width: 80px;">게시번호</th>
+                                    <th style="width: 24%; min-width: 220px;">취약점 게시명</th>
+                                    <th style="width: 15%; min-width: 140px;">취약점 ID</th>
+                                    <th style="width: 8%; min-width: 90px;">상태</th>
+                                    <th style="width: 9%; min-width: 100px;">조치일</th>
+                                </tr>
+                            </thead>
+                            <tbody id="vuln-aggregate-tbody">
+                                <tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 30px;">집계할 데이터가 없습니다.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>      
+      
         <!-- 4. 일정관리 탭 -->
 		<div id="tab-schedule" class="tab-pane">
             <div class="page-header">
@@ -1386,8 +1500,17 @@ body.offline-mode header .btn i { display: none; }
                 currentEditingSheetName = '기본일정';
                 document.getElementById('schedule-sheet-selector').innerHTML = '<option value="기본일정">기본일정</option>';
                 document.getElementById('schedule-file-name').textContent = '';
-                document.getElementById('print-subtitle-schedule').textContent = `[기본일정] 보안 시스템 점검 상세 일정`;
+				document.getElementById('print-subtitle-schedule').textContent = `[기본일정] 보안 시스템 점검 상세 일정`;
                 showToast('일정관리 데이터가 완전히 삭제되었습니다.');
+            };
+        } else if (type === 'vuln_manage') {
+            const tx = db.transaction('tables', 'readwrite');
+            const store = tx.objectStore('tables');
+            store.delete('vuln_manage');
+            tx.oncomplete = () => {
+                document.getElementById('vuln-manage-tbody').innerHTML = '';
+                addVulnManageRow();
+                showToast('취약점 관리 데이터가 완전히 삭제되었습니다.');
             };
         }
     }
@@ -3080,6 +3203,7 @@ body.offline-mode header .btn i { display: none; }
             const tr = e.target.closest('tr');
             if (tr) applyPassStyle(tr); // <-- 이 부분 추가
         }
+		if (e.target.closest('#vuln-manage-tbody')) saveVulnManageData();
         if (e.target.closest('#vuln-create-table')) saveVulnCreateData(); 
         if (e.target.closest('#monthly-tbody')) saveMonthlyData(); 
 		if (e.target.closest('#monthly-check-tbody')) saveMonthlyCheckData(); // <== 이 줄을 추가하세요.      
@@ -3097,8 +3221,18 @@ body.offline-mode header .btn i { display: none; }
             if(cm_res.meta) { document.getElementById('th-manager-a').innerText = cm_res.meta.aName || 'A사'; document.getElementById('th-manager-b').innerText = cm_res.meta.bName || 'B사'; }
             if(cm_res.data.length > 0) cm_res.data.forEach(d => addContactManagerRow([d.c1, d.c2, d.c3, d.c4, d.c5, d.c6, d.c7]));
             else addContactManagerRow(['1', 'DB서버', '암호화 솔루션', 'B보안', '김운영', '최인프라', '박솔루션']);
-        } else {
+		} else {
             addContactManagerRow(['1', 'DB서버', '암호화 솔루션', 'B보안', '김운영', '최인프라', '박솔루션']);
+        }
+
+        const vm_res = await getFromDB('tables', 'vuln_manage');
+        document.getElementById('vuln-manage-tbody').innerHTML = '';
+        if (vm_res && vm_res.data && vm_res.data.length > 0) {
+            vm_res.data.forEach(d => addVulnManageRow(d));
+        } else {
+            addVulnManageRow({ no: '2376', title: 'Brotli 디코더 취약점 위협 동향 및 보안 권고 [출처:금융보안원]', vulnId: 'CVE-2026-111497', date: '2026-10-26' });
+            addVulnManageRow({ no: '2375', title: 'Google 제품 보안 업데이트 권고 (SHGSVR-20261026-01)[보안권고문][출처:KRcert]', vulnId: 'CVE-2026-111497', date: '2026-10-26' });
+            addVulnManageRow({ no: '2374', title: 'Oracle Java 및 GraalVM 보안 업데이트 권고 [출처:금융보안원]', vulnId: '', date: '2026-10-24' });
         }
 
         const allTables = await getAllFromDB('tables');
@@ -3232,7 +3366,7 @@ body.offline-mode header .btn i { display: none; }
     }
 
 	// === 앱 주요 로직 초기화 (비동기 스크립트 로딩 완료 후 호출됨) ===
-    async function initializeAppLogic() {
+	async function initializeAppLogic() {
         const navItems = document.querySelectorAll('.nav-item'); const tabPanes = document.querySelectorAll('.tab-pane');
         navItems.forEach(item => {
             item.addEventListener('click', async () => {
@@ -3301,6 +3435,13 @@ body.offline-mode header .btn i { display: none; }
                     // 추출된 그룹 데이터를 전역으로 저장하여 테이블 그릴 때 사용
                     window.currentVulnMonthGroups = monthGroups;
                     loadVulnSummaryData();
+                }
+
+                // ▼▼▼ 취약점 집계 탭 클릭 시 최신 데이터 로드 (추가된 부분) ▼▼▼
+                if (item.getAttribute('data-target') === 'tab-vuln-aggregate') {
+                    await saveVulnCreateData();
+                    await saveVulnManageData();
+                    await loadVulnAggregateData();
                 }
               
             });
@@ -4376,8 +4517,9 @@ body.offline-mode header .btn i { display: none; }
         setTimeout(() => { document.body.classList.remove('printing-monthly-manage'); }, 100);
     }
   
-    async function forceSaveAll(notify = true) {
+	async function forceSaveAll(notify = true) {
         await saveContactData(); 
+        await saveVulnManageData();
         await saveRequestData(); 
         await saveSsrData(); 
         await saveVulnCreateData(); 
@@ -4885,7 +5027,26 @@ body.offline-mode header .btn i { display: none; }
         if (!targetMonth || !window.currentVulnMonthGroups || !window.currentVulnMonthGroups[targetMonth]) return;
         document.getElementById('print-subtitle-summary').textContent = `[${targetMonth}] 미조치 취약점 요약 장표`;
         
-        const pages = window.currentVulnMonthGroups[targetMonth];
+		const pages = window.currentVulnMonthGroups[targetMonth];
+
+        // 취약점 관리(vuln_manage) 데이터 로드 및 CVE별 관리번호 매핑
+        const vulnManageRes = await getFromDB('tables', 'vuln_manage');
+        const vulnManageList = (vulnManageRes && vulnManageRes.data) ? vulnManageRes.data : [];
+        const getMatchedManageNos = (cveStr) => {
+            const targetText = stripHTML(cveStr || '').toUpperCase();
+            const targetCves = targetText.match(/CVE-\d{4}-\d+/g) || (targetText ? [targetText] : []);
+            if (targetCves.length === 0) return [];
+            const matchedNos = new Set();
+            vulnManageList.forEach(item => {
+                const no = stripHTML(item.no || '').trim();
+                const vid = stripHTML(item.vulnId || '').toUpperCase();
+                if (!no || !vid) return;
+                if (targetCves.some(cve => vid.includes(cve))) {
+                    matchedNos.add(no);
+                }
+            });
+            return Array.from(matchedNos);
+        };
         
         // 1. 해당 월에 속한 모든 페이지의 CVE 추출 (중복 제거)
         let tempCVEs = [];
@@ -5000,9 +5161,12 @@ body.offline-mode header .btn i { display: none; }
                     }
                 }
 
-                // 미조치 건이 있을 경우 주황색 배경과 조치(예정)일 렌더링
+				// 미조치 건이 있을 경우 주황색 배경과 조치(예정)일 및 매칭된 관리번호 렌더링
                 if (unresolvedFound) {
-                    td.innerHTML = actionDate ? `<span style="font-weight:700; color:#c2410c;">${actionDate}</span>` : '';
+                    const matchedNos = getMatchedManageNos(cveCol.cve);
+                    const dateHtml = actionDate ? `<span style="font-weight:700; color:#c2410c;">${actionDate}</span>` : '';
+                    const noHtml = matchedNos.length > 0 ? `<div style="font-size:11px; font-weight:600; color:#64748b; margin-top:2px;">${matchedNos.join(', ')}</div>` : '';
+                    td.innerHTML = `${dateHtml}${noHtml}`;
                     td.style.backgroundColor = '#fff7ed'; 
                     td.classList.add('summary-unresolved'); // 출력용 클래스
                 }
@@ -5170,6 +5334,364 @@ body.offline-mode header .btn i { display: none; }
         a.download = `취약점_미조치요약_${targetMonth}_${dateStr}.xlsx`; 
         a.click();
     }  
+  
+    // === 취약점 관리 탭 전용 스크립트 ===
+    async function saveVulnManageData() {
+        const rows = document.getElementById('vuln-manage-tbody').querySelectorAll('tr');
+        const data = Array.from(rows).map(tr => {
+            const tds = tr.querySelectorAll('td');
+            if (tds.length >= 4) {
+                return {
+                    no: tds[0].innerHTML.trim(),
+                    title: tds[1].innerHTML.trim(),
+                    vulnId: tds[2].innerHTML.trim(),
+                    date: tds[3].innerHTML.trim()
+                };
+            }
+            return null;
+        }).filter(Boolean);
+        await saveToDB('tables', { id: 'vuln_manage', data: data });
+    }
+
+    function addVulnManageRow(rowData = { no: '', title: '', vulnId: '', date: '' }) {
+        const tbody = document.getElementById('vuln-manage-tbody');
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td class="editable-cell" contenteditable="true" spellcheck="false" style="text-align:center;">${rowData.no || ''}</td>
+            <td class="editable-cell" contenteditable="true" spellcheck="false" style="text-align:left; white-space:pre-wrap;">${rowData.title || ''}</td>
+            <td class="editable-cell" contenteditable="true" spellcheck="false" style="text-align:center; white-space:pre-wrap;">${rowData.vulnId || ''}</td>
+            <td class="editable-cell" contenteditable="true" spellcheck="false" style="text-align:center;">${rowData.date || ''}</td>
+            <td style="text-align:center;" class="no-print"><button class="btn btn-danger" style="height:28px; padding:0 8px; font-size:13px;" onclick="this.closest('tr').remove(); saveVulnManageData();"><i class="fas fa-trash"></i></button></td>
+        `;
+        tbody.appendChild(tr);
+        applyLockState();
+    }
+
+    function filterVulnManageTable() {
+        const keyword = document.getElementById('vuln-manage-search').value.trim().toLowerCase();
+        document.getElementById('vuln-manage-tbody').querySelectorAll('tr').forEach(tr => {
+            const text = tr.innerText.toLowerCase();
+            tr.style.display = (!keyword || text.includes(keyword)) ? '' : 'none';
+        });
+    }
+
+    async function downloadVulnManageTemplate() {
+        const wb = new ExcelJS.Workbook();
+        const ws = wb.addWorksheet('취약점관리_양식');
+        ws.columns = [
+            { header: '관리번호', width: 12 },
+            { header: '취약점 게시명', width: 55 },
+            { header: '취약점 ID', width: 25 },
+            { header: '게시일', width: 15 }
+        ];
+        ws.getRow(1).eachCell((c) => {
+            c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF70AD47' } };
+            c.font = { color: { argb: 'FFFFFFFF' }, bold: true };
+            c.alignment = { horizontal: 'center' };
+            c.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+        });
+        ws.addRow(['2376', 'Brotli 디코더 취약점 위협 동향 및 보안 권고 [출처:금융보안원]', 'CVE-2026-111497', '2026-10-26']);
+        const blob = new Blob([await wb.xlsx.writeBuffer()], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = '취약점관리_양식.xlsx'; a.click();
+    }
+
+    document.getElementById('excel-upload-vuln-manage').addEventListener('change', async function(e) {
+        const file = e.target.files[0]; if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            const wb = new ExcelJS.Workbook(); await wb.xlsx.load(event.target.result);
+            const ws = wb.worksheets[0];
+            const tbody = document.getElementById('vuln-manage-tbody');
+            tbody.innerHTML = '';
+            ws.eachRow((row, rNumber) => {
+                if (rNumber > 1) {
+                    const rowData = {
+                        no: getCellValueHTML(row.getCell(1)),
+                        title: getCellValueHTML(row.getCell(2)),
+                        vulnId: getCellValueHTML(row.getCell(3)),
+                        date: getCellValueHTML(row.getCell(4))
+                    };
+                    if (rowData.no || rowData.title || rowData.vulnId || rowData.date) addVulnManageRow(rowData);
+                }
+            });
+            if (tbody.children.length === 0) addVulnManageRow();
+            await saveVulnManageData();
+            showToast('취약점 관리 엑셀이 로드되었습니다.');
+        };
+        reader.readAsArrayBuffer(file);
+        e.target.value = '';
+    });
+
+    async function exportVulnManageExcel() {
+        await saveVulnManageData();
+        const wb = new ExcelJS.Workbook();
+        const ws = wb.addWorksheet('취약점관리');
+        ws.columns = [
+            { header: '관리번호', width: 12 },
+            { header: '취약점 게시명', width: 55 },
+            { header: '취약점 ID', width: 25 },
+            { header: '게시일', width: 15 }
+        ];
+        ws.getRow(1).eachCell((c) => {
+            c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF70AD47' } };
+            c.font = { color: { argb: 'FFFFFFFF' }, bold: true };
+            c.alignment = { horizontal: 'center' };
+            c.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+        });
+        document.getElementById('vuln-manage-tbody').querySelectorAll('tr').forEach(tr => {
+            const tds = tr.querySelectorAll('td');
+            if (tds.length >= 4) {
+                const row = ws.addRow([
+                    tds[0].innerText.trim(),
+                    tds[1].innerText.trim(),
+                    tds[2].innerText.trim(),
+                    tds[3].innerText.trim()
+                ]);
+                row.eachCell((c, colNum) => {
+                    c.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+                    c.alignment = { vertical: 'middle', horizontal: colNum === 2 ? 'left' : 'center', wrapText: true };
+                });
+            }
+        });
+        const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const blob = new Blob([await wb.xlsx.writeBuffer()], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `취약점관리_${dateStr}.xlsx`; a.click();
+    }
+  
+	// === 취약점 집계 탭 전용 스크립트 ===
+    let currentVulnAggregateData = [];
+
+	async function loadVulnAggregateData() {
+        currentVulnAggregateData = [];
+        const allTables = await getAllFromDB('tables');
+        const vulnPages = allTables
+            .filter(t => t.id && t.id.startsWith('vuln_page_'))
+            .sort((a, b) => a.pageName.localeCompare(b.pageName, undefined, { numeric: true, sensitivity: 'base' }));
+
+        // 취약점 관리(vuln_manage) 데이터 로드 (게시날짜, 게시번호, 취약점 게시명 매핑용)
+        const vulnManageRes = await getFromDB('tables', 'vuln_manage');
+        const vulnManageList = (vulnManageRes && vulnManageRes.data) ? vulnManageRes.data : [];
+
+        const findVulnManageInfo = (cveStr) => {
+            const targetText = stripHTML(cveStr || '').toUpperCase();
+            const targetCves = targetText.match(/CVE-\d{4}-\d+/g) || (targetText ? [targetText] : []);
+            if (targetCves.length === 0) return { postDate: '', postNo: '', postTitle: '' };
+
+            const matchedDates = new Set();
+            const matchedNos = new Set();
+            const matchedTitles = new Set();
+            vulnManageList.forEach(item => {
+                const vid = stripHTML(item.vulnId || '').toUpperCase();
+                if (!vid) return;
+                if (targetCves.some(cve => vid.includes(cve))) {
+                    const d = stripHTML(item.date || '').trim();
+                    const n = stripHTML(item.no || '').trim();
+                    const t = stripHTML(item.title || '').trim();
+                    if (d) matchedDates.add(d);
+                    if (n) matchedNos.add(n);
+                    if (t) matchedTitles.add(t);
+                }
+            });
+            return {
+                postDate: Array.from(matchedDates).join(', '),
+                postNo: Array.from(matchedNos).join(', '),
+                postTitle: Array.from(matchedTitles).join(' / ')
+            };
+        };
+
+        vulnPages.forEach(page => {
+            if (!page.rows || !page.cveCols) return;
+            page.rows.forEach(rd => {
+                const system = stripHTML(rd.base[1] || '').trim();
+                const detail = stripHTML(rd.base[2] || '').trim();
+                if (!system) return;
+
+                page.cveCols.forEach((cveCol, idx) => {
+                    const st = rd.statuses ? rd.statuses[idx] : null;
+                    if (!st) return;
+
+                    const status = stripHTML(st.status || '').trim();
+                    if (!status) return;
+
+                    const vulnId = stripHTML(cveCol.cve || '').trim();
+                    const manageInfo = findVulnManageInfo(vulnId);
+
+                    let actionDate = stripHTML(st.date || '').trim();
+                    if (status.includes('해당없음') || status.includes('미사용')) {
+                        actionDate = '';
+                    }
+
+                    currentVulnAggregateData.push({
+                        system,
+                        detail,
+                        postDate: manageInfo.postDate,
+                        postNo: manageInfo.postNo,
+                        postTitle: manageInfo.postTitle,
+                        vulnId,
+                        status,
+                        actionDate
+                    });
+                });
+            });
+        });
+
+        // 정보보호시스템 필터 옵션 갱신
+        const sysFilter = document.getElementById('aggregate-system-filter');
+        const currentSys = sysFilter.value;
+        const sysSet = new Set(currentVulnAggregateData.map(item => item.system));
+
+        sysFilter.innerHTML = '<option value="all">전체 시스템</option>';
+        Array.from(sysSet).forEach(sys => {
+            const op = document.createElement('option');
+            op.value = sys;
+            op.textContent = sys;
+            sysFilter.appendChild(op);
+        });
+        sysFilter.value = sysSet.has(currentSys) ? currentSys : 'all';
+
+        // 상태 필터 옵션 갱신
+        const statusFilter = document.getElementById('aggregate-status-filter');
+        const currentStatus = statusFilter.value;
+        const statusSet = new Set(currentVulnAggregateData.map(item => item.status));
+
+        statusFilter.innerHTML = '<option value="all">전체 상태</option>';
+        Array.from(statusSet).forEach(st => {
+            const op = document.createElement('option');
+            op.value = st;
+            op.textContent = st;
+            statusFilter.appendChild(op);
+        });
+        statusFilter.value = statusSet.has(currentStatus) ? currentStatus : 'all';
+
+        renderVulnAggregateTable();
+    }
+
+    function resetVulnAggregateDateFilter() {
+        document.getElementById('aggregate-date-start').value = '';
+        document.getElementById('aggregate-date-end').value = '';
+        renderVulnAggregateTable();
+    }
+
+	function renderVulnAggregateTable() {
+        const sysVal = document.getElementById('aggregate-system-filter').value;
+        const statusVal = document.getElementById('aggregate-status-filter').value;
+        const startDate = document.getElementById('aggregate-date-start').value;
+        const endDate = document.getElementById('aggregate-date-end').value;
+        const tbody = document.getElementById('vuln-aggregate-tbody');
+        tbody.innerHTML = '';
+
+        // 출력용 부제목 갱신
+        let subtitle = sysVal === 'all' ? '전체 시스템 취약점 집계' : `[${sysVal}] 취약점 집계`;
+        if (statusVal !== 'all') {
+            subtitle += ` / 상태: ${statusVal}`;
+        }
+        if (startDate || endDate) {
+            subtitle += ` (게시날짜: ${startDate || '전체'} ~ ${endDate || '전체'})`;
+        }
+        document.getElementById('print-subtitle-aggregate').textContent = subtitle;
+
+        // 날짜 문자열(YYYY-MM-DD / YYYY.MM.DD / YYYY/MM/DD) 정규화 후 범위 비교
+        const matchesDateRange = (postDateStr) => {
+            if (!startDate && !endDate) return true;
+            if (!postDateStr) return false;
+
+            const dateTokens = postDateStr.match(/\d{4}[-./]\d{1,2}[-./]\d{1,2}/g);
+            if (!dateTokens || dateTokens.length === 0) return false;
+
+            return dateTokens.some(token => {
+                const parts = token.split(/[-./]/);
+                const normalized = `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+                if (startDate && normalized < startDate) return false;
+                if (endDate && normalized > endDate) return false;
+                return true;
+            });
+        };
+
+        const filtered = currentVulnAggregateData.filter(item => {
+            if (sysVal !== 'all' && item.system !== sysVal) return false;
+            if (statusVal !== 'all' && item.status !== statusVal) return false;
+            if (!matchesDateRange(item.postDate)) return false;
+            return true;
+        });
+
+        document.getElementById('aggregate-count').textContent = filtered.length;
+
+        if (filtered.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:30px; font-weight:600; color:var(--text-muted);">조건에 해당하는 데이터가 없습니다.</td></tr>`;
+            return;
+        }
+
+        const esc = (str) => String(str || '').replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>');
+
+        filtered.forEach(item => {
+            const tr = document.createElement('tr');
+            let badgeClass = 'badge-gray';
+            if (item.status === '미조치') badgeClass = 'badge-red';
+            else if (item.status === '영향확인중') badgeClass = 'badge-yellow';
+            else if (
+                item.status.includes('완료') ||
+                item.status.includes('미사용') ||
+                item.status.includes('해당없음') ||
+                item.status.includes('미관리대상') ||
+                item.status.includes('제외')
+            ) badgeClass = 'badge-green';
+
+            tr.innerHTML = `
+                <td style="font-weight:600; text-align:left;">${esc(item.system)}</td>
+                <td style="text-align:left;">${esc(item.detail)}</td>
+                <td style="text-align:center;">${esc(item.postDate)}</td>
+                <td style="text-align:center;">${esc(item.postNo)}</td>
+                <td style="text-align:left; white-space:pre-wrap;">${esc(item.postTitle)}</td>
+                <td style="text-align:center;">${esc(item.vulnId)}</td>
+                <td style="text-align:center;"><span class="badge ${badgeClass}">${esc(item.status)}</span></td>
+                <td style="font-weight:600; color:var(--accent); text-align:center;">${esc(item.actionDate)}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    async function exportVulnAggregateExcel() {
+        const wb = new ExcelJS.Workbook();
+        const ws = wb.addWorksheet('취약점집계');
+        ws.columns = [
+            { header: '정보보호시스템', width: 22 },
+            { header: '세부내역', width: 20 },
+            { header: '게시날짜', width: 14 },
+            { header: '게시번호', width: 12 },
+            { header: '취약점 게시명', width: 45 },
+            { header: '취약점 ID', width: 22 },
+            { header: '상태', width: 14 },
+            { header: '조치일', width: 15 }
+        ];
+
+        ws.getRow(1).eachCell((c) => {
+            c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF70AD47' } };
+            c.font = { color: { argb: 'FFFFFFFF' }, bold: true };
+            c.alignment = { horizontal: 'center', vertical: 'middle' };
+            c.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+        });
+
+        document.getElementById('vuln-aggregate-tbody').querySelectorAll('tr').forEach(tr => {
+            const tds = tr.querySelectorAll('td');
+            if (tds.length === 8) {
+                const row = ws.addRow(Array.from(tds).map(td => td.innerText.trim()));
+                row.eachCell((c, colNum) => {
+                    c.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+                    c.alignment = { vertical: 'middle', horizontal: colNum === 5 ? 'left' : 'center', wrapText: true };
+                });
+            }
+        });
+
+        const sysVal = document.getElementById('aggregate-system-filter').value;
+        const sysStr = sysVal === 'all' ? '전체시스템' : sysVal;
+        const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const blob = new Blob([await wb.xlsx.writeBuffer()], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `취약점_집계_${sysStr}_${dateStr}.xlsx`;
+        a.click();
+    }
+</script>  
 </script>
 </body>
 </html>
