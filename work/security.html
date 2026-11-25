@@ -278,7 +278,47 @@ body.offline-mode header .btn i { display: none; }
 .icons-failed .fa-exclamation-triangle::before { content: "⚠️"; }
 .icons-failed .fa-info-circle::before { content: "ℹ️"; }
 .icons-failed .fa-file-excel::before { content: "📊"; }  
-.icons-failed .fa-chart-bar::before { content: "📊"; }  
+.icons-failed .fa-chart-bar::before { content: "📊"; }
+.icons-failed .fa-envelope::before { content: "✉️"; }
+.icons-failed .fa-copy::before { content: "📋"; }
+.icons-failed .fa-eye::before { content: "👁️"; } 
+/* 메일 포맷 전용 보조 스타일 */
+#mail-format-table td.mail-body-cell {
+    text-align: left;
+    white-space: pre-wrap;
+    line-height: 1.6;
+    max-width: 360px;
+    word-break: break-word;
+}
+.mail-modal-content {
+    width: 680px;
+    max-width: 92vw;
+}
+.mail-modal-content textarea {
+    width: 100%;
+    min-height: 220px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-family: var(--font-ui);
+    font-size: 14px;
+    line-height: 1.6;
+    resize: vertical;
+    transition: 0.2s;
+}
+.mail-modal-content textarea:focus {
+    border-color: var(--accent);
+    outline: none;
+    box-shadow: 0 0 0 3px var(--accent-light);
+}
+.mail-modal-content input[readonly],
+.mail-modal-content textarea[readonly] {
+    background: #f8fafc;
+    color: var(--text-main);
+}
+@media print {
+    .mail-ref-col { display: none !important; }
+}  
 </style>
 </head>
 <body>
@@ -287,7 +327,8 @@ body.offline-mode header .btn i { display: none; }
 <datalist id="time-list"><option value="10시"></option><option value="14시"></option><option value="16시"></option></datalist>
 <datalist id="month-list"><option value="매월"></option><option value="격월(홀수달)"></option><option value="격월(짝수달)"></option><option value="분기(3,6,9,12)"></option><option value="반기(6,12)"></option><option value="연1회(12월)"></option></datalist>
 <datalist id="category-list"><option value="개선 사항"></option><option value="기능 개선"></option><option value="기능 이슈(관리 서버)"></option><option value="기능 이슈(관리서버)"></option><option value="기타"></option><option value="취약점 조치"></option></datalist>
-
+<datalist id="mail-category-list"><option value="취약점 점검 요청"></option><option value="자료 요청"></option><option value="정기점검 안내"></option><option value="패치 작업 안내"></option><option value="이슈 협조 요청"></option><option value="기타"></option></datalist>
+  
 <header>
     <div style="display:flex; align-items:center; gap: 15px;">
         <button class="btn btn-secondary" onclick="toggleSidebar()" style="padding: 0 12px; height: 36px; border: none; font-size: 16px;" title="메뉴 토글">
@@ -318,6 +359,7 @@ body.offline-mode header .btn i { display: none; }
 		<div class="nav-item" data-target="tab-monthly-check"><i class="fas fa-check-square"></i> 월별 체크 사항</div>      
         <div class="nav-item" data-target="tab-request"><i class="fas fa-tasks"></i> ShellCop 이슈 현황관리</div>
         <div class="nav-item" data-target="tab-ssr"><i class="fas fa-list-check"></i> SSR 이슈관리</div>
+		<div class="nav-item" data-target="tab-mail-format"><i class="fas fa-envelope"></i> 메일 포맷</div>      
     </aside>
 
     <main class="main-content">
@@ -1046,6 +1088,64 @@ body.offline-mode header .btn i { display: none; }
                     </div>
                 </div>
             </div>
+		</div>
+
+        <!-- 8. 메일 포맷 탭 -->
+        <div id="tab-mail-format" class="tab-pane">
+            <div class="page-header">
+                <h1 class="page-title"><i class="fas fa-envelope"></i> 메일 포맷</h1>
+                <div style="display: flex; gap: 10px;">
+                    <input type="file" id="excel-upload-mail-format" accept=".xlsx, .xls" style="display: none;">
+                    <button class="btn btn-danger btn-edit-only" onclick="clearData('mail_format')"><i class="fas fa-trash-alt"></i> 데이터 초기화</button>
+                    <button class="btn btn-secondary" onclick="downloadMailFormatTemplate()"><i class="fas fa-download"></i> 양식 다운로드</button>
+                    <button class="btn btn-secondary btn-edit-only" onclick="document.getElementById('excel-upload-mail-format').click()"><i class="fas fa-upload"></i> 데이터 로드</button>
+                    <button class="btn btn-accent" onclick="exportMailFormatExcel()"><i class="fas fa-file-excel"></i> 엑셀 저장</button>
+                    <button class="btn btn-secondary" onclick="window.print()"><i class="fas fa-print"></i> 출력</button>
+                </div>
+            </div>
+
+            <div class="paper-sheet">
+                <div class="search-bar no-print" style="background: #f8fafc; padding: 16px; border-radius: 8px; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                        <span style="font-weight: 600; font-size: 14px;">분류:</span>
+                        <select id="mail-format-category-filter" class="input-modern" style="width: 170px; cursor: pointer;" onchange="filterMailFormatTable()">
+                            <option value="all">전체 분류</option>
+                        </select>
+                        <span style="font-weight: 600; font-size: 14px; margin-left: 6px;">검색:</span>
+                        <input type="text" id="mail-format-search" class="input-modern" style="width: 300px;" placeholder="포맷명, 수신/참조, 메일 제목, 본문, 비고 검색" oninput="filterMailFormatTable()">
+                        <span style="font-size: 13px; color: var(--text-sub); margin-left: 6px;">조회 건수: <strong id="mail-format-count" style="color: var(--accent);">0</strong>건</span>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <button class="btn btn-primary btn-edit-only" onclick="openMailFormatModal(null, true)"><i class="fas fa-plus"></i> 새 포맷 등록</button>
+                        <button class="btn btn-secondary btn-edit-only" onclick="addMailFormatRow()"><i class="fas fa-pen"></i> 행 추가</button>
+                    </div>
+                </div>
+
+                <div id="print-area-mail-format">
+                    <div class="print-header">
+                        <h1>보안유지보수 메일 포맷 목록</h1>
+                        <p id="print-subtitle-mail-format">취약점 점검 요청, 자료 요청 등 메일 발송 참조 양식</p>
+                    </div>
+                    <div class="data-table-wrapper">
+                        <table class="data-table" id="mail-format-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 55px; min-width: 50px; text-align: center;">번호</th>
+                                    <th style="width: 130px; min-width: 120px; text-align: center;">분류</th>
+                                    <th style="width: 180px; min-width: 150px; text-align: center;">포맷명</th>
+                                    <th style="width: 150px; min-width: 130px; text-align: center;">수신/참조</th>
+                                    <th style="width: 220px; min-width: 180px; text-align: center;">메일 제목</th>
+                                    <th style="width: 340px; min-width: 260px; text-align: center;">메일 본문</th>
+                                    <th style="width: 130px; min-width: 110px; text-align: center;">비고</th>
+                                    <th style="width: 85px; min-width: 80px; text-align: center;" class="mail-ref-col">참조</th>
+                                    <th style="width: 60px; min-width: 55px; text-align: center;" class="no-print">관리</th>
+                                </tr>
+                            </thead>
+                            <tbody id="mail-format-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
         </div>
 
     </main>
@@ -1197,6 +1297,57 @@ body.offline-mode header .btn i { display: none; }
     </div>
 </div>  
   
+<!-- 메일 포맷 상세 보기 / 편집 / 복사 모달 -->
+<div class="modal-overlay" id="mail-format-modal">
+    <div class="modal-content mail-modal-content">
+        <div class="modal-header">
+            <h3 id="mail-format-modal-title"><i class="fas fa-envelope"></i> 메일 포맷 상세</h3>
+            <div class="modal-close" onclick="closeMailFormatModal()"><i class="fas fa-times"></i></div>
+        </div>
+        <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-group">
+                    <label>분류</label>
+                    <input type="text" id="mf-modal-category" list="mail-category-list" placeholder="예: 취약점 점검 요청">
+                </div>
+                <div class="form-group">
+                    <label>포맷명</label>
+                    <input type="text" id="mf-modal-name" placeholder="예: 월간 취약점 점검 요청 메일">
+                </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-group">
+                    <label>수신/참조</label>
+                    <input type="text" id="mf-modal-recipients" placeholder="예: 협력사 엔지니어(정/부), 담당자">
+                </div>
+                <div class="form-group">
+                    <label>비고</label>
+                    <input type="text" id="mf-modal-note" placeholder="발송 시 참고사항">
+                </div>
+            </div>
+            <div class="form-group">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <label style="margin-bottom: 0;">메일 제목</label>
+                    <button type="button" class="btn btn-secondary" style="height: 28px; padding: 0 10px; font-size: 12px;" onclick="copyMailField('subject')"><i class="fas fa-copy"></i> 제목 복사</button>
+                </div>
+                <input type="text" id="mf-modal-subject" placeholder="메일 제목을 입력하세요">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <label style="margin-bottom: 0;">메일 본문</label>
+                    <button type="button" class="btn btn-secondary" style="height: 28px; padding: 0 10px; font-size: 12px;" onclick="copyMailField('body')"><i class="fas fa-copy"></i> 본문 복사</button>
+                </div>
+                <textarea id="mf-modal-body" placeholder="메일 본문 내용을 입력하세요"></textarea>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" style="margin-right: auto;" onclick="copyMailField('all')"><i class="fas fa-copy"></i> 제목+본문 복사</button>
+            <button type="button" class="btn btn-secondary" onclick="closeMailFormatModal()">닫기</button>
+            <button type="button" class="btn btn-primary" id="mf-modal-save-btn" onclick="saveMailFormatModal()"><i class="fas fa-save"></i> 저장</button>
+        </div>
+    </div>
+</div>
+
 <div id="toast"><i class="fas fa-check-circle"></i> <span id="toast-msg"></span></div>
 
 <script>
@@ -1503,7 +1654,7 @@ body.offline-mode header .btn i { display: none; }
 				document.getElementById('print-subtitle-schedule').textContent = `[기본일정] 보안 시스템 점검 상세 일정`;
                 showToast('일정관리 데이터가 완전히 삭제되었습니다.');
             };
-        } else if (type === 'vuln_manage') {
+		} else if (type === 'vuln_manage') {
             const tx = db.transaction('tables', 'readwrite');
             const store = tx.objectStore('tables');
             store.delete('vuln_manage');
@@ -1511,6 +1662,17 @@ body.offline-mode header .btn i { display: none; }
                 document.getElementById('vuln-manage-tbody').innerHTML = '';
                 addVulnManageRow();
                 showToast('취약점 관리 데이터가 완전히 삭제되었습니다.');
+            };
+        } else if (type === 'mail_format') {
+            const tx = db.transaction('tables', 'readwrite');
+            const store = tx.objectStore('tables');
+            store.delete('mail_format');
+            tx.oncomplete = () => {
+                document.getElementById('mail-format-tbody').innerHTML = '';
+                addMailFormatRow();
+                updateMailFormatCategoryFilter();
+                filterMailFormatTable();
+                showToast('메일 포맷 데이터가 완전히 삭제되었습니다.');
             };
         }
     }
@@ -3205,8 +3367,9 @@ body.offline-mode header .btn i { display: none; }
         }
 		if (e.target.closest('#vuln-manage-tbody')) saveVulnManageData();
         if (e.target.closest('#vuln-create-table')) saveVulnCreateData(); 
-        if (e.target.closest('#monthly-tbody')) saveMonthlyData(); 
-		if (e.target.closest('#monthly-check-tbody')) saveMonthlyCheckData(); // <== 이 줄을 추가하세요.      
+		if (e.target.closest('#monthly-tbody')) saveMonthlyData(); 
+		if (e.target.closest('#monthly-check-tbody')) saveMonthlyCheckData(); // <== 이 줄을 추가하세요.
+        if (e.target.closest('#mail-format-tbody')) { saveMailFormatData(); updateMailFormatCategoryFilter(); }      
     });
 
     async function loadDataFromDB() {
@@ -3338,6 +3501,42 @@ body.offline-mode header .btn i { display: none; }
         const mcSel = document.getElementById('monthly-check-page-selector');
         loadMonthlyCheckPageFromDB(mcSel.options.length > 1 ? mcSel.options[1].value : mcSel.options[0].value);
       
+		const mf_res = await getFromDB('tables', 'mail_format');
+        document.getElementById('mail-format-tbody').innerHTML = '';
+        if (mf_res && mf_res.data && mf_res.data.length > 0) {
+            mf_res.data.forEach(d => addMailFormatRow(d));
+        } else {
+            addMailFormatRow({
+                no: '1',
+                category: '취약점 점검 요청',
+                name: '월간 취약점 점검 요청 메일',
+                recipients: '협력사 엔지니어(정/부), 시스템 담당자',
+                subject: '[보안유지보수] 2026년 OO월 정보보호시스템 취약점 점검 요청의 건',
+                body: '안녕하세요, 보안운영팀입니다.\n\n금월 신규 발표된 보안 취약점(CVE)에 대한 영향도 확인 및 점검을 요청드립니다.\n\n1. 점검 대상 : 담당 정보보호시스템\n2. 점검 항목 : 첨부된 취약점 점검표(CVE 리스트) 참조\n3. 회신 기한 : 2026년 OO월 OO일(요일) 17:00까지\n4. 회신 내용 : 취약점별 상태(해당없음/조치완료/미조치 등) 및 조치(예정)일 기입\n\n기한 내 회신 부탁드립니다.\n감사합니다.',
+                note: '점검표 엑셀 첨부'
+            });
+            addMailFormatRow({
+                no: '2',
+                category: '자료 요청',
+                name: '정기점검 산출물 자료 요청 메일',
+                recipients: '협력사 엔지니어(정/부)',
+                subject: '[보안유지보수] 2026년 OO월 정기점검 보고서 및 증적 자료 요청',
+                body: '안녕하세요, 보안운영팀입니다.\n\nOO월 정기점검 완료에 따른 산출물 제출을 요청드립니다.\n\n1. 요청 자료 : 정기점검 보고서, 시스템 점검 체크리스트, 패치/변경 증적\n2. 제출 기한 : 2026년 OO월 OO일(요일)까지\n3. 비고 : 특이사항 및 EOS/업그레이드 일정이 있는 경우 함께 기재 요청\n\n확인 후 회신 부탁드립니다.\n감사합니다.',
+                note: '매월 말일 기준 요청'
+            });
+            addMailFormatRow({
+                no: '3',
+                category: '패치 작업 안내',
+                name: '보안 패치 작업 일정 사전 안내',
+                recipients: '시스템 담당자, 관련 부서 담당자',
+                subject: '[보안유지보수] 정보보호시스템 보안 패치 작업 일정 안내',
+                body: '안녕하세요, 보안운영팀입니다.\n\n아래와 같이 정보보호시스템 보안 패치 작업을 진행할 예정이오니 업무에 참고 부탁드립니다.\n\n1. 대상 시스템 : OO 시스템\n2. 작업 일시 : 2026년 OO월 OO일(요일) OO:00 ~ OO:00\n3. 작업 내용 : 취약점(CVE-XXXX-XXXX) 조치 및 버전 패치\n4. 서비스 영향 : 작업 시간 중 일시적 순단 발생 가능\n\n관련 문의사항은 보안운영팀으로 연락 부탁드립니다.\n감사합니다.',
+                note: '작업 3일 전 발송'
+            });
+        }
+        updateMailFormatCategoryFilter();
+        filterMailFormatTable();
+
         const s_all = await getAllFromDB('schedules');
         s_all.sort((a, b) => a.sheetName.localeCompare(b.sheetName, undefined, {numeric: true, sensitivity: 'base'}));
         
@@ -4525,8 +4724,9 @@ body.offline-mode header .btn i { display: none; }
         await saveSsrData(); 
         await saveVulnCreateData(); 
         await saveCurrentScheduleToDB();
-        await saveMonthlyData(); 
-        await saveMonthlyCheckData(); 
+		await saveMonthlyData(); 
+        await saveMonthlyCheckData();
+        await saveMailFormatData();
 
         if(notify) showToast('모든 데이터가 브라우저(로컬)에 저장되었습니다.');
     }
@@ -5774,10 +5974,418 @@ body.offline-mode header .btn i { display: none; }
         const blob = new Blob([await wb.xlsx.writeBuffer()], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = `취약점_집계_${sysStr}_${dateStr}.xlsx`;
+		a.download = `취약점_집계_${sysStr}_${dateStr}.xlsx`;
         a.click();
     }
-</script>  
+
+    // ==========================================
+    // === 메일 포맷 탭 전용 스크립트 ===
+    // ==========================================
+    let currentEditingMailRow = null;
+
+    function getPlainTextFromCell(td) {
+        if (!td) return '';
+        return td.innerText.replace(/\r\n/g, '\n').trim();
+    }
+
+    function escapeHtmlText(str) {
+        return String(str || '')
+            .replace(/&/g, '&')
+            .replace(/</g, '<')
+            .replace(/>/g, '>');
+    }
+
+    async function saveMailFormatData() {
+        const tbody = document.getElementById('mail-format-tbody');
+        if (!tbody) return;
+        const rows = tbody.querySelectorAll('tr');
+        const data = Array.from(rows).map(tr => {
+            const tds = tr.querySelectorAll('td');
+            if (tds.length >= 7) {
+                const catInput = tds[1].querySelector('input');
+                return {
+                    no: getPlainTextFromCell(tds[0]),
+                    category: catInput ? catInput.value.trim() : getPlainTextFromCell(tds[1]),
+                    name: getPlainTextFromCell(tds[2]),
+                    recipients: getPlainTextFromCell(tds[3]),
+                    subject: getPlainTextFromCell(tds[4]),
+                    body: getPlainTextFromCell(tds[5]),
+                    note: getPlainTextFromCell(tds[6])
+                };
+            }
+            return null;
+        }).filter(Boolean);
+        await saveToDB('tables', { id: 'mail_format', data: data });
+    }
+
+    function addMailFormatRow(rowData = null) {
+        const tbody = document.getElementById('mail-format-tbody');
+        const nextNo = String(tbody.querySelectorAll('tr').length + 1);
+        const data = rowData || {
+            no: nextNo,
+            category: '',
+            name: '',
+            recipients: '',
+            subject: '',
+            body: '',
+            note: ''
+        };
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td class="editable-cell" contenteditable="true" spellcheck="false" style="text-align:center;">${escapeHtmlText(data.no || nextNo)}</td>
+            <td style="text-align:center; padding:0;"><input type="text" list="mail-category-list" value="${escapeHtmlText(data.category || '').replace(/"/g, '"')}" spellcheck="false" style="width:100%; height:40px; border:1px solid transparent; text-align:center; background:transparent; font-family:inherit; font-size:14px; outline:none; border-radius:4px;" onfocus="this.style.background='#fff'; this.style.borderColor='var(--accent)';" onblur="this.style.background='transparent'; this.style.borderColor='transparent';"></td>
+            <td class="editable-cell" contenteditable="true" spellcheck="false" style="text-align:left; font-weight:600;">${escapeHtmlText(data.name || '')}</td>
+            <td class="editable-cell" contenteditable="true" spellcheck="false" style="text-align:left; white-space:pre-wrap;">${escapeHtmlText(data.recipients || '')}</td>
+            <td class="editable-cell" contenteditable="true" spellcheck="false" style="text-align:left; white-space:pre-wrap;">${escapeHtmlText(data.subject || '')}</td>
+            <td class="editable-cell mail-body-cell" contenteditable="true" spellcheck="false">${escapeHtmlText(data.body || '')}</td>
+            <td class="editable-cell" contenteditable="true" spellcheck="false" style="text-align:left; white-space:pre-wrap;">${escapeHtmlText(data.note || '')}</td>
+            <td style="text-align:center;" class="mail-ref-col">
+                <button class="btn btn-secondary" style="height:28px; padding:0 10px; font-size:12px;" onclick="openMailFormatModal(this.closest('tr'), false)" title="메일 포맷 상세 보기 및 복사"><i class="fas fa-eye"></i> 참조</button>
+            </td>
+            <td style="text-align:center;" class="no-print">
+                <button class="btn btn-danger" style="height:28px; padding:0 8px; font-size:13px;" onclick="this.closest('tr').remove(); saveMailFormatData(); updateMailFormatCategoryFilter(); filterMailFormatTable();"><i class="fas fa-trash"></i></button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+        applyLockState();
+        updateMailFormatCategoryFilter();
+        filterMailFormatTable();
+    }
+
+    function updateMailFormatCategoryFilter() {
+        const filter = document.getElementById('mail-format-category-filter');
+        if (!filter) return;
+        const currentVal = filter.value;
+        const catSet = new Set();
+
+        document.querySelectorAll('#mail-format-tbody tr').forEach(tr => {
+            const catInput = tr.cells[1] ? tr.cells[1].querySelector('input') : null;
+            const cat = catInput ? catInput.value.trim() : getPlainTextFromCell(tr.cells[1]);
+            if (cat) catSet.add(cat);
+        });
+
+        filter.innerHTML = '<option value="all">전체 분류</option>';
+        Array.from(catSet).sort().forEach(cat => {
+            const op = document.createElement('option');
+            op.value = cat;
+            op.textContent = cat;
+            filter.appendChild(op);
+        });
+        filter.value = catSet.has(currentVal) ? currentVal : 'all';
+    }
+
+    function filterMailFormatTable() {
+        const catFilter = document.getElementById('mail-format-category-filter');
+        const searchInput = document.getElementById('mail-format-search');
+        const catVal = catFilter ? catFilter.value : 'all';
+        const keyword = searchInput ? searchInput.value.trim().toLowerCase() : '';
+
+        let visibleCount = 0;
+        document.querySelectorAll('#mail-format-tbody tr').forEach(tr => {
+            const tds = tr.querySelectorAll('td');
+            if (tds.length < 7) return;
+            const catInput = tds[1].querySelector('input');
+            const rowCat = catInput ? catInput.value.trim() : getPlainTextFromCell(tds[1]);
+
+            const rowText = [
+                getPlainTextFromCell(tds[0]),
+                rowCat,
+                getPlainTextFromCell(tds[2]),
+                getPlainTextFromCell(tds[3]),
+                getPlainTextFromCell(tds[4]),
+                getPlainTextFromCell(tds[5]),
+                getPlainTextFromCell(tds[6])
+            ].join(' ').toLowerCase();
+
+            const matchCat = (catVal === 'all' || rowCat === catVal);
+            const matchKeyword = (!keyword || rowText.includes(keyword));
+            const show = matchCat && matchKeyword;
+            tr.style.display = show ? '' : 'none';
+            if (show) visibleCount++;
+        });
+
+        const countEl = document.getElementById('mail-format-count');
+        if (countEl) countEl.textContent = visibleCount;
+
+        const subtitleEl = document.getElementById('print-subtitle-mail-format');
+        if (subtitleEl) {
+            subtitleEl.textContent = catVal === 'all'
+                ? '취약점 점검 요청, 자료 요청 등 메일 발송 참조 양식'
+                : `[${catVal}] 메일 발송 참조 양식`;
+        }
+    }
+
+    function openMailFormatModal(tr, isNew = false) {
+        currentEditingMailRow = isNew ? null : tr;
+
+        const titleEl = document.getElementById('mail-format-modal-title');
+        const catEl = document.getElementById('mf-modal-category');
+        const nameEl = document.getElementById('mf-modal-name');
+        const recEl = document.getElementById('mf-modal-recipients');
+        const noteEl = document.getElementById('mf-modal-note');
+        const subjEl = document.getElementById('mf-modal-subject');
+        const bodyEl = document.getElementById('mf-modal-body');
+        const saveBtn = document.getElementById('mf-modal-save-btn');
+
+        if (isNew || !tr) {
+            titleEl.innerHTML = '<i class="fas fa-plus"></i> 새 메일 포맷 등록';
+            catEl.value = '';
+            nameEl.value = '';
+            recEl.value = '';
+            noteEl.value = '';
+            subjEl.value = '';
+            bodyEl.value = '';
+        } else {
+            const tds = tr.querySelectorAll('td');
+            const catInput = tds[1].querySelector('input');
+            titleEl.innerHTML = isLocked
+                ? '<i class="fas fa-envelope"></i> 메일 포맷 참조 (조회/복사)'
+                : '<i class="fas fa-envelope"></i> 메일 포맷 상세 / 수정';
+            catEl.value = catInput ? catInput.value.trim() : getPlainTextFromCell(tds[1]);
+            nameEl.value = getPlainTextFromCell(tds[2]);
+            recEl.value = getPlainTextFromCell(tds[3]);
+            subjEl.value = getPlainTextFromCell(tds[4]);
+            bodyEl.value = getPlainTextFromCell(tds[5]);
+            noteEl.value = getPlainTextFromCell(tds[6]);
+        }
+
+        const readOnlyMode = !isNew && isLocked;
+        [catEl, nameEl, recEl, noteEl, subjEl, bodyEl].forEach(el => {
+            el.readOnly = readOnlyMode;
+        });
+        saveBtn.style.display = readOnlyMode ? 'none' : 'inline-flex';
+
+        document.getElementById('mail-format-modal').classList.add('active');
+    }
+
+    function closeMailFormatModal() {
+        document.getElementById('mail-format-modal').classList.remove('active');
+        currentEditingMailRow = null;
+    }
+
+    async function saveMailFormatModal() {
+        const category = document.getElementById('mf-modal-category').value.trim();
+        const name = document.getElementById('mf-modal-name').value.trim();
+        const recipients = document.getElementById('mf-modal-recipients').value.trim();
+        const note = document.getElementById('mf-modal-note').value.trim();
+        const subject = document.getElementById('mf-modal-subject').value.trim();
+        const body = document.getElementById('mf-modal-body').value.trim();
+
+        if (!name && !subject) {
+            alert('포맷명 또는 메일 제목을 입력해주세요.');
+            return;
+        }
+
+        if (currentEditingMailRow) {
+            const tds = currentEditingMailRow.querySelectorAll('td');
+            const catInput = tds[1].querySelector('input');
+            if (catInput) catInput.value = category;
+            else tds[1].textContent = category;
+            tds[2].textContent = name;
+            tds[3].textContent = recipients;
+            tds[4].textContent = subject;
+            tds[5].textContent = body;
+            tds[6].textContent = note;
+        } else {
+            addMailFormatRow({
+                no: String(document.querySelectorAll('#mail-format-tbody tr').length + 1),
+                category,
+                name,
+                recipients,
+                subject,
+                body,
+                note
+            });
+        }
+
+        await saveMailFormatData();
+        updateMailFormatCategoryFilter();
+        filterMailFormatTable();
+        closeMailFormatModal();
+        showToast('메일 포맷이 저장되었습니다.');
+    }
+
+    async function copyMailField(type) {
+        const subject = document.getElementById('mf-modal-subject').value;
+        const body = document.getElementById('mf-modal-body').value;
+        let textToCopy = '';
+        let label = '';
+
+        if (type === 'subject') {
+            textToCopy = subject;
+            label = '메일 제목이';
+        } else if (type === 'body') {
+            textToCopy = body;
+            label = '메일 본문이';
+        } else {
+            textToCopy = `[제목]\n${subject}\n\n[본문]\n${body}`;
+            label = '메일 제목과 본문이';
+        }
+
+        try {
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(textToCopy);
+            } else {
+                const ta = document.createElement('textarea');
+                ta.value = textToCopy;
+                ta.style.position = 'fixed';
+                ta.style.left = '-9999px';
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                ta.remove();
+            }
+            showToast(`${label} 클립보드에 복사되었습니다.`);
+        } catch (err) {
+            alert('복사에 실패했습니다. 텍스트를 직접 선택하여 복사해주세요.');
+        }
+    }
+
+    async function downloadMailFormatTemplate() {
+        const wb = new ExcelJS.Workbook();
+        const ws = wb.addWorksheet('메일포맷_양식');
+        ws.columns = [
+            { header: '번호', width: 8 },
+            { header: '분류', width: 18 },
+            { header: '포맷명', width: 25 },
+            { header: '수신/참조', width: 25 },
+            { header: '메일 제목', width: 40 },
+            { header: '메일 본문', width: 60 },
+            { header: '비고', width: 20 }
+        ];
+        ws.getRow(1).eachCell((c) => {
+            c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF70AD47' } };
+            c.font = { color: { argb: 'FFFFFFFF' }, bold: true };
+            c.alignment = { horizontal: 'center', vertical: 'middle' };
+            c.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+        });
+
+        ws.dataValidations.add('B2:B9999', {
+            type: 'list',
+            allowBlank: true,
+            formulae: ['"취약점 점검 요청,자료 요청,정기점검 안내,패치 작업 안내,이슈 협조 요청,기타"']
+        });
+
+        ws.addRow([
+            '1',
+            '취약점 점검 요청',
+            '월간 취약점 점검 요청 메일',
+            '협력사 엔지니어(정/부), 시스템 담당자',
+            '[보안유지보수] 2026년 OO월 정보보호시스템 취약점 점검 요청의 건',
+            '안녕하세요, 보안운영팀입니다.\n\n금월 취약점 점검을 요청드립니다.\n첨부된 점검표 작성 후 기한 내 회신 부탁드립니다.\n감사합니다.',
+            '점검표 엑셀 첨부'
+        ]);
+
+        ws.eachRow((row, rNumber) => {
+            if (rNumber > 1) {
+                row.eachCell((c, colNum) => {
+                    c.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+                    c.alignment = { vertical: 'middle', horizontal: colNum <= 2 ? 'center' : 'left', wrapText: true };
+                });
+            }
+        });
+
+        const blob = new Blob([await wb.xlsx.writeBuffer()], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = '메일포맷_양식.xlsx';
+        a.click();
+    }
+
+    document.getElementById('excel-upload-mail-format').addEventListener('change', async function(e) {
+        const file = e.target.files[0]; if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            const wb = new ExcelJS.Workbook();
+            await wb.xlsx.load(event.target.result);
+            const ws = wb.worksheets[0];
+            const tbody = document.getElementById('mail-format-tbody');
+            tbody.innerHTML = '';
+
+            ws.eachRow((row, rNumber) => {
+                if (rNumber > 1) {
+                    const rowData = {
+                        no: getCellValue(row.getCell(1)),
+                        category: getCellValue(row.getCell(2)),
+                        name: getCellValue(row.getCell(3)),
+                        recipients: getCellValue(row.getCell(4)),
+                        subject: getCellValue(row.getCell(5)),
+                        body: getCellValue(row.getCell(6)),
+                        note: getCellValue(row.getCell(7))
+                    };
+                    if (rowData.name || rowData.subject || rowData.body || rowData.category) {
+                        addMailFormatRow(rowData);
+                    }
+                }
+            });
+
+            if (tbody.children.length === 0) addMailFormatRow();
+            await saveMailFormatData();
+            updateMailFormatCategoryFilter();
+            filterMailFormatTable();
+            showToast('메일 포맷 엑셀이 로드되었습니다.');
+        };
+        reader.readAsArrayBuffer(file);
+        e.target.value = '';
+    });
+
+    async function exportMailFormatExcel() {
+        await saveMailFormatData();
+        const wb = new ExcelJS.Workbook();
+        const ws = wb.addWorksheet('메일포맷');
+        ws.columns = [
+            { header: '번호', width: 8 },
+            { header: '분류', width: 18 },
+            { header: '포맷명', width: 25 },
+            { header: '수신/참조', width: 25 },
+            { header: '메일 제목', width: 40 },
+            { header: '메일 본문', width: 60 },
+            { header: '비고', width: 20 }
+        ];
+
+        ws.getRow(1).eachCell((c) => {
+            c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF70AD47' } };
+            c.font = { color: { argb: 'FFFFFFFF' }, bold: true };
+            c.alignment = { horizontal: 'center', vertical: 'middle' };
+            c.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+        });
+
+        ws.dataValidations.add('B2:B9999', {
+            type: 'list',
+            allowBlank: true,
+            formulae: ['"취약점 점검 요청,자료 요청,정기점검 안내,패치 작업 안내,이슈 협조 요청,기타"']
+        });
+
+        document.querySelectorAll('#mail-format-tbody tr').forEach(tr => {
+            if (tr.style.display === 'none') return;
+            const tds = tr.querySelectorAll('td');
+            if (tds.length >= 7) {
+                const catInput = tds[1].querySelector('input');
+                const row = ws.addRow([
+                    getPlainTextFromCell(tds[0]),
+                    catInput ? catInput.value.trim() : getPlainTextFromCell(tds[1]),
+                    getPlainTextFromCell(tds[2]),
+                    getPlainTextFromCell(tds[3]),
+                    getPlainTextFromCell(tds[4]),
+                    getPlainTextFromCell(tds[5]),
+                    getPlainTextFromCell(tds[6])
+                ]);
+                row.eachCell((c, colNum) => {
+                    c.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+                    c.alignment = { vertical: 'middle', horizontal: colNum <= 2 ? 'center' : 'left', wrapText: true };
+                });
+            }
+        });
+
+        const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const blob = new Blob([await wb.xlsx.writeBuffer()], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `메일포맷_${dateStr}.xlsx`;
+        a.click();
+    }
+</script>
 </script>
 </body>
 </html>
