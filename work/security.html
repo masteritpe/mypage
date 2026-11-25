@@ -694,8 +694,14 @@ body.offline-mode header .btn i { display: none; }
                     <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 15px;">
                         <div style="display: flex; align-items: center; gap: 10px;">
                             <span style="font-weight: 600; font-size: 14px;">정보보호시스템 선택:</span>
-                            <select id="aggregate-system-filter" class="input-modern" style="width: 220px; cursor: pointer;" onchange="renderVulnAggregateTable()">
+                            <select id="aggregate-system-filter" class="input-modern" style="width: 220px; cursor: pointer;" onchange="onAggregateSystemFilterChange()">
                                 <option value="all">전체 시스템</option>
+                            </select>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span style="font-weight: 600; font-size: 14px;">세부내역:</span>
+                            <select id="aggregate-detail-filter" class="input-modern" style="width: 200px; cursor: pointer;" onchange="renderVulnAggregateTable()">
+                                <option value="all">전체 세부내역</option>
                             </select>
                         </div>
                         <div style="display: flex; align-items: center; gap: 10px;">
@@ -5846,9 +5852,48 @@ body.offline-mode header .btn i { display: none; }
             op.value = st;
             op.textContent = st;
             statusFilter.appendChild(op);
+		});
+        sysFilter.value = sysSet.has(currentSys) ? currentSys : 'all';
+
+        // 세부내역 필터 옵션 갱신 (선택된 정보보호시스템과 연동)
+        updateVulnAggregateDetailFilter();
+
+        statusFilter.innerHTML = '<option value="all">전체 상태</option>';
+        Array.from(statusSet).forEach(st => {
+            const op = document.createElement('option');
+            op.value = st;
+            op.textContent = st;
+            statusFilter.appendChild(op);
         });
         statusFilter.value = statusSet.has(currentStatus) ? currentStatus : 'all';
 
+        renderVulnAggregateTable();
+    }
+
+    function updateVulnAggregateDetailFilter() {
+        const sysVal = document.getElementById('aggregate-system-filter').value;
+        const detailFilter = document.getElementById('aggregate-detail-filter');
+        if (!detailFilter) return;
+        const currentDetail = detailFilter.value;
+        const detailSet = new Set();
+
+        currentVulnAggregateData.forEach(item => {
+            if (sysVal !== 'all' && item.system !== sysVal) return;
+            if (item.detail) detailSet.add(item.detail);
+        });
+
+        detailFilter.innerHTML = '<option value="all">전체 세부내역</option>';
+        Array.from(detailSet).forEach(detail => {
+            const op = document.createElement('option');
+            op.value = detail;
+            op.textContent = detail;
+            detailFilter.appendChild(op);
+        });
+        detailFilter.value = detailSet.has(currentDetail) ? currentDetail : 'all';
+    }
+
+    function onAggregateSystemFilterChange() {
+        updateVulnAggregateDetailFilter();
         renderVulnAggregateTable();
     }
 
@@ -5860,6 +5905,7 @@ body.offline-mode header .btn i { display: none; }
 
 	function renderVulnAggregateTable() {
         const sysVal = document.getElementById('aggregate-system-filter').value;
+        const detailVal = document.getElementById('aggregate-detail-filter').value;
         const statusVal = document.getElementById('aggregate-status-filter').value;
         const startDate = document.getElementById('aggregate-date-start').value;
         const endDate = document.getElementById('aggregate-date-end').value;
@@ -5868,6 +5914,9 @@ body.offline-mode header .btn i { display: none; }
 
         // 출력용 부제목 갱신
         let subtitle = sysVal === 'all' ? '전체 시스템 취약점 집계' : `[${sysVal}] 취약점 집계`;
+        if (detailVal !== 'all') {
+            subtitle += ` / 세부내역: ${detailVal}`;
+        }
         if (statusVal !== 'all') {
             subtitle += ` / 상태: ${statusVal}`;
         }
@@ -5895,6 +5944,7 @@ body.offline-mode header .btn i { display: none; }
 
         const filtered = currentVulnAggregateData.filter(item => {
             if (sysVal !== 'all' && item.system !== sysVal) return false;
+            if (detailVal !== 'all' && item.detail !== detailVal) return false;
             if (statusVal !== 'all' && item.status !== statusVal) return false;
             if (!matchesDateRange(item.postDate)) return false;
             return true;
@@ -5968,13 +6018,15 @@ body.offline-mode header .btn i { display: none; }
             }
         });
 
-        const sysVal = document.getElementById('aggregate-system-filter').value;
+		const sysVal = document.getElementById('aggregate-system-filter').value;
+        const detailVal = document.getElementById('aggregate-detail-filter').value;
         const sysStr = sysVal === 'all' ? '전체시스템' : sysVal;
+        const detailStr = detailVal === 'all' ? '전체세부내역' : detailVal;
         const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
         const blob = new Blob([await wb.xlsx.writeBuffer()], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-		a.download = `취약점_집계_${sysStr}_${dateStr}.xlsx`;
+		a.download = `취약점_집계_${sysStr}_${detailStr}_${dateStr}.xlsx`;
         a.click();
     }
 
