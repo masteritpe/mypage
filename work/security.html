@@ -431,12 +431,12 @@ body.offline-mode header .btn i { display: none; }
                     </div>
                     <div class="data-table-wrapper">
                         <table class="data-table" id="vuln-manage-table">
-                            <thead>
+							<thead>
                                 <tr>
-                                    <th style="width: 10%; min-width: 90px;">관리번호</th>
-                                    <th style="width: 48%; min-width: 320px;">취약점 게시명</th>
-                                    <th style="width: 22%; min-width: 160px;">취약점 ID</th>
-                                    <th style="width: 14%; min-width: 120px;">게시일</th>
+                                    <th style="width: 10%; min-width: 90px; cursor: pointer; user-select: none;" onclick="toggleVulnManageSort(0)">관리번호 <span class="vm-sort-icon" data-col="0">▼</span></th>
+                                    <th style="width: 48%; min-width: 320px; cursor: pointer; user-select: none;" onclick="toggleVulnManageSort(1)">취약점 게시명 <span class="vm-sort-icon" data-col="1"></span></th>
+                                    <th style="width: 22%; min-width: 160px; cursor: pointer; user-select: none;" onclick="toggleVulnManageSort(2)">취약점 ID <span class="vm-sort-icon" data-col="2"></span></th>
+                                    <th style="width: 14%; min-width: 120px; cursor: pointer; user-select: none;" onclick="toggleVulnManageSort(3)">게시일 <span class="vm-sort-icon" data-col="3"></span></th>
                                     <th style="width: 6%; min-width: 60px;" class="no-print">관리</th>
                                 </tr>
                             </thead>
@@ -3225,7 +3225,7 @@ body.offline-mode header .btn i { display: none; }
             addContactManagerRow(['1', 'DB서버', '암호화 솔루션', 'B보안', '김운영', '최인프라', '박솔루션']);
         }
 
-        const vm_res = await getFromDB('tables', 'vuln_manage');
+		const vm_res = await getFromDB('tables', 'vuln_manage');
         document.getElementById('vuln-manage-tbody').innerHTML = '';
         if (vm_res && vm_res.data && vm_res.data.length > 0) {
             vm_res.data.forEach(d => addVulnManageRow(d));
@@ -3234,6 +3234,7 @@ body.offline-mode header .btn i { display: none; }
             addVulnManageRow({ no: '2375', title: 'Google 제품 보안 업데이트 권고 (SHGSVR-20261026-01)[보안권고문][출처:KRcert]', vulnId: 'CVE-2026-111497', date: '2026-10-26' });
             addVulnManageRow({ no: '2374', title: 'Oracle Java 및 GraalVM 보안 업데이트 권고 [출처:금융보안원]', vulnId: '', date: '2026-10-24' });
         }
+        applyVulnManageSort();
 
         const allTables = await getAllFromDB('tables');
         let vulnPages = allTables.filter(t => t.id && t.id.startsWith('vuln_page_'));
@@ -5336,6 +5337,48 @@ body.offline-mode header .btn i { display: none; }
     }  
   
     // === 취약점 관리 탭 전용 스크립트 ===
+	let vulnManageSortCol = 0;      // 기본 정렬 컬럼: 0 (관리번호)
+    let vulnManageSortDir = 'desc'; // 기본 정렬 방향: 내림차순
+
+    function toggleVulnManageSort(colIdx) {
+        if (vulnManageSortCol === colIdx) {
+            vulnManageSortDir = vulnManageSortDir === 'desc' ? 'asc' : 'desc';
+        } else {
+            vulnManageSortCol = colIdx;
+            vulnManageSortDir = (colIdx === 0 || colIdx === 3) ? 'desc' : 'asc';
+        }
+        applyVulnManageSort();
+    }
+
+    function applyVulnManageSort() {
+        const tbody = document.getElementById('vuln-manage-tbody');
+        if (!tbody) return;
+
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        rows.sort((a, b) => {
+            const valA = stripHTML(a.cells[vulnManageSortCol]?.innerHTML || '').trim();
+            const valB = stripHTML(b.cells[vulnManageSortCol]?.innerHTML || '').trim();
+
+            if (!valA && !valB) return 0;
+            if (!valA) return 1;
+            if (!valB) return -1;
+
+            const cmp = valA.localeCompare(valB, undefined, { numeric: true, sensitivity: 'base' });
+            return vulnManageSortDir === 'asc' ? cmp : -cmp;
+        });
+
+        rows.forEach(tr => tbody.appendChild(tr));
+
+        document.querySelectorAll('#vuln-manage-table .vm-sort-icon').forEach(span => {
+            const col = parseInt(span.dataset.col, 10);
+            if (col === vulnManageSortCol) {
+                span.textContent = vulnManageSortDir === 'asc' ? '▲' : '▼';
+            } else {
+                span.textContent = '';
+            }
+        });
+    }
+  
     async function saveVulnManageData() {
         const rows = document.getElementById('vuln-manage-tbody').querySelectorAll('tr');
         const data = Array.from(rows).map(tr => {
@@ -5395,14 +5438,36 @@ body.offline-mode header .btn i { display: none; }
         const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = '취약점관리_양식.xlsx'; a.click();
     }
 
-    document.getElementById('excel-upload-vuln-manage').addEventListener('change', async function(e) {
+	document.getElementById('excel-upload-vuln-manage').addEventListener('change', async function(e) {
         const file = e.target.files[0]; if (!file) return;
         const reader = new FileReader();
         reader.onload = async (event) => {
             const wb = new ExcelJS.Workbook(); await wb.xlsx.load(event.target.result);
             const ws = wb.worksheets[0];
             const tbody = document.getElementById('vuln-manage-tbody');
-            tbody.innerHTML = '';
+
+            // 기존 행에서 관리번호 기준 매핑 생성 (완전 빈 행은 정리)
+            const existingRowMap = new Map();
+            Array.from(tbody.querySelectorAll('tr')).forEach(tr => {
+                const tds = tr.querySelectorAll('td');
+                if (tds.length < 4) return;
+                const noKey = stripHTML(tds[0].innerHTML).trim();
+                const titleVal = stripHTML(tds[1].innerHTML).trim();
+                const vulnIdVal = stripHTML(tds[2].innerHTML).trim();
+                const dateVal = stripHTML(tds[3].innerHTML).trim();
+
+                if (!noKey && !titleVal && !vulnIdVal && !dateVal) {
+                    tr.remove();
+                    return;
+                }
+                if (noKey) {
+                    existingRowMap.set(noKey, tr);
+                }
+            });
+
+            let updatedCount = 0;
+            let addedCount = 0;
+
             ws.eachRow((row, rNumber) => {
                 if (rNumber > 1) {
                     const rowData = {
@@ -5411,12 +5476,33 @@ body.offline-mode header .btn i { display: none; }
                         vulnId: getCellValueHTML(row.getCell(3)),
                         date: getCellValueHTML(row.getCell(4))
                     };
-                    if (rowData.no || rowData.title || rowData.vulnId || rowData.date) addVulnManageRow(rowData);
+
+                    if (!rowData.no && !rowData.title && !rowData.vulnId && !rowData.date) return;
+
+                    const noKey = stripHTML(rowData.no).trim();
+                    if (noKey && existingRowMap.has(noKey)) {
+                        const targetTr = existingRowMap.get(noKey);
+                        const tds = targetTr.querySelectorAll('td');
+                        tds[0].innerHTML = rowData.no || '';
+                        tds[1].innerHTML = rowData.title || '';
+                        tds[2].innerHTML = rowData.vulnId || '';
+                        tds[3].innerHTML = rowData.date || '';
+                        updatedCount++;
+                    } else {
+                        addVulnManageRow(rowData);
+                        if (noKey) {
+                            existingRowMap.set(noKey, tbody.lastElementChild);
+                        }
+                        addedCount++;
+                    }
                 }
             });
+
             if (tbody.children.length === 0) addVulnManageRow();
+            applyVulnManageSort();
             await saveVulnManageData();
-            showToast('취약점 관리 엑셀이 로드되었습니다.');
+            filterVulnManageTable();
+            showToast(`취약점 관리 엑셀이 로드되었습니다. (업데이트 ${updatedCount}건, 신규 ${addedCount}건)`);
         };
         reader.readAsArrayBuffer(file);
         e.target.value = '';
