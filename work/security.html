@@ -179,9 +179,12 @@ body.locked-mode .status-select { pointer-events: none; appearance: none; }
 
 /* === 전체 출력용 완벽 보완 CSS (Print) === */
 .print-header { display: none; }
-#vuln-create-print-container, #monthly-print-container, #monthly-check-print-container, #vuln-summary-print-container { display: none; }
+#vuln-create-print-container, #monthly-print-container, #monthly-check-print-container, #vuln-summary-print-container, #vuln-aggregate-summary-print-container { display: none; }
 
 @media print {
+    body.printing-vuln-aggregate-summary > *:not(#vuln-aggregate-summary-print-container) { display: none !important; }
+    body.printing-vuln-aggregate-summary #vuln-aggregate-summary-print-container { display: block !important; width: 100%; }
+
     body.printing-vuln-summary > *:not(#vuln-summary-print-container) { display: none !important; }
     body.printing-vuln-summary #vuln-summary-print-container { display: block !important; width: 100%; }
   
@@ -708,12 +711,13 @@ body.offline-mode header .btn i { display: none; }
         </div>      
 
 		<!-- 취약점 집계 탭 -->
-        <div id="tab-vuln-aggregate" class="tab-pane">
+		<div id="tab-vuln-aggregate" class="tab-pane">
             <div class="page-header">
                 <h1 class="page-title"><i class="fas fa-chart-bar"></i> 취약점 집계</h1>
                 <div style="display: flex; gap: 10px;">
                     <button class="btn btn-accent" onclick="exportVulnAggregateExcel()"><i class="fas fa-file-excel"></i> 엑셀 저장</button>
                     <button class="btn btn-secondary" onclick="window.print()"><i class="fas fa-print"></i> 출력</button>
+                    <button class="btn btn-primary" onclick="printVulnAggregateSummary()"><i class="fas fa-print"></i> 요약 출력</button>
                 </div>
             </div>
             <div class="paper-sheet">
@@ -6826,8 +6830,151 @@ body.offline-mode header .btn i { display: none; }
                 <td style="text-align:center;"><span class="badge ${badgeClass}">${esc(item.status)}</span></td>
                 <td style="font-weight:600; color:var(--accent); text-align:center;">${esc(item.actionDate)}</td>
             `;
-            tbody.appendChild(tr);
+			tbody.appendChild(tr);
         });
+    }
+
+    function printVulnAggregateSummary() {
+        const sysVal = document.getElementById('aggregate-system-filter').value;
+        const detailVal = document.getElementById('aggregate-detail-filter').value;
+        const startDate = document.getElementById('aggregate-date-start').value;
+        const endDate = document.getElementById('aggregate-date-end').value;
+
+        // 날짜 문자열(YYYY-MM-DD / YYYY.MM.DD / YYYY/MM/DD) 정규화 후 범위 비교
+        const matchesDateRange = (postDateStr) => {
+            if (!startDate && !endDate) return true;
+            if (!postDateStr) return false;
+            const dateTokens = postDateStr.match(/\d{4}[-./]\d{1,2}[-./]\d{1,2}/g);
+            if (!dateTokens || dateTokens.length === 0) return false;
+
+            return dateTokens.some(token => {
+                const parts = token.split(/[-./]/);
+                const normalized = `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+                if (startDate && normalized < startDate) return false;
+                if (endDate && normalized > endDate) return false;
+                return true;
+            });
+        };
+
+        // 1. 미조치 취약점만 필터링 (현재 선택된 시스템/세부내역/게시날짜 필터 반영)
+        const unresolvedItems = currentVulnAggregateData.filter(item => {
+            if (item.status !== '미조치') return false;
+            if (sysVal !== 'all' && item.system !== sysVal) return false;
+            if (detailVal !== 'all' && item.detail !== detailVal) return false;
+            if (!matchesDateRange(item.postDate)) return false;
+            return true;
+        });
+
+        if (unresolvedItems.length === 0) {
+            alert('출력할 미조치 취약점 데이터가 없습니다.');
+            return;
+        }
+
+        // 2. 정보보호시스템 + 세부내역별로 그룹화하고, 같은 게시물(게시번호/게시명)의 취약점 ID 모으기
+        const systemGroupMap = new Map();
+
+        unresolvedItems.forEach(item => {
+            const sysKey = `${item.system}|||${item.detail}`;
+            if (!systemGroupMap.has(sysKey)) {
+                systemGroupMap.set(sysKey, {
+                    system: item.system,
+                    detail: item.detail,
+                    postMap: new Map()
+                });
+            }
+
+            const sysGroup = systemGroupMap.get(sysKey);
+            const postKey = item.postNo
+                ? `NO::${item.postNo}`
+                : (item.postTitle || item.postDate)
+                    ? `META::${item.postDate}|||${item.postTitle}`
+                    : `CVE::${item.vulnId}`;
+
+            if (!sysGroup.postMap.has(postKey)) {
+                sysGroup.postMap.set(postKey, {
+                    postDates: new Set(),
+                    postNo: item.postNo || '',
+                    postTitle: item.postTitle || '',
+                    vulnIds: new Set(),
+                    actionDates: new Set()
+                });
+            }
+
+            const postEntry = sysGroup.postMap.get(postKey);
+            if (item.postDate) postEntry.postDates.add(item.postDate);
+            if (item.vulnId) postEntry.vulnIds.add(item.vulnId);
+            if (item.actionDate) postEntry.actionDates.add(item.actionDate);
+        });
+
+        // 3. 출력용 컨테이너 생성 및 초기화
+        let printDiv = document.getElementById('vuln-aggregate-summary-print-container');
+        if (!printDiv) {
+            printDiv = document.createElement('div');
+            printDiv.id = 'vuln-aggregate-summary-print-container';
+            document.body.appendChild(printDiv);
+        }
+        printDiv.innerHTML = '';
+
+        const esc = (str) => String(str || '')
+            .replace(/&/g, '&')
+            .replace(/</g, '<')
+            .replace(/>/g, '>');
+
+        let subtitle = sysVal === 'all' ? '전체 시스템 미조치 취약점 요약' : `[${sysVal}] 미조치 취약점 요약`;
+        if (detailVal !== 'all') subtitle += ` / 세부내역: ${detailVal}`;
+        if (startDate || endDate) subtitle += ` (게시날짜: ${startDate || '전체'} ~ ${endDate || '전체'})`;
+
+        let html = `
+            <div class="print-page" style="width: 100%; margin-bottom: 20px;">
+                <div class="print-header" style="text-align:center; margin-bottom:15px;">
+                    <h1 style="font-size:18pt; margin-bottom:5px;">보안 취약점 미조치 요약 현황</h1>
+                    <p style="font-size:10pt; color:#555;">${esc(subtitle)}</p>
+                </div>
+                <table class="data-table" style="width: 100%; border-collapse: collapse; font-size: 9pt; border: 1px solid #000; table-layout: auto;">
+                    <thead>
+                        <tr>
+                            <th style="width: 13%; border:1px solid #000; padding:6px; background:#f1f5f9; -webkit-print-color-adjust:exact;">정보보호시스템</th>
+                            <th style="width: 12%; border:1px solid #000; padding:6px; background:#f1f5f9; -webkit-print-color-adjust:exact;">세부내역</th>
+                            <th style="width: 10%; border:1px solid #000; padding:6px; background:#f1f5f9; -webkit-print-color-adjust:exact;">게시날짜</th>
+                            <th style="width: 8%; border:1px solid #000; padding:6px; background:#f1f5f9; -webkit-print-color-adjust:exact;">게시번호</th>
+                            <th style="width: 28%; border:1px solid #000; padding:6px; background:#f1f5f9; -webkit-print-color-adjust:exact;">취약점 게시명</th>
+                            <th style="width: 19%; border:1px solid #000; padding:6px; background:#f1f5f9; -webkit-print-color-adjust:exact;">취약점 ID</th>
+                            <th style="width: 10%; border:1px solid #000; padding:6px; background:#f1f5f9; -webkit-print-color-adjust:exact;">조치일</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+		// 4. 시스템/세부내역별 행 생성 (인쇄 시 빈 페이지 방지를 위해 rowspan 제거)
+        systemGroupMap.forEach(group => {
+            const posts = Array.from(group.postMap.values());
+
+            posts.forEach(post => {
+                const postDateText = Array.from(post.postDates).join(', ');
+                const vulnIdHtml = Array.from(post.vulnIds).map(v => esc(v)).join('<br>');
+                const actionDateHtml = Array.from(post.actionDates).map(d => esc(d)).join('<br>');
+
+                html += `<tr>
+                    <td style="border:1px solid #000; padding:6px; text-align:left; font-weight:700; vertical-align:middle;">${esc(group.system)}</td>
+                    <td style="border:1px solid #000; padding:6px; text-align:left; vertical-align:middle;">${esc(group.detail)}</td>
+                    <td style="border:1px solid #000; padding:6px; text-align:center; vertical-align:middle;">${esc(postDateText)}</td>
+                    <td style="border:1px solid #000; padding:6px; text-align:center; vertical-align:middle;">${esc(post.postNo)}</td>
+                    <td style="border:1px solid #000; padding:6px; text-align:left; white-space:pre-wrap; vertical-align:middle;">${esc(post.postTitle)}</td>
+                    <td style="border:1px solid #000; padding:6px; text-align:center; line-height:1.6; vertical-align:middle;">${vulnIdHtml}</td>
+                    <td style="border:1px solid #000; padding:6px; text-align:center; font-weight:700; color:#c2410c; vertical-align:middle;">${actionDateHtml}</td>
+                </tr>`;
+            });
+        });
+
+        html += `</tbody></table></div>`;
+        printDiv.innerHTML = html;
+
+        // 5. 인쇄 실행 및 상태 복원
+        document.body.classList.add('printing-vuln-aggregate-summary');
+        window.print();
+        setTimeout(() => {
+            document.body.classList.remove('printing-vuln-aggregate-summary');
+        }, 100);
     }
 
     async function exportVulnAggregateExcel() {
