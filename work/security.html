@@ -532,11 +532,15 @@ body.offline-mode header .btn i { display: none; }
             </div>
             
             <div class="paper-sheet">
-                <div class="search-bar no-print" style="background: #f8fafc; padding: 16px; border-radius: 8px; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
-                    <div style="display: flex; gap: 10px; align-items: center;">
+				<div class="search-bar no-print" style="background: #f8fafc; padding: 16px; border-radius: 8px; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                         <span style="font-weight: 600; font-size: 14px;">정보보호시스템 조회:</span>
-                        <select id="vuln-create-system-filter" class="input-modern" style="width: 200px; cursor: pointer;" onchange="filterVulnCreateTable()">
+                        <select id="vuln-create-system-filter" class="input-modern" style="width: 200px; cursor: pointer;" onchange="onVulnCreateSystemFilterChange()">
                             <option value="ALL">전체 시스템 보기</option>
+                        </select>
+                        <span style="font-weight: 600; font-size: 14px; margin-left: 4px;">세부내역:</span>
+                        <select id="vuln-create-detail-filter" class="input-modern" style="width: 180px; cursor: pointer;" onchange="filterVulnCreateTable()">
+                            <option value="ALL">전체 세부내역</option>
                         </select>
                         <span style="font-weight: 600; font-size: 14px; margin-left: 10px;">작업 페이지 선택:</span>
                         <select id="vuln-page-selector" class="input-modern" style="width: 200px; cursor: pointer;"></select>
@@ -2961,13 +2965,13 @@ body.offline-mode header .btn i { display: none; }
         };
     }
 
-    // === 취약점 작성 정보보호시스템 필터 제어 ===
+	// === 취약점 작성 정보보호시스템 / 세부내역 필터 제어 ===
     function updateVulnCreateFilterOptions() {
         const rows = document.getElementById('vuln-create-tbody').querySelectorAll('tr');
         const sysSet = new Set();
         rows.forEach(tr => { 
             // cells[1]이 정보보호시스템명
-            const sysName = stripHTML(tr.cells[1].innerHTML).trim(); 
+            const sysName = stripHTML(tr.cells[1]?.innerHTML || '').trim(); 
             if(sysName) sysSet.add(sysName); 
         });
 
@@ -2983,6 +2987,37 @@ body.offline-mode header .btn i { display: none; }
             filter.appendChild(op); 
         });
         filter.value = sysSet.has(currentVal) ? currentVal : "ALL";
+
+        updateVulnCreateDetailFilterOptions();
+    }
+
+    function updateVulnCreateDetailFilterOptions() {
+        const sysVal = document.getElementById('vuln-create-system-filter')?.value || "ALL";
+        const detailFilter = document.getElementById('vuln-create-detail-filter');
+        if (!detailFilter) return;
+
+        const currentDetail = detailFilter.value;
+        const detailSet = new Set();
+        document.getElementById('vuln-create-tbody').querySelectorAll('tr').forEach(tr => {
+            const sysName = stripHTML(tr.cells[1]?.innerHTML || '').trim();
+            const detailName = stripHTML(tr.cells[2]?.innerHTML || '').trim();
+            if (sysVal !== "ALL" && sysName !== sysVal) return;
+            if (detailName) detailSet.add(detailName);
+        });
+
+        detailFilter.innerHTML = '<option value="ALL">전체 세부내역</option>';
+        Array.from(detailSet).forEach(detail => {
+            const op = document.createElement('option');
+            op.value = detail;
+            op.textContent = detail;
+            detailFilter.appendChild(op);
+        });
+        detailFilter.value = detailSet.has(currentDetail) ? currentDetail : "ALL";
+    }
+
+    function onVulnCreateSystemFilterChange() {
+        updateVulnCreateDetailFilterOptions();
+        filterVulnCreateTable();
     }
 
 	// (추가) 상태 추적 변수 및 토글 함수
@@ -3006,14 +3041,18 @@ body.offline-mode header .btn i { display: none; }
         filterVulnCreateTable();
     }
 
-    // (수정) 기존 필터 함수에 입력 완료 체크 로직 병합
+    // (수정) 기존 필터 함수에 세부내역 및 입력 완료 체크 로직 병합
     function filterVulnCreateTable() {
+        const detail = document.getElementById('vuln-create-detail-filter')?.value || "ALL";
         const sys = document.getElementById('vuln-create-system-filter').value;
         document.getElementById('vuln-create-tbody').querySelectorAll('tr').forEach(tr => {
-            // 1. 정보보호시스템 필터 검사
-            let showSys = (sys === "ALL" || stripHTML(tr.cells[1].innerHTML).trim() === sys);
+            // 1. 세부내역 필터 검사
+            let showDetail = (detail === "ALL" || stripHTML(tr.cells[2]?.innerHTML || '').trim() === detail);
+
+            // 2. 정보보호시스템 필터 검사
+            let showSys = (sys === "ALL" || stripHTML(tr.cells[1]?.innerHTML || '').trim() === sys);
             
-            // 2. 입력 완료 숨김 필터 검사
+            // 3. 입력 완료 숨김 필터 검사
             let showCompleted = true;
             if (hideCompletedRows) {
                 const selects = tr.querySelectorAll('.status-select');
@@ -3032,8 +3071,8 @@ body.offline-mode header .btn i { display: none; }
                 if (allFilled) showCompleted = false;
             }
 
-            // 두 조건을 모두 만족해야 화면에 노출
-            tr.style.display = (showSys && showCompleted) ? '' : 'none';
+            // 세 조건을 모두 만족해야 화면에 노출
+            tr.style.display = (showDetail && showSys && showCompleted) ? '' : 'none';
         });
     }
   
