@@ -2407,6 +2407,20 @@ body.offline-mode header .btn i { display: none; }
         const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = '취약점작성_업로드양식.xlsx'; a.click();
     }
 
+	// 취약점 작성 필터 조건에 따른 파일명 접미사 생성
+    function getVulnCreateFilterSuffix() {
+        const sysVal = document.getElementById('vuln-create-system-filter')?.value || 'ALL';
+        const detailVal = document.getElementById('vuln-create-detail-filter')?.value || 'ALL';
+        const sanitize = (str) => String(str).replace(/[\\/:*?"<>|]/g, '_').trim();
+
+        const parts = [];
+        if (sysVal !== 'ALL') parts.push(sanitize(sysVal));
+        if (detailVal !== 'ALL') parts.push(sanitize(detailVal));
+        if (hideCompletedRows) parts.push('미완료');
+
+        return parts.length > 0 ? '_' + parts.join('_') : '';
+    }
+
     async function exportVulnCreateExcel() {
         await saveVulnCreateData();
         const wb = new ExcelJS.Workbook();
@@ -2447,6 +2461,8 @@ body.offline-mode header .btn i { display: none; }
 
         const rows = document.getElementById('vuln-create-tbody').rows;
         Array.from(rows).forEach(tr => {
+            if (tr.style.display === 'none') return; // 필터링되어 숨겨진 행 제외
+
             let rowData = [];
             for(let i=0; i<6; i++) rowData.push(tr.cells[i].innerText);
             
@@ -2467,7 +2483,7 @@ body.offline-mode header .btn i { display: none; }
                 if (rowNumber <= 2) {
                     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF70AD47' } };
                     cell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-				} else {
+                } else {
                     if (cell.value === '미조치') {
                         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF97316' } };
                         cell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
@@ -2479,12 +2495,12 @@ body.offline-mode header .btn i { display: none; }
             });
         });
 
+        const filterSuffix = getVulnCreateFilterSuffix();
         const dateStr = new Date().toISOString().slice(0,10).replace(/-/g, '');
         const blob = new Blob([await wb.xlsx.writeBuffer()], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `보안취약점_${currentVulnPageName}_${dateStr}.xlsx`; a.click();
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `보안취약점_${currentVulnPageName}${filterSuffix}_${dateStr}.xlsx`; a.click();
     }
 
-    
     async function exportVulnCreateExcelAll() {
         await saveVulnCreateData();
         const allTables = await getAllFromDB('tables');
@@ -2495,6 +2511,9 @@ body.offline-mode header .btn i { display: none; }
             alert("저장할 데이터가 없습니다.");
             return;
         }
+
+        const sysVal = document.getElementById('vuln-create-system-filter')?.value || 'ALL';
+        const detailVal = document.getElementById('vuln-create-detail-filter')?.value || 'ALL';
         
         const wb = new ExcelJS.Workbook();
         
@@ -2527,11 +2546,25 @@ body.offline-mode header .btn i { display: none; }
             
             if (page.rows) {
                 page.rows.forEach(rd => {
-                    let rowData = [...rd.base];
+                    // 정보보호시스템 필터 적용
+                    const rowSys = stripHTML(rd.base[1] || '').trim();
+                    if (sysVal !== 'ALL' && rowSys !== sysVal) return;
+
+                    // 세부내역 필터 적용
+                    const rowDetail = stripHTML(rd.base[2] || '').trim();
+                    if (detailVal !== 'ALL' && rowDetail !== detailVal) return;
+
+                    // 입력 완료 숨기기 필터 적용
+                    if (hideCompletedRows && rd.statuses && rd.statuses.length > 0) {
+                        const allFilled = rd.statuses.every(st => stripHTML(st.status || '').trim() !== '');
+                        if (allFilled) return;
+                    }
+
+                    let rowData = rd.base.map(v => stripHTML(v || ''));
                     if (rd.statuses) {
                         rd.statuses.forEach(st => {
-                            rowData.push(st.status);
-                            rowData.push(st.date);
+                            rowData.push(stripHTML(st.status || ''));
+                            rowData.push(stripHTML(st.date || ''));
                         });
                     }
                     ws.addRow(rowData);
@@ -2545,23 +2578,24 @@ body.offline-mode header .btn i { display: none; }
                     if (rowNumber <= 2) {
                         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF70AD47' } };
                         cell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-					} else {
-                    if (cell.value === '미조치') {
-                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF97316' } };
-                        cell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
-                    } else if (cell.value === '영향확인중') {
-                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEAB308' } };
-                        cell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
+                    } else {
+                        if (cell.value === '미조치') {
+                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF97316' } };
+                            cell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
+                        } else if (cell.value === '영향확인중') {
+                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEAB308' } };
+                            cell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
+                        }
                     }
-                }
                 });
             });
             ws.columns.forEach(column => { column.width = 15; });
         }
         
+        const filterSuffix = getVulnCreateFilterSuffix();
         const dateStr = new Date().toISOString().slice(0,10).replace(/-/g, '');
         const blob = new Blob([await wb.xlsx.writeBuffer()], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `보안취약점_전체_${dateStr}.xlsx`; a.click();
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `보안취약점_전체${filterSuffix}_${dateStr}.xlsx`; a.click();
     }
     
     function printVulnCreate() {
