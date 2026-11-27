@@ -282,6 +282,29 @@ body.offline-mode header .btn i { display: none; }
 .icons-failed .fa-envelope::before { content: "✉️"; }
 .icons-failed .fa-copy::before { content: "📋"; }
 .icons-failed .fa-eye::before { content: "👁️"; } 
+.icons-failed .fa-folder-open::before { content: "📂"; }
+/* 자료 취합 동적 헤더 스타일 */
+#data-gather-table th.gather-dyn-th {
+    background: #e2efda;
+    min-width: 140px;
+}
+.gather-col-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+.gather-col-del {
+    border: none;
+    background: transparent;
+    color: #dc2626;
+    cursor: pointer;
+    font-size: 13px;
+    padding: 0 4px;
+    line-height: 1;
+}
+.gather-col-del:hover { opacity: 0.7; }
+  
 /* 메일 포맷 전용 보조 스타일 */
 #mail-format-table td.mail-body-cell {
     text-align: left;
@@ -353,7 +376,8 @@ body.offline-mode header .btn i { display: none; }
         <div class="nav-item" data-target="tab-vuln-create"><i class="fas fa-edit"></i> 취약점 작성</div>
         <div class="nav-item" data-target="tab-vuln"><i class="fas fa-bug"></i> 취약점 분석</div>
 		<div class="nav-item" data-target="tab-vuln-summary"><i class="fas fa-table"></i> 취약점 요약</div> 
-		<div class="nav-item" data-target="tab-vuln-aggregate"><i class="fas fa-chart-bar"></i> 취약점 집계</div>      
+		<div class="nav-item" data-target="tab-vuln-aggregate"><i class="fas fa-chart-bar"></i> 취약점 집계</div> 
+		<div class="nav-item" data-target="tab-data-gather"><i class="fas fa-folder-open"></i> 자료 취합</div>      
         <div class="nav-item" data-target="tab-schedule"><i class="fas fa-calendar-alt"></i> 일정관리</div>
         <div class="nav-item" data-target="tab-monthly-manage"><i class="fas fa-calendar-check"></i> 월별 관리 사항</div>
 		<div class="nav-item" data-target="tab-monthly-check"><i class="fas fa-check-square"></i> 월별 체크 사항</div>      
@@ -751,6 +775,74 @@ body.offline-mode header .btn i { display: none; }
                 </div>
             </div>
         </div>      
+
+		<!-- 3-1. 자료 취합 탭 -->
+        <div id="tab-data-gather" class="tab-pane">
+            <div class="page-header">
+                <h1 class="page-title"><i class="fas fa-folder-open"></i> 자료 취합</h1>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <input type="file" id="excel-upload-data-gather" accept=".xlsx, .xls" style="display: none;">
+                    <button class="btn btn-danger btn-edit-only" onclick="clearDataGatherPage()"><i class="fas fa-trash-alt"></i> 데이터 초기화</button>
+                    <button class="btn btn-secondary" onclick="downloadDataGatherTemplate()"><i class="fas fa-download"></i> 양식 다운로드</button>
+					<button class="btn btn-secondary btn-edit-only" onclick="openDataGatherColModal()" style="height: 40px;"><i class="fas fa-plus"></i> 항목 추가</button>                  
+                    <button class="btn btn-accent" onclick="exportDataGatherExcel(false)"><i class="fas fa-file-excel"></i> 엑셀 저장 (현재)</button>
+                    <button class="btn btn-primary" onclick="exportDataGatherExcel(true)"><i class="fas fa-file-excel"></i> 엑셀 저장 (전체)</button>
+                    <button class="btn btn-secondary" onclick="window.print()"><i class="fas fa-print"></i> 출력</button>
+                </div>
+            </div>
+
+            <div class="paper-sheet">
+                <div class="search-bar no-print" style="background: #f8fafc; padding: 16px; border-radius: 8px; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                        <span style="font-weight: 600; font-size: 14px;">요청 건 선택:</span>
+                        <select id="data-gather-page-selector" class="input-modern" style="width: 220px; cursor: pointer;"></select>
+                        <button class="btn btn-primary btn-edit-only" onclick="openDataGatherCreateModal()" style="height: 40px;"><i class="fas fa-plus"></i> 새 요청 건</button>
+                        <button class="btn btn-secondary btn-edit-only" onclick="openDataGatherManagerModal()" style="height: 40px;"><i class="fas fa-layer-group"></i> 관리</button>
+
+                        <span style="font-weight: 600; font-size: 14px; margin-left: 8px;">시스템:</span>
+                        <select id="data-gather-system-filter" class="input-modern" style="width: 170px; cursor: pointer;" onchange="filterDataGatherTable()">
+                            <option value="ALL">전체 시스템</option>
+                        </select>
+                        <input type="text" id="data-gather-search" class="input-modern" style="width: 200px;" placeholder="세부내역, 협력사, 내용 검색" oninput="filterDataGatherTable()">
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                        <span style="font-size: 13px; color: var(--text-sub); margin-right: 4px;">취합 현황: <strong id="data-gather-progress" style="color: var(--accent);">0 / 0</strong></span>
+						<button class="btn btn-secondary btn-edit-only" onclick="openDataGatherColModal()" style="height: 40px;"><i class="fas fa-plus"></i> 항목 추가</button>                      
+                        <button class="btn btn-secondary btn-edit-only" onclick="loadSystemsFromContactsToGather()" style="height: 40px;" title="연락처(시스템별 담당자) 목록으로 기본 행 채우기"><i class="fas fa-address-book"></i> 시스템 불러오기</button>
+                        <button class="btn btn-secondary btn-edit-only" onclick="addDataGatherRow()" style="height: 40px;"><i class="fas fa-pen"></i> 행 추가</button>
+                        <button id="btn-toggle-gather-completed" class="btn btn-secondary" onclick="toggleDataGatherCompletedRows()" style="height: 40px;"><i class="fas fa-eye-slash"></i> 입력 완료 숨기기</button>
+                    </div>
+                </div>
+
+                <div id="print-area-data-gather">
+                    <div class="print-header">
+                        <h1>보안유지보수 자료 취합</h1>
+                        <p id="print-subtitle-data-gather">요청 자료 조사 및 취합 현황</p>
+                    </div>
+
+                    <div class="top-scrollbar-wrapper no-print" id="data-gather-top-scroll" style="overflow-x: auto; width: 100%; margin-bottom: 5px;">
+                        <div id="data-gather-top-scroll-content" style="height: 1px;"></div>
+                    </div>
+
+                    <div class="data-table-wrapper" id="data-gather-table-wrapper" style="overflow-x: auto;">
+                        <table class="data-table" id="data-gather-table">
+                            <thead id="data-gather-thead">
+                                <tr>
+                                    <th style="width: 55px; min-width: 55px;">번호</th>
+                                    <th style="width: 160px; min-width: 150px;">정보보호시스템</th>
+                                    <th style="width: 160px; min-width: 150px;">세부내역</th>
+                                    <th style="width: 110px; min-width: 100px;">협력사</th>
+                                    <th style="width: 100px; min-width: 90px;">엔지니어</th>
+                                    <th style="width: 60px; min-width: 60px;" class="no-print">관리</th>
+                                </tr>
+                            </thead>
+                            <tbody id="data-gather-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>      
+      
       
         <!-- 4. 일정관리 탭 -->
 		<div id="tab-schedule" class="tab-pane">
@@ -1355,6 +1447,84 @@ body.offline-mode header .btn i { display: none; }
     </div>
 </div>
 
+<!-- 자료 취합 새 요청 건 생성 모달 -->
+<div class="modal-overlay" id="data-gather-create-modal">
+    <div class="modal-content" style="width: 500px; max-width: 92vw;">
+        <div class="modal-header">
+            <h3><i class="fas fa-plus"></i> 새 자료 취합 요청 건 생성</h3>
+            <div class="modal-close" onclick="closeDataGatherCreateModal()"><i class="fas fa-times"></i></div>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>요청 건명 (페이지명)</label>
+                <input type="text" id="new-data-gather-name" placeholder="예: 2026-11 Java 버전 조사">
+            </div>
+            <div class="form-group">
+                <label>조사 항목 (쉼표 , 로 구분하여 입력)</label>
+                <input type="text" id="new-data-gather-cols" value="설치 여부(O, X), 현재 버전, 업데이트 계획" placeholder="예: 설치 여부(O, X), 현재 버전, 업데이트 계획">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+                <label>기본 시스템 목록 초기화 방식</label>
+                <select id="new-data-gather-base-mode">
+                    <option value="contacts">연락처(시스템별 담당자) 목록 자동 불러오기 (없으면 기본 16종)</option>
+                    <option value="current">현재 보고 있는 페이지의 시스템 목록 복사</option>
+                    <option value="fixed">기본 16개 정보보호시스템 목록 사용</option>
+                    <option value="empty">빈 행 1개만 생성</option>
+                </select>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeDataGatherCreateModal()">취소</button>
+            <button class="btn btn-primary" onclick="confirmAddNewDataGatherPage()"><i class="fas fa-save"></i> 생성</button>
+        </div>
+    </div>
+</div>
+
+<!-- 자료 취합 요청 건 관리 모달 -->
+<div class="modal-overlay" id="data-gather-manager-modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3><i class="fas fa-layer-group"></i> 자료 취합 요청 건 관리</h3>
+            <div class="modal-close" onclick="closeDataGatherManagerModal()"><i class="fas fa-times"></i></div>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>관리할 요청 건 선택</label>
+                <select id="manage-data-gather-selector" onchange="document.getElementById('manage-data-gather-name').value = this.value;"></select>
+            </div>
+            <div class="form-group">
+                <label>요청 건 이름 변경</label>
+                <input type="text" id="manage-data-gather-name" placeholder="새로운 요청 건명 입력">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-danger" onclick="deleteSelectedDataGatherPage()" style="margin-right:auto;"><i class="fas fa-trash"></i> 삭제</button>
+            <button class="btn btn-secondary" onclick="closeDataGatherManagerModal()">취소</button>
+            <button class="btn btn-primary" onclick="renameSelectedDataGatherPage()"><i class="fas fa-save"></i> 명칭 수정</button>
+        </div>
+    </div>
+</div>  
+
+<!-- 자료 취합 항목 추가 모달 -->
+<div class="modal-overlay" id="data-gather-col-modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3><i class="fas fa-plus"></i> 조사 항목 추가</h3>
+            <div class="modal-close" onclick="closeDataGatherColModal()"><i class="fas fa-times"></i></div>
+        </div>
+        <div class="modal-body">
+            <div class="form-group" style="margin-bottom: 0;">
+                <label>추가할 항목명 (쉼표 , 로 여러 항목 동시 추가 가능)</label>
+                <input type="text" id="new-data-gather-col-name" placeholder="예: 설치 여부(O, X), 현재 버전, 비고" onkeydown="if(event.key === 'Enter') confirmAddDataGatherColumn();">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeDataGatherColModal()">취소</button>
+            <button class="btn btn-primary" onclick="confirmAddDataGatherColumn()"><i class="fas fa-save"></i> 추가</button>
+        </div>
+    </div>
+</div>  
+  
 <div id="toast"><i class="fas fa-check-circle"></i> <span id="toast-msg"></span></div>
 
 <script>
@@ -1425,6 +1595,7 @@ body.offline-mode header .btn i { display: none; }
   
     let currentMonthlyPageName = '기본월';
     let currentMonthlyCheckPageName = '기본월';    
+	let currentDataGatherPageName = '기본요청';  
 
     function applyLockState() {
         const btn = document.getElementById('btn-lock');
@@ -1733,7 +1904,13 @@ body.offline-mode header .btn i { display: none; }
         const summaryTable = document.getElementById('vuln-summary-table');
         if(summaryTable && summaryTopScrollContent) {
             summaryTopScrollContent.style.width = summaryTable.offsetWidth + 'px';
-        }      
+        }
+        // 5. 자료 취합 가로 스크롤 동기화 추가
+        const gatherTopScrollContent = document.getElementById('data-gather-top-scroll-content');
+        const gatherTable = document.getElementById('data-gather-table');
+        if(gatherTable && gatherTopScrollContent) {
+            gatherTopScrollContent.style.width = gatherTable.offsetWidth + 'px';
+        }
     }
 
     // CVE 갯수 업데이트 함수
@@ -3373,10 +3550,11 @@ body.offline-mode header .btn i { display: none; }
             if (tr) applyPassStyle(tr); // <-- 이 부분 추가
         }
 		if (e.target.closest('#vuln-manage-tbody')) saveVulnManageData();
-        if (e.target.closest('#vuln-create-table')) saveVulnCreateData(); 
+		if (e.target.closest('#vuln-create-table')) saveVulnCreateData(); 
 		if (e.target.closest('#monthly-tbody')) saveMonthlyData(); 
 		if (e.target.closest('#monthly-check-tbody')) saveMonthlyCheckData(); // <== 이 줄을 추가하세요.
-        if (e.target.closest('#mail-format-tbody')) { saveMailFormatData(); updateMailFormatCategoryFilter(); }      
+        if (e.target.closest('#mail-format-tbody')) { saveMailFormatData(); updateMailFormatCategoryFilter(); }
+        if (e.target.closest('#data-gather-table')) { saveDataGatherData(); updateDataGatherProgress(); }
     });
 
     async function loadDataFromDB() {
@@ -3503,10 +3681,13 @@ body.offline-mode header .btn i { display: none; }
             monthlyCheckPages.push(defaultPage);
         }
 
-        await refreshMonthlyCheckPageSelector();
+		await refreshMonthlyCheckPageSelector();
         // [수정된 부분] 초기 로드 시 'ALL'(0번 옵션) 대신 첫 번째 실제 페이지(1번 옵션)를 로드
         const mcSel = document.getElementById('monthly-check-page-selector');
         loadMonthlyCheckPageFromDB(mcSel.options.length > 1 ? mcSel.options[1].value : mcSel.options[0].value);
+
+        // === 자료 취합 데이터 로드 (페이지 기반) ===
+        await initDataGatherPagesFromDB();
       
 		const mf_res = await getFromDB('tables', 'mail_format');
         document.getElementById('mail-format-tbody').innerHTML = '';
@@ -3709,7 +3890,19 @@ body.offline-mode header .btn i { display: none; }
             const summaryTableEl = document.getElementById('vuln-summary-table');
             const roSummary = new ResizeObserver(() => { syncTopScrollWidth(); });
             if(summaryTableEl) roSummary.observe(summaryTableEl);
-        }      
+        }
+
+        // 5. 자료 취합 스크롤 연동 이벤트
+        const gatherTopScroll = document.getElementById('data-gather-top-scroll');
+        const gatherTableWrapper = document.getElementById('data-gather-table-wrapper');
+        if(gatherTopScroll && gatherTableWrapper) {
+            gatherTopScroll.addEventListener('scroll', () => { gatherTableWrapper.scrollLeft = gatherTopScroll.scrollLeft; });
+            gatherTableWrapper.addEventListener('scroll', () => { gatherTopScroll.scrollLeft = gatherTableWrapper.scrollLeft; });
+
+            const gatherTableEl = document.getElementById('data-gather-table');
+            const roGather = new ResizeObserver(() => { syncTopScrollWidth(); });
+            if(gatherTableEl) roGather.observe(gatherTableEl);
+        }
       
         await initDB(); await loadDataFromDB();
         document.getElementById('schedule-tbody').addEventListener('input', updateScheduleSummary);
@@ -4734,6 +4927,7 @@ body.offline-mode header .btn i { display: none; }
 		await saveMonthlyData(); 
         await saveMonthlyCheckData();
         await saveMailFormatData();
+		await saveDataGatherData();      
 
         if(notify) showToast('모든 데이터가 브라우저(로컬)에 저장되었습니다.');
     }
@@ -6441,6 +6635,672 @@ body.offline-mode header .btn i { display: none; }
         a.download = `메일포맷_${dateStr}.xlsx`;
         a.click();
     }
+	// ==========================================
+    // === 자료 취합 탭 전용 스크립트 ===
+    // ==========================================
+    let currentDataGatherCols = [];
+    let hideDataGatherCompleted = false;
+
+    function getBaseSystemsFromContactsOrFixed() {
+        const managerRows = document.querySelectorAll('#contact-manager-tbody tr');
+        const result = [];
+        managerRows.forEach((tr, idx) => {
+            const tds = tr.querySelectorAll('td');
+            if (tds.length >= 7) {
+                const no = stripHTML(tds[0].innerHTML).trim() || String(idx + 1);
+                const sys = stripHTML(tds[1].innerHTML).trim();
+                const detail = stripHTML(tds[2].innerHTML).trim();
+                const partner = stripHTML(tds[3].innerHTML).trim();
+                const eng = stripHTML(tds[6].innerHTML).trim();
+                if (sys || detail) {
+                    result.push([no, sys, detail, partner, eng]);
+                }
+            }
+        });
+        if (result.length > 0) return result;
+        return FIXED_16_SYSTEMS.map(sys => [sys[0], sys[1], sys[2], sys[3], sys[4]]);
+    }
+
+    async function initDataGatherPagesFromDB() {
+        const allTables = await getAllFromDB('tables');
+        let pages = allTables.filter(t => t.id && t.id.startsWith('data_gather_page_'));
+
+        if (pages.length === 0) {
+            const baseSystems = getBaseSystemsFromContactsOrFixed();
+            const defaultCols = ['설치 여부(O, X)', '현재 버전', '업데이트 계획'];
+            const defaultRows = baseSystems.map((b, i) => ({
+                base: b,
+                values: i === 0 ? ['O', '17.0.12', '21.0.13.1'] : defaultCols.map(() => '')
+            }));
+            const defaultPage = {
+                id: 'data_gather_page_샘플_버전조사',
+                pageName: '샘플_버전조사',
+                cols: defaultCols,
+                rows: defaultRows
+            };
+            await saveToDB('tables', defaultPage);
+            pages.push(defaultPage);
+        }
+
+        await refreshDataGatherPageSelector(pages[0].pageName);
+        await loadDataGatherPageFromDB(pages[0].pageName);
+    }
+
+    async function refreshDataGatherPageSelector(selectVal) {
+        const all = await getAllFromDB('tables');
+        const pages = all
+            .filter(t => t.id && t.id.startsWith('data_gather_page_'))
+            .sort((a, b) => a.pageName.localeCompare(b.pageName, undefined, { numeric: true, sensitivity: 'base' }));
+
+        const sel = document.getElementById('data-gather-page-selector');
+        if (!sel) return;
+        sel.innerHTML = '';
+        pages.forEach(p => {
+            const op = document.createElement('option');
+            op.value = p.pageName;
+            op.textContent = p.pageName;
+            sel.appendChild(op);
+        });
+        if (selectVal && pages.some(p => p.pageName === selectVal)) {
+            sel.value = selectVal;
+        }
+    }
+
+    document.getElementById('data-gather-page-selector').addEventListener('change', async function(e) {
+        if (e.target.value) {
+            await saveDataGatherData();
+            await loadDataGatherPageFromDB(e.target.value);
+        }
+    });
+
+    function isOxColumn(colName) {
+        const txt = String(colName || '');
+        return txt.includes('O, X') || txt.includes('O/X') || txt.includes('여부');
+    }
+
+    function renderDataGatherHeader(cols) {
+        currentDataGatherCols = [...cols];
+        const theadRow = document.getElementById('data-gather-thead').rows[0];
+        while (theadRow.cells.length > 6) {
+            theadRow.deleteCell(5);
+        }
+
+        cols.forEach((colName, idx) => {
+            const th = document.createElement('th');
+            th.className = 'gather-dyn-th';
+            th.innerHTML = `
+                <div class="gather-col-header">
+                    <span class="gather-col-title editable-cell" contenteditable="true" spellcheck="false" style="padding:2px 4px; border-radius:4px;">${escapeHtmlText(colName)}</span>
+                    <button type="button" class="gather-col-del no-print btn-edit-only" title="항목 삭제" onclick="removeDataGatherColumn(${idx})"><i class="fas fa-times"></i></button>
+                </div>
+            `;
+            theadRow.insertBefore(th, theadRow.lastElementChild);
+        });
+    }
+
+	function createDataGatherValueCell(colName, val = '') {
+        const td = document.createElement('td');
+        if (isOxColumn(colName)) {
+            const v = String(val || '').trim();
+            td.style.padding = '0';
+            td.innerHTML = `
+                <select class="status-select ${v === 'X' ? 'unresolved' : ''}" onchange="onDataGatherOxChange(this)">
+                    <option value="" ${v === '' ? 'selected' : ''}></option>
+                    <option value="O" ${v === 'O' ? 'selected' : ''}>O</option>
+                    <option value="X" ${v === 'X' ? 'selected' : ''}>X</option>
+                    <option value="N/A" ${v === 'N/A' ? 'selected' : ''}>N/A</option>
+                </select>
+            `;
+        } else {
+            td.className = 'editable-cell';
+            td.contentEditable = 'true';
+            td.setAttribute('spellcheck', 'false');
+            td.style.whiteSpace = 'pre-wrap';
+            td.innerHTML = escapeHtmlText(val);
+        }
+        return td;
+    }
+
+    function onDataGatherOxChange(selectEl) {
+        if (selectEl.value === 'X') selectEl.classList.add('unresolved');
+        else selectEl.classList.remove('unresolved');
+        saveDataGatherData();
+        updateDataGatherProgress();
+        filterDataGatherTable();
+    }
+
+    function addDataGatherRow(rowData = null) {
+        const tbody = document.getElementById('data-gather-tbody');
+        const nextNo = String(tbody.querySelectorAll('tr').length + 1);
+        const base = (rowData && rowData.base) ? rowData.base : [nextNo, '', '', '', ''];
+        const values = (rowData && rowData.values) ? rowData.values : currentDataGatherCols.map(() => '');
+
+        const tr = document.createElement('tr');
+        for (let i = 0; i < 5; i++) {
+            const td = document.createElement('td');
+            td.className = 'editable-cell';
+            td.contentEditable = 'true';
+            td.setAttribute('spellcheck', 'false');
+            if (i === 1) td.style.fontWeight = '600';
+            if (i === 1 || i === 2) td.style.textAlign = 'left';
+            td.innerHTML = escapeHtmlText(base[i] || (i === 0 ? nextNo : ''));
+            tr.appendChild(td);
+        }
+
+        currentDataGatherCols.forEach((colName, idx) => {
+            tr.appendChild(createDataGatherValueCell(colName, values[idx] || ''));
+        });
+
+        const delTd = document.createElement('td');
+        delTd.className = 'no-print';
+        delTd.style.textAlign = 'center';
+        delTd.innerHTML = `<button class="btn btn-danger" style="height:28px; padding:0 8px; font-size:13px;" onclick="this.closest('tr').remove(); saveDataGatherData(); updateDataGatherFilterOptions(); filterDataGatherTable(); updateDataGatherProgress();"><i class="fas fa-trash"></i></button>`;
+        tr.appendChild(delTd);
+
+        tbody.appendChild(tr);
+        applyLockState();
+        updateDataGatherFilterOptions();
+        updateDataGatherProgress();
+        setTimeout(syncTopScrollWidth, 50);
+    }
+
+    function getDataGatherCurrentColumnsFromDOM() {
+        const theadRow = document.getElementById('data-gather-thead').rows[0];
+        const cols = [];
+        for (let i = 5; i < theadRow.cells.length - 1; i++) {
+            const titleEl = theadRow.cells[i].querySelector('.gather-col-title');
+            cols.push(titleEl ? titleEl.innerText.trim() : theadRow.cells[i].innerText.trim());
+        }
+        return cols;
+    }
+
+	function getDataGatherCellText(td) {
+        const sel = td.querySelector('select');
+        if (sel) return sel.value.trim();
+        const inp = td.querySelector('input');
+        if (inp) return inp.value.trim();
+        return td.innerText.replace(/\r\n/g, '\n').trim();
+    }
+
+    async function saveDataGatherData() {
+        if (!currentDataGatherPageName) return;
+        const cols = getDataGatherCurrentColumnsFromDOM();
+        currentDataGatherCols = cols;
+
+        const rows = Array.from(document.getElementById('data-gather-tbody').querySelectorAll('tr')).map(tr => {
+            const tds = tr.querySelectorAll('td');
+            if (tds.length < 6) return null;
+            const base = [];
+            for (let i = 0; i < 5; i++) base.push(getDataGatherCellText(tds[i]));
+            const values = [];
+            for (let i = 0; i < cols.length; i++) {
+                values.push(tds[5 + i] ? getDataGatherCellText(tds[5 + i]) : '');
+            }
+            return { base, values };
+        }).filter(Boolean);
+
+        await saveToDB('tables', {
+            id: 'data_gather_page_' + currentDataGatherPageName,
+            pageName: currentDataGatherPageName,
+            cols,
+            rows
+        });
+    }
+
+    async function loadDataGatherPageFromDB(pageName) {
+        currentDataGatherPageName = pageName;
+        document.getElementById('data-gather-page-selector').value = pageName;
+        document.getElementById('print-subtitle-data-gather').textContent = `[${pageName}] 요청 자료 조사 및 취합 현황`;
+
+        const res = await getFromDB('tables', 'data_gather_page_' + pageName);
+        const cols = (res && res.cols && res.cols.length > 0) ? res.cols : ['설치 여부(O, X)', '현재 버전', '업데이트 계획'];
+        renderDataGatherHeader(cols);
+
+        const tbody = document.getElementById('data-gather-tbody');
+        tbody.innerHTML = '';
+        if (res && res.rows && res.rows.length > 0) {
+            res.rows.forEach(r => addDataGatherRow(r));
+        } else {
+            addDataGatherRow();
+        }
+
+        updateDataGatherFilterOptions();
+        filterDataGatherTable();
+        updateDataGatherProgress();
+        applyLockState();
+        setTimeout(syncTopScrollWidth, 100);
+    }
+
+	function openDataGatherColModal() {
+        const input = document.getElementById('new-data-gather-col-name');
+        input.value = '';
+        document.getElementById('data-gather-col-modal').classList.add('active');
+        setTimeout(() => input.focus(), 50);
+    }
+
+    function closeDataGatherColModal() {
+        document.getElementById('data-gather-col-modal').classList.remove('active');
+    }
+
+    function confirmAddDataGatherColumn() {
+        const rawVal = document.getElementById('new-data-gather-col-name').value.trim();
+        const newCols = parseDataGatherColumns(rawVal);
+
+        if (newCols.length === 0) {
+            alert('추가할 조사 항목 이름을 입력해주세요.');
+            return;
+        }
+
+        const cols = getDataGatherCurrentColumnsFromDOM();
+        newCols.forEach(colName => cols.push(colName));
+        renderDataGatherHeader(cols);
+
+        document.querySelectorAll('#data-gather-tbody tr').forEach(tr => {
+            newCols.forEach(colName => {
+                const newTd = createDataGatherValueCell(colName, '');
+                tr.insertBefore(newTd, tr.lastElementChild);
+            });
+        });
+
+        applyLockState();
+        saveDataGatherData();
+        updateDataGatherProgress();
+        closeDataGatherColModal();
+        setTimeout(syncTopScrollWidth, 100);
+        showToast(`${newCols.length}개 항목이 추가되었습니다.`);
+    }
+
+    function removeDataGatherColumn(colIdx) {
+        const cols = getDataGatherCurrentColumnsFromDOM();
+        if (cols.length <= 1) {
+            alert('최소 1개 이상의 조사 항목이 필요합니다.');
+            return;
+        }
+        const targetName = cols[colIdx] || '해당';
+        if (!confirm(`'${targetName}' 항목과 입력된 데이터를 삭제하시겠습니까?`)) return;
+
+        cols.splice(colIdx, 1);
+        document.querySelectorAll('#data-gather-tbody tr').forEach(tr => {
+            if (tr.cells[5 + colIdx]) tr.deleteCell(5 + colIdx);
+        });
+        renderDataGatherHeader(cols);
+        applyLockState();
+        saveDataGatherData();
+        updateDataGatherProgress();
+        setTimeout(syncTopScrollWidth, 100);
+    }
+
+    function loadSystemsFromContactsToGather() {
+        if (!confirm('현재 요청 건의 행을 연락처(시스템별 담당자) 기준 시스템 목록으로 채우시겠습니까?\n(기존 입력값은 초기화됩니다)')) return;
+        const baseSystems = getBaseSystemsFromContactsOrFixed();
+        const cols = getDataGatherCurrentColumnsFromDOM();
+        const tbody = document.getElementById('data-gather-tbody');
+        tbody.innerHTML = '';
+        baseSystems.forEach(b => addDataGatherRow({ base: b, values: cols.map(() => '') }));
+        saveDataGatherData();
+        filterDataGatherTable();
+        showToast('시스템 목록을 불러왔습니다.');
+    }
+
+    function openDataGatherCreateModal() {
+        const dateStr = new Date().toISOString().slice(0, 7);
+        document.getElementById('new-data-gather-name').value = `${dateStr}_자료조사`;
+        document.getElementById('new-data-gather-cols').value = '설치 여부(O, X), 현재 버전, 업데이트 계획';
+        document.getElementById('data-gather-create-modal').classList.add('active');
+    }
+
+    function closeDataGatherCreateModal() {
+        document.getElementById('data-gather-create-modal').classList.remove('active');
+    }
+
+	function parseDataGatherColumns(rawStr) {
+        const result = [];
+        let buf = '';
+        let depth = 0;
+        for (const ch of String(rawStr || '')) {
+            if (ch === '(') depth++;
+            else if (ch === ')' && depth > 0) depth--;
+
+            if (ch === ',' && depth === 0) {
+                if (buf.trim()) result.push(buf.trim());
+                buf = '';
+            } else {
+                buf += ch;
+            }
+        }
+        if (buf.trim()) result.push(buf.trim());
+        return result;
+    }  
+  
+    async function confirmAddNewDataGatherPage() {
+        await saveDataGatherData();
+        const pageName = document.getElementById('new-data-gather-name').value.trim();
+        const colsRaw = document.getElementById('new-data-gather-cols').value.trim();
+        const baseMode = document.getElementById('new-data-gather-base-mode').value;
+
+        if (!pageName) return alert('요청 건명(페이지명)을 입력해주세요.');
+        const existing = await getFromDB('tables', 'data_gather_page_' + pageName);
+        if (existing) return alert('이미 존재하는 요청 건명입니다.');
+
+		// 괄호 () 내부의 쉼표는 무시하고 바깥쪽 쉼표로만 항목 분리
+        const cols = parseDataGatherColumns(colsRaw);
+        if (cols.length === 0) return alert('최소 1개 이상의 조사 항목을 입력해주세요.');
+
+        let baseSystems = [];
+        if (baseMode === 'contacts') {
+            baseSystems = getBaseSystemsFromContactsOrFixed();
+        } else if (baseMode === 'current') {
+            document.querySelectorAll('#data-gather-tbody tr').forEach(tr => {
+                const tds = tr.querySelectorAll('td');
+                if (tds.length >= 5) {
+                    baseSystems.push([0, 1, 2, 3, 4].map(i => getDataGatherCellText(tds[i])));
+                }
+            });
+            if (baseSystems.length === 0) baseSystems = [['1', '', '', '', '']];
+        } else if (baseMode === 'fixed') {
+            baseSystems = FIXED_16_SYSTEMS.map(sys => [sys[0], sys[1], sys[2], sys[3], sys[4]]);
+        } else {
+            baseSystems = [['1', '', '', '', '']];
+        }
+
+        const rows = baseSystems.map(b => ({ base: b, values: cols.map(() => '') }));
+        await saveToDB('tables', { id: 'data_gather_page_' + pageName, pageName, cols, rows });
+        await refreshDataGatherPageSelector(pageName);
+        closeDataGatherCreateModal();
+        await loadDataGatherPageFromDB(pageName);
+        showToast(`'${pageName}' 자료 취합 요청 건이 생성되었습니다.`);
+    }
+
+    async function openDataGatherManagerModal() {
+        await saveDataGatherData();
+        const all = await getAllFromDB('tables');
+        const pages = all
+            .filter(t => t.id && t.id.startsWith('data_gather_page_'))
+            .sort((a, b) => a.pageName.localeCompare(b.pageName, undefined, { numeric: true, sensitivity: 'base' }));
+
+        if (pages.length === 0) return alert('관리할 요청 건이 없습니다.');
+        const sel = document.getElementById('manage-data-gather-selector');
+        sel.innerHTML = '';
+        pages.forEach(p => {
+            const op = document.createElement('option');
+            op.value = p.pageName;
+            op.textContent = p.pageName;
+            sel.appendChild(op);
+        });
+        sel.value = currentDataGatherPageName;
+        document.getElementById('manage-data-gather-name').value = currentDataGatherPageName;
+        document.getElementById('data-gather-manager-modal').classList.add('active');
+    }
+
+    function closeDataGatherManagerModal() {
+        document.getElementById('data-gather-manager-modal').classList.remove('active');
+    }
+
+    async function deleteSelectedDataGatherPage() {
+        const target = document.getElementById('manage-data-gather-selector').value;
+        if (!target) return;
+        if (!confirm(`정말로 '${target}' 요청 건을 삭제하시겠습니까?`)) return;
+
+        const tx = db.transaction('tables', 'readwrite');
+        tx.objectStore('tables').delete('data_gather_page_' + target);
+        tx.oncomplete = async () => {
+            showToast(`'${target}' 요청 건이 삭제되었습니다.`);
+            closeDataGatherManagerModal();
+            await initDataGatherPagesFromDB();
+        };
+    }
+
+    async function renameSelectedDataGatherPage() {
+        const oldName = document.getElementById('manage-data-gather-selector').value;
+        const newName = document.getElementById('manage-data-gather-name').value.trim();
+        if (!oldName || !newName || oldName === newName) {
+            closeDataGatherManagerModal();
+            return;
+        }
+        const existing = await getFromDB('tables', 'data_gather_page_' + newName);
+        if (existing) return alert('이미 존재하는 요청 건명입니다.');
+
+        const data = await getFromDB('tables', 'data_gather_page_' + oldName);
+        data.id = 'data_gather_page_' + newName;
+        data.pageName = newName;
+
+        const tx = db.transaction('tables', 'readwrite');
+        tx.objectStore('tables').delete('data_gather_page_' + oldName);
+        tx.objectStore('tables').put(data);
+        tx.oncomplete = async () => {
+            showToast(`요청 건명이 '${newName}'(으)로 변경되었습니다.`);
+            closeDataGatherManagerModal();
+            await refreshDataGatherPageSelector(newName);
+            await loadDataGatherPageFromDB(newName);
+        };
+    }
+
+    function clearDataGatherPage() {
+        if (!confirm(`현재 [${currentDataGatherPageName}] 페이지의 입력값을 모두 초기화하시겠습니까?`)) return;
+        const cols = getDataGatherCurrentColumnsFromDOM();
+        document.querySelectorAll('#data-gather-tbody tr').forEach(tr => {
+            for (let i = 0; i < cols.length; i++) {
+                const td = tr.cells[5 + i];
+                if (!td) continue;
+				const sel = td.querySelector('select');
+                const inp = td.querySelector('input');
+                if (sel) {
+                    sel.value = '';
+                    sel.classList.remove('unresolved');
+                } else if (inp) {
+                    inp.value = '';
+                } else {
+                    td.innerHTML = '';
+                }
+            }
+        });
+        saveDataGatherData();
+        updateDataGatherProgress();
+        filterDataGatherTable();
+        showToast('현재 요청 건의 조사 입력값이 초기화되었습니다.');
+    }
+
+    function updateDataGatherFilterOptions() {
+        const filter = document.getElementById('data-gather-system-filter');
+        if (!filter) return;
+        const currentVal = filter.value;
+        const sysSet = new Set();
+        document.querySelectorAll('#data-gather-tbody tr').forEach(tr => {
+            const sys = getDataGatherCellText(tr.cells[1]);
+            if (sys) sysSet.add(sys);
+        });
+        filter.innerHTML = '<option value="ALL">전체 시스템</option>';
+        Array.from(sysSet).forEach(sys => {
+            const op = document.createElement('option');
+            op.value = sys;
+            op.textContent = sys;
+            filter.appendChild(op);
+        });
+        filter.value = sysSet.has(currentVal) ? currentVal : 'ALL';
+    }
+
+    function toggleDataGatherCompletedRows() {
+        hideDataGatherCompleted = !hideDataGatherCompleted;
+        const btn = document.getElementById('btn-toggle-gather-completed');
+        if (hideDataGatherCompleted) {
+            btn.innerHTML = '<i class="fas fa-eye"></i> 입력 완료 보이기';
+            btn.classList.remove('btn-secondary');
+            btn.classList.add('btn-accent');
+        } else {
+            btn.innerHTML = '<i class="fas fa-eye-slash"></i> 입력 완료 숨기기';
+            btn.classList.remove('btn-accent');
+            btn.classList.add('btn-secondary');
+        }
+        filterDataGatherTable();
+    }
+
+    function isDataGatherRowCompleted(tr) {
+        const colCount = currentDataGatherCols.length;
+        if (colCount === 0) return false;
+        let filled = 0;
+        for (let i = 0; i < colCount; i++) {
+            const td = tr.cells[5 + i];
+            if (td && getDataGatherCellText(td) !== '') filled++;
+        }
+        return filled > 0;
+    }
+
+    function updateDataGatherProgress() {
+        const rows = Array.from(document.querySelectorAll('#data-gather-tbody tr'));
+        const total = rows.length;
+        const done = rows.filter(tr => isDataGatherRowCompleted(tr)).length;
+        const el = document.getElementById('data-gather-progress');
+        if (el) el.textContent = `${done} / ${total}`;
+    }
+
+    function filterDataGatherTable() {
+        const sysVal = document.getElementById('data-gather-system-filter').value;
+        const keyword = document.getElementById('data-gather-search').value.trim().toLowerCase();
+
+        document.querySelectorAll('#data-gather-tbody tr').forEach(tr => {
+            const sysName = getDataGatherCellText(tr.cells[1]);
+            const showSys = (sysVal === 'ALL' || sysName === sysVal);
+
+            let rowText = '';
+            for (let i = 0; i < tr.cells.length - 1; i++) {
+                rowText += ' ' + getDataGatherCellText(tr.cells[i]);
+            }
+            const showKeyword = (!keyword || rowText.toLowerCase().includes(keyword));
+            const showCompleted = !hideDataGatherCompleted || !isDataGatherRowCompleted(tr);
+
+            tr.style.display = (showSys && showKeyword && showCompleted) ? '' : 'none';
+        });
+    }
+
+    function writeDataGatherSheet(ws, cols, rows) {
+        const headers = ['번호', '정보보호시스템', '세부내역', '협력사', '엔지니어', ...cols];
+        ws.columns = [
+            { width: 8 }, { width: 22 }, { width: 22 }, { width: 15 }, { width: 14 },
+            ...cols.map(() => ({ width: 22 }))
+        ];
+        const headerRow = ws.addRow(headers);
+        headerRow.eachCell((c, colNum) => {
+            const isDynamic = colNum > 5;
+            c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: isDynamic ? 'FFC6E0B4' : 'FF70AD47' } };
+            c.font = { color: { argb: isDynamic ? 'FF000000' : 'FFFFFFFF' }, bold: true };
+            c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+            c.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+        });
+
+        rows.forEach(r => {
+            const row = ws.addRow([...r.base, ...r.values]);
+            row.eachCell((c, colNum) => {
+                c.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+                c.alignment = { vertical: 'middle', horizontal: (colNum === 2 || colNum === 3) ? 'left' : 'center', wrapText: true };
+            });
+        });
+    }
+
+    async function downloadDataGatherTemplate() {
+        await saveDataGatherData();
+        const cols = getDataGatherCurrentColumnsFromDOM();
+        const baseSystems = getBaseSystemsFromContactsOrFixed();
+        const rows = baseSystems.map(b => ({ base: b, values: cols.map(() => '') }));
+
+        const wb = new ExcelJS.Workbook();
+        const ws = wb.addWorksheet(currentDataGatherPageName || '자료취합_양식');
+        writeDataGatherSheet(ws, cols, rows);
+
+        const blob = new Blob([await wb.xlsx.writeBuffer()], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `자료취합_양식_${currentDataGatherPageName}.xlsx`;
+        a.click();
+    }
+
+    document.getElementById('excel-upload-data-gather').addEventListener('change', async function(e) {
+        const file = e.target.files[0]; if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            const wb = new ExcelJS.Workbook();
+            await wb.xlsx.load(event.target.result);
+            const ws = wb.worksheets[0];
+            if (!ws) return;
+
+            const row1 = ws.getRow(1);
+            const dynCols = [];
+            for (let c = 6; c <= row1.cellCount; c++) {
+                const headerVal = getCellValue(row1.getCell(c));
+                if (headerVal) dynCols.push(headerVal);
+            }
+            if (dynCols.length === 0) {
+                alert('엑셀 1행의 6번째 열(F열) 이후에 조사 항목 헤더가 필요합니다.');
+                return;
+            }
+
+            renderDataGatherHeader(dynCols);
+            const tbody = document.getElementById('data-gather-tbody');
+            tbody.innerHTML = '';
+
+            ws.eachRow((row, rNumber) => {
+                if (rNumber > 1) {
+                    const base = [];
+                    for (let i = 1; i <= 5; i++) base.push(getCellValue(row.getCell(i)));
+                    const values = [];
+                    for (let i = 0; i < dynCols.length; i++) values.push(getCellValue(row.getCell(6 + i)));
+                    if (base.join('').trim() || values.join('').trim()) {
+                        addDataGatherRow({ base, values });
+                    }
+                }
+            });
+
+            if (tbody.children.length === 0) addDataGatherRow();
+            await saveDataGatherData();
+            updateDataGatherFilterOptions();
+            filterDataGatherTable();
+            updateDataGatherProgress();
+            showToast('자료 취합 엑셀이 로드되었습니다.');
+        };
+        reader.readAsArrayBuffer(file);
+        e.target.value = '';
+    });
+
+    async function exportDataGatherExcel(exportAll = false) {
+        await saveDataGatherData();
+        const wb = new ExcelJS.Workbook();
+
+        if (exportAll) {
+            const all = await getAllFromDB('tables');
+            const pages = all
+                .filter(t => t.id && t.id.startsWith('data_gather_page_'))
+                .sort((a, b) => a.pageName.localeCompare(b.pageName, undefined, { numeric: true, sensitivity: 'base' }));
+
+            if (pages.length === 0) return alert('저장할 자료 취합 데이터가 없습니다.');
+            pages.forEach(p => {
+                const ws = wb.addWorksheet(p.pageName.slice(0, 31));
+                writeDataGatherSheet(ws, p.cols || [], p.rows || []);
+            });
+        } else {
+            const cols = getDataGatherCurrentColumnsFromDOM();
+            const rows = [];
+            document.querySelectorAll('#data-gather-tbody tr').forEach(tr => {
+                if (tr.style.display === 'none') return;
+                const tds = tr.querySelectorAll('td');
+                if (tds.length >= 6) {
+                    const base = [0, 1, 2, 3, 4].map(i => getDataGatherCellText(tds[i]));
+                    const values = cols.map((_, idx) => getDataGatherCellText(tds[5 + idx]));
+                    rows.push({ base, values });
+                }
+            });
+            const ws = wb.addWorksheet((currentDataGatherPageName || '자료취합').slice(0, 31));
+            writeDataGatherSheet(ws, cols, rows);
+        }
+
+        const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const fileName = exportAll
+            ? `자료취합_전체_${dateStr}.xlsx`
+            : `자료취합_${currentDataGatherPageName}_${dateStr}.xlsx`;
+        const blob = new Blob([await wb.xlsx.writeBuffer()], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = fileName;
+        a.click();
+    }  
 </script>
 </script>
 </body>
